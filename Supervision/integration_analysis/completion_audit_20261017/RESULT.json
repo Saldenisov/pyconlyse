@@ -1,0 +1,2365 @@
+{
+  "scope": "Supervision original-source ledger, initialization/resource-state and copied NI2012 cleanup",
+  "source_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "original_application_VIs": [
+    {
+      "name": "0_SUP_ELYSE.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\0_SUP_ELYSE.vi",
+      "sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+      "diagram_count": 588,
+      "classes": {
+        "BrowseOptions": 10,
+        "EventSpec": 38,
+        "ExpressionInfo": 8,
+        "GrowTermInfo": 7,
+        "Image": 10361,
+        "SelectorInfoElement": 8,
+        "SelectorRange": 300,
+        "aBuild": 55,
+        "aBuildDCO": 163,
+        "aDelDCO": 10,
+        "aDelete": 2,
+        "aIDCO": 44,
+        "aIndx": 14,
+        "aInit": 2,
+        "aInitDCO": 8,
+        "annex": 1489,
+        "bDConstDCO": 864,
+        "bDFixed": 13,
+        "caseSel": 105,
+        "commentNode": 4,
+        "commentTun": 2,
+        "concat": 21,
+        "concatDCO": 75,
+        "cosm": 1798,
+        "cpdArith": 15,
+        "cpdArithDCO": 195,
+        "ctlRefConst": 5,
+        "ctlRefDCO": 5,
+        "demux": 6,
+        "diag": 588,
+        "dmxDCO": 76,
+        "eventDataNode": 34,
+        "eventDynDCO": 2,
+        "eventStruct": 1,
+        "eventTimeOut": 1,
+        "fBox": 23,
+        "fBoxDCO": 59,
+        "fPTerm": 251,
+        "flatSeqTun": 58,
+        "flatSequence": 31,
+        "fontRun": 259,
+        "forLoop": 10,
+        "gRef": 751,
+        "gRefDCO": 751,
+        "growViewObj": 1,
+        "hGrowCItem": 488,
+        "iUse": 173,
+        "iUseDCO": 1720,
+        "indArr": 18,
+        "innerLpTun": 20,
+        "lCnt": 24,
+        "lMax": 10,
+        "lSR": 17,
+        "lTiming": 2,
+        "lTst": 14,
+        "label": 3085,
+        "lpTun": 43,
+        "mergeErrors": 4,
+        "mergeErrorsDCO": 12,
+        "multiCosm": 1209,
+        "multiLabel": 49,
+        "mux": 9,
+        "mxDCO": 42,
+        "nMux": 252,
+        "nmxDCO": 1591,
+        "numLabel": 599,
+        "oHExt": 1,
+        "overridableParm": 103,
+        "pane": 77,
+        "parm": 1175,
+        "prim": 415,
+        "printf": 3,
+        "printfArg": 19,
+        "propItem": 155,
+        "propItemInfo": 168,
+        "propNode": 122,
+        "rSR": 17,
+        "sLoc": 43,
+        "sRN": 588,
+        "selLabel": 225,
+        "selTun": 312,
+        "select": 105,
+        "seqTun": 126,
+        "sequence": 37,
+        "sequenceFrame": 58,
+        "sharedVariableDynamicDCO": 573,
+        "sharedVariableDynamicOpen": 13,
+        "sharedVariableDynamicRead": 25,
+        "sharedVariableDynamicWrite": 64,
+        "signal": 3793,
+        "stdBool": 220,
+        "stdClust": 77,
+        "stdColorNum": 78,
+        "stdNum": 550,
+        "stdPath": 10,
+        "stdRefNum": 120,
+        "stdRing": 49,
+        "stdString": 143,
+        "stdTag": 115,
+        "term": 11404,
+        "textHair": 4063,
+        "timeLoop": 1,
+        "typeDef": 19,
+        "whileLoop": 13,
+        "xDataNode": 4,
+        "xNode": 5,
+        "xTunnel": 37
+      },
+      "VI_calls": [
+        {
+          "name": "\"1_SUP_INIT_NI6602.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"1_SUP_PROFILS XY.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"1_SUP_WRITE_NI6602.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"2_SUP_Ecart_lu_ecr_VDirecte.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"2_SUP_Ecart_lu_ecr_VDéviée.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"2_SUP_Graph _Radioprot.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"2_SUP_Journal_des _erreurs.vi\"",
+          "count": 10
+        },
+        {
+          "name": "\"2_SUP_marche_defaut_VIDE.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"3_SUP_en_défaut_alims.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"AbortMotion.vi\"",
+          "count": 3
+        },
+        {
+          "name": "\"Boîte de dialogue de fichier\"",
+          "count": 1
+        },
+        {
+          "name": "\"Clear Errors.vi\"",
+          "count": 4
+        },
+        {
+          "name": "\"Error Cluster From Error Code.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"FW102x Close.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"FW102x Error Message.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"FW102x Get Position.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"FW102x Initialize.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"FW102x Set Position.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"General Error Handler.vi\"",
+          "count": 4
+        },
+        {
+          "name": "\"GetErrorMsg.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"GetIdentification.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"GetMotionDone.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"GetPosition.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"IMAQ 3DView\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ BCGLookup\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Centroid\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Close.vi\"",
+          "count": 6
+        },
+        {
+          "name": "\"IMAQ Copy\"",
+          "count": 5
+        },
+        {
+          "name": "\"IMAQ Create\"",
+          "count": 10
+        },
+        {
+          "name": "\"IMAQ Dispose\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Draw\"",
+          "count": 2
+        },
+        {
+          "name": "\"IMAQ EdgeDetection\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Extract\"",
+          "count": 2
+        },
+        {
+          "name": "\"IMAQ GetPalette\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ GetPixelValue\"",
+          "count": 2
+        },
+        {
+          "name": "\"IMAQ Grab Acquire.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Grab Setup.vi\"",
+          "count": 6
+        },
+        {
+          "name": "\"IMAQ Init.vi\"",
+          "count": 6
+        },
+        {
+          "name": "\"IMAQ Interlace\"",
+          "count": 3
+        },
+        {
+          "name": "\"IMAQ Particle Filter\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ RemoveParticle\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Rotate\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Stop.vi\"",
+          "count": 4
+        },
+        {
+          "name": "\"IMAQ Threshold\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ WindDraw\"",
+          "count": 1
+        },
+        {
+          "name": "\"IMAQ Write TIFF File\"",
+          "count": 1
+        },
+        {
+          "name": "\"InitSingleDevice.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"Init_Open_Close.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Mean PtByPt.vi\"",
+          "count": 15
+        },
+        {
+          "name": "\"Moteurs SdC GoTo.vi\"",
+          "count": 8
+        },
+        {
+          "name": "\"RelativeMove.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"SetZeroPosition.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"Shutdown.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Simple Error Handler.vi\"",
+          "count": 37
+        },
+        {
+          "name": "\"System Exec.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"sous vi LigneCentroide2.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "1_SUP_INIT_NI6602.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\1_SUP_INIT_NI6602.vi",
+      "sha256": "CE8BCA30E727C9B8C1EE9681263FBCE1D60247C2DBECDD0B73A37A385C88104F",
+      "diagram_count": 9,
+      "classes": {
+        "Image": 1502,
+        "annex": 188,
+        "bDConstDCO": 163,
+        "cosm": 220,
+        "diag": 9,
+        "fPTerm": 3,
+        "fontRun": 17,
+        "gRef": 1,
+        "gRefDCO": 1,
+        "hGrowCItem": 64,
+        "iUse": 20,
+        "iUseDCO": 304,
+        "label": 399,
+        "multiCosm": 212,
+        "multiLabel": 72,
+        "nMux": 1,
+        "nmxDCO": 9,
+        "numLabel": 106,
+        "oHExt": 1,
+        "polyIUse": 24,
+        "polyIUseDCO": 384,
+        "polySelector": 24,
+        "propItem": 24,
+        "propItemInfo": 24,
+        "propNode": 16,
+        "sLoc": 7,
+        "sRN": 9,
+        "selLabel": 25,
+        "seqTun": 10,
+        "sequence": 1,
+        "signal": 258,
+        "stdBool": 16,
+        "stdNum": 58,
+        "stdRefNum": 1,
+        "stdRing": 48,
+        "stdString": 16,
+        "stdTag": 25,
+        "term": 1096,
+        "textHair": 602
+      },
+      "VI_calls": [
+        {
+          "name": "\"Clear Errors.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"DAQmx Clear Task.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"DAQmx Create Task.vi\"",
+          "count": 8
+        },
+        {
+          "name": "\"DAQmx Start Task.vi\"",
+          "count": 8
+        },
+        {
+          "name": "\"DAQmx Stop Task.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "1_SUP_PROFILS XY.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\1_SUP_PROFILS XY.vi",
+      "sha256": "1AFEED32C671255FC42238F007CFA94D531598A1800F1CB05FD6E2744B4541C6",
+      "diagram_count": 7,
+      "classes": {
+        "Image": 108,
+        "SelectorRange": 4,
+        "aInit": 2,
+        "aInitDCO": 6,
+        "aRepDCO": 10,
+        "aReplace": 2,
+        "annex": 13,
+        "bDConstDCO": 9,
+        "caseSel": 2,
+        "cosm": 14,
+        "diag": 7,
+        "fPTerm": 15,
+        "fontRun": 5,
+        "forLoop": 2,
+        "iUse": 2,
+        "iUseDCO": 22,
+        "innerLpTun": 2,
+        "lCnt": 2,
+        "lMax": 2,
+        "lSR": 2,
+        "label": 40,
+        "lpTun": 4,
+        "multiCosm": 11,
+        "multiLabel": 4,
+        "nMux": 1,
+        "nmxDCO": 3,
+        "numLabel": 8,
+        "oHExt": 1,
+        "overridableParm": 4,
+        "parm": 28,
+        "polyIUse": 2,
+        "polyIUseDCO": 10,
+        "polySelector": 2,
+        "prim": 12,
+        "rSR": 2,
+        "sRN": 7,
+        "selLabel": 2,
+        "selTun": 8,
+        "select": 2,
+        "signal": 56,
+        "stdBool": 1,
+        "stdNum": 6,
+        "stdRing": 2,
+        "term": 144,
+        "textHair": 54,
+        "typeDef": 2
+      },
+      "VI_calls": [
+        {
+          "name": "\"IMAQ GetRowCol\"",
+          "count": 2
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "1_SUP_WRITE_NI6602.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\1_SUP_WRITE_NI6602.vi",
+      "sha256": "81F29F2C56C22DB6FB37CC8893D360362B2610B6488F9D95C8AFCE0CB21E0DCE",
+      "diagram_count": 2,
+      "classes": {
+        "Image": 35,
+        "annex": 4,
+        "bDConstDCO": 4,
+        "cosm": 3,
+        "diag": 2,
+        "fPTerm": 5,
+        "fontRun": 1,
+        "hGrowCItem": 8,
+        "iUse": 2,
+        "iUseDCO": 32,
+        "lCnt": 1,
+        "lTst": 1,
+        "label": 12,
+        "lpTun": 4,
+        "multiCosm": 4,
+        "numLabel": 3,
+        "oHExt": 1,
+        "overridableParm": 2,
+        "parm": 13,
+        "prim": 6,
+        "propItem": 4,
+        "propItemInfo": 4,
+        "propNode": 2,
+        "sRN": 2,
+        "signal": 25,
+        "stdBool": 1,
+        "stdNum": 3,
+        "term": 73,
+        "textHair": 15,
+        "whileLoop": 1
+      },
+      "VI_calls": [
+        {
+          "name": "\"DAQmx Start Task.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"DAQmx Stop Task.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "2_SUP_Ecart_lu_ecr_VDirecte.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\2_SUP_Ecart_lu_ecr_VDirecte.vi",
+      "sha256": "5CD315417FDFC2FA5115D0C26D3450825E5EF54441A9C43FC6D0F6C0A9E45333",
+      "diagram_count": 3,
+      "classes": {
+        "Image": 10,
+        "annex": 1,
+        "bDConstDCO": 1,
+        "diag": 3,
+        "fPTerm": 3,
+        "fontRun": 1,
+        "gRef": 3,
+        "gRefDCO": 3,
+        "label": 8,
+        "multiCosm": 1,
+        "nMux": 2,
+        "nmxDCO": 35,
+        "oHExt": 1,
+        "overridableParm": 11,
+        "parm": 77,
+        "prim": 33,
+        "sRN": 3,
+        "seqTun": 2,
+        "sequence": 1,
+        "signal": 62,
+        "stdBool": 1,
+        "term": 134,
+        "textHair": 8
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "2_SUP_Ecart_lu_ecr_VDéviée.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\2_SUP_Ecart_lu_ecr_VDéviée.vi",
+      "sha256": "BB17412EA188A1EBC0218673E5DD694775A8A1F25034CCC5AA8740F236641C0C",
+      "diagram_count": 3,
+      "classes": {
+        "Image": 7,
+        "diag": 3,
+        "fPTerm": 3,
+        "fontRun": 1,
+        "gRef": 3,
+        "gRefDCO": 3,
+        "label": 7,
+        "nMux": 2,
+        "nmxDCO": 29,
+        "oHExt": 1,
+        "overridableParm": 9,
+        "parm": 63,
+        "prim": 27,
+        "sRN": 3,
+        "seqTun": 2,
+        "sequence": 1,
+        "signal": 52,
+        "term": 111,
+        "textHair": 7
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "2_SUP_Graph _Radioprot.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\2_SUP_Graph _Radioprot.vi",
+      "sha256": "25D72D2432462638F26E71F8E02614A02CA5174D7008E7E8116B8102C205718D",
+      "diagram_count": 10,
+      "classes": {
+        "Image": 57,
+        "SelectorRange": 9,
+        "aBuild": 1,
+        "aBuildDCO": 5,
+        "annex": 6,
+        "bDConstDCO": 6,
+        "caseSel": 3,
+        "cosm": 6,
+        "cpdArith": 1,
+        "cpdArithDCO": 4,
+        "diag": 10,
+        "fPTerm": 7,
+        "fontRun": 21,
+        "gRef": 3,
+        "gRefDCO": 3,
+        "label": 12,
+        "multiCosm": 6,
+        "mux": 1,
+        "mxDCO": 5,
+        "nMux": 3,
+        "nmxDCO": 11,
+        "numLabel": 6,
+        "oHExt": 1,
+        "overridableParm": 1,
+        "parm": 9,
+        "prim": 4,
+        "sRN": 10,
+        "selLabel": 3,
+        "selTun": 9,
+        "select": 3,
+        "signal": 36,
+        "stdNum": 6,
+        "term": 90,
+        "textHair": 21
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "2_SUP_Journal_des _erreurs.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\2_SUP_Journal_des _erreurs.vi",
+      "sha256": "E8B8E05803ED7BC37F3AE82F2C133D4BC43E1DE7AD22E76B2C2D6DDA26681E49",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 26,
+        "aBuild": 1,
+        "aBuildDCO": 2,
+        "annex": 5,
+        "bDConstDCO": 5,
+        "bDFixed": 2,
+        "concat": 2,
+        "concatDCO": 8,
+        "cosm": 4,
+        "diag": 1,
+        "fPTerm": 5,
+        "fontRun": 7,
+        "label": 12,
+        "multiCosm": 3,
+        "oHExt": 1,
+        "parm": 10,
+        "polyIUse": 1,
+        "polyIUseDCO": 9,
+        "prim": 4,
+        "sRN": 1,
+        "signal": 15,
+        "stdBool": 1,
+        "stdString": 2,
+        "term": 34,
+        "textHair": 12
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "2_SUP_marche_defaut_VIDE.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\2_SUP_marche_defaut_VIDE.vi",
+      "sha256": "E1D2BB8D8E6D5EEB2541A06E286BADE5610B5409037D5F918923E9B270D110AF",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 70,
+        "annex": 13,
+        "bDConstDCO": 3,
+        "cosm": 35,
+        "diag": 1,
+        "fPTerm": 8,
+        "indArr": 2,
+        "label": 17,
+        "multiCosm": 5,
+        "nMux": 1,
+        "nmxDCO": 14,
+        "numLabel": 3,
+        "oHExt": 1,
+        "pane": 2,
+        "parm": 30,
+        "prim": 12,
+        "sRN": 1,
+        "signal": 26,
+        "stdClust": 2,
+        "stdColorNum": 4,
+        "stdNum": 3,
+        "term": 47,
+        "textHair": 20
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "3_SUP_en_défaut_alims.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\3_SUP_en_défaut_alims.vi",
+      "sha256": "A67EE1CD5714C1D303FEE98FB3903BA2DBCC82D3FB6DB76488D73EDD64A324EB",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 13,
+        "cpdArith": 19,
+        "cpdArithDCO": 76,
+        "diag": 1,
+        "fPTerm": 4,
+        "fontRun": 13,
+        "gRef": 8,
+        "gRefDCO": 8,
+        "label": 13,
+        "nMux": 40,
+        "nmxDCO": 116,
+        "oHExt": 1,
+        "parm": 114,
+        "prim": 38,
+        "sRN": 1,
+        "signal": 122,
+        "term": 316,
+        "textHair": 13
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Add Item.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Add Item.vi",
+      "sha256": "A81AB74D116BE4AE5CA30A6CA8A30693B845B6707FE46033809B6F8D099272DB",
+      "diagram_count": 3,
+      "classes": {
+        "Image": 32,
+        "annex": 2,
+        "bDConstDCO": 2,
+        "cosm": 2,
+        "diag": 3,
+        "fPTerm": 10,
+        "forLoop": 2,
+        "hGrowCItem": 8,
+        "innerLpTun": 10,
+        "invokeItem": 28,
+        "invokeNode": 2,
+        "lCnt": 2,
+        "lMax": 2,
+        "lSR": 4,
+        "label": 18,
+        "lpTun": 10,
+        "multiCosm": 2,
+        "numLabel": 2,
+        "oHExt": 1,
+        "parm": 47,
+        "prim": 13,
+        "rSR": 4,
+        "sRN": 3,
+        "signal": 47,
+        "stdNum": 2,
+        "term": 127,
+        "textHair": 20
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "BuildHelpPath.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\BuildHelpPath.vi",
+      "sha256": "462E5C80CA0B8648881B56DB181941344E48FD02AB65BCBFC08BA4067BAFD7E5",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 3,
+        "diag": 1,
+        "fPTerm": 2,
+        "fontRun": 3,
+        "iUse": 1,
+        "iUseDCO": 1,
+        "label": 3,
+        "oHExt": 1,
+        "parm": 3,
+        "prim": 1,
+        "sRN": 1,
+        "signal": 3,
+        "term": 4,
+        "textHair": 3
+      },
+      "VI_calls": [
+        {
+          "name": "\"GetHelpDir.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Check Special Tags.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Check Special Tags.vi",
+      "sha256": "2EFD56A54D1FF34872B5726E4918A0642BFBFABBF111346F18C440A55ED6CA2A",
+      "diagram_count": 5,
+      "classes": {
+        "Image": 37,
+        "annex": 9,
+        "bDConstDCO": 6,
+        "bDFixed": 1,
+        "caseSel": 2,
+        "cosm": 9,
+        "diag": 5,
+        "fPTerm": 4,
+        "fontRun": 22,
+        "label": 14,
+        "multiCosm": 3,
+        "multiLabel": 3,
+        "numLabel": 3,
+        "oHExt": 1,
+        "parm": 18,
+        "prim": 4,
+        "sRN": 5,
+        "selLabel": 2,
+        "selTun": 13,
+        "select": 2,
+        "signal": 28,
+        "stdRing": 3,
+        "stdString": 2,
+        "term": 69,
+        "textHair": 22,
+        "typeDef": 3
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Convert property node font to graphics font.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Convert property node font to graphics font.vi",
+      "sha256": "262B6CAC8B60CADA6C3531137EE1B500A8CFF053D4B074951DC81E1DA4B2A3FC",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 43,
+        "annex": 11,
+        "bDConstDCO": 2,
+        "cosm": 8,
+        "diag": 1,
+        "fPTerm": 2,
+        "fontRun": 15,
+        "label": 14,
+        "multiCosm": 8,
+        "nMux": 2,
+        "nmxDCO": 17,
+        "numLabel": 1,
+        "oHExt": 1,
+        "pane": 1,
+        "sRN": 1,
+        "signal": 10,
+        "stdBool": 7,
+        "stdClust": 1,
+        "stdNum": 1,
+        "stdString": 1,
+        "term": 20,
+        "textHair": 15
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Details Display Dialog.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Details Display Dialog.vi",
+      "sha256": "58ABC11B9A7C92E8224C0D3C6401D5C181119859118268FE87F0D87086FA1426",
+      "diagram_count": 19,
+      "classes": {
+        "Image": 199,
+        "aBuild": 3,
+        "aBuildDCO": 15,
+        "annex": 32,
+        "bDConstDCO": 25,
+        "bDFixed": 1,
+        "caseSel": 3,
+        "concat": 3,
+        "concatDCO": 9,
+        "cosm": 21,
+        "ctlRefConst": 2,
+        "ctlRefDCO": 2,
+        "diag": 19,
+        "eventDataNode": 7,
+        "eventDynDCO": 2,
+        "eventStruct": 1,
+        "eventTimeOut": 1,
+        "fPTerm": 20,
+        "fontRun": 2,
+        "forLoop": 1,
+        "hGrowCItem": 156,
+        "iUse": 4,
+        "iUseDCO": 24,
+        "innerLpTun": 1,
+        "invokeItem": 26,
+        "invokeNode": 5,
+        "lCnt": 2,
+        "lMax": 1,
+        "lTst": 1,
+        "label": 95,
+        "lpTun": 4,
+        "multiCosm": 24,
+        "multiLabel": 3,
+        "nMux": 2,
+        "nmxDCO": 32,
+        "numLabel": 9,
+        "oHExt": 1,
+        "overridableParm": 11,
+        "pane": 1,
+        "parm": 67,
+        "prim": 28,
+        "propItem": 50,
+        "propItemInfo": 59,
+        "propNode": 34,
+        "sLoc": 2,
+        "sRN": 19,
+        "selLabel": 4,
+        "selTun": 17,
+        "select": 3,
+        "seqTun": 4,
+        "sequence": 2,
+        "signal": 146,
+        "stdBool": 15,
+        "stdClust": 1,
+        "stdNum": 6,
+        "stdRing": 3,
+        "stdString": 2,
+        "term": 539,
+        "textHair": 111,
+        "typeDef": 3,
+        "whileLoop": 1
+      },
+      "VI_calls": [
+        {
+          "name": "\"Clear Errors.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Set Bold Text.vi\"",
+          "count": 2
+        },
+        {
+          "name": "\"compatReturnToEnter.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Directory to Tree.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Directory to Tree.vi",
+      "sha256": "CE6D04D1B42FCAFCCDC25E9773BD7F1DD16EB3984415086939FC80B7B950E566",
+      "diagram_count": 5,
+      "classes": {
+        "BrowseOptions": 3,
+        "Image": 78,
+        "SelectorRange": 2,
+        "aBuild": 3,
+        "aBuildDCO": 9,
+        "annex": 11,
+        "bDConstDCO": 5,
+        "caseSel": 1,
+        "cosm": 27,
+        "ctlRefConst": 1,
+        "ctlRefDCO": 1,
+        "diag": 5,
+        "fPTerm": 11,
+        "forLoop": 1,
+        "hGrowCItem": 8,
+        "iUse": 3,
+        "iUseDCO": 18,
+        "indArr": 3,
+        "innerLpTun": 3,
+        "lCnt": 2,
+        "lMax": 1,
+        "lSR": 8,
+        "lTst": 1,
+        "label": 31,
+        "lpTun": 6,
+        "multiCosm": 8,
+        "numLabel": 3,
+        "oHExt": 1,
+        "parm": 8,
+        "prim": 4,
+        "propItem": 3,
+        "propItemInfo": 3,
+        "propNode": 2,
+        "rSR": 8,
+        "sRN": 5,
+        "selLabel": 1,
+        "selTun": 11,
+        "select": 1,
+        "signal": 60,
+        "stdBool": 2,
+        "stdNum": 3,
+        "stdPath": 3,
+        "term": 137,
+        "textHair": 35,
+        "whileLoop": 1
+      },
+      "VI_calls": [
+        {
+          "name": "\"Add Item.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Initialize.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Validate.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Error Code Database.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Error Code Database.vi",
+      "sha256": "4241A23180BBB28759A3CB927440406FA3A78035E0D698C7D6D480DA9CDD3BF8",
+      "diagram_count": 1,
+      "classes": {
+        "ExtFuncParam": 3,
+        "Image": 8,
+        "annex": 2,
+        "bDConstDCO": 2,
+        "cosm": 2,
+        "diag": 1,
+        "extFunc": 1,
+        "extFuncArg": 3,
+        "fPTerm": 2,
+        "fontRun": 6,
+        "hGrowCItem": 4,
+        "label": 6,
+        "oHExt": 1,
+        "parm": 6,
+        "prim": 2,
+        "sRN": 1,
+        "signal": 7,
+        "stdString": 2,
+        "term": 18,
+        "textHair": 6
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Find Tag.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Find Tag.vi",
+      "sha256": "62CC3ED0BEED484A5E328EC830C0431FA2337F22788C2755209839BFB7E1860B",
+      "diagram_count": 2,
+      "classes": {
+        "Image": 11,
+        "annex": 1,
+        "bDConstDCO": 1,
+        "concat": 1,
+        "concatDCO": 4,
+        "diag": 2,
+        "fPTerm": 6,
+        "fontRun": 9,
+        "iUse": 2,
+        "iUseDCO": 14,
+        "innerLpTun": 2,
+        "lCnt": 1,
+        "lSR": 1,
+        "lTst": 1,
+        "label": 9,
+        "lpTun": 4,
+        "multiCosm": 1,
+        "oHExt": 1,
+        "parm": 25,
+        "prim": 7,
+        "rSR": 1,
+        "sRN": 2,
+        "signal": 24,
+        "stdBool": 1,
+        "term": 58,
+        "textHair": 9,
+        "whileLoop": 1
+      },
+      "VI_calls": [
+        {
+          "name": "\"Search and Replace Pattern.vi\"",
+          "count": 2
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Format Message String.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Format Message String.vi",
+      "sha256": "6617B920244154F269395FBDDE94B881EB6F822183B6D6EFBEA5E4867EF68E43",
+      "diagram_count": 3,
+      "classes": {
+        "Image": 19,
+        "annex": 3,
+        "bDConstDCO": 3,
+        "bDFixed": 1,
+        "caseSel": 1,
+        "concat": 2,
+        "concatDCO": 7,
+        "cosm": 3,
+        "diag": 3,
+        "fPTerm": 8,
+        "fontRun": 16,
+        "hGrowCItem": 8,
+        "iUse": 2,
+        "iUseDCO": 13,
+        "label": 15,
+        "oHExt": 1,
+        "parm": 5,
+        "prim": 2,
+        "propItem": 2,
+        "propItemInfo": 2,
+        "propNode": 2,
+        "sRN": 3,
+        "selLabel": 1,
+        "selTun": 6,
+        "select": 1,
+        "signal": 24,
+        "stdString": 2,
+        "term": 59,
+        "textHair": 16
+      },
+      "VI_calls": [
+        {
+          "name": "\"Find Tag.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Set Bold Text.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "FW102x Close.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\FW102x Close.vi",
+      "sha256": "DFFEA2642C29F01F33AAD30A6D81DE291FCC30014F6C36E3EBFEF1AF86D7C306",
+      "diagram_count": 1,
+      "classes": {
+        "ExtFuncParam": 2,
+        "Image": 11,
+        "annex": 1,
+        "bDConstDCO": 1,
+        "cosm": 1,
+        "diag": 1,
+        "extFunc": 1,
+        "extFuncArg": 2,
+        "fPTerm": 3,
+        "hGrowCItem": 4,
+        "iUse": 1,
+        "iUseDCO": 6,
+        "label": 4,
+        "multiCosm": 1,
+        "numLabel": 1,
+        "oHExt": 1,
+        "parm": 5,
+        "prim": 3,
+        "sRN": 1,
+        "signal": 7,
+        "stdNum": 1,
+        "term": 20,
+        "textHair": 5
+      },
+      "VI_calls": [
+        {
+          "name": "\"FW102x IVI Error Converter.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "FW102x Error Message.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\FW102x Error Message.vi",
+      "sha256": "0B6C1E7C0F7E5761456FC38CC69E1845258686EF079052DC9A0C0865AFBB3331",
+      "diagram_count": 1,
+      "classes": {
+        "ExtFuncParam": 4,
+        "Image": 14,
+        "aInit": 1,
+        "aInitDCO": 3,
+        "annex": 1,
+        "bDConstDCO": 1,
+        "cosm": 1,
+        "diag": 1,
+        "extFunc": 1,
+        "extFuncArg": 4,
+        "fPTerm": 7,
+        "hGrowCItem": 4,
+        "label": 7,
+        "multiCosm": 1,
+        "mux": 1,
+        "mxDCO": 4,
+        "numLabel": 1,
+        "oHExt": 1,
+        "parm": 8,
+        "prim": 4,
+        "sRN": 1,
+        "signal": 12,
+        "stdNum": 1,
+        "term": 29,
+        "textHair": 8
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "FW102x Get Position.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\FW102x Get Position.vi",
+      "sha256": "DC08889751DE40340CE932A011612F8DD9A0550C91408DE82CE3AEDD863A659D",
+      "diagram_count": 3,
+      "classes": {
+        "ExtFuncParam": 3,
+        "Image": 10,
+        "SelectorRange": 2,
+        "caseSel": 1,
+        "diag": 3,
+        "extFunc": 1,
+        "extFuncArg": 3,
+        "fPTerm": 5,
+        "gRef": 3,
+        "gRefDCO": 3,
+        "hGrowCItem": 4,
+        "iUse": 1,
+        "iUseDCO": 6,
+        "label": 9,
+        "oHExt": 1,
+        "parm": 4,
+        "prim": 2,
+        "sRN": 3,
+        "selLabel": 1,
+        "selTun": 2,
+        "select": 1,
+        "signal": 13,
+        "term": 32,
+        "textHair": 10
+      },
+      "VI_calls": [
+        {
+          "name": "\"FW102x IVI Error Converter.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "FW102x Initialize.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\FW102x Initialize.vi",
+      "sha256": "69E72CFB5DF707C969A959C07BA5821C1CDD433F1D405E5393CD61C8B3FFD486",
+      "diagram_count": 3,
+      "classes": {
+        "ExtFuncParam": 6,
+        "Image": 10,
+        "SelectorRange": 2,
+        "caseSel": 1,
+        "diag": 3,
+        "extFunc": 1,
+        "extFuncArg": 6,
+        "fPTerm": 7,
+        "gRef": 1,
+        "gRefDCO": 1,
+        "hGrowCItem": 4,
+        "iUse": 1,
+        "iUseDCO": 6,
+        "label": 9,
+        "oHExt": 1,
+        "parm": 12,
+        "prim": 5,
+        "sRN": 3,
+        "selLabel": 1,
+        "selTun": 2,
+        "select": 1,
+        "signal": 18,
+        "term": 44,
+        "textHair": 10
+      },
+      "VI_calls": [
+        {
+          "name": "\"FW102x IVI Error Converter.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "FW102x IVI Error Converter.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\FW102x IVI Error Converter.vi",
+      "sha256": "8D2D046461005F61795FAD239EB3F557752A319972DF9968AAB6559F8CF44777",
+      "diagram_count": 7,
+      "classes": {
+        "ExtFuncParam": 17,
+        "Image": 115,
+        "SelectorRange": 6,
+        "aInit": 4,
+        "aInitDCO": 12,
+        "annex": 18,
+        "bDConstDCO": 18,
+        "bDFixed": 5,
+        "caseSel": 3,
+        "cosm": 18,
+        "diag": 7,
+        "extFunc": 4,
+        "extFuncArg": 17,
+        "fPTerm": 6,
+        "hGrowCItem": 16,
+        "iUse": 1,
+        "iUseDCO": 12,
+        "label": 16,
+        "multiCosm": 13,
+        "nMux": 2,
+        "nmxDCO": 6,
+        "numLabel": 13,
+        "oHExt": 1,
+        "parm": 48,
+        "prim": 18,
+        "sRN": 7,
+        "selLabel": 3,
+        "selTun": 12,
+        "select": 3,
+        "signal": 74,
+        "stdNum": 13,
+        "term": 192,
+        "textHair": 32
+      },
+      "VI_calls": [
+        {
+          "name": "\"IVI Error Message Builder.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "FW102x Set Position.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\FW102x Set Position.vi",
+      "sha256": "B8BBED963EA558F34453963B8735EB7B2462FC5596ED05D1EADAAA3324A7EF58",
+      "diagram_count": 3,
+      "classes": {
+        "ExtFuncParam": 3,
+        "Image": 9,
+        "SelectorRange": 2,
+        "caseSel": 1,
+        "diag": 3,
+        "extFunc": 1,
+        "extFuncArg": 3,
+        "fPTerm": 5,
+        "gRef": 2,
+        "gRefDCO": 2,
+        "hGrowCItem": 4,
+        "iUse": 1,
+        "iUseDCO": 6,
+        "label": 8,
+        "oHExt": 1,
+        "parm": 4,
+        "prim": 2,
+        "sRN": 3,
+        "selLabel": 1,
+        "selTun": 2,
+        "select": 1,
+        "signal": 12,
+        "term": 31,
+        "textHair": 9
+      },
+      "VI_calls": [
+        {
+          "name": "\"FW102x IVI Error Converter.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "General Error Handler CORE.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\General Error Handler CORE.vi",
+      "sha256": "12A5F68A25702C2638F5CD599C8909DE43926FAA9DA23006386FD570A93A0A64",
+      "diagram_count": 43,
+      "classes": {
+        "Image": 232,
+        "aIDCO": 6,
+        "aIndx": 2,
+        "annex": 44,
+        "bDConstDCO": 35,
+        "bDFixed": 6,
+        "cLStrObj": 3,
+        "caseSel": 20,
+        "concat": 4,
+        "concatDCO": 18,
+        "cosm": 30,
+        "cpdArith": 1,
+        "cpdArithDCO": 4,
+        "diag": 43,
+        "fPTerm": 18,
+        "fontRun": 125,
+        "hGrowCItem": 20,
+        "iUse": 10,
+        "iUseDCO": 53,
+        "label": 78,
+        "multiCosm": 28,
+        "multiLabel": 10,
+        "nMux": 5,
+        "nmxDCO": 22,
+        "numLabel": 17,
+        "oHExt": 1,
+        "overridableParm": 3,
+        "parm": 112,
+        "prim": 39,
+        "printf": 4,
+        "printfArg": 25,
+        "propItem": 5,
+        "propItemInfo": 5,
+        "propNode": 5,
+        "sRN": 43,
+        "selLabel": 20,
+        "selTun": 129,
+        "select": 20,
+        "signal": 298,
+        "stdBool": 11,
+        "stdNum": 7,
+        "stdRing": 10,
+        "stdString": 1,
+        "term": 761,
+        "textHair": 125,
+        "typeDef": 9
+      },
+      "VI_calls": [
+        {
+          "name": "\"Check Special Tags.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Details Display Dialog.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Error Code Database.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Format Message String.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Not Found Dialog.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Trim Whitespace.vi\"",
+          "count": 5
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "General Error Handler.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\General Error Handler.vi",
+      "sha256": "C184162B74BA6A1F7121C4F62F6C114D6A64A7420EEFB317E09A2E82F42B8F7B",
+      "diagram_count": 6,
+      "classes": {
+        "Image": 57,
+        "annex": 10,
+        "bDConstDCO": 5,
+        "caseSel": 1,
+        "cosm": 10,
+        "diag": 6,
+        "fPTerm": 14,
+        "fontRun": 37,
+        "iUse": 1,
+        "iUseDCO": 16,
+        "label": 26,
+        "multiCosm": 5,
+        "multiLabel": 5,
+        "numLabel": 5,
+        "oHExt": 1,
+        "sRN": 6,
+        "selLabel": 1,
+        "selTun": 1,
+        "select": 1,
+        "signal": 20,
+        "stdRing": 5,
+        "term": 33,
+        "textHair": 37,
+        "typeDef": 5
+      },
+      "VI_calls": [
+        {
+          "name": "\"General Error Handler CORE.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "GetHelpDir.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\GetHelpDir.vi",
+      "sha256": "38957A89D5B56B55804B2E411BB6008F26BC1FE138F8254CDB78BBCDE6C328F4",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 4,
+        "annex": 1,
+        "bDConstDCO": 1,
+        "cosm": 1,
+        "diag": 1,
+        "fPTerm": 1,
+        "fontRun": 3,
+        "label": 3,
+        "oHExt": 1,
+        "parm": 7,
+        "prim": 3,
+        "sRN": 1,
+        "signal": 4,
+        "stdString": 1,
+        "term": 8,
+        "textHair": 3
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Init_Open_Close.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Init_Open_Close.vi",
+      "sha256": "F05170AD849B3AE679397BC18CA3A42E4BEEF8F1714394B690B1CB8AFD29304E",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 17,
+        "annex": 2,
+        "bDConstDCO": 2,
+        "diag": 1,
+        "fPTerm": 7,
+        "hGrowCItem": 8,
+        "iUse": 1,
+        "iUseDCO": 10,
+        "invokeItem": 10,
+        "invokeNode": 2,
+        "label": 13,
+        "multiCosm": 2,
+        "oHExt": 1,
+        "sRN": 1,
+        "signal": 13,
+        "stdBool": 2,
+        "term": 30,
+        "textHair": 13
+      },
+      "VI_calls": [
+        {
+          "name": "\"Directory to Tree.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Initialize.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Initialize.vi",
+      "sha256": "2FB3ED629C5839D64AF1D6C6DC85A6C9717F6696BC7A04E03E1B40B2C335F925",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 8,
+        "aBuild": 1,
+        "aBuildDCO": 2,
+        "annex": 1,
+        "bDConstDCO": 1,
+        "ctlRefConst": 1,
+        "ctlRefDCO": 1,
+        "diag": 1,
+        "fPTerm": 3,
+        "hGrowCItem": 4,
+        "label": 6,
+        "multiCosm": 1,
+        "oHExt": 1,
+        "propItem": 2,
+        "propItemInfo": 2,
+        "propNode": 1,
+        "sRN": 1,
+        "signal": 4,
+        "stdBool": 1,
+        "term": 10,
+        "textHair": 6
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Longest Line Length in Pixels.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Longest Line Length in Pixels.vi",
+      "sha256": "0FDDBA5E644072731726E2B015D7FBE57E7C9334AEC76B96324CFEE938EB1D4C",
+      "diagram_count": 2,
+      "classes": {
+        "Image": 42,
+        "annex": 6,
+        "bDConstDCO": 3,
+        "cosm": 13,
+        "diag": 2,
+        "fPTerm": 2,
+        "fontRun": 17,
+        "hGrowCItem": 8,
+        "iUse": 2,
+        "iUseDCO": 12,
+        "invokeItem": 10,
+        "invokeNode": 1,
+        "lCnt": 1,
+        "lSR": 1,
+        "lTst": 1,
+        "label": 10,
+        "lpTun": 4,
+        "multiCosm": 4,
+        "multiLabel": 3,
+        "nMux": 2,
+        "nmxDCO": 5,
+        "numLabel": 4,
+        "oHExt": 1,
+        "overridableParm": 1,
+        "pane": 1,
+        "parm": 11,
+        "prim": 4,
+        "propItem": 2,
+        "propItemInfo": 4,
+        "propNode": 1,
+        "rSR": 1,
+        "sRN": 2,
+        "signal": 24,
+        "stdClust": 1,
+        "stdNum": 1,
+        "stdRing": 3,
+        "term": 67,
+        "textHair": 17,
+        "whileLoop": 1
+      },
+      "VI_calls": [
+        {
+          "name": "\"Convert property node font to graphics font.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Get Text Rect.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Not Found Dialog.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Not Found Dialog.vi",
+      "sha256": "6DAA7DBDD94EC838F5AB1A8BF36B3933D40950DBB66AE78BD208090816D279C7",
+      "diagram_count": 8,
+      "classes": {
+        "Image": 51,
+        "annex": 10,
+        "bDConstDCO": 9,
+        "caseSel": 3,
+        "cosm": 9,
+        "diag": 8,
+        "fPTerm": 6,
+        "fontRun": 26,
+        "iUse": 2,
+        "iUseDCO": 14,
+        "label": 15,
+        "multiCosm": 8,
+        "multiLabel": 4,
+        "numLabel": 4,
+        "oHExt": 1,
+        "parm": 21,
+        "prim": 7,
+        "sRN": 8,
+        "selLabel": 3,
+        "selTun": 8,
+        "select": 3,
+        "signal": 32,
+        "stdBool": 4,
+        "stdRing": 4,
+        "stdString": 1,
+        "term": 84,
+        "textHair": 26,
+        "typeDef": 1
+      },
+      "VI_calls": [
+        {
+          "name": "\"BuildHelpPath.vi\"",
+          "count": 1
+        },
+        {
+          "name": "\"Three Button Dialog.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Search and Replace Pattern.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Search and Replace Pattern.vi",
+      "sha256": "889593766AE7AC2DB7ACFD4EEA8B94C34B804CCB5F4071EA844B499ED515906C",
+      "diagram_count": 4,
+      "classes": {
+        "Image": 23,
+        "annex": 2,
+        "bDConstDCO": 2,
+        "caseSel": 1,
+        "concat": 2,
+        "concatDCO": 6,
+        "cosm": 2,
+        "diag": 4,
+        "fPTerm": 7,
+        "fontRun": 11,
+        "lCnt": 1,
+        "lSR": 4,
+        "lTst": 1,
+        "label": 8,
+        "lpTun": 2,
+        "multiCosm": 2,
+        "numLabel": 2,
+        "oHExt": 1,
+        "overridableParm": 1,
+        "parm": 28,
+        "prim": 9,
+        "rSR": 4,
+        "sRN": 4,
+        "selLabel": 1,
+        "selTun": 10,
+        "select": 1,
+        "signal": 38,
+        "stdNum": 2,
+        "term": 92,
+        "textHair": 11,
+        "whileLoop": 1
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Set Bold Text.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Set Bold Text.vi",
+      "sha256": "1F2A74598465F0EF0C38E5084E73A25AB77001E9EDF68DBBAE8320CB1A560307",
+      "diagram_count": 4,
+      "classes": {
+        "Image": 43,
+        "annex": 7,
+        "bDConstDCO": 4,
+        "caseSel": 1,
+        "cosm": 8,
+        "diag": 4,
+        "fPTerm": 6,
+        "fontRun": 18,
+        "forLoop": 1,
+        "hGrowCItem": 8,
+        "innerLpTun": 4,
+        "lCnt": 1,
+        "lMax": 1,
+        "label": 15,
+        "lpTun": 6,
+        "multiCosm": 5,
+        "numLabel": 2,
+        "oHExt": 1,
+        "overridableParm": 2,
+        "pane": 1,
+        "parm": 4,
+        "prim": 2,
+        "propItem": 6,
+        "propItemInfo": 11,
+        "propNode": 2,
+        "sRN": 4,
+        "selLabel": 1,
+        "selTun": 5,
+        "select": 1,
+        "signal": 28,
+        "stdBool": 3,
+        "stdClust": 1,
+        "stdNum": 2,
+        "term": 57,
+        "textHair": 18
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "sous vi LigneCentroide2.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\sous vi LigneCentroide2.vi",
+      "sha256": "61D1CA1FFEA73A48F0150CA4EA8FE083072FD80D69ED001FF4B51C1D366B7660",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 3,
+        "diag": 1,
+        "fBox": 1,
+        "fBoxDCO": 6,
+        "fPTerm": 3,
+        "fontRun": 7,
+        "label": 3,
+        "mux": 2,
+        "mxDCO": 10,
+        "nMux": 1,
+        "nmxDCO": 3,
+        "oHExt": 1,
+        "parm": 16,
+        "prim": 8,
+        "sRN": 1,
+        "signal": 17,
+        "term": 37,
+        "textHair": 11
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Three Button Dialog CORE.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Three Button Dialog CORE.vi",
+      "sha256": "F9492C803787A451A8D4D5B94CAE5C2850C3DAF5BDDDA22CEDE6EB89CA80AD90",
+      "diagram_count": 39,
+      "classes": {
+        "Image": 425,
+        "aInit": 3,
+        "aInitDCO": 9,
+        "annex": 55,
+        "bDConstDCO": 33,
+        "bDFixed": 2,
+        "caseSel": 11,
+        "cosm": 83,
+        "cpdArith": 3,
+        "cpdArithDCO": 12,
+        "ctlRefConst": 1,
+        "ctlRefDCO": 1,
+        "diag": 39,
+        "eventDataNode": 5,
+        "eventDynDCO": 2,
+        "eventStruct": 1,
+        "eventTimeOut": 1,
+        "fPTerm": 14,
+        "fontRun": 170,
+        "gRef": 1,
+        "gRefDCO": 1,
+        "hGrowCItem": 152,
+        "iUse": 1,
+        "iUseDCO": 11,
+        "indArr": 1,
+        "invokeItem": 4,
+        "invokeNode": 2,
+        "lCnt": 1,
+        "lTst": 1,
+        "label": 119,
+        "lpTun": 3,
+        "multiCosm": 40,
+        "multiLabel": 4,
+        "nMux": 7,
+        "nmxDCO": 36,
+        "numLabel": 34,
+        "oHExt": 1,
+        "overridableParm": 31,
+        "pane": 6,
+        "parm": 129,
+        "prim": 58,
+        "propItem": 60,
+        "propItemInfo": 61,
+        "propNode": 36,
+        "sLoc": 15,
+        "sRN": 39,
+        "selLabel": 12,
+        "selTun": 42,
+        "select": 11,
+        "seqTun": 2,
+        "sequence": 2,
+        "signal": 225,
+        "stdBool": 5,
+        "stdClust": 6,
+        "stdNum": 30,
+        "stdRing": 4,
+        "stdString": 1,
+        "term": 811,
+        "textHair": 169,
+        "whileLoop": 1
+      },
+      "VI_calls": [
+        {
+          "name": "\"Longest Line Length in Pixels.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Three Button Dialog.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Three Button Dialog.vi",
+      "sha256": "D4535F1559A2E46BB93AACF7294C2D1329751E0566DEE5072A6F7868857C5E08",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 11,
+        "diag": 1,
+        "fPTerm": 9,
+        "fontRun": 11,
+        "iUse": 1,
+        "iUseDCO": 12,
+        "label": 11,
+        "oHExt": 1,
+        "sRN": 1,
+        "signal": 9,
+        "term": 12,
+        "textHair": 11
+      },
+      "VI_calls": [
+        {
+          "name": "\"Three Button Dialog CORE.vi\"",
+          "count": 1
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Validate.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\analysis\\lvkit_eval\\parser_original_final_20261003\\cache\\llb\\SUPERVISION.llb-b28f7faf\\Validate.vi",
+      "sha256": "79E7EEAB3F7125EC9B691B16F37B29686DAA109554D564E7073428684AD8A302",
+      "diagram_count": 1,
+      "classes": {
+        "Image": 25,
+        "annex": 3,
+        "bDConstDCO": 3,
+        "cosm": 3,
+        "diag": 1,
+        "fPTerm": 2,
+        "label": 8,
+        "multiCosm": 3,
+        "numLabel": 1,
+        "oHExt": 1,
+        "overridableParm": 1,
+        "parm": 25,
+        "prim": 9,
+        "sRN": 1,
+        "signal": 13,
+        "stdNum": 1,
+        "stdString": 2,
+        "term": 29,
+        "textHair": 9
+      },
+      "VI_calls": [],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    },
+    {
+      "name": "Moteurs SdC GoTo.vi",
+      "source": "C:\\dev\\pyconlyse\\Supervision\\source\\PILOTAGE_ELYSE_SUP\\PILOTAGE_ELYSE_SUP_moteurs\\Moteurs SdC GoTo.vi",
+      "sha256": "4F33F363F0E21F76074CDE926E8439D9BC93947610B55BC42304FAFC2B1EFF3F",
+      "diagram_count": 27,
+      "classes": {
+        "Image": 174,
+        "SelectorRange": 14,
+        "aBuild": 1,
+        "aBuildDCO": 5,
+        "aIDCO": 12,
+        "aIndx": 4,
+        "annex": 14,
+        "bDConstDCO": 10,
+        "caseSel": 6,
+        "cosm": 20,
+        "diag": 27,
+        "fPTerm": 14,
+        "gRef": 36,
+        "gRefDCO": 36,
+        "iUse": 20,
+        "iUseDCO": 272,
+        "indArr": 2,
+        "lCnt": 4,
+        "lTst": 4,
+        "label": 94,
+        "lpTun": 28,
+        "multiCosm": 14,
+        "nMux": 4,
+        "nmxDCO": 8,
+        "numLabel": 8,
+        "oHExt": 1,
+        "overridableParm": 3,
+        "parm": 27,
+        "prim": 11,
+        "sRN": 27,
+        "selLabel": 6,
+        "selTun": 28,
+        "select": 6,
+        "seqTun": 12,
+        "sequence": 4,
+        "signal": 214,
+        "stdBool": 4,
+        "stdNum": 8,
+        "term": 583,
+        "textHair": 108,
+        "whileLoop": 4
+      },
+      "VI_calls": [
+        {
+          "name": "\"AbortMotion.vi\"",
+          "count": 4
+        },
+        {
+          "name": "\"GetErrorMsg.vi\"",
+          "count": 4
+        },
+        {
+          "name": "\"GetMotionDone.vi\"",
+          "count": 4
+        },
+        {
+          "name": "\"GetPosition.vi\"",
+          "count": 4
+        },
+        {
+          "name": "\"RelativeMove.vi\"",
+          "count": 4
+        }
+      ],
+      "original_bytes_and_XML_verified": true,
+      "inventory_is_full_behavior_proof": false
+    }
+  ],
+  "member_count": 39,
+  "focused_proofs_reused": [
+    {
+      "name": "beam_indicator_join_20261016",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\beam_indicator_join_20261016\\routes.json",
+      "sha256": "5B06ED186CF36CF9D39812B75F56D9670806F196A4808516BE471A816EAD1352"
+    },
+    {
+      "name": "beam_switch_trace_20261016",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\beam_switch_trace_20261016\\trace.json",
+      "sha256": "3F99461538321F152A9134D87AC1969F5E1CAAAF9A2464574DB9443EA3C74F7F"
+    },
+    {
+      "name": "h1_triplet_source_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\h1_triplet_source_20261017\\RESULT.json",
+      "sha256": "E34AFE631FAFB945E3184F5B4EA224817816E99D811016F2E813099778813363"
+    },
+    {
+      "name": "periodic_indicator_guards_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\periodic_indicator_guards_20261017\\RESULT.json",
+      "sha256": "B34424C1F8446EC680DE2C605BF7EDBB4F3D78E36C009051112E2638189536ED"
+    },
+    {
+      "name": "phase_status_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\phase_status_20261017\\RESULT.json",
+      "sha256": "92C9C259FB4EA154E513B84F88A36101F3954E0C4E04806D828B3BF98D9B7236"
+    },
+    {
+      "name": "psp_stale_status_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\psp_stale_status_20261017\\RESULT.json",
+      "sha256": "A3883B822FACEC4E5F56B2091E7633928448C3DD618FE998DB640F11BD17B4D1"
+    },
+    {
+      "name": "psp_journals_stop_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\psp_journals_stop_20261017\\RESULT.json",
+      "sha256": "909D63EC5A8E6E62E7EA85A8AD1553CAC80B61FCDA7AEA1B6A83B19B45670AB6"
+    },
+    {
+      "name": "simple_error_handler_stop_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\simple_error_handler_stop_20261017\\RESULT.json",
+      "sha256": "3AA7E2E8130356339F93D0A7E30747DD539C63DCC56FA70B1B0386359274B09F"
+    },
+    {
+      "name": "normal_stop_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\normal_stop_20261017\\RESULT.json",
+      "sha256": "713FCFC90073EBB4212FF5927624A54945B8D5D076C941E67960CD87BED321BC"
+    },
+    {
+      "name": "wait_motor_stop_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\wait_motor_stop_20261017\\RESULT.json",
+      "sha256": "206FC7DF8358651FB40F1AB0F4228EE90978F1787ED16449B35E076FE0A7236D"
+    },
+    {
+      "name": "native_timeouts_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\native_timeouts_20261017\\RESULT.json",
+      "sha256": "F3427E4344F6D5E6AE5BEB76E0DAA18EE4D55878B4A61FADAD4E6963AF7D6CE4"
+    },
+    {
+      "name": "cleanup_errors_20261017",
+      "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\cleanup_errors_20261017\\RESULT.json",
+      "sha256": "6DB3795580872D3D1F570700DB9ACBE9BCD43FA53501E557B1176BCE95B3543B"
+    }
+  ],
+  "new_initialization_findings": {
+    "manual_event": 27,
+    "state_banks": [
+      {
+        "name": "CmdLib Out",
+        "bank": 244,
+        "FP_control": "61437",
+        "startup_terminal": "61443",
+        "manual_writer": "273836",
+        "manual_terminal": "273843",
+        "same_state_bank": true
+      },
+      {
+        "name": "DeviceKey Out",
+        "bank": 246,
+        "FP_control": "61750",
+        "startup_terminal": "61762",
+        "manual_writer": "286518",
+        "manual_terminal": "286525",
+        "same_state_bank": true
+      },
+      {
+        "name": "Device Address Out",
+        "bank": 248,
+        "FP_control": "77644",
+        "startup_terminal": "77648",
+        "manual_writer": "91956",
+        "manual_terminal": "95313",
+        "same_state_bank": true
+      }
+    ],
+    "discovery_delay_ms": 5000,
+    "delay_is_total_initialization_deadline": false,
+    "key_length_branches": [
+      {
+        "selector": "61925",
+        "zero_length": "61965",
+        "nonzero_length_default": "62087",
+        "empty_key_error_passthrough": [
+          "61953",
+          "61942"
+        ],
+        "empty_key_sets_failure_error": false
+      },
+      {
+        "selector": "274119",
+        "zero_length": "274148",
+        "nonzero_length_default": "274182",
+        "empty_key_error_passthrough": [
+          "274139",
+          "274129"
+        ],
+        "empty_key_sets_failure_error": false
+      }
+    ],
+    "zero_position_loops": [
+      {
+        "loop": "62157",
+        "count_literal": "62100",
+        "iterations_when_calls_return": 4,
+        "motor_indices": "loop i incremented:1..4",
+        "call": "77355",
+        "error_input_is_invariant_tunnel": true,
+        "error_output_is_scalar_last_iteration": true,
+        "per_motor_error_feedback_or_early_stop": false
+      },
+      {
+        "loop": "274199",
+        "count_literal": "274188",
+        "iterations_when_calls_return": 4,
+        "motor_indices": "loop i incremented:1..4",
+        "call": "274246",
+        "error_input_is_invariant_tunnel": true,
+        "error_output_is_scalar_last_iteration": true,
+        "per_motor_error_feedback_or_early_stop": false
+      }
+    ],
+    "manual_post_phase": {
+      "frame": "88075",
+      "movement_buttons_Visible_requested": true,
+      "Initialisation_requested": false,
+      "property_writes_outside_error_case": true
+    },
+    "no_source_Shutdown_before_manual_reinitialization": true,
+    "inferences": [
+      "Startup and manual initialization target the SAME three stored banks, not independent handle sets. Startup uses FP terminals; manual init uses local aliases of those exact controls.",
+      "After the manual discovery stage returns with an empty key, CmdLib has an unconditional replacement request, but DeviceKey/address have no assignment in the zero-length arm. Old key/address can remain paired with the new reference. This is a supplied-state counterexample, not an observed live stale-handle incident.",
+      "Missing-device branch shows a modal message but does not itself set error.status=True. After the modal/earlier calls return, the final phase requests movement-button visibility without success gating.",
+      "Each SetZeroPosition receives the same GetIdentification error via an ordinary loop tunnel, not the preceding motor error. Scalar output reports the last iteration: a returned failure on motor1..3 can be hidden by a successful motor4. This is not homing or a proof of motion.",
+      "No original Main Shutdown call precedes manual replacement. Native internal cleanup is unknown, so a resource leak is not asserted."
+    ],
+    "limits": [
+      "Five-byte device-address literals are not decoded as assumed zero.",
+      "Native return values, automatic disposal and UI property success are unverified.",
+      "A blocked discovery, identification, zeroing call or modal dialog prevents the next phase."
+    ]
+  },
+  "copied_remote_NI2012_cleanup": {
+    "observations": {
+      "library_identity": "copied remote_labview2012 archives; loaded identity unverified",
+      "IMAQ_Close_gate": "session==null -> pass error; non-null -> unregister then imgClose",
+      "incoming_error_used_as_close_selector": false,
+      "unregister": {
+        "native_symbol": "ImaqUnRegisterSesn",
+        "diagram_error_gate": false,
+        "input_error_to_output": [
+          "155",
+          "163"
+        ],
+        "error_cluster_not_passed_to_native": true
+      },
+      "imgClose_gate": "interfaceID==0 -> pass error; nonzero -> native close attempt",
+      "native_close": {
+        "symbol": "imgClose_LV",
+        "UID": "131",
+        "frame": "123",
+        "clean": 1,
+        "native_error_cluster_input": false,
+        "native_return_code_to_error_update": [
+          "136",
+          "216"
+        ],
+        "prior_error_only_enters_post_call_error_update": [
+          "150",
+          "218"
+        ],
+        "success_and_bounded_return_proven": false
+      },
+      "merge_priority": [
+        "unregister error = incoming error",
+        "post-close error update"
+      ],
+      "prior_error_can_hide_close_error": true,
+      "Dispose": {
+        "native_symbol": "LV_Dispose",
+        "diagram_error_gate": false,
+        "error_cluster_is_native_argument": true,
+        "DLL_internal_error_short_circuit_verified": false,
+        "error_contract_documented_standard": true,
+        "image_type_opaque": true
+      },
+      "documentation_conflict": "IMAQ Close help contains generic skip-on-error boilerplate, but the examined wrapper gates on null reference and zero interface ID, not error.status. The source graph governs this candidate conclusion.",
+      "conclusion": "The same null-session/nonzero-ID/native-close/error-merge predicates pass against all five copied NI2012 wrappers. This extends the NI2020 candidate finding to the saved remote copy, not to a currently loaded DLL or successful close."
+    },
+    "members": [
+      {
+        "name": "IMAQUnregisterSession",
+        "source_sha256": "3570CC98AE87D679495CDB817801D9C69B94E193D399FA37B2BFCAC82956640B",
+        "archive": "C:\\dev\\pyconlyse\\.tmp\\acq_sup_semantics_20261006\\remote_labview2012\\driver\\DLLCalls.llb",
+        "archive_sha256": "3F2F0252B647DF4C8F478D38256C75E792834C909034F00E964221FFFEF77616"
+      },
+      {
+        "name": "IMAQ_Close",
+        "source_sha256": "2C060BF30DE10FB902C160950C59C7656365D1FAB708903693FDEB4BF4B7A81D",
+        "archive": "C:\\dev\\pyconlyse\\.tmp\\acq_sup_semantics_20261006\\remote_labview2012\\driver\\imaqhl.llb",
+        "archive_sha256": "632BA742EE23C62623395D4C2BFF9A5DD1DE538D5AFCE2E60CF49ED0EC752B58"
+      },
+      {
+        "name": "IMAQ_Dispose",
+        "source_sha256": "1B43E3D508E3F4A6BBD05DAA801DF4378DD36A0601FE36DE4436EF801A24E7C2",
+        "archive": "C:\\dev\\pyconlyse\\.tmp\\acq_sup_semantics_20261006\\remote_labview2012\\Basics.llb",
+        "archive_sha256": "B087D320B7733E7FF71D57D5273A6D107AE9982455593CA550FAFDA43A1362EA"
+      },
+      {
+        "name": "imgClose",
+        "source_sha256": "2658EE264612C9CA7AD85F5D2F412F54A6F3055F122AF03C91B9ACACB82EF0B8",
+        "archive": "C:\\dev\\pyconlyse\\.tmp\\acq_sup_semantics_20261006\\remote_labview2012\\driver\\DLLCalls.llb",
+        "archive_sha256": "3F2F0252B647DF4C8F478D38256C75E792834C909034F00E964221FFFEF77616"
+      },
+      {
+        "name": "imgUpdateErrorCluster",
+        "source_sha256": "FF50BCB60DAAD917F629AC635D660620BE795B125D77D9A296EB826F07A73946",
+        "archive": "C:\\dev\\pyconlyse\\.tmp\\acq_sup_semantics_20261006\\remote_labview2012\\driver\\DLLCalls.llb",
+        "archive_sha256": "3F2F0252B647DF4C8F478D38256C75E792834C909034F00E964221FFFEF77616"
+      }
+    ],
+    "same_selected_wire_predicates_as_NI2020": true,
+    "native_library_equivalence": false
+  },
+  "additional_finite_source_model": {
+    "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\direct_comparison_complete_20261017\\RESULT.json",
+    "sha256": "2CEB3001D35C1631B183151DFC7D11EBD5A6B549752A6FE80F7457518DD422E1",
+    "source": "2_SUP_Ecart_lu_ecr_VDirecte.vi",
+    "complete_final_OUT_projection_within_declared_domain": true,
+    "complete_native_VI_replacement": false
+  },
+  "completion_criteria": {
+    "all_39_original_VI_and_XML_identities_accounted": true,
+    "all_original_source_control_behavior_proven": false,
+    "all_saved_screenshots_source_hash_bound_at_capture": false,
+    "complete_Python_business_logic_replacement": false,
+    "full_Supervision_coverage": false
+  },
+  "remaining_source_work_not_replaced_by_inventory": {
+    "historical_SUP_member_rows_still_not_whole_closed": 38,
+    "historical_status_not_recomputed_as_current_coverage_percent": true,
+    "concrete_source_obligations": [
+      {
+        "source": "2_SUP_Graph _Radioprot.vi",
+        "obligation": "Original DCO780 five-byte UInt32 framing, absent named field selection, quotient/remainder/coercion and retained False-arm state."
+      },
+      {
+        "source": "Search and Replace Pattern.vi",
+        "obligation": "Original DefaultData333 I32 framing, loop termination/defaults and byte-pattern grammar; no native string-equivalence claim."
+      },
+      {
+        "source": "Validate.vi",
+        "obligation": "Original consumed Path/literal framing and validity/encoding; not a caller-supplied-literal shortcut."
+      },
+      {
+        "source": "Main event/value/property and camera/motor paths",
+        "obligation": "Finish whole-VI dependency closure for complex Event NewVal/OldVal, remaining saved-state/field/coercion facts and bounded procedure models."
+      }
+    ],
+    "separate_deployment_obligations": [
+      "Actual PSP delivery, coherent snapshots, reconnect and native IO deadlines.",
+      "Loaded NI/NewFocus version/overload identity and actual resource-close success.",
+      "Current physical owner/limits and hardware response; not a static-source closure task."
+    ]
+  },
+  "saved_screenshots": [
+    {
+      "path": "C:\\dev\\pyconlyse\\Supervision\\analysis\\screenshots\\0_SUP_ELYSE_outer_frame_1_init_subframe_4_motor_subframe_1_full.png",
+      "sha256": "D68EC28F9216F3C463BA33F5FA1F6CF179AC1722BAFE0F7295DACBC335E6D245"
+    },
+    {
+      "path": "C:\\dev\\pyconlyse\\Supervision\\analysis\\screenshots\\0_SUP_ELYSE_outer_frame_1_init_subframe_4_motor_subframe_1_selector_alt_full.png",
+      "sha256": "BAC3F5962F15DB70EF120C06160D0CF945E09D72CE86D9C458E719B560C3F817"
+    },
+    {
+      "path": "C:\\dev\\pyconlyse\\Supervision\\analysis\\screenshots\\0_SUP_ELYSE_outer_frame_3_full.png",
+      "sha256": "86A2D09FF76648DAB97A62EE7C55BFF61E15DEA4F0BE0E51B6F6E639367DC726"
+    },
+    {
+      "path": "C:\\dev\\pyconlyse\\Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd407.png",
+      "sha256": "9F41DE9402C7D18519B8A908B9C29ACD10F3B245F752A46A6CDD871C7886107E"
+    },
+    {
+      "path": "C:\\dev\\pyconlyse\\Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd408.png",
+      "sha256": "9B04AF6087B173CA40B66C46BCE3F688B1FDD86398968B9A4CC89A13F060679F"
+    },
+    {
+      "path": "C:\\dev\\pyconlyse\\Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd409.png",
+      "sha256": "444A192E4265F5A610E00BC2EBCA76657ECBDDFA940FDB18ED051924D8EF6AD0"
+    },
+    {
+      "path": "C:\\dev\\pyconlyse\\Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd410.png",
+      "sha256": "7188403774BA1FDCA3F7509EACED6B573C9B4C213EBB0610B3E568510F4CCC9C"
+    }
+  ],
+  "screen_used": false,
+  "VI_run_or_save": false,
+  "native_library_loaded": false,
+  "network_io": false,
+  "hardware_io": false,
+  "production_changes": false,
+  "previous_frozen_reports_changed": false
+}

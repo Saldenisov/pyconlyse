@@ -1,0 +1,1357 @@
+{
+  "source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "helper_vi_sha256": "5CD315417FDFC2FA5115D0C26D3450825E5EF54441A9C43FC6D0F6C0A9E45333",
+  "scope": "Original main direct-line local/property writers and direct comparison helper",
+  "observations": {
+    "direct_local_aliases": 15,
+    "direct_local_writers": 6,
+    "whole_cluster_local_writers": [
+      {
+        "writer_uid": "7430",
+        "purpose": "Timeout command/setpoint refresh",
+        "mux_uid": "11207",
+        "source_snapshot": {
+          "local_uid": "9745",
+          "terminal": "11801",
+          "wire": "39997",
+          "bundle_input": "13980"
+        },
+        "output_wire": "38005",
+        "updated_fields": [
+          {
+            "mux_uid": "11207",
+            "terminal": "13982",
+            "raw_index": 42,
+            "label_path": [
+              "Correcteur H1",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              3,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14329",
+            "raw_index": 54,
+            "label_path": [
+              "Correcteur V1",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              4,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14334",
+            "raw_index": 66,
+            "label_path": [
+              "Correcteur H2",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              5,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14337",
+            "raw_index": 78,
+            "label_path": [
+              "Correcteur V2",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              6,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14340",
+            "raw_index": 114,
+            "label_path": [
+              "Correcteur H3",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              9,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14343",
+            "raw_index": 126,
+            "label_path": [
+              "Correcteur V3",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              10,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14346",
+            "raw_index": 6,
+            "label_path": [
+              "Dipôle 1",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              0,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14375",
+            "raw_index": 18,
+            "label_path": [
+              "Focale",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              1,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14379",
+            "raw_index": 90,
+            "label_path": [
+              "Triplet 1-1",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              7,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "14382",
+            "raw_index": 102,
+            "label_path": [
+              "Triplet 1-2",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              8,
+              5
+            ]
+          },
+          {
+            "mux_uid": "11207",
+            "terminal": "13971",
+            "raw_index": 30,
+            "label_path": [
+              "Phase HF / Laser",
+              "Consigne"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              2,
+              5
+            ]
+          }
+        ],
+        "Phase_flags": "retained from source snapshot",
+        "inactive_with_saved_literal": false
+      },
+      {
+        "writer_uid": "7502",
+        "purpose": "Timeout measured-value refresh",
+        "mux_uid": "12099",
+        "source_snapshot": {
+          "local_uid": "12100",
+          "terminal": "15083",
+          "wire": "12243",
+          "bundle_input": "14153"
+        },
+        "output_wire": "7441",
+        "updated_fields": [
+          {
+            "mux_uid": "12099",
+            "terminal": "14154",
+            "raw_index": 7,
+            "label_path": [
+              "Dipôle 1",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              0,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "14179",
+            "raw_index": 19,
+            "label_path": [
+              "Focale",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              1,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "15043",
+            "raw_index": 31,
+            "label_path": [
+              "Phase HF / Laser",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              2,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "15046",
+            "raw_index": 43,
+            "label_path": [
+              "Correcteur H1",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              3,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "15049",
+            "raw_index": 55,
+            "label_path": [
+              "Correcteur V1",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              4,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "15067",
+            "raw_index": 67,
+            "label_path": [
+              "Correcteur H2",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              5,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "15070",
+            "raw_index": 79,
+            "label_path": [
+              "Correcteur V2",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              6,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "12747",
+            "raw_index": 91,
+            "label_path": [
+              "Triplet 1-1",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              7,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "12770",
+            "raw_index": 103,
+            "label_path": [
+              "Triplet 1-2",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              8,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "12773",
+            "raw_index": 115,
+            "label_path": [
+              "Correcteur H3",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              9,
+              6
+            ]
+          },
+          {
+            "mux_uid": "12099",
+            "terminal": "12806",
+            "raw_index": 127,
+            "label_path": [
+              "Correcteur V3",
+              "Lecture"
+            ],
+            "type": "NumFloat64",
+            "addressing": "explicit-index",
+            "position_path": [
+              10,
+              6
+            ]
+          }
+        ],
+        "Phase_flags": "retained from source snapshot",
+        "inactive_with_saved_literal": false
+      },
+      {
+        "writer_uid": "7649",
+        "purpose": "periodic sequence32847 frame0 running flags",
+        "mux_uid": "10168",
+        "source_snapshot": {
+          "local_uid": "15775",
+          "terminal": "15782",
+          "wire": "37086",
+          "bundle_input": "10220"
+        },
+        "output_wire": "37105",
+        "updated_fields": [
+          {
+            "mux_uid": "10168",
+            "terminal": "10223",
+            "raw_index": 2,
+            "label_path": [
+              "Dipôle 1",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              0,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "15913",
+            "raw_index": 14,
+            "label_path": [
+              "Focale",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              1,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "16759",
+            "raw_index": 38,
+            "label_path": [
+              "Correcteur H1",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              3,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "17146",
+            "raw_index": 50,
+            "label_path": [
+              "Correcteur V1",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              4,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "17506",
+            "raw_index": 62,
+            "label_path": [
+              "Correcteur H2",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              5,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "17862",
+            "raw_index": 74,
+            "label_path": [
+              "Correcteur V2",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              6,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "14815",
+            "raw_index": 86,
+            "label_path": [
+              "Triplet 1-1",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              7,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "16104",
+            "raw_index": 98,
+            "label_path": [
+              "Triplet 1-2",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              8,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "14074",
+            "raw_index": 110,
+            "label_path": [
+              "Correcteur H3",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              9,
+              1
+            ]
+          },
+          {
+            "mux_uid": "10168",
+            "terminal": "14822",
+            "raw_index": 122,
+            "label_path": [
+              "Correcteur V3",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              10,
+              1
+            ]
+          }
+        ],
+        "Phase_flags": "retained from source snapshot",
+        "inactive_with_saved_literal": false
+      },
+      {
+        "writer_uid": "61451",
+        "purpose": "periodic sequence32847 frame1 raw fault flags",
+        "mux_uid": "61408",
+        "source_snapshot": {
+          "local_uid": "61400",
+          "terminal": "61403",
+          "wire": "71592",
+          "bundle_input": "61413"
+        },
+        "output_wire": "71589",
+        "updated_fields": [
+          {
+            "mux_uid": "61408",
+            "terminal": "61414",
+            "raw_index": 4,
+            "label_path": [
+              "Dipôle 1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              0,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61417",
+            "raw_index": 16,
+            "label_path": [
+              "Focale",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              1,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61422",
+            "raw_index": 40,
+            "label_path": [
+              "Correcteur H1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              3,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61427",
+            "raw_index": 52,
+            "label_path": [
+              "Correcteur V1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              4,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61432",
+            "raw_index": 64,
+            "label_path": [
+              "Correcteur H2",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              5,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61435",
+            "raw_index": 76,
+            "label_path": [
+              "Correcteur V2",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              6,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61438",
+            "raw_index": 88,
+            "label_path": [
+              "Triplet 1-1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              7,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61441",
+            "raw_index": 100,
+            "label_path": [
+              "Triplet 1-2",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              8,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61444",
+            "raw_index": 112,
+            "label_path": [
+              "Correcteur H3",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              9,
+              3
+            ]
+          },
+          {
+            "mux_uid": "61408",
+            "terminal": "61447",
+            "raw_index": 124,
+            "label_path": [
+              "Correcteur V3",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              10,
+              3
+            ]
+          }
+        ],
+        "Phase_flags": "retained from source snapshot",
+        "inactive_with_saved_literal": false
+      },
+      {
+        "writer_uid": "70618",
+        "purpose": "periodic frame3 computed faults, saved gate False",
+        "mux_uid": "70571",
+        "source_snapshot": {
+          "local_uid": "39996",
+          "terminal": "70563",
+          "wire": "73205",
+          "bundle_input": "70581"
+        },
+        "output_wire": "73204",
+        "updated_fields": [
+          {
+            "mux_uid": "70571",
+            "terminal": "70582",
+            "raw_index": 4,
+            "label_path": [
+              "Dipôle 1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              0,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70585",
+            "raw_index": 16,
+            "label_path": [
+              "Focale",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              1,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70588",
+            "raw_index": 40,
+            "label_path": [
+              "Correcteur H1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              3,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70591",
+            "raw_index": 52,
+            "label_path": [
+              "Correcteur V1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              4,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70594",
+            "raw_index": 62,
+            "label_path": [
+              "Correcteur H2",
+              "en marche"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              5,
+              1
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70597",
+            "raw_index": 76,
+            "label_path": [
+              "Correcteur V2",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              6,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70605",
+            "raw_index": 88,
+            "label_path": [
+              "Triplet 1-1",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              7,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70608",
+            "raw_index": 100,
+            "label_path": [
+              "Triplet 1-2",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              8,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70611",
+            "raw_index": 112,
+            "label_path": [
+              "Correcteur H3",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              9,
+              3
+            ]
+          },
+          {
+            "mux_uid": "70571",
+            "terminal": "70614",
+            "raw_index": 124,
+            "label_path": [
+              "Correcteur V3",
+              "en défaut"
+            ],
+            "type": "Boolean",
+            "addressing": "explicit-index",
+            "position_path": [
+              10,
+              3
+            ]
+          }
+        ],
+        "Phase_flags": "retained from source snapshot",
+        "inactive_with_saved_literal": true
+      }
+    ],
+    "comparison_whole_cluster_writer": {
+      "uid": "16437",
+      "call": "18812",
+      "output_wire": "13546",
+      "input_wire": "14957",
+      "input_local": "16457"
+    },
+    "row_Value_write": {
+      "uid": "8025",
+      "read_uid": "8048",
+      "same_reference_wire": "11108",
+      "source_control_reference": "7979",
+      "branches": [
+        {
+          "action": 0,
+          "diagram": "8464",
+          "identity_wires": [
+            {
+              "wire": "8509",
+              "ports": [
+                "8311",
+                "8341"
+              ]
+            },
+            {
+              "wire": "8503",
+              "ports": [
+                "8288",
+                "8365"
+              ]
+            }
+          ]
+        },
+        {
+          "action": 1,
+          "diagram": "8515",
+          "identity_wires": [
+            {
+              "wire": "8560",
+              "ports": [
+                "8312",
+                "8342"
+              ]
+            },
+            {
+              "wire": "8554",
+              "ports": [
+                "8289",
+                "8366"
+              ]
+            }
+          ]
+        },
+        {
+          "action": 16,
+          "diagram": "8566",
+          "identity_wires": [
+            {
+              "wire": "8611",
+              "ports": [
+                "8313",
+                "8343"
+              ]
+            },
+            {
+              "wire": "8605",
+              "ports": [
+                "8290",
+                "8367"
+              ]
+            }
+          ]
+        },
+        {
+          "action": 128,
+          "diagram": "8617",
+          "identity_wires": [
+            {
+              "wire": "9074",
+              "ports": [
+                "8314",
+                "8344"
+              ]
+            },
+            {
+              "wire": "9068",
+              "ports": [
+                "8291",
+                "8368"
+              ]
+            }
+          ]
+        },
+        {
+          "action": 256,
+          "diagram": "6002",
+          "identity_wires": [
+            {
+              "wire": "17414",
+              "ports": [
+                "16769",
+                "16778"
+              ]
+            },
+            {
+              "wire": "17408",
+              "ports": [
+                "16763",
+                "16784"
+              ]
+            }
+          ]
+        },
+        {
+          "action": 512,
+          "diagram": "7494",
+          "identity_wires": [
+            {
+              "wire": "10182",
+              "ports": [
+                "8117",
+                "8185"
+              ]
+            },
+            {
+              "wire": "10172",
+              "ports": [
+                "8082",
+                "8226"
+              ]
+            }
+          ]
+        },
+        {
+          "action": 1024,
+          "diagram": "7655",
+          "identity_wires": [
+            {
+              "wire": "11559",
+              "ports": [
+                "7947",
+                "10435"
+              ]
+            },
+            {
+              "wire": "11553",
+              "ports": [
+                "7689",
+                "10449"
+              ]
+            }
+          ]
+        }
+      ],
+      "flags": "copied unchanged after successful typed read"
+    },
+    "static_reference_target_census": {
+      "direct_and_nested_controls": 133,
+      "matching_nodes": [
+        "7979"
+      ],
+      "direct_bound_property_nodes": []
+    },
+    "FP_flags": {
+      "en marche": "20261",
+      "en défaut": "20247"
+    },
+    "Phase_root_named_fields": [
+      {
+        "flattened_index": 26,
+        "position_path": [
+          2,
+          1
+        ],
+        "label_path": [
+          "Phase HF / Laser",
+          "en marche"
+        ],
+        "type": "Boolean",
+        "flat_type_id": 272,
+        "value_type_signature": "ad569bf9183bdbaa05e6d2210831c9f010100d13b910c932ca2ed6ecb962f573"
+      },
+      {
+        "flattened_index": 28,
+        "position_path": [
+          2,
+          3
+        ],
+        "label_path": [
+          "Phase HF / Laser",
+          "en défaut"
+        ],
+        "type": "Boolean",
+        "flat_type_id": 274,
+        "value_type_signature": "ad569bf9183bdbaa05e6d2210831c9f010100d13b910c932ca2ed6ecb962f573"
+      }
+    ],
+    "control_terminal_7644_connected": false,
+    "load_event_frame_ids": {
+      "22": "6026",
+      "23": "19144"
+    },
+    "helper": {
+      "input_copy_path": [
+        {
+          "source": "1304",
+          "target": "5180",
+          "kind": "wire",
+          "uid": "2647"
+        },
+        {
+          "source": "5180",
+          "target": "5920",
+          "kind": "tunnel",
+          "uid": "5180"
+        },
+        {
+          "source": "5920",
+          "target": "5934",
+          "kind": "wire",
+          "uid": "5964"
+        }
+      ],
+      "copied_output_read_path": [
+        {
+          "source": "1369",
+          "target": "1577",
+          "kind": "wire",
+          "uid": "1330"
+        }
+      ],
+      "output_write_path": [
+        {
+          "source": "1565",
+          "target": "3813",
+          "kind": "wire",
+          "uid": "3862"
+        }
+      ],
+      "fields_changed": [
+        {
+          "mux_uid": "1555",
+          "terminal": "1578",
+          "raw_index": 3,
+          "label_path": [
+            "Dipôle 1",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            0,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1583",
+          "raw_index": 15,
+          "label_path": [
+            "Focale",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            1,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1586",
+          "raw_index": 27,
+          "label_path": [
+            "Phase HF / Laser",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            2,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1589",
+          "raw_index": 39,
+          "label_path": [
+            "Correcteur H1",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            3,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1592",
+          "raw_index": 51,
+          "label_path": [
+            "Correcteur V1",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            4,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1595",
+          "raw_index": 63,
+          "label_path": [
+            "Correcteur H2",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            5,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1598",
+          "raw_index": 75,
+          "label_path": [
+            "Correcteur V2",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            6,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1601",
+          "raw_index": 87,
+          "label_path": [
+            "Triplet 1-1",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            7,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1604",
+          "raw_index": 99,
+          "label_path": [
+            "Triplet 1-2",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            8,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1607",
+          "raw_index": 111,
+          "label_path": [
+            "Correcteur H3",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            9,
+            2
+          ]
+        },
+        {
+          "mux_uid": "1555",
+          "terminal": "1633",
+          "raw_index": 123,
+          "label_path": [
+            "Correcteur V3",
+            "orange"
+          ],
+          "type": "Boolean",
+          "addressing": "explicit-index",
+          "position_path": [
+            10,
+            2
+          ]
+        }
+      ],
+      "Phase_orange": {
+        "value": false,
+        "literal": "3056",
+        "net": "1341"
+      },
+      "Phase_running_and_fault": "retained from helper input cluster"
+    }
+  },
+  "inferences": [
+    "No hardware-bit or calculated producer of the two Phase flags was found in these audited paths.",
+    "The five main nMux local writers echo Phase flags from a previously read cluster; the sixth local writer echoes them through the comparison helper.",
+    "The event19 selected-row Value writer echoes both flags in all seven saved arms.",
+    "A whole-cluster or whole-row copy-back can restore an older flag value if another actor changed it after the source snapshot; this race is possible, not observed.",
+    "The flags therefore originate from pre-existing UI state in these paths, not from independently verified equipment feedback.",
+    "Correction to broad earlier summaries: Phase orange is forced False in the original comparison helper, not driven by its command/readback comparison."
+  ],
+  "saved_screenshots": [
+    {
+      "path": "Supervision\\analysis\\screenshots\\0_SUP_ELYSE_outer_frame_2_event_case_19_full.png",
+      "sha256": "283FDDED972B1768313CF83A688D47DC06175C88E2F19F4345711EE5992BFC93"
+    },
+    {
+      "path": "Supervision\\analysis\\labview_print_hidden_frames\\2__SUP__Ecart__lu__ecr__VDirected1.png",
+      "sha256": "76E01DB8163BCBBFC1E683EBF053D1BFB00A6793BA19C61B59DDB4D10800A840"
+    },
+    {
+      "path": "Supervision\\analysis\\labview_print_hidden_frames\\2__SUP__Ecart__lu__ecr__VDirected2.png",
+      "sha256": "A620777CB1503DF27E090A983F2903B809B48B7A169477F343D00C22836B6155"
+    }
+  ],
+  "correction_to_prior_auxiliary_role_labels": {
+    "prior_report": "h1_triplet_source_20261017/RESULT.json",
+    "unchanged": "H1 maps to C6.OUT00; Triplet1-1 maps to C7.OUT00",
+    "corrected_bank_local_directions": [
+      {
+        "mux": "8553",
+        "write": {
+          "local": "6122",
+          "port": "14267",
+          "aggregate_terminal": "14385",
+          "wire": "15811"
+        },
+        "read": {
+          "local": "15529",
+          "port": "15533",
+          "aggregate_terminal": "14404",
+          "wire": "15810"
+        }
+      },
+      {
+        "mux": "7543",
+        "write": {
+          "local": "8562",
+          "port": "14317",
+          "aggregate_terminal": "7683",
+          "wire": "12493"
+        },
+        "read": {
+          "local": "9302",
+          "port": "9663",
+          "aggregate_terminal": "14059",
+          "wire": "12492"
+        }
+      }
+    ],
+    "note": "Earlier bank_input/bank_local_write_path labels were reversed. The wire endpoints and named destinations are unchanged. This additive correction does not rewrite the earlier evidence."
+  },
+  "requires_LabVIEW_or_remains_unknown": [
+    "Initial Phase Boolean values: saved DFDS and native startup/default semantics are unqualified. No False default is inferred from a palette or missing field.",
+    "Historical screenshots lack capture-time source hashes; source-version-native correspondence remains open.",
+    "The native Controls[] row-order/reference ABI and omitted caller output connector index are not promoted by this source trace.",
+    "External UI/VI Server clients, deployed-version changes and all unreviewed dynamic reference/error paths are not excluded by a local main-VI writer census.",
+    "Property/Variant error behavior, copy-back races and actual initial/live values were not executed or measured."
+  ],
+  "complete_Supervision_coverage": false,
+  "native_defaults_verified": false,
+  "screen_used": false,
+  "vi_run_or_save": false,
+  "hardware_io": false,
+  "network_io": false,
+  "production_changes": false
+}

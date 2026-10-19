@@ -1,0 +1,80 @@
+{
+  "question": "What M/A and X1/X10 change in the saved Supervision beam-line handlers, and what reaches Acquisition",
+  "scope": "Static saved-source analysis. No VI execution, XP access, network command, equipment write or deployment.",
+  "MA": {
+    "action_mask": 1,
+    "direct_case_diagram": "8515",
+    "deviated_case_diagram": "34271",
+    "observed_operation": "Seven retained cell values pass unchanged; no arithmetic, call or transport node in either arm",
+    "new_setpoint_transfer": false,
+    "publications_still_attempted": ["C6NI6703", "C7NI6703", "C8NI6703", "C9NI6703"],
+    "new_digital_start_stop_request_in_these_handlers": false,
+    "enables_single_arrow_adjustment": false,
+    "correction_to_prior_chat": "The former M/A tooltip described the label's apparent intention, not a demonstrated supply-start command. These handlers do not implement that start/stop path.",
+    "boundary": "Not a statement that no external VI Server client or different deployed VI could use the control. Omitted saved named-field indices remain unqualified; the seven-field pass-through proof does not require assigning them index zero."
+  },
+  "X1_X10": {
+    "action_mask": 16,
+    "direct_case_diagram": "8566",
+    "deviated_case_diagram": "34298",
+    "switch_only_changes_setpoint": false,
+    "future_arrow_uses_local_boolean": true,
+    "false_selects": "smaller literal at explicit Select input1",
+    "true_selects": "larger literal at explicit Select input3",
+    "selector_input": "explicit Select input2, traced from explicit cell field4 X1/X10",
+    "paths_checked": 24,
+    "corrector_steps": {
+      "<<_or_>>": {"false": 0.1, "true": 1.0},
+      "<_or_>": {"false": 0.01, "true": 0.1},
+      "unit": "A according to native control labels, not independently calibrated hardware units"
+    },
+    "native_exception": "Phase HF/Laser fine step selects 1 or 5, so its X1/X10 caption does not mean a universal factor10",
+    "mode_boolean_transmitted_to_Acquisition": false
+  },
+  "command_path": {
+    "single_arrow": "local Boolean selects step -> arithmetic/coercion -> UI Consigne -> guarded local bank update -> whole-bank PSP publication",
+    "Supervision_namespace": "ni.var.psp://localhost/SUPERVISION/",
+    "Acquisition_namespace": "ni.var.psp://10.20.30.2/SUPERVISION/",
+    "bank_payloads": "Four clusters, each 10 DBL; no M/A or X1/X10 Boolean field",
+    "Acquisition_readers": ["10310", "10333", "10369", "10449"],
+    "Acquisition_local_banks": [9, 10, 11, 12],
+    "separate_IO_loop": "locals -> Cluster To Array -> iUse278, 1_ACQ_WRITE_NI6703.vi",
+    "physical_acknowledgement_proved": false,
+    "single_atomic_cross_loop_epoch_proved": false,
+    "forward_wire_routes": 20,
+    "explicit_forward_destination_indices": 18,
+    "unqualified_omitted_forward_destination_indices": [
+      {"source": "Correcteur H1.Consigne", "bank": "C6NI6703", "terminal": "14331"},
+      {"source": "Triplet 1-1.Consigne", "bank": "C7NI6703", "terminal": "14067"}
+    ]
+  },
+  "other_consumer_checks": {
+    "whole_line_deviation_helpers": "Both pinned helper diagrams have no iUse, property or PSP transport nodes; no native/ABI equivalence promotion",
+    "explicit_named_MA_scalar_reads_in_root": 0,
+    "explicit_ACQ_line_ValueSignaling_writers": 0,
+    "decoded_binding_or_DataSocket_metadata_matches": 0,
+    "native_control_binding_certification": false,
+    "simultaneous_multi_control_change_semantics_closed": false
+  },
+  "verification": {
+    "tests": "12 passed, 1 warning in 35.96s",
+    "warning": "PytestAssertRewriteWarning: Module already imported so cannot be rewritten; scripts.refactor.pytest_module_isolation",
+    "ruff": "All checks passed!",
+    "reproduction": "tools/trace_sup_beam_switches.py --check: PASS",
+    "network_guard": "socket.connect forbidden during positive source-reproduction test",
+    "Supervision_source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+    "Acquisition_export_archive_sha256": "6A518B319B2D35B465DB9AAB557CCA751ACC8B58A600FBA0B8E13771B6EA1527",
+    "trace_sha256": "3F99461538321F152A9134D87AC1969F5E1CAAAF9A2464574DB9443EA3C74F7F",
+    "script_sha256": "6F272D1BA85EB19448093CCE79AF1FEFA846C2B6BAA6B2688A3B36736AB72D3F",
+    "tests_sha256": "B802B880C3B49FAF258EC22AB964AD76EC3CB34186531EEA839825656D83187A",
+    "unchanged_canonical_evidence_sha256": "D1F3379615EA71304B975E33051762561C1FA54DC2724061C84C3D8D0AF7AD7C",
+    "unchanged_live_web_index_sha256": "E85BA3E80605DCF4C7DEA0B1FC378EA58C4F8CAF06B9CB524EB1D49B60BBCE71"
+  },
+  "limits": [
+    "Conclusions are for the pinned saved VI copies, not a compared running deployment.",
+    "The two omitted target field indices still require independent native-label confirmation; they are not silently mapped to zero.",
+    "No complete-controller, fault-recovery, shared-variable race or hardware safety-equivalence claim is made.",
+    "M/A must not be treated as a proved hardware permission or stop interlock.",
+    "Existing web descriptions were not changed during this analysis-only task."
+  ]
+}

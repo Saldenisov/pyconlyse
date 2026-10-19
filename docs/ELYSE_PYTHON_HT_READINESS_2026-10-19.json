@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-19",
+  "scope": "Read-only HT feedback and configuration checks; local polarity correction and cold v6 candidate; no heating/HT/Chroma energization",
+  "operator_constraints": {
+    "cooling_water_circulating": false,
+    "Chroma_supplies_powered": false,
+    "source": "Operator statements during this check",
+    "Chroma_serial_testing_deferred_on_operator_objection": true,
+    "water_interlock_causes_Chroma_power_absence": "Operator hypothesis; not proven by this check",
+    "interlocks_bypassed": false
+  },
+  "actions": {
+    "NI_cards_initialized_or_reopened": false,
+    "General_or_stage_commands_sent": false,
+    "AO_or_DO_writes_sent": false,
+    "COM_ports_opened": false,
+    "serial_queries_or_commands_sent": false,
+    "vendor_DLL_loaded": false,
+    "Moxa_settings_or_Windows_driver_mapping_changed": false,
+    "HTTP_methods_to_Moxa": ["GET"],
+    "Moxa_Apply_Save_Restart_used": false,
+    "NPort_driver_UI": "Existing utility opened only to inspect mapping; settings dialog canceled; utility closed without Apply",
+    "Supervision_UI": "Only HT tab selected; no command button pressed",
+    "LabVIEW_Acquisition_and_telemetry_bridge_stopped_or_replaced": false,
+    "new_server_executed_on_XP": false,
+    "Windows_startup_changed": false,
+    "raw_telemetry_history_or_SQLite_saved": false
+  },
+  "HT_polarity_correction": {
+    "previous_candidate": "v5; do not deploy it as the corrected candidate",
+    "previous_unqualified_implementation": "supply_on = raw C4_IN_DIO96[48]",
+    "corrected_implementation": "supply_on = NOT raw C4_IN_DIO96[48]; raw_supply_contact is retained separately",
+    "evidence": [
+      "Pinned Supervision wire projection ht:27: C4_IN_DIO96[48] -> Page HT field27, identity, source terminal57834 -> target40106",
+      "Pinned Page HT control51485: False color #00C82D green, True color #B3B3B3 gray; both labels ALIMENTATION HT EN MARCHE",
+      "Live Supervision HT tab showed gray EN MARCHE and displayed0.0kV while fresh telemetry C4[48] remained True"
+    ],
+    "source_maps": ["web/frontend/src/elyseLiveDisplayMap.json", "web/frontend/src/elyseControlPanels.json"],
+    "validators": ["tools/export_sup_live_display_map.py without --write", "tools/export_sup_control_panels.py without --write"],
+    "new_tests": [
+      "Raw True produces semantic supply_on=False",
+      "Raw False produces semantic supply_on=True",
+      "Corrected interpretation matches pinned Supervision palette and field binding"
+    ],
+    "software_display_semantics_verified": true,
+    "independent_electrical_ON_OFF_transition_tested": false,
+    "lost_feedback_or_disconnected_contact_behavior_verified": false
+  },
+  "observed_zero_region": {
+    "source": "Existing elyse/acquisition/telemetry Tango attribute telemetry_json; copied_acquisition producer; no extra NI tasks",
+    "field": "C2NI6071E[7], already legacy-scaled kV; raw-to-scaled source calibration is2.44",
+    "capture_duration_seconds": 23.89,
+    "unique_fresh_samples": 80,
+    "rejected_polls": 0,
+    "producer_sessions": 1,
+    "maximum_packet_age_seconds": 0.3739999999743304,
+    "first_received_utc_Everest_clock": "2026-10-19T13:55:00.174523+00:00",
+    "last_received_utc_Everest_clock": "2026-10-19T13:55:23.852632+00:00",
+    "C4_48_raw_values_seen": [true],
+    "minimum_kv": -0.00119140625,
+    "maximum_kv": 0.00833984375,
+    "mean_kv": 0.00318701171875,
+    "population_stddev_kv": 0.0016613069742391498,
+    "maximum_absolute_kv": 0.00833984375,
+    "exact_zero_samples": 4,
+    "raw_series_retained": false,
+    "what_this_proves": "A fresh nonzero offset/noise region can be displayed as0.0kV; displayed rounding or a single exact-zero sample does not qualify zero",
+    "what_this_does_not_prove": "Independent actual zero voltage, sensor gain/offset calibration, discharge completion, a safe residual voltage/energy limit, or an acceptable shutdown tolerance",
+    "zero_tolerance_changed_from_unqualified_default": false,
+    "candidate_default_zero_tolerance_kv": 0.0,
+    "feedback_verified_enabled": false,
+    "host_clock_note": "XP/Supervision and Everest displayed different wall-clock times; no cross-host time subtraction was used"
+  },
+  "Moxa_configuration_observations_only": {
+    "address": "10.20.30.51",
+    "model": "NPort5650-16",
+    "firmware": "3.5 Build11080114",
+    "XP_virtual_COM_mapping_observed_in_driver_UI": [
+      {"COM": "COM10", "server": "10.20.30.51", "physical_port": 1, "server_alias": "Focale_3"},
+      {"COM": "COM11", "server": "10.20.30.51", "physical_port": 2, "server_alias": "Focale_2"},
+      {"COM": "COM12", "server": "10.20.30.51", "physical_port": 3, "server_alias": "Focale_1"}
+    ],
+    "operating_mode_for_ports1_to3": "Real COM Mode",
+    "serial_settings_view": {"baud": 9600, "data_bits": 8, "stop_bits": 1, "parity": "None", "flow_control": "None", "interface": "RS-232"},
+    "monitor_async_settings_observed_baud_for_ports1_to3": 1200,
+    "configured_vs_runtime_baud_conclusion": "Different observations retained; no assumption that either is the instrument's current required baud. No setting was changed.",
+    "monitor_line_state_for_ports1_to3": "Listen; no connected peer listed at observation",
+    "configured_mapping_agrees_with_saved_F3_COM10_F2_COM11_F1_COM12": true,
+    "connected_instrument_identity_or_responsiveness_verified": false,
+    "current_cable_to_instrument_identity_proven_by_alias": false,
+    "Chroma_OFF_behavior_commissioned": false,
+    "resources_verified_enabled": false,
+    "read_only_pages": ["http://10.20.30.51/03View.htm", "http://10.20.30.51/04View.htm", "http://10.20.30.51/Mn_line.htm", "http://10.20.30.51/Mn_asynS.htm"],
+    "manufacturer_runtime_monitor_reference": "https://moxa.com/getmedia/1960124b-b920-4403-aedd-3fc3e96b1f60/moxa-nport-5000-series-manual-v5.5.pdf"
+  },
+  "local_v6_candidate": {
+    "directory": "C:/dev/ELYSE-ACQ-telemetry/2026-10-19/ACQ_Python_Server_20261019_v6",
+    "archive": "C:/dev/ELYSE-ACQ-telemetry/2026-10-19/ACQ_Python_Server_20261019_v6.zip",
+    "archive_sha256": "B84C52C425E1820827F777A536F121F3AEBF9C2930EAF639117E26EB6A92648A",
+    "profile": "extended_ht_stop",
+    "auto_initialize": false,
+    "HT_feedback_verified": false,
+    "Chroma_resources_verified": false,
+    "zero_tolerance_kv": 0.0,
+    "ready_for_cold_window_launch_after_separate_deployment": true,
+    "ready_for_full_hardware_General_Arret": false,
+    "deployed_on_XP": false,
+    "v4_and_v5_archives_overwritten": false
+  },
+  "verification": {
+    "Python3_12_deny_network_tests_passed": 130,
+    "Python3_12_tests_failed": 0,
+    "warnings": 1,
+    "actual_Python3_4_unittests_passed": 124,
+    "actual_Python3_4_tests_failed": 0,
+    "pinned_Supervision_display_projections_checked": 94,
+    "pinned_Supervision_control_panels_checked": 4,
+    "new_module_and_test_Ruff_check": "PASS",
+    "test_inputs": "Synthetic owner/task callbacks; no actuation through tests"
+  },
+  "remaining": [
+    "Restore cooling circulation before requesting any stage energization; do not bypass protection. The causal wiring that powers Chroma still needs confirmation.",
+    "Establish independently measured HT zero and an engineering-approved zero/noise tolerance; do not silently use UI rounding or this short baseline as an electrical safety threshold.",
+    "When Chroma power becomes available, verify actual instrument identity, baud behavior and bounded OFF behavior without commanding Output ON or reset/configuration unexpectedly.",
+    "Qualify HT ON/OFF feedback polarity electrically, loss-of-feedback behavior, and pulse absence separately before enabling the new hardware shutdown profile."
+  ]
+}

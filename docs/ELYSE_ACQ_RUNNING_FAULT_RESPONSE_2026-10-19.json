@@ -1,0 +1,602 @@
+{
+  "date": "2026-10-19",
+  "scope": "ORIGINAL_ACQUISITION_POST_START_FAULT_PROVENANCE_NOT_PHYSICAL_PROTECTION",
+  "source_vi_sha256": "6FE801E023CF755FBDE89B4AD17854D5FC08447517010C2122E66C9F3DF5C3CF",
+  "observations": {
+    "c4_input_census": {
+      "references": [
+        {
+          "uid": "8346",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicOpen",
+          "peer_uid": "1168",
+          "net_uid": "1171"
+        },
+        {
+          "uid": "19587",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "19515",
+          "net_uid": "18857"
+        },
+        {
+          "uid": "2352",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "7748",
+          "net_uid": "4165"
+        },
+        {
+          "uid": "25024",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicWrite",
+          "peer_uid": "4245",
+          "net_uid": "42839"
+        },
+        {
+          "uid": "10202",
+          "access": "read",
+          "peer_class": "nMux",
+          "peer_uid": "39336",
+          "net_uid": "40077"
+        },
+        {
+          "uid": "55726",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "55654",
+          "net_uid": "42946"
+        }
+      ],
+      "only_direct_local_unbundle_fields": [
+        19,
+        38
+      ],
+      "klystron_fields_0_1_20_not_selected_on_these_local_read_nets": true,
+      "limit": "Main-VI C4 local-reference census; not external control access or electrical interlocks"
+    },
+    "klystron_status_fields_not_selected_for_local_trip": {
+      "0": "00 APA0 b47 Eau corps Klystron",
+      "1": "01 APA1 b45 Eau collecteur Klystron",
+      "2": "02 APA2 b43 Eau cuve Klystron",
+      "3": "03 APA3 b41 Vide Klystron",
+      "4": "04 APA4 b39 Ventilation Thyratron",
+      "5": "05 APA5 b37 Niveau d'huile cuve Klystron",
+      "6": "06 APA6 b35 V chauffage Thyratron",
+      "7": "07 APA7 b33 I chauffage Thyratron",
+      "8": "08 APB0 b31 V chauffage Klystron",
+      "9": "09 APB1 b29 I chauffage Klystron",
+      "10": "10 APB2 b27 I De QING",
+      "11": "11 APB3 b25 I réservoir Thyratron",
+      "12": "12 APB4 b23 Sécurité Thyratron",
+      "13": "13 APB5 b21 Pression SF6",
+      "14": "14 APB6 b19 I prémagnétisation",
+      "15": "15 APB7 b17 Contact porte",
+      "16": "16 APC0 b15 Contact perche",
+      "17": "17 APC1 b13 Contact capot cuve",
+      "18": "18 APC2 b11 Fin Tempo",
+      "20": "20 APC4 b07 Eau focale Klystron",
+      "21": "21 APC5 b05 I Focale 1",
+      "22": "22 APC6 b03 I Focale 2",
+      "23": "23 APC7 b01 I Focale 3"
+    },
+    "c4_output_writer_summary": {
+      "local_references": 145,
+      "local_writers": 68,
+      "producer_classes": {
+        "sRN": 1,
+        "sharedVariableDynamicRead": 1,
+        "nMux": 66
+      },
+      "whole_cluster_writers": [
+        {
+          "writer": "16132",
+          "source_class": "sRN",
+          "source_uid": "14814",
+          "source_port": "17346",
+          "scope": "sequence:359[1]/sequence:201[5]/sequence:24603[0]"
+        },
+        {
+          "writer": "25478",
+          "source_class": "sharedVariableDynamicRead",
+          "source_uid": "25426",
+          "source_port": "25443",
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[0]/sequence:10111[0]"
+        }
+      ]
+    },
+    "all_three_stage_stop_field_writers": [
+      {
+        "writer": "55143",
+        "bundle": "55151",
+        "field": 8,
+        "value": false,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[6]/select:26469[1]/sequence:26556[1]"
+      },
+      {
+        "writer": "31209",
+        "bundle": "31217",
+        "field": 8,
+        "value": true,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[6]/select:26469[1]/sequence:26556[2]"
+      },
+      {
+        "writer": "36883",
+        "bundle": "36891",
+        "field": 6,
+        "value": false,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[6]/select:26469[1]/sequence:26556[7]"
+      },
+      {
+        "writer": "23595",
+        "bundle": "23604",
+        "field": 6,
+        "value": true,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[6]/select:26469[1]/sequence:26556[8]"
+      },
+      {
+        "writer": "25754",
+        "bundle": "25792",
+        "field": 4,
+        "value": false,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[6]/select:26469[1]/sequence:26556[10]"
+      },
+      {
+        "writer": "29481",
+        "bundle": "29506",
+        "field": 4,
+        "value": true,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[6]/select:26469[1]/sequence:26556[11]"
+      },
+      {
+        "writer": "23331",
+        "bundle": "23340",
+        "field": 4,
+        "value": false,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[7]/select:23245[1]/sequence:23281[0]"
+      },
+      {
+        "writer": "23408",
+        "bundle": "23414",
+        "field": 4,
+        "value": true,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[7]/select:23245[1]/sequence:23281[1]"
+      },
+      {
+        "writer": "26272",
+        "bundle": "26280",
+        "field": 6,
+        "value": false,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[8]/select:26159[1]/sequence:26235[0]"
+      },
+      {
+        "writer": "26356",
+        "bundle": "26577",
+        "field": 6,
+        "value": true,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[8]/select:26159[1]/sequence:26235[1]"
+      },
+      {
+        "writer": "54844",
+        "bundle": "54852",
+        "field": 8,
+        "value": false,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[10]/select:23463[1]/sequence:23507[1]"
+      },
+      {
+        "writer": "23792",
+        "bundle": "23800",
+        "field": 8,
+        "value": true,
+        "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[10]/select:23463[1]/sequence:23507[2]"
+      },
+      {
+        "writer": "42452",
+        "bundle": "42462",
+        "field": 8,
+        "value": false,
+        "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[4]/sequence:42397[0]"
+      },
+      {
+        "writer": "42582",
+        "bundle": "42596",
+        "field": 8,
+        "value": true,
+        "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[4]/sequence:42397[1]"
+      },
+      {
+        "writer": "43217",
+        "bundle": "43223",
+        "field": 6,
+        "value": false,
+        "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[4]/sequence:42397[6]"
+      },
+      {
+        "writer": "43280",
+        "bundle": "43287",
+        "field": 6,
+        "value": true,
+        "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[4]/sequence:42397[7]"
+      },
+      {
+        "writer": "43368",
+        "bundle": "43379",
+        "field": 4,
+        "value": false,
+        "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[4]/sequence:42397[9]"
+      },
+      {
+        "writer": "43434",
+        "bundle": "43440",
+        "field": 4,
+        "value": true,
+        "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[4]/sequence:42397[10]"
+      }
+    ],
+    "dps_writer_census": {
+      "local_references": 82,
+      "local_writers": 28,
+      "producer_classes": {
+        "sRN": 1,
+        "sharedVariableDynamicRead": 1,
+        "nMux": 26
+      },
+      "fields": [
+        {
+          "writer": "39295",
+          "bundle": "39303",
+          "field": 1,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[0]/sequence:10111[3]/select:11044[1]/sequence:8256[5]"
+        },
+        {
+          "writer": "23085",
+          "bundle": "23709",
+          "field": 0,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[3]/select:19197[1]/sequence:18783[10]"
+        },
+        {
+          "writer": "23005",
+          "bundle": "23043",
+          "field": 1,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[4]/select:17947[1]/sequence:7929[5]"
+        },
+        {
+          "writer": "35515",
+          "bundle": "35523",
+          "field": 2,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[5]/select:34571[1]/sequence:34597[8]"
+        },
+        {
+          "writer": "28802",
+          "bundle": "28821",
+          "field": 3,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[6]/select:26469[1]/sequence:26556[15]"
+        },
+        {
+          "writer": "24872",
+          "bundle": "24908",
+          "field": 5,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[7]/select:23245[1]/sequence:23281[2]"
+        },
+        {
+          "writer": "27605",
+          "bundle": "27650",
+          "field": 7,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[8]/select:26159[1]/sequence:26235[2]"
+        },
+        {
+          "writer": "31433",
+          "bundle": "31444",
+          "field": 9,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[9]/select:30860[1]/sequence:30983[2]"
+        },
+        {
+          "writer": "23980",
+          "bundle": "24001",
+          "field": 11,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[10]/select:23463[1]/sequence:23507[3]"
+        },
+        {
+          "writer": "33891",
+          "bundle": "33905",
+          "field": 12,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[11]/select:33660[1]/sequence:33686[2]"
+        },
+        {
+          "writer": "38546",
+          "bundle": "38554",
+          "field": 4,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[12]/select:38031[1]/sequence:38057[5]"
+        },
+        {
+          "writer": "29094",
+          "bundle": "29162",
+          "field": 6,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[13]/select:24272[1]/sequence:24303[6]"
+        },
+        {
+          "writer": "36397",
+          "bundle": "36405",
+          "field": 8,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[14]/select:35982[1]/sequence:36008[6]"
+        },
+        {
+          "writer": "40526",
+          "bundle": "40534",
+          "field": 10,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[15]/select:40121[1]/sequence:40147[6]"
+        },
+        {
+          "writer": "32298",
+          "bundle": "32306",
+          "field": 20,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[16]/select:29880[1]/sequence:30036[13]"
+        },
+        {
+          "writer": "43003",
+          "bundle": "43011",
+          "field": 23,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[17]/select:42497[1]/sequence:42523[4]"
+        },
+        {
+          "writer": "35784",
+          "bundle": "35792",
+          "field": 13,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[18]/select:34237[1]/sequence:34267[1]"
+        },
+        {
+          "writer": "43848",
+          "bundle": "43856",
+          "field": 14,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[19]/select:43675[1]/sequence:43701[1]"
+        },
+        {
+          "writer": "54192",
+          "bundle": "54200",
+          "field": 15,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[20]/select:53958[1]/sequence:53984[2]"
+        },
+        {
+          "writer": "32186",
+          "bundle": "32194",
+          "field": 17,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[21]/select:31612[1]/sequence:31655[2]"
+        },
+        {
+          "writer": "33392",
+          "bundle": "33400",
+          "field": 16,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[22]/select:32837[1]/sequence:32863[2]"
+        },
+        {
+          "writer": "45339",
+          "bundle": "45347",
+          "field": 18,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[23]/select:45163[1]/sequence:45189[1]"
+        },
+        {
+          "writer": "41236",
+          "bundle": "41245",
+          "field": 19,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[24]/select:40754[1]/sequence:40791[2]"
+        },
+        {
+          "writer": "39654",
+          "bundle": "39675",
+          "field": 21,
+          "value": false,
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[25]/select:38772[1]/sequence:38798[3]"
+        },
+        {
+          "writer": "54679",
+          "bundle": "54687",
+          "field": 1,
+          "value": false,
+          "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[5]/sequence:54275[5]"
+        },
+        {
+          "writer": "58870",
+          "bundle": "58878",
+          "field": 1,
+          "value": false,
+          "scope": "sequence:359[3]/select:43488[1]/whileLoop:42592[0]/select:52981[1]/sequence:51954[5]/sequence:54275[6]"
+        }
+      ],
+      "whole_cluster_writers": [
+        {
+          "writer": "31118",
+          "source_class": "sRN",
+          "source_uid": "33056",
+          "source_port": "28919",
+          "scope": "sequence:359[1]/sequence:201[5]/sequence:24603[3]"
+        },
+        {
+          "writer": "87",
+          "source_class": "sharedVariableDynamicRead",
+          "source_uid": "19950",
+          "source_port": "19968",
+          "scope": "sequence:359[2]/whileLoop:102[0]/eventStruct:43[0]/sequence:10111[0]"
+        }
+      ]
+    },
+    "cooling": {
+      "condition": "(C4_IN[19] OR C4_IN[38]) AND ((NOT C3_IN[0]) OR (NOT C3_IN[6]))",
+      "input_labels": {
+        "C4_IN[19]": "19 APC3 b09 Débit EAU CANON",
+        "C4_IN[38]": "38 BPB6 b20 Débit EAU SECTION",
+        "C3_IN[0]": "00 APA0 b47 Reffroidissement Canon marche",
+        "C3_IN[6]": "06 APA6 b35 Reffroidissement Section marche"
+      },
+      "execution_context": "Event43 Timeout frame3, nonempty Diagram Disable14478 arm",
+      "false_arm": "empty: no stop, reset or automatic restart",
+      "direct_card_command_intents": [
+        [
+          0,
+          "C3_OUT_DIO96",
+          1,
+          false
+        ],
+        [
+          1,
+          "C3_OUT_DIO96",
+          1,
+          true
+        ],
+        [
+          3,
+          "C3_OUT_DIO96",
+          4,
+          false
+        ],
+        [
+          4,
+          "C3_OUT_DIO96",
+          4,
+          true
+        ]
+      ],
+      "requested_wait_ms": [
+        150,
+        null,
+        400,
+        150,
+        null,
+        null,
+        100
+      ],
+      "status_assignments": {
+        "EPS[1]": true,
+        "EPS[2]": false,
+        "EPS[3]": false,
+        "EPS[5]": true,
+        "DPS[1]": false
+      },
+      "unchanged_by_this_branch": [
+        "C4_OUT_DIO96",
+        "EPS[8,14,20,26,32]",
+        "EPS[13,19,31]",
+        "DPS[3,5,7,11]",
+        "stop30",
+        "TCP ED45"
+      ],
+      "publication": "fresh DPS snapshot -> SUPERVISION/DPS -> Simple Error Handler39603",
+      "proof": "PASS: cooling Timeout 12 diagrams / 38 nets / all seven trip frames",
+      "native": {
+        "specific_native_version": "20.0f1",
+        "nonempty_arm_seen_enabled": true,
+        "original_lv2012_runtime_equivalence": false,
+        "image_hashes": {
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-active-branch-selector.png": "2C9526EDE38D06CD59EA572BA387571BB9B1EE966A1A1ACB6D517BC018A07CE9",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-cooling-guard-enabled.png": "5BBC9C88C1144CD42EBFDAD12BC78E5CF4AD1DBA831BB75E5765933E7ED4FCEF",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-false-empty.png": "95F9BF46F568B1F91D126BCBB514BF0E0B5887D283E1F943693EB02E33DCC15D",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-frame0.png": "6F1740DD1766CC45BD0D96EA04179FC03FF37A8E5699E4296FACA6969E1D5DA9",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-frame1.png": "51D111A6E084D65C0AC1AFDC4A222AE411B103281DF7D594F2C4F375474FBB87",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-frame2.png": "37392DAD22DEC5EA358473C31D43B0B58521586126C1715D3470EF8A7A3DB478",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-frame3.png": "FF3A8D56ADA2BB32630B6844006F5A90E7E934848DBA83E65357238C3D4E7B58",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-frame4.png": "C58933F0D221486B9977197B877F1AB690F01C5CAD1EEC6F7AAC657A0A3C967F",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-frame5.png": "D872EB94AE8A4F7C8131E5F481B395E85A6488611D95656F25D95D7CF1E7686A",
+          "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-trip-frame6.png": "1AC83F41FD90BA447EB099A848D369B71EB407D50F23DBA27075ED48F5E33005"
+        }
+      }
+    },
+    "driver_path": "C3_OUT local2378 -> ClusterToArray8127 -> DIO helper686 connector2 -> C3 DAQmx Write2840 data2868; errors precede C4 write38",
+    "other_stage_stop_paths": [
+      "DPS[5/7/11] signaling EPS[15/21/33] -> events7/8/10 -> NewVal=True -> C4[4/6/8] False->True",
+      "DPS[3] signaling EPS[9] -> event6 General Arrêt -> Focales OFF, then C4[8,17,6,4,1] False->True",
+      "Outer stop: leave runtime frame2, TCP ED45=True, then Arrêt général47=True -> controlled stop stage phase4"
+    ],
+    "psp_error_limits": [
+      "Two publication error True arms set stop30=True and TCP ED45=True",
+      "Timeout final read-error True arm instead sets both False; last-writer ordering is not fixed",
+      "Five runtime loops each sample stop30 independently; blocked or in-flight calls have no cancellation proven here",
+      "A loop exit alone is not a stage stop; outer staged stop additionally requires its TCP/general gates"
+    ],
+    "supporting_proofs": {
+      "stop_memory": {
+        "stop_local_references": 20,
+        "literal_writers": 11,
+        "init_gref_resets": [
+          [
+            45,
+            false
+          ],
+          [
+            46,
+            false
+          ]
+        ],
+        "init_gref_reset_30_or_47": false,
+        "loaded_initial_values_proven": false,
+        "indirect_writers_excluded": false
+      },
+      "lifecycle": {
+        "diagram_uids": [
+          "3",
+          "135",
+          "59492",
+          "41058",
+          "43496",
+          "43502",
+          "41713",
+          "42610",
+          "52989",
+          "52995",
+          "246",
+          "1760"
+        ],
+        "diagrams": 12,
+        "nets": 52
+      },
+      "runtime_publication": "8 ordered PSP requests C1/C2/EPS/EPC/VTA/C3/C4/C5; final returned error True assigns stop/TCP ED True. Comparison frame saved False, inactive two-helper True arm retained. Wait=80 ms, stop sampled independently of sequence; no atomic cycle or emergency latency guarantee.",
+      "timeout_reads": "PASS: Timeout reads 6 diagrams / 53 direct nets; 12 error-chained readers; final error clears stop/TCP ED",
+      "event_envelopes": "PASS: 72 event/gate diagrams / 73 nets / all23 NewValFalse/True envelopes",
+      "dio": [
+        "DIO96 root: all three callers preserve C3/C4/C5 banks via locals OUT 17/15/13, IN 18/16/14; task local 22; NI6071E error -> DIO96 -> NI6703",
+        "DIO96: Read C3/C4/C5 -> Write C3/C4/C5; public error chain; read data assigned without error guard; independent DI/DO task fields; autoStart True; timeout/task/count ports unwired"
+      ]
+    }
+  },
+  "supported_conclusions": [
+    "No automatic software stop of these three stages is sourced from the local klystron water/vacuum/oil/current fault bits in this pinned main VI",
+    "The four-input cooling branch commands only Canon and Section cooling stop lines, not Chauffage/PREMA/Focales stop lines or Chroma OFF",
+    "All26 fieldwise DPS bundles write False only: no local fault-to-True stop request producer exists in this census",
+    "Stage OK flags can remain True after this cooling branch; that is a software-state example, not proof supplies remain physically energized"
+  ],
+  "boundaries": [
+    "Raw Boolean polarity and actual loss-of-water transitions are not electrically qualified",
+    "Incoming PSP whole clusters may change C4_OUT, DPS and EPS; external Supervision/VI-server actors are outside this local response proof",
+    "The specific saved native20 import shows the cooling arm enabled; deployed LV2012 source/activation is not certified",
+    "Timeout is configured20ms but shares Event43 with long stage procedures, including Focales29s wait and instrument calls",
+    "No safety-response deadline, repeat-pulse rate or physical pulse width is guaranteed; assignments/Wait are unordered inside a frame",
+    "NI failures/modal handler aborts are distinct from decoded hardware défaut; no complete LV2012 driver-error safe-shutdown claim is made",
+    "Independent cabinet protection, actual relay wiring, physical shutdown and the deployed executable remain unverified"
+  ],
+  "screen_used": false,
+  "hardware_commands_sent": false,
+  "vi_run_or_saved": false,
+  "runtime_code_changed": false,
+  "qualifies_hardware_start": false
+}

@@ -1,0 +1,1080 @@
+{
+  "date": "2026-10-19",
+  "scope": "PINNED_ACQUISITION_ADMISSION_NOT_ELECTRICAL_PERMISSION",
+  "source_vi_sha256": "6FE801E023CF755FBDE89B4AD17854D5FC08447517010C2122E66C9F3DF5C3CF",
+  "observations": {
+    "eps": {
+      "total_local_references": 66,
+      "readers": [
+        {
+          "reader_uid": "21596",
+          "port": "21600",
+          "net_uid": "9719",
+          "consumer_uid": "21963",
+          "consumer_port": "21977",
+          "category": "sharedVariableDynamicOpen"
+        },
+        {
+          "reader_uid": "34455",
+          "port": "34458",
+          "net_uid": "23857",
+          "consumer_uid": "34480",
+          "consumer_port": "34494",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "18634",
+          "port": "18639",
+          "net_uid": "46570",
+          "consumer_uid": "18665",
+          "consumer_port": "18680",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "19942",
+          "port": "19945",
+          "net_uid": "30261",
+          "consumer_uid": "19997",
+          "consumer_port": "20012",
+          "category": "sharedVariableDynamicRead"
+        },
+        {
+          "reader_uid": "39289",
+          "port": "39292",
+          "net_uid": "39344",
+          "consumer_uid": "38770",
+          "consumer_port": "38904",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "18624",
+          "port": "18719",
+          "net_uid": "22618",
+          "consumer_uid": "18625",
+          "consumer_port": "26405",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "22985",
+          "port": "22990",
+          "net_uid": "23114",
+          "consumer_uid": "22959",
+          "consumer_port": "22964",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "35509",
+          "port": "35512",
+          "net_uid": "35567",
+          "consumer_uid": "35487",
+          "consumer_port": "35492",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "28788",
+          "port": "28795",
+          "net_uid": "35142",
+          "consumer_uid": "28738",
+          "consumer_port": "28752",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "24858",
+          "port": "24865",
+          "net_uid": "25407",
+          "consumer_uid": "24619",
+          "consumer_port": "24648",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "27587",
+          "port": "27596",
+          "net_uid": "27891",
+          "consumer_uid": "27544",
+          "consumer_port": "27562",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "31423",
+          "port": "31430",
+          "net_uid": "31479",
+          "consumer_uid": "31404",
+          "consumer_port": "31411",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "23961",
+          "port": "23971",
+          "net_uid": "24051",
+          "consumer_uid": "23928",
+          "consumer_port": "23940",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "34353",
+          "port": "34356",
+          "net_uid": "35738",
+          "consumer_uid": "34337",
+          "consumer_port": "34342",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "38540",
+          "port": "38543",
+          "net_uid": "38589",
+          "consumer_uid": "38527",
+          "consumer_port": "38532",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "29087",
+          "port": "29090",
+          "net_uid": "29200",
+          "consumer_uid": "29073",
+          "consumer_port": "29078",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "36391",
+          "port": "36394",
+          "net_uid": "36440",
+          "consumer_uid": "36378",
+          "consumer_port": "36383",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "40520",
+          "port": "40523",
+          "net_uid": "40570",
+          "consumer_uid": "40507",
+          "consumer_port": "40512",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "32292",
+          "port": "32295",
+          "net_uid": "32350",
+          "consumer_uid": "32270",
+          "consumer_port": "32275",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "39536",
+          "port": "39539",
+          "net_uid": "39625",
+          "consumer_uid": "39563",
+          "consumer_port": "39577",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "42997",
+          "port": "43000",
+          "net_uid": "43059",
+          "consumer_uid": "42975",
+          "consumer_port": "42980",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "31683",
+          "port": "31897",
+          "net_uid": "32085",
+          "consumer_uid": "31968",
+          "consumer_port": "31982",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "35778",
+          "port": "35781",
+          "net_uid": "35830",
+          "consumer_uid": "35761",
+          "consumer_port": "35766",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "49466",
+          "port": "49473",
+          "net_uid": "49551",
+          "consumer_uid": "49501",
+          "consumer_port": "49515",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "43842",
+          "port": "43845",
+          "net_uid": "43891",
+          "consumer_uid": "43829",
+          "consumer_port": "43834",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "43979",
+          "port": "43982",
+          "net_uid": "44080",
+          "consumer_uid": "43985",
+          "consumer_port": "43999",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "54186",
+          "port": "54189",
+          "net_uid": "54235",
+          "consumer_uid": "54170",
+          "consumer_port": "54175",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "47280",
+          "port": "47283",
+          "net_uid": "32935",
+          "consumer_uid": "47306",
+          "consumer_port": "47320",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "32180",
+          "port": "32183",
+          "net_uid": "32371",
+          "consumer_uid": "32167",
+          "consumer_port": "32172",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "32559",
+          "port": "32562",
+          "net_uid": "32718",
+          "consumer_uid": "32625",
+          "consumer_port": "32639",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "33571",
+          "port": "33574",
+          "net_uid": "33877",
+          "consumer_uid": "33577",
+          "consumer_port": "33591",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "45333",
+          "port": "45336",
+          "net_uid": "45382",
+          "consumer_uid": "45320",
+          "consumer_port": "45325",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "45469",
+          "port": "45472",
+          "net_uid": "45567",
+          "consumer_uid": "45475",
+          "consumer_port": "45489",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "41230",
+          "port": "41233",
+          "net_uid": "41281",
+          "consumer_uid": "41217",
+          "consumer_port": "41222",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "41371",
+          "port": "41374",
+          "net_uid": "41438",
+          "consumer_uid": "41377",
+          "consumer_port": "41391",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "39636",
+          "port": "39645",
+          "net_uid": "39740",
+          "consumer_uid": "39579",
+          "consumer_port": "39594",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "39878",
+          "port": "39881",
+          "net_uid": "39950",
+          "consumer_uid": "39885",
+          "consumer_port": "39901",
+          "category": "sharedVariableDynamicWrite"
+        },
+        {
+          "reader_uid": "54673",
+          "port": "54676",
+          "net_uid": "54728",
+          "consumer_uid": "54654",
+          "consumer_port": "54659",
+          "category": "preserve_other_fields_in_literal_bundle"
+        },
+        {
+          "reader_uid": "58864",
+          "port": "58867",
+          "net_uid": "58969",
+          "consumer_uid": "58845",
+          "consumer_port": "58850",
+          "category": "preserve_other_fields_in_literal_bundle"
+        }
+      ],
+      "reader_categories": {
+        "sharedVariableDynamicOpen": 1,
+        "sharedVariableDynamicWrite": 12,
+        "sharedVariableDynamicRead": 1,
+        "preserve_other_fields_in_literal_bundle": 25
+      },
+      "literal_fieldwise_writers": [
+        {
+          "bundle_uid": "38770",
+          "writer_uid": "38731",
+          "fields": [
+            [
+              3,
+              false
+            ],
+            [
+              2,
+              false
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              1,
+              true
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "18625",
+          "writer_uid": "18626",
+          "fields": [
+            [
+              0,
+              false
+            ],
+            [
+              2,
+              true
+            ],
+            [
+              5,
+              false
+            ],
+            [
+              1,
+              false
+            ],
+            [
+              8,
+              true
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "22959",
+          "writer_uid": "22951",
+          "fields": [
+            [
+              3,
+              false
+            ],
+            [
+              2,
+              false
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              1,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "35487",
+          "writer_uid": "35479",
+          "fields": [
+            [
+              11,
+              false
+            ],
+            [
+              8,
+              true
+            ],
+            [
+              6,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "28738",
+          "writer_uid": "28721",
+          "fields": [
+            [
+              8,
+              false
+            ],
+            [
+              14,
+              false
+            ],
+            [
+              20,
+              false
+            ],
+            [
+              26,
+              false
+            ],
+            [
+              32,
+              false
+            ],
+            [
+              11,
+              true
+            ],
+            [
+              17,
+              true
+            ],
+            [
+              23,
+              true
+            ],
+            [
+              29,
+              true
+            ],
+            [
+              35,
+              true
+            ],
+            [
+              9,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "24619",
+          "writer_uid": "24589",
+          "fields": [
+            [
+              14,
+              false
+            ],
+            [
+              17,
+              true
+            ],
+            [
+              15,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "27544",
+          "writer_uid": "27523",
+          "fields": [
+            [
+              20,
+              false
+            ],
+            [
+              23,
+              true
+            ],
+            [
+              21,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "31404",
+          "writer_uid": "31396",
+          "fields": [
+            [
+              26,
+              false
+            ],
+            [
+              29,
+              true
+            ],
+            [
+              27,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "23928",
+          "writer_uid": "23916",
+          "fields": [
+            [
+              32,
+              false
+            ],
+            [
+              35,
+              true
+            ],
+            [
+              33,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "34337",
+          "writer_uid": "34320",
+          "fields": [
+            [
+              36,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "38527",
+          "writer_uid": "38519",
+          "fields": [
+            [
+              17,
+              false
+            ],
+            [
+              14,
+              true
+            ],
+            [
+              12,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "29073",
+          "writer_uid": "29062",
+          "fields": [
+            [
+              23,
+              false
+            ],
+            [
+              20,
+              true
+            ],
+            [
+              18,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "36378",
+          "writer_uid": "36370",
+          "fields": [
+            [
+              29,
+              false
+            ],
+            [
+              26,
+              true
+            ],
+            [
+              24,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "40507",
+          "writer_uid": "40499",
+          "fields": [
+            [
+              35,
+              false
+            ],
+            [
+              32,
+              true
+            ],
+            [
+              30,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "32270",
+          "writer_uid": "32262",
+          "fields": [
+            [
+              56,
+              false
+            ],
+            [
+              58,
+              true
+            ],
+            [
+              64,
+              false
+            ],
+            [
+              67,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "42975",
+          "writer_uid": "42967",
+          "fields": [
+            [
+              65,
+              false
+            ],
+            [
+              58,
+              false
+            ],
+            [
+              64,
+              false
+            ],
+            [
+              67,
+              true
+            ],
+            [
+              61,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "35761",
+          "writer_uid": "35744",
+          "fields": [
+            [
+              42,
+              false
+            ],
+            [
+              39,
+              true
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "43829",
+          "writer_uid": "43821",
+          "fields": [
+            [
+              42,
+              true
+            ],
+            [
+              39,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "54170",
+          "writer_uid": "54162",
+          "fields": [
+            [
+              49,
+              false
+            ],
+            [
+              45,
+              true
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "32167",
+          "writer_uid": "32159",
+          "fields": [
+            [
+              45,
+              false
+            ],
+            [
+              49,
+              true
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "45320",
+          "writer_uid": "45312",
+          "fields": [
+            [
+              55,
+              false
+            ],
+            [
+              52,
+              true
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "41217",
+          "writer_uid": "41209",
+          "fields": [
+            [
+              42,
+              true
+            ],
+            [
+              52,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "39579",
+          "writer_uid": "39559",
+          "fields": [
+            [
+              59,
+              false
+            ],
+            [
+              64,
+              false
+            ],
+            [
+              61,
+              true
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "54654",
+          "writer_uid": "54646",
+          "fields": [
+            [
+              3,
+              false
+            ],
+            [
+              2,
+              false
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              1,
+              false
+            ]
+          ]
+        },
+        {
+          "bundle_uid": "58845",
+          "writer_uid": "58837",
+          "fields": [
+            [
+              3,
+              false
+            ],
+            [
+              2,
+              false
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              1,
+              false
+            ]
+          ]
+        }
+      ],
+      "direct_fieldwise_writers_of_start_ed_13_19_31": [],
+      "other_writes": [
+        "startup all-zero cluster",
+        "Timeout PSP whole-cluster replacement"
+      ],
+      "direct_eps_predicate_read_found": false,
+      "unwired_front_panel_terminal": "66774"
+    },
+    "eps_request_targets": {
+      "eps_parent_ddo": "59243",
+      "public_connector": -1,
+      "static_property_targets": 24,
+      "all_static_properties": "Value then Val(Sgnl), both True",
+      "limit": "Direct local/static access only; external VI-server access is not excluded"
+    },
+    "stages": [
+      {
+        "operation": "chauffage.start",
+        "dps_request": 4,
+        "eps_request": 12,
+        "eps_request_label": "Marche CHAUFFAGE Mod.",
+        "property_uid": "29098",
+        "event": 12,
+        "event_target_ddo": "66579",
+        "entry_condition": "NewVal=True",
+        "prior_eps_ok_or_ed_checked": [],
+        "prior_water_or_general_checked": [],
+        "c4_assignments": [
+          [
+            "38074",
+            3,
+            true
+          ],
+          [
+            "38157",
+            3,
+            false
+          ],
+          [
+            "38235",
+            2,
+            true
+          ],
+          [
+            "38295",
+            2,
+            false
+          ]
+        ],
+        "eps_completion_assignments": [
+          [
+            12,
+            false
+          ],
+          [
+            14,
+            true
+          ],
+          [
+            17,
+            false
+          ]
+        ],
+        "focal_helper": null
+      },
+      {
+        "operation": "prema.start",
+        "dps_request": 6,
+        "eps_request": 18,
+        "eps_request_label": "Marche PREMA Mod.",
+        "property_uid": "30677",
+        "event": 13,
+        "event_target_ddo": "66627",
+        "entry_condition": "NewVal=True",
+        "prior_eps_ok_or_ed_checked": [],
+        "prior_water_or_general_checked": [],
+        "c4_assignments": [
+          [
+            "24338",
+            5,
+            true
+          ],
+          [
+            "25366",
+            5,
+            false
+          ],
+          [
+            "28837",
+            2,
+            true
+          ],
+          [
+            "28946",
+            2,
+            false
+          ]
+        ],
+        "eps_completion_assignments": [
+          [
+            18,
+            false
+          ],
+          [
+            20,
+            true
+          ],
+          [
+            23,
+            false
+          ]
+        ],
+        "focal_helper": null
+      },
+      {
+        "operation": "focales.start",
+        "dps_request": 10,
+        "eps_request": 30,
+        "eps_request_label": "Marche FOCALE Mod.",
+        "property_uid": "32446",
+        "event": 15,
+        "event_target_ddo": "66723",
+        "entry_condition": "NewVal=True",
+        "prior_eps_ok_or_ed_checked": [],
+        "prior_water_or_general_checked": [],
+        "c4_assignments": [
+          [
+            "40162",
+            7,
+            true
+          ],
+          [
+            "40245",
+            7,
+            false
+          ],
+          [
+            "40323",
+            2,
+            true
+          ],
+          [
+            "40383",
+            2,
+            false
+          ]
+        ],
+        "eps_completion_assignments": [
+          [
+            30,
+            false
+          ],
+          [
+            32,
+            true
+          ],
+          [
+            35,
+            false
+          ]
+        ],
+        "focal_helper": "1_Focales ON.vi"
+      }
+    ],
+    "c4_input_consumers": {
+      "references": [
+        {
+          "uid": "8346",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicOpen",
+          "peer_uid": "1168",
+          "net_uid": "1171"
+        },
+        {
+          "uid": "19587",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "19515",
+          "net_uid": "18857"
+        },
+        {
+          "uid": "2352",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "7748",
+          "net_uid": "4165"
+        },
+        {
+          "uid": "25024",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicWrite",
+          "peer_uid": "4245",
+          "net_uid": "42839"
+        },
+        {
+          "uid": "10202",
+          "access": "read",
+          "peer_class": "nMux",
+          "peer_uid": "39336",
+          "net_uid": "40077"
+        },
+        {
+          "uid": "55726",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "55654",
+          "net_uid": "42946"
+        }
+      ],
+      "only_direct_local_unbundle_fields": [
+        19,
+        38
+      ],
+      "klystron_fields_0_1_20_not_selected_on_these_local_read_nets": true,
+      "limit": "Main-VI C4 local-reference census; not external control access or electrical interlocks"
+    },
+    "proofs": [
+      "PASS: Timeout reads 6 diagrams / 53 direct nets; 12 error-chained readers; final error clears stop/TCP ED",
+      "PASS: 72 event/gate diagrams / 73 nets / all23 NewValFalse/True envelopes",
+      "32 nets, 33 operations, 12 saved conversion shapes; short-array padding remains open",
+      "DIO96 root: all three callers preserve C3/C4/C5 banks via locals OUT 17/15/13, IN 18/16/14; task local 22; NI6071E error -> DIO96 -> NI6703",
+      "DIO96: Read C3/C4/C5 -> Write C3/C4/C5; public error chain; read data assigned without error guard; independent DI/DO task fields; autoStart True; timeout/task/count ports unwired"
+    ],
+    "first_true_dps_dispatch": "lowest True among 29 bits -> index+1 -> one explicit arm for DPS[0..23]",
+    "runtime_write_path": [
+      "C4_OUT gRef2362:2365 -> ClusterToArray8025 -> helper686:694 (connector1)",
+      "1_ACQ_RW_DIO96: C4 DO local4826:4829 -> DAQmx Write38:4773",
+      "C4 DO task field4; digital1D Boolean selector0E; autoStart=True",
+      "NI6071E error -> DIO96; C3/C4/C5 reads -> C3/C4/C5 writes via errors",
+      "C4 write error-in4786 from C3 write2892; error-out4798 to C5 write5301"
+    ],
+    "no_eps_action_or_water_mask_in_runtime_io": true,
+    "focal_delay_ms": 29000,
+    "historical_image_hashes": {
+      "C:\\dev\\ELYSE-ACQ-analysis\\runs\\20260922-085500-+0200\\images\\EV-ACQ-0033-event12-start-modulator-heating.png": "000F3F92AD1EB3C46B6A2B9A8B7B5DA3AB647CDEDDC6DE65D190F41B07D6A811",
+      "C:\\dev\\ELYSE-ACQ-analysis\\runs\\20260922-085500-+0200\\images\\EV-ACQ-0034-event13-start-premagnetization.png": "968B8033B022F8CBE164B2B5BFF51FCD96856DF42E5F2BA40A146372F025D9E8",
+      "C:\\dev\\ELYSE-ACQ-analysis\\runs\\20260922-085500-+0200\\images\\EV-ACQ-0046-event15-focal-modulator-psp-dps.png": "BCD43CD852DA3615103EAAFF93920DB5EF9A7E9A4D81C8FE0A77DF6646850F42"
+    }
+  },
+  "supported_conclusions": [
+    "No preceding EPS OK/ED, General, vacuum/oil/water admission predicate exists on these reviewed main-VI start-event or DIO data paths",
+    "EPS request fields12/18/30 are signaling targets; EPS14/20/32 are later literal software completion flags, not input permits or hardware ACK",
+    "EPS start ED13/19/31 have no direct fieldwise writers in this main graph; startup zeroing and whole-cluster PSP replacement can still change them",
+    "DPS request arbitration, event scheduling, handler progress and the separate DIO loop are necessary execution boundaries, not physical safety permits"
+  ],
+  "execution_limits": [
+    "Lower-index DPS True can defer a later request; no queued delivery or bounded request latency is proven",
+    "PSP failures/stale snapshots and unwired property error outputs do not establish successful request delivery",
+    "Timeout and stage handlers share EventStructure43; Timeout cannot run between frames of one active stage event",
+    "A later Timeout can replace local EPS and C4_OUT from remote whole-cluster snapshots; no snapshot freshness or atomicity is proven",
+    "Assignments and Wait in one frame are unordered; separate NI loop might miss a short local pulse; no electrical pulse duration is proven",
+    "Focales adds Chroma initialization/configuration/output-enable and Simple Error Handler; blocking/abort can prevent later frames",
+    "Native DAQmx incoming-error/timeout behavior and physical write success are external boundaries, not established by these wrapper wires"
+  ],
+  "unresolved": [
+    "Which cabinet contacts/electrical safety logic actually block each supply and the Chroma mains contactor",
+    "Installed source identity, pin polarity, physical wiring and current plant readiness",
+    "Dynamic external VI-server access is not ruled out by this local static census"
+  ],
+  "screen_used": false,
+  "hardware_commands_sent": false,
+  "vi_run_or_saved": false,
+  "runtime_code_changed": false,
+  "qualifies_hardware_start": false
+}

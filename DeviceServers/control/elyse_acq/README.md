@@ -1,7 +1,7 @@
 # ELYSE ACQ Tango controller
 
 Current source/runtime boundaries, known parity gaps and the software verification
-lane are indexed in [ELYSE business logic migration status](../../../../docs/ELYSE_BUSINESS_LOGIC_STATUS.md).
+lane are indexed in [ELYSE business logic migration status](../../../docs/ELYSE_BUSINESS_LOGIC_STATUS.md).
 The pure procedure controller below, read-only LabVIEW telemetry facade and
 read-only Python-runtime facade are distinct. None is a complete commissioned
 replacement. `business_logic_contract()` records these limits without authorizing
@@ -66,8 +66,11 @@ Current state:
 - the Tango facade refuses production hardware mode;
 - no real DAQ task is created and no hardware write is possible.
 
-The beam-line calculator requires the selected numeric step explicitly because
-the LabVIEW `X1/X10` Boolean-to-step polarity has not been verified. It rejects
+The beam-line calculator requires the selected numeric step explicitly.
+The later saved-source trace proves
+`X1/X10` false selects the smaller literal and true the larger across 24 paths;
+Phase HF/Laser fine adjustment is 1/5, not a universal factor ten. This does not
+provide a current runtime mode Boolean or hardware qualification. The model rejects
 non-adjustment actions rather than guessing their behavior. The field/PSP
 crosswalk and source-image links are in
 [`BEAM_LINE_ANALOG_COMMAND_CROSSWALK_2026-09-29.csv`](../../../Supervision/integration_analysis/BEAM_LINE_ANALOG_COMMAND_CROSSWALK_2026-09-29.csv)

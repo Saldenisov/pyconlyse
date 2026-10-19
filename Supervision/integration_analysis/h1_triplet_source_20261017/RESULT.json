@@ -1,0 +1,219 @@
+{
+  "source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "scope": "H1 and Triplet 1-1, direct-line event19 frame1 transfer/frame2 PSP publication",
+  "method": "saved source wires plus unique labelled terminal/member type identity",
+  "routes": [
+    {
+      "name": "H1",
+      "source": {
+        "mux_uid": "8491",
+        "terminal": "13325",
+        "raw_index": 42,
+        "label_path": [
+          "Correcteur H1",
+          "Consigne"
+        ],
+        "type": "NumFloat64",
+        "addressing": "explicit-index",
+        "position_path": [
+          3,
+          5
+        ]
+      },
+      "direct_wire": {
+        "net": "8488",
+        "source": "13325",
+        "destination": "14331"
+      },
+      "destination_mux": "8553",
+      "destination": {
+        "raw_index": null,
+        "resolution": "unique-full-labelled-saved-type-match",
+        "terminal_type_ref": "TypeID(7369)",
+        "terminal_saved_type": {
+          "tag": "TypeDesc",
+          "attributes": {
+            "Type": "NumFloat64",
+            "Prop1": "0",
+            "Label": "00 OUT00 b01 Cmd Guidage H1"
+          },
+          "text": null,
+          "children": []
+        },
+        "matched_member": {
+          "flattened_index": 0,
+          "position_path": [
+            0
+          ],
+          "label_path": [
+            "00 OUT00 b01 Cmd Guidage H1"
+          ],
+          "type": "NumFloat64",
+          "flat_type_id": 1305,
+          "value_type_signature": "65b041a3de2e2adb0ff1017580ea94f61fe44f383c564b8a01c072f60c668813"
+        },
+        "index_was_defaulted": false
+      },
+      "bank_input": {
+        "name": "C6NI6703",
+        "reference_uid": "6122",
+        "reference_terminal": "14267",
+        "aggregate_terminal": "14385",
+        "net": "15811"
+      },
+      "bank_local_write_path": [
+        {
+          "source": "14404",
+          "target": "15533",
+          "kind": "wire",
+          "uid": "15810"
+        }
+      ],
+      "psp": {
+        "writer": "12969",
+        "uri": "ni.var.psp://localhost/SUPERVISION/C6NI6703",
+        "literal": "11727"
+      },
+      "acquisition_receipt": {
+        "bank": "C6NI6703",
+        "reader_uid": "10310",
+        "uri": "ni.var.psp://10.20.30.2/SUPERVISION/C6NI6703",
+        "local_bank": 9,
+        "local_writer_uid": "10392",
+        "shape": "10 DBL; no M/A or X1/X10 Boolean field"
+      },
+      "acquisition_writer_receipt": {
+        "local_bank": 9,
+        "local_uid": "2388",
+        "cluster_to_array_uid": "7588",
+        "call_uid": "278",
+        "call_terminal": "298",
+        "raw_connector_index": null
+      },
+      "source_level_named_route_resolved": true
+    },
+    {
+      "name": "Triplet 1-1",
+      "source": {
+        "mux_uid": "8491",
+        "terminal": "15225",
+        "raw_index": 90,
+        "label_path": [
+          "Triplet 1-1",
+          "Consigne"
+        ],
+        "type": "NumFloat64",
+        "addressing": "explicit-index",
+        "position_path": [
+          7,
+          5
+        ]
+      },
+      "direct_wire": {
+        "net": "7998",
+        "source": "15225",
+        "destination": "14067"
+      },
+      "destination_mux": "7543",
+      "destination": {
+        "raw_index": null,
+        "resolution": "unique-full-labelled-saved-type-match",
+        "terminal_type_ref": "TypeID(7364)",
+        "terminal_saved_type": {
+          "tag": "TypeDesc",
+          "attributes": {
+            "Type": "NumFloat64",
+            "Prop1": "0",
+            "Label": "00 OUT00 b01 Cmd I Triplet 1-1"
+          },
+          "text": null,
+          "children": []
+        },
+        "matched_member": {
+          "flattened_index": 0,
+          "position_path": [
+            0
+          ],
+          "label_path": [
+            "00 OUT00 b01 Cmd I Triplet 1-1"
+          ],
+          "type": "NumFloat64",
+          "flat_type_id": 1294,
+          "value_type_signature": "65b041a3de2e2adb0ff1017580ea94f61fe44f383c564b8a01c072f60c668813"
+        },
+        "index_was_defaulted": false
+      },
+      "bank_input": {
+        "name": "C7NI6703",
+        "reference_uid": "8562",
+        "reference_terminal": "14317",
+        "aggregate_terminal": "7683",
+        "net": "12493"
+      },
+      "bank_local_write_path": [
+        {
+          "source": "14059",
+          "target": "9663",
+          "kind": "wire",
+          "uid": "12492"
+        }
+      ],
+      "psp": {
+        "writer": "13145",
+        "uri": "ni.var.psp://localhost/SUPERVISION/C7NI6703",
+        "literal": "11681"
+      },
+      "acquisition_receipt": {
+        "bank": "C7NI6703",
+        "reader_uid": "10333",
+        "uri": "ni.var.psp://10.20.30.2/SUPERVISION/C7NI6703",
+        "local_bank": 10,
+        "local_writer_uid": "10398",
+        "shape": "10 DBL; no M/A or X1/X10 Boolean field"
+      },
+      "acquisition_writer_receipt": {
+        "local_bank": 10,
+        "local_uid": "2448",
+        "cluster_to_array_uid": "8669",
+        "call_uid": "278",
+        "call_terminal": "466",
+        "raw_connector_index": "5"
+      },
+      "source_level_named_route_resolved": true
+    }
+  ],
+  "explicit_NumFloat64_terminal_labels_checked": 302,
+  "explicit_label_conflicts": 0,
+  "previous_trace": {
+    "path": "Supervision\\integration_analysis\\beam_switch_trace_20261016\\trace.json",
+    "sha256": "3F99461538321F152A9134D87AC1969F5E1CAAAF9A2464574DB9443EA3C74F7F"
+  },
+  "saved_images": [
+    {
+      "path": "Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd347.png",
+      "sha256": "3EA87F99F64A02A248D6DC8CA7C4411E050E8683B54C85342A8F6B1F415987AC"
+    },
+    {
+      "path": "Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd350.png",
+      "sha256": "08B206C74FEE6B4773A24E4FCEDCF0FBC4A2FDB897A7921DCA7B1939B0DDA9B3"
+    }
+  ],
+  "image_observation": "d347 shows both named setpoint-to-OUT00 wires; d350 shows C6/C7 PSP publications",
+  "image_capture_time_vi_sha256": null,
+  "image_role": "corroboration only; no fresh native source-version qualification",
+  "fresh_native_labview_verification": false,
+  "all_omitted_indices_qualified": false,
+  "physical_channel_or_pin_verified": false,
+  "limits": [
+    "The named software destinations are resolved; raw dco/i remains null.",
+    "Member position0 is derived by unique full labelled-type match, not a missing-index default.",
+    "The existing Acquisition receipt preserves C6 call-terminal298 raw connector index as unknown.",
+    "Local-variable writes/reads in distinct frames/loops are not one continuous wire or atomic epoch.",
+    "This does not prove execution, delivery, DAQmx ABI, voltage/current calibration or hardware response."
+  ],
+  "screen_used": false,
+  "vi_run_or_save": false,
+  "hardware_io": false,
+  "network_io": false,
+  "deployment": false
+}

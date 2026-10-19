@@ -1,0 +1,150 @@
+{
+  "date": "2026-10-19",
+  "scope": "Operator-authorized, sequential real-hardware Python v4 / LabVIEW General-only commissioning; not full installation equivalence",
+  "supersedes_pretest_status_only": "docs/ELYSE_PYTHON_ACQ_GENERAL_ONLY_2026-10-19.json records package preparation before this separately authorized live test; that evidence is unchanged",
+  "authorization": {
+    "operator_confirmed_all_stages_physically_off_before_test": true,
+    "approved_actions": ["Launch v4", "Initialize NI", "General Marche", "General Arret", "Release Python tasks", "Sequential LabVIEW comparison"],
+    "independent_operator_observation_of_cabinet_on_off_during_this_test": false,
+    "operator_requested_card_state_comparison": true
+  },
+  "python_artifact": {
+    "xp_directory": "C:/ACQ_Python_Server_20261019_v4",
+    "local_directory": "C:/dev/ELYSE-ACQ-telemetry/2026-10-19/ACQ_Python_Server_20261019_v4",
+    "archive_sha256": "41BA77826B5D73F0D4D666B8A2D2D472FCF0ED3E1ADEC22A3FCB3DDC9DAAAC83",
+    "control_profile": "general_only_test",
+    "package_changed_during_live_test": false,
+    "chroma_adapter_used_in_python_general_only_profile": false
+  },
+  "initialization": {
+    "python_cards": 11,
+    "python_ni_tasks": 21,
+    "python_input_channels": 320,
+    "input_channel_breakdown": {"C1_AI": 64, "C2_AI": 64, "C11_AI": 16, "C3_DI": 56, "C4_DI": 64, "C5_DI": 56},
+    "started_counter_indices": [0, 1, 2, 5, 6, 7],
+    "python_error": "",
+    "startup_command_vs_reviewed_source_plan": {
+      "digital_bits_compared": 112,
+      "digital_mismatches": 0,
+      "analog_voltage_channels_compared": 40,
+      "analog_voltage_mismatches": 0,
+      "electrical_output_readback": false
+    }
+  },
+  "comparison_contract": {
+    "input_bank_map": {"C1NI6071E": "C1_NI6071E_AI", "C2NI6071E": "C2_NI6071E_AI", "C3_IN_DIO96": "C3_DIO96_DI", "C4_IN_DIO96": "C4_DIO96_DI", "C5_IN_DIO96": "C5_DIO96_DI"},
+    "digital_output_bank_map": {"C3_OUT_DIO96": "C3_DIO96_DO", "C4_OUT_DIO96": "C4_DIO96_DO", "C5_OUT_DIO96": "C5_DIO96_DO"},
+    "native_input_field_labels_matched_per_phase": 304,
+    "input_bank_shape_and_type_checks_passed": 15,
+    "digital_input_fields_compared_per_phase": 176,
+    "commanded_digital_fields_compared_per_phase": 112,
+    "logical_analog_output_fields_compared_per_phase": 40,
+    "C11_raw_AI_directly_compared_with_27_bank_LabVIEW_schema": false,
+    "analog_sample_equality_used_as_acceptance_criterion": false,
+    "cross_host_timestamps_subtracted": false,
+    "samples_atomic_across_banks_or_programs": false
+  },
+  "phases": [
+    {
+      "name": "initialized_baseline",
+      "python_sequence": 164,
+      "python_received_utc_XP_clock": "2026-10-19T12:34:57.590000+00:00",
+      "labview_C4_sequence": 10,
+      "labview_received_utc_Everest_clock": "2026-10-19T12:52:09.633908+00:00",
+      "labview_fresh_error_free_banks": 27,
+      "digital_input_mismatches": 0,
+      "commanded_digital_mismatches": 0,
+      "logical_analog_output_mismatches": 0
+    },
+    {
+      "name": "General_Marche_completed",
+      "python_sequence": 224,
+      "python_received_utc_XP_clock": "2026-10-19T12:35:15.074375+00:00",
+      "labview_C4_sequence": 1463,
+      "labview_received_utc_Everest_clock": "2026-10-19T12:54:03.937726+00:00",
+      "labview_fresh_error_free_banks": 27,
+      "digital_input_mismatches": 0,
+      "commanded_digital_mismatches": 0,
+      "logical_analog_output_mismatches": 0,
+      "python_source_completion_frame": {"frame": 9, "uid": "35570"}
+    },
+    {
+      "name": "General_Arret_completed",
+      "python_sequence": 366,
+      "python_received_utc_XP_clock": "2026-10-19T12:35:50.699375+00:00",
+      "labview_C4_sequence": 2215,
+      "labview_received_utc_Everest_clock": "2026-10-19T12:55:24.350421+00:00",
+      "labview_fresh_error_free_banks": 27,
+      "digital_input_mismatches": 0,
+      "commanded_digital_mismatches": 0,
+      "logical_analog_output_mismatches": 0,
+      "all_176_digital_inputs_returned_to_initialized_baseline": true,
+      "pending_labview_DPS_requests": 0,
+      "python_general_stop_required": false,
+      "python_source_completion_frame": {"frame": 16, "uid": "35146"}
+    }
+  ],
+  "digital_transition_evidence": {
+    "same_C4_changed_indices_for_both_programs": [2, 3, 4, 5, 8, 10, 11, 12, 13, 15, 16, 17, 19, 21, 22, 33, 34, 35, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47],
+    "C4_changes_on_start": 29,
+    "same_C4_inputs_reversed_on_stop": true,
+    "C3_input_changes": 0,
+    "C5_input_changes": 0,
+    "commanded_digital_images_after_completed_pulses_equal_baseline": true,
+    "evidence_is_real_input_feedback_not_just_EPS_OK": true
+  },
+  "stop_scope_and_latency": {
+    "python_stop_scope": "Only reviewed General event-6 frames 13..16; not complete event 6 or full installation shutdown",
+    "labview_stop_scope": "Original full General Arret event 6, including Focales OFF helper/configuration and staged stop pulses",
+    "other_stage_start_commands_sent": false,
+    "other_stage_stop_or_configuration_writes_absent": false,
+    "labview_check_8_seconds_after_click": {"snapshot_stale": true, "fresh_banks": 0, "request_still_pending": true, "excluded_from_completed_phase_comparison": true},
+    "later_completed_labview_check": {"fresh_banks": 27, "pending_DPS_requests": 0},
+    "inference": "The Timeout telemetry publisher did not refresh during the still-executing legacy stop procedure; the stale intermediate snapshot was not a completed-stop mismatch",
+    "exact_total_stop_duration_or_responsible_native_call_measured": false
+  },
+  "ownership_and_transport": {
+    "python_deinitialized_before_LabVIEW_launch": true,
+    "authenticated_python_post_deinitialize": {"state": "IDLE", "resource_count": 0, "sequence": 570, "error": "", "current_operation": null, "general_stop_required": false},
+    "python_window_closed_before_LabVIEW_launch": true,
+    "simultaneous_Python_and_LabVIEW_NI_owners": false,
+    "labview_launcher": "C:/ELYSE_ACQ_TELEMETRY_AUTO_20261017/START_Acquisition_Telemetry.vi",
+    "existing_XP_bridge_started": "C:/ACQ_SharedState_Python34_20261014/shared_state_receiver.pyw",
+    "transport": "127.0.0.1:8766 -> 10.20.30.202:8767 -> elyse/acquisition/telemetry",
+    "initial_transport_problem": "Existing bridge was not running; Everest held 27 stale banks until bridge was started",
+    "bridge_start_reinitialized_or_commanded_NI": false,
+    "Windows_startup_changed": false,
+    "original_VIs_edited_or_saved": false
+  },
+  "final_observation": {
+    "received_utc_Everest_clock": "2026-10-19T13:02:11.421826+00:00",
+    "C4_sequence": 7494,
+    "fresh_banks_younger_than_2_seconds": 27,
+    "total_banks": 27,
+    "bank_errors": 0,
+    "producer_kind": "copied_acquisition",
+    "all_176_DI_vs_initial_baseline_mismatches": 0,
+    "general_EPS": {"8": false, "9": false, "11": true},
+    "pending_DPS_requests": 0,
+    "General_input_observed_state": "OFF / returned to initial baseline",
+    "LabVIEW_Acquisition": "RUNNING",
+    "Supervision": "RUNNING at last screen observation; General indicator OFF",
+    "XP_telemetry_bridge": "RUNNING",
+    "Python_v4": "CLOSED after verified IDLE and zero NI tasks"
+  },
+  "storage": {
+    "raw_comparison_snapshots": "Temporary local diagnostic-process RAM only; process exited after comparison",
+    "raw_telemetry_arrays_saved_in_this_report": false,
+    "telemetry_history_or_SQLite_created": false,
+    "saved_evidence": "Diagnostic mismatch counts, channel identities, phase sequence/timestamp provenance, procedure scope and limitations"
+  },
+  "bounded_conclusion": "Python v4 and LabVIEW produced identical observed digital endpoint transitions for this authorized General-only start/stop test, with matching software output images. This is not proof of complete Acquisition/Supervision equivalence or independently measured cabinet electrical power.",
+  "remaining_limits": [
+    "The operator did not independently observe cabinet power during both A/B runs; the conclusion uses NI input feedback.",
+    "Analog readings were non-identical sequential samples. No simultaneous sampling, acceptance tolerances or noise qualification established quantitative analog equivalence.",
+    "Commanded DO/AO images are software intent, not electrical output readback. Electrical pulse widths and full transient ordering were not measured.",
+    "C11 raw AI, complete NI timing/driver configuration readback, all faults/restarts and full application logic are not qualified by this test.",
+    "Python general_only_test stop deliberately omits other-stage shutdown. It must not be treated as full General Arret after heating/PREMA/focal/HT stages have been enabled.",
+    "No Chauffage, PREMA, Focales, Relais HT or HT start was performed. Cooling interlocks and Chroma resource mapping remain separate prerequisites for those stages."
+  ]
+}
