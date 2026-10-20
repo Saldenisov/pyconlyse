@@ -82,6 +82,32 @@ class BusinessLogicContractTests(unittest.TestCase):
         self.assertFalse(bridge["interchangeable_with_xp_gui_snapshot"])
         self.assertFalse(self.contract["parity_gaps"]["bank_schemas"]["equivalent"])
 
+    def test_recovery_and_new_runtime_view_never_enable_hardware_control(self):
+        runtime = self.contract["layers"]["xp_gui_runtime"]
+        self.assertEqual(runtime["runtime_protocol_version"], 2)
+        self.assertTrue(runtime["dirty_owner_blocks_initialization"])
+        self.assertTrue(runtime["state_revision_fencing"])
+        self.assertFalse(runtime["build_fingerprint_is_deployment_attestation"])
+        self.assertFalse(runtime["qualified_process_recovery_checker_shipped"])
+        self.assertFalse(runtime["automatic_ni_recovery"])
+        supervisor = runtime["cold_supervisor"]
+        self.assertTrue(supervisor["restart_only_after_confirmed_nonzero_child_exit"])
+        self.assertEqual(supervisor["restart_budget"], 3)
+        self.assertTrue(supervisor["qualified_local_prior_child_recovery_api"])
+        self.assertFalse(supervisor["production_quiescence_verifier_included"])
+        for key in ("normal_exit_restarts", "kills_live_or_unresponsive_card_owner",
+                    "initializes_cards_or_replays_commands", "startup_installed_by_this_change"):
+            self.assertFalse(supervisor[key])
+        self.assertFalse(runtime["command_admission"]["default_enabled"])
+        self.assertFalse(runtime["command_admission"]["wired_to_gui_http_or_tango"])
+        web = self.contract["layers"]["web_supervision"]
+        self.assertFalse(web["python_runtime_hardware_commands_enabled"])
+        self.assertFalse(web["python_runtime_falls_back_to_labview_or_simulator"])
+        self.assertEqual(web["python_runtime_path"], "/api/elyse/acquisition/runtime")
+        self.assertEqual(web["python_runtime_tango_caller_wait_seconds"], 2.0)
+        self.assertFalse(web["python_runtime_replaces_unresolved_read_worker"])
+        self.assertTrue(web["browser_age_includes_http_json_elapsed"])
+
     def test_requested_sample_discrepancy_is_tied_to_two_source_implementations(self):
         gap = self.contract["parity_gaps"]["ni6071e_requested_samples"]
         original = tree("DeviceServers/control/elyse_acq/vi_simulation/runtime_io.py")

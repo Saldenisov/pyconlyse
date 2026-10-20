@@ -18,7 +18,7 @@ or issue NI, serial, PSP or Tango commands.
 | Original Supervision | Saved-source models, display mappings, event fragments and focused lifecycle traces | 39 original VI/XML identities accounted; complete semantic coverage remains false |
 | Pure Python models | Explicit supplied inputs/returns; 16 modulator procedures and 120 frames including nested frames | No stage actuators or native error-handler replacement |
 | Copied LabVIEW telemetry | Latest 27 shared-variable banks through Python 3.4 to Everest | Sequential/non-atomic; transport does not qualify the source data or replace Acquisition |
-| XP GUI server, default port 8771 | Cold IDLE, explicit local initialization, six AI/DI banks, General, fourteen additional source-stage paths and conditional cooling-trip evaluation on the same owner | New paths default uncommissioned; no new HTTP/Tango commands; native error semantics, HT-voltage/counter and full 27-bank parity remain incomplete |
+| XP GUI server, default port 8771 | Cold IDLE or recovery-blocked, explicit local initialization, six AI/DI banks, General, fourteen additional source-stage paths and conditional cooling-trip evaluation on the same owner | New paths default uncommissioned; no new HTTP/Tango commands; native error semantics, HT-voltage/counter and full 27-bank parity remain incomplete |
 | Simulator, port 8765 | Signed named procedures, replay and durable intent state | Logical simulation only, not the GUI NI server |
 | Everest Tango/web | Separate read-only views of LabVIEW telemetry and Python runtime; replay/business simulation | No remote NI control route; replay values are not measurements |
 
@@ -175,6 +175,103 @@ manifest hashes, unchanged catalog bytes and absence of keys, telemetry history,
 native drivers or an interpreter. A packaged cold runtime was also imported and
 started in IDLE on actual Python 3.4 with native-library loading denied.
 
+## Cold recovery and Python runtime observation on 20 October 2026
+
+The prepared server now reports protocol version 2, a new 32-hex boot session,
+a 64-hex source/data fingerprint and a lifecycle revision. The fingerprint
+covers the packaged source files present at boot, not loaded bytecode, site
+configuration, a Git commit, firmware or commissioning. It must not be used as
+remote deployment attestation. The revision changes on accepted lifecycle
+requests and completions/faults, not on every telemetry read.
+
+Production GUI initialization exclusively creates a small ownership marker next
+to its configuration before invoking the NI backend factory. A cold window
+with an unreleased, malformed or unqualified marker enters `RECOVERY_REQUIRED`;
+it does not initialize cards. Successful cleanup can remove only the current
+session's exact marker, after backend resources and retained native workers
+have been released. Stopping an uninitialized blocked window preserves a prior
+owner's marker. The marker protects cooperating instances using the same
+configuration path, not independent copies, other configurations or LabVIEW.
+
+Recovery requires local electrical-OFF confirmation and a separately qualified
+checker proving absence of the prior parent, native children and competing NI
+owners. Parent PID absence alone is insufficient. No production checker is
+shipped, so an ambiguous prior owner remains blocked; the local recovery button
+does not bypass this condition. The small ownership and child journals contain
+control-process identities, not measurements or private keys. Telemetry remains
+RAM-latest without SQLite or history.
+
+The cold supervisor holds a config-scoped OS file lock and writes a separate
+pre-spawn child journal. Only a confirmed nonzero child exit permits another
+cold GUI launch, with a default budget of three delayed retries. Exit zero is
+intentional termination and is not respawned. A live or unresponsive owner is
+never killed, replaced or abandoned. An unconfirmed child journal after
+supervisor failure blocks a duplicate launch. The GUI entrypoint now propagates
+its return code, so a failed startup is not silently reported as exit zero.
+The explicit Windows Startup installer generates a supervisor launcher; no
+installed Startup file was changed by this source update. Automatic recovery
+of an initialized NI state or replay of a prior command remains forbidden.
+
+The explicit local `ColdAcquisitionSupervisor.recover_prior_child()` acquires
+the same config lock and can clear only its exact prior child journal. It
+requires electrical-OFF confirmation and a trusted checker returning typed
+evidence bound to that record's token, full controlled argument list and SHA256.
+The evidence must establish absence of the matching GUI, native children and
+competing NI owners; JSON flags or PID-only inspection are not accepted. A
+changed record or lost lock aborts recovery. Success leaves the supervisor cold
+and does not clear the separate NI ownership marker or launch a process.
+
+Operational recovery is therefore still a commissioning prerequisite, not an
+unattended-deployment feature: keep the candidate's autostart unqualified until
+a Windows process/native-worker/NI-owner checker has been independently tested.
+After an ambiguous crash, establish electrical OFF through the installation's
+qualified local procedure, preserve both journals, and use those local recovery
+APIs only with that checker. Do not delete files merely because a PID is absent.
+If no qualified checker is available, retain the blocked state. A new cold
+window must separately recover prior NI ownership before explicit initialization;
+neither step resumes a saved stage sequence.
+
+The Everest reader replaces each complete snapshot rather than merging banks.
+It clears measurements after transport failure, incompatible identity,
+revision rollback or in-session build changes, and suppresses otherwise valid
+but stale measurements in its exported view. A changed
+boot session requires another consistent poll before data are marked fresh.
+Only one read is in flight, retries use bounded backoff, and a late reply after
+stop cannot repopulate the cache. A still-live reader prevents overlapping
+replacement. Socket inactivity timeouts do not by themselves certify a hard
+end-to-end deadline against a peer that continuously drip-feeds bytes.
+
+The separate authenticated web path `/api/elyse/acquisition/runtime` reads
+`runtime_json` from the fixed Tango device
+`tango://10.20.30.202:10000/elyse/acquisition/runtime`. Its Python Acquisition
+tab distinguishes bridge age, NI age, lifecycle/recovery and boot/source
+identity, then shows the six typed input banks only when fresh. Missing or
+invalid values are not zero. Stale values are removed rather than left as
+green live indicators. This view does not fall back to the 27-bank LabVIEW
+bridge, PSP, a simulator or direct browser/Flask access to XP. Loss of telemetry
+does not establish electrical OFF.
+
+The web application owns one retained Tango-read worker covering proxy
+construction and the complete direct read. Concurrent callers share only the
+current unexpired flight; callers wait at most two seconds. An unresolved live
+worker blocks replacement, and its late response is discarded rather than
+cached. This bounds Flask request waits without claiming that a stuck PyTango
+call was killed. The browser also includes the entire HTTP/JSON round-trip
+duration in its conservative source/bridge ages before showing measurements;
+a delayed response cannot reset an already old image to fresh.
+
+An unwired named-command admission module provides session/revision fencing
+and at-most-once dispatch attempts against explicitly supplied local callbacks.
+It is disabled by default and is not instantiated by GUI, HTTP, Tango or web.
+Its bounded RAM ledger never evicts old IDs to make them executable again;
+failed or indeterminate attempts are not automatically replayed. It neither
+authenticates a transport nor qualifies a hardware command. All network
+mutations remain unavailable and all web hardware controls remain disabled.
+
+These changes prepare source and fake-test infrastructure. They do not deploy
+the candidate, exercise a real Windows restart, prove absence of native orphans
+after a crash, or close the remaining VI/sample-count/27-bank parity gaps.
+
 ## Supervision corrections and remaining work
 
 M/A action 1 passes seven retained values unchanged in the reviewed beam-line
@@ -230,6 +327,33 @@ be treated as interchangeable. HMAC proves response authentication, not an
 immutable deployed build identity. See [HT readiness evidence](ELYSE_PYTHON_HT_READINESS_2026-10-19.json).
 
 ## Software verification
+
+The final cold-recovery/runtime-web integration on 20 October 2026 passed
+**3617 offline tests**, no skips, 7300 warnings, in **231.94 s** on Python
+3.12.14 with the actual Python 3.4 package/process lane enabled. The independent
+fake-NI pipeline exercises real server snapshot construction, signed loopback
+HTTP, the Everest reader and web projection, including removal of old inputs
+after deinitialization. It does not contact the lab computers or a real Tango
+device. This count supersedes the overlapping earlier Python totals below.
+
+The focused gate `tools/test_acquisition_python34.py` passed **360 tests in
+7.918 s on actual Python 3.4.4**. It blocks real child-process creation, external
+connections and ctypes driver loading; tests inject fake NI/native processes,
+and no NI/VISA driver module was loaded. This focused result overlaps the
+offline gate rather than adding 360 independent tests. Package checks separately
+start only a cold IDLE interpreter process, with native loading denied. The
+candidate contains 22 Python modules; the fingerprint and package source/data
+closures agree, and catalog bytes remain unchanged.
+
+The final frontend selection passed **11 suites / 200 tests in 38.412 s**.
+The exact-source production bundle passed with
+`CI=false GENERATE_SOURCEMAP=false`; pre-existing Hook warnings remain in
+AndorSpectrographClient, CameraClient, DSNetioPDUClient, DSStandaMotorsClient and
+DeviceControl, alongside bundle-size/Browserslist advisories. New runtime
+frontend files passed ESLint. Critical Python syntax/undefined-name checks,
+`git diff --check` and independent source/lifecycle review passed. These are
+software gates, not XP deployment, Windows restart, hardware, or full-VI
+acceptance tests.
 
 The 20 October 2026 nine-stage/cooling integration passed the offline software
 gate on Python 3.12.14: **3384 passed, no skips, 7300 warnings, 207.46 s**, with

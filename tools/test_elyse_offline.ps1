@@ -27,13 +27,14 @@ try {
     $selectedTests = @(
         "legacy/xp_acq_agent/tests",
         "Supervision/python_reconstruction/tests",
-        "tests/unit/test_acq_runtime_health.py",
         "tests/unit/test_acquisition_runtime_package.py",
         "tests/unit/test_elyse_business_logic_contract.py"
     )
     $selectedTests += Get-ChildItem -Path @(
+        "tests/unit/test_acq_runtime*.py",
         "tests/web/test_elyse*.py",
         "tests/web/test_acq_telemetry_api.py",
+        "tests/web/test_acq_runtime_api.py",
         "tests/device_servers/control/test_elyse*.py"
     ) | ForEach-Object FullName
     $pytestOptions = @("--import-mode=importlib", "--deny-network", "-q")

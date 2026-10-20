@@ -21,6 +21,35 @@ Native worker exit does not establish physical OFF.
 HTTP exposes authenticated reads, not control. Deinitialization is resource
 release, not electrical shutdown.
 
+The prepared GUI reports protocol 2, a fresh boot session, a source/data
+fingerprint and a lifecycle revision. Production initialization acquires
+`<absolute-config-path>.ownership` before NI initialization; an unreleased or
+unqualified prior marker blocks a cold window in `RECOVERY_REQUIRED`. Successful
+cleanup releases only this session's exact marker. Local electrical-OFF
+confirmation alone cannot clear a prior owner: a qualified parent/native-child/
+NI-competitor absence checker is also required, and none is shipped by default.
+This is cooperative config-path ownership, not machine-wide NI exclusion.
+
+The explicit Windows Startup installer now writes a cold supervisor launcher.
+It permits at most three delayed restarts after confirmed nonzero child exits;
+normal exit is not respawned. A live or unresponsive owner is not killed or
+replaced. Its config-scoped OS lock and pre-spawn child journal block duplicate
+launches after ambiguous supervisor failure. These small ownership journals
+contain no telemetry; no history or SQLite is introduced. No Startup entry was
+installed or updated by the source/test change.
+Deliberate local prior-child recovery requires a held matching OS guard and
+qualified evidence bound to the exact journal identity/bytes. No production
+Windows checker is included: ambiguous journals stay blocked, not deleted on a
+PID-only guess. Unattended restart/recovery remains unqualified.
+
+Everest exposes the separate Python runtime through `AcqRuntime.runtime_json`
+and the authenticated read-only web path `/api/elyse/acquisition/runtime`.
+The Python Acquisition tab shows six validated input banks only while fresh,
+with separate transport and NI ages. It does not substitute the 27-bank LabVIEW
+bridge, PSP or simulator values. No web hardware commands are enabled. The
+unwired `acquisition_command_admission.py` is an offline/local protocol
+foundation, disabled by default, not an installed control endpoint.
+
 See [current cross-layer status](../../docs/ELYSE_BUSINESS_LOGIC_STATUS.md) before
 interpreting model coverage or historical package results as deployment parity.
 Site-specific configuration and private keys are intentionally not committed.
