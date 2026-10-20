@@ -11,6 +11,22 @@ from .acquisition_startup import install_startup
 from .chroma_focal_stop import DEFAULT_DLL
 from .chroma_focal_command import ChromaFocalCommand
 from .acquisition_ht_shutdown import validate_policy
+from .acquisition_recovery import OwnershipMarker
+from .runtime_identity import new_runtime_identity
+
+
+def create_cold_runtime(factory, period, config_path, demo=False, quiescence_checker=None):
+    """Production always installs the installation-local persistent guard.
+
+    No guessed XP process verifier is installed. A prior marker therefore
+    requires separately qualified local recovery before cards can initialize.
+    The demo explicitly reports that persistent protection is inactive.
+    """
+    identity = new_runtime_identity()
+    guard = None if demo else OwnershipMarker(
+        os.path.abspath(config_path) + ".ownership", identity["session_id"], identity["build_id"],
+        quiescence_checker=quiescence_checker)
+    return AcquisitionRuntime(factory, period=period, identity=identity, recovery_guard=guard)
 
 
 def load_configuration(path):
@@ -73,7 +89,9 @@ class AcquisitionWindow(object):
                    (" - GENERAL ONLY TEST" if self.general_only else
                     " - EXTENDED HT STOP" if self.extended_ht else ""))
         root.geometry("1000x640")
-        self.status = tk.StringVar(value="IDLE - no NI resources opened")
+        initial_state = runtime.snapshot()
+        self.status = tk.StringVar(value="{0} | NI tasks: {1} | {2}".format(
+            initial_state["state"], initial_state["resource_count"], initial_state["error"]))
         tk.Label(root, textvariable=self.status, anchor="w", font=("Arial", 13)).pack(fill="x", padx=12, pady=10)
         tk.Label(root, text="Server: {0}:{1} | authenticated telemetry reads only".format(*server.server_address),
                  anchor="w").pack(fill="x", padx=12)
@@ -94,6 +112,16 @@ class AcquisitionWindow(object):
         self.startup_button.pack(side="right", padx=4)
         if demo or self.general_only:
             self.startup_button.configure(state="disabled")
+        recovery_controls = tk.Frame(root)
+        recovery_controls.pack(fill="x", padx=12)
+        self.recovery_button = tk.Button(recovery_controls, text="Recover prior ownership", command=self.recover)
+        self.recovery_button.pack(side="left", padx=4)
+        self.recovery_button.configure(state="normal" if initial_state["state"] == "RECOVERY_REQUIRED" else "disabled")
+        self.init_button.configure(state="normal" if initial_state["state"] == "IDLE" else "disabled")
+        for button in (self.general_button, self.general_stop_button, self.deinit_button):
+            button.configure(state="disabled")
+        tk.Label(recovery_controls, text="Unclean prior ownership blocks initialization; no automatic replay.",
+                 anchor="w").pack(side="left", padx=8)
         stop_scope = ("GENERAL ONLY TEST: Marche + two resets; Arret pulses C4[1], restoring interrupted Marche/RAZ if needed. No Chroma.\n"
                       "Other stages must already be OFF. This is NOT the full LabVIEW stop or an emergency stop.\n"
                       if self.general_only else
@@ -138,6 +166,19 @@ class AcquisitionWindow(object):
             self.runtime.general_start(operator_confirmed=True)
         except Exception as error:
             self.messagebox.showerror("General Marche refused", str(error), parent=self.root)
+
+    def recover(self):
+        if not self.messagebox.askyesno(
+                "Prior ownership recovery", "This does not initialize cards or replay a command.\n\n"
+                "Has the installation been switched OFF LOCALLY and physically verified?\n"
+                "A separately qualified checker must also prove the old process, native children and competing NI owners absent.\n"
+                "PID absence alone is insufficient. Without that checker recovery remains blocked.", parent=self.root):
+            return
+        try:
+            self.runtime.recover_local(electrical_off_confirmed=True)
+            self.messagebox.showinfo("Ownership recovered", "Cards remain uninitialized. No command replayed.", parent=self.root)
+        except Exception as error:
+            self.messagebox.showerror("Recovery refused; marker preserved", str(error), parent=self.root)
 
     def enable_startup(self):
         try:
@@ -219,6 +260,7 @@ class AcquisitionWindow(object):
         age = state["everest_read_age_seconds"]
         self.link.set("Everest reader: " + ("not seen" if age is None else "last signed read {0:.1f} s ago".format(age)))
         self.init_button.configure(state="normal" if state["state"] == "IDLE" and not self.closing else "disabled")
+        self.recovery_button.configure(state="normal" if state["state"] == "RECOVERY_REQUIRED" and not self.closing else "disabled")
         self.general_button.configure(state="normal" if state["state"] == "RUNNING" and not self.closing else "disabled")
         can_stop = state["resource_count"] > 0 and (state["state"] in ("RUNNING", "FAULT") or
                    state["current_operation"] == "modulator.general.start")
@@ -273,7 +315,7 @@ def main(entrypoint, argv=None):
                                        focal_controls_verified=focal_controls_verified,
                                        focal_command=focal_command,
                                        cooling_trip_verified=trip_verified))
-        runtime = AcquisitionRuntime(factory, period=config["period_seconds"])
+        runtime = create_cold_runtime(factory, config["period_seconds"], args.config, demo=args.demo)
         # Binding guards against a second service window before starting a worker.
         server = RuntimeHTTPServer((config["bind_host"], config["port"]), runtime, key)
         runtime.start()  # Cold; factory is NOT called here.

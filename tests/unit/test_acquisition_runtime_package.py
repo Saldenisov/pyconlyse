@@ -33,6 +33,10 @@ def test_clean_source_package_contains_stage_dependencies_without_live_configura
         assert manifest["source_stage_controls_default_enabled"] is False
         assert manifest["ht_stage_controls_default_enabled"] is False
         assert manifest["focal_stage_controls_default_enabled"] is False
+        assert manifest["runtime_protocol_version"] == 2
+        assert manifest["cold_process_supervisor_included"] is True
+        assert manifest["automatic_ni_recovery"] is False
+        assert manifest["command_admission_installed_on_network"] is False
         expected = {"acquisition_server.pyw", "config.acquisition.json"}
         expected.update("elyse_agent/" + name for name in MODULES)
         expected.update("data/" + name for name in DATA)
@@ -45,6 +49,29 @@ def test_clean_source_package_contains_stage_dependencies_without_live_configura
                            for name in archive.namelist())
         original = ROOT / "legacy/xp_acq_agent/data/modulator_stage_catalog.json"
         assert (output / "data/modulator_stage_catalog.json").read_bytes() == original.read_bytes()
+
+
+def test_source_fingerprint_covers_exact_packaged_source_closure():
+    from legacy.xp_acq_agent.elyse_agent.runtime_identity import SOURCE_MODULES, SOURCE_PATHS
+    assert set(SOURCE_MODULES) == set(MODULES)
+    assert set(SOURCE_PATHS) == {"acquisition_server.pyw"} | {
+        "elyse_agent/" + name for name in MODULES
+    } | {"data/" + name for name in DATA}
+
+
+def test_gui_entrypoint_propagates_error_exit_instead_of_hiding_it_from_supervisor(monkeypatch):
+    import runpy
+    import sys
+    import types
+    module = types.ModuleType("elyse_agent.acquisition_gui")
+    calls = []
+    module.main = lambda path: calls.append(path) or 7
+    monkeypatch.setitem(sys.modules, "elyse_agent", types.ModuleType("elyse_agent"))
+    monkeypatch.setitem(sys.modules, "elyse_agent.acquisition_gui", module)
+    with pytest.raises(SystemExit) as exited:
+        runpy.run_path(str(ROOT / "legacy/xp_acq_agent/acquisition_server.pyw"), run_name="__main__")
+    assert exited.value.code == 7
+    assert calls == [str(ROOT / "legacy/xp_acq_agent/acquisition_server.pyw")]
 
 
 def test_packaged_cold_runtime_imports_on_actual_python34_without_loading_a_native_driver():
@@ -71,6 +98,14 @@ runtime.request_shutdown()
 assert runtime.join(2)
 assert snapshot['state'] == 'IDLE'
 assert snapshot['resource_count'] == 0
+assert snapshot['runtime_protocol_version'] == 2
+assert len(snapshot['session_id']) == 32 and len(snapshot['build_id']) == 64
+assert type(snapshot['state_revision']) is int
+assert snapshot['recovery']['protection_active'] is False
+from elyse_agent.acquisition_command_admission import CommandAdmission
+from elyse_agent.acquisition_supervisor import ColdAcquisitionSupervisor
+from elyse_agent.runtime_identity import source_fingerprint
+assert snapshot['build_id'] == source_fingerprint()
 assert not set(sys.modules).intersection(('nidaqmx', 'PyDAQmx', 'visa', 'pyvisa'))
 print(json.dumps(dict(version=list(sys.version_info[:2]), paths=len(SUPPORTED_OPERATIONS))))
 """

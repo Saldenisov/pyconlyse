@@ -1,4 +1,4 @@
-"""Install only this application's cold launcher in current user's Startup."""
+"""Explicitly install this application's cold supervisor in user Startup."""
 import ctypes
 import os
 import sys
@@ -22,20 +22,25 @@ def startup_directory():
 def install_startup(entrypoint, config_path, folder=None, interpreter=None):
     entrypoint, config_path = os.path.abspath(entrypoint), os.path.abspath(config_path)
     interpreter = interpreter or os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-    if not all(os.path.isfile(path) for path in (entrypoint, config_path, interpreter)):
-        raise ValueError("Installed entrypoint/config/pythonw.exe must exist")
+    supervisor = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acquisition_supervisor.py")
+    if not all(os.path.isfile(path) for path in (entrypoint, config_path, interpreter, supervisor)):
+        raise ValueError("Installed entrypoint/config/pythonw.exe/supervisor must exist")
     folder = folder or startup_directory()
     target = os.path.join(folder, FILENAME)
     if os.path.exists(target):
-        with open(target, "r") as source:
+        with open(target, "r", encoding="utf-8") as source:
             if not source.read().startswith(MARKER):
                 raise ValueError("Refusing to overwrite an unrelated Startup file")
-    # No shell/cmd, installation, network operation or card initialization.
-    source = (MARKER + "\nimport subprocess\nsubprocess.Popen({0!r}, cwd={1!r})\n").format(
-        [interpreter, entrypoint, "--config", config_path], os.path.dirname(entrypoint))
+    # Updating this file is only an explicit GUI button operation. It does not
+    # execute the supervisor, child, shell, network or any card operation here.
+    arguments = [interpreter, supervisor, "--interpreter", interpreter,
+                 "--entrypoint", entrypoint, "--config", config_path]
+    source = (MARKER + "\n# coding: utf-8\n# COLD_SUPERVISOR_V2\nimport subprocess\n"
+              "subprocess.Popen({0!r}, cwd={1!r}, shell=False, close_fds=True)\n").format(
+                  arguments, os.path.dirname(entrypoint))
     descriptor, temporary = tempfile.mkstemp(prefix=".elyse-acq-", suffix=".pyw", dir=folder)
     try:
-        with os.fdopen(descriptor, "w") as stream:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write(source)
         os.replace(temporary, target)
     finally:

@@ -15,6 +15,8 @@ MODULES = (
     "chroma_focal_command.py",
     "acquisition_stage_model.py",
     "acquisition_stage_execution.py", "acquisition_cooling_trip.py",
+    "runtime_identity.py", "acquisition_recovery.py", "acquisition_supervisor.py",
+    "acquisition_command_admission.py",
 )
 DATA = ("calibration_map.csv", "ni6602_timing.csv", "modulator_stage_catalog.json")
 
@@ -74,6 +76,10 @@ def build(output, root=None, control_profile="legacy_full"):
                     focal_stage_controls_default_enabled=False,
                     initialized_hardware_during_packaging=False, secret_files_included=False,
                     telemetry_storage="ram_latest", files=records,
+                    runtime_protocol_version=2,
+                    cold_process_supervisor_included=True,
+                    automatic_ni_recovery=False,
+                    command_admission_installed_on_network=False,
                     limitations=["Not the full LabVIEW business/safety state machine",
                                  "NI task cleanup is not electrical emergency shutdown",
                                  "Only local GUI initialization; remote HTTP reads only",
@@ -92,7 +98,10 @@ def build(output, root=None, control_profile="legacy_full"):
                                  "Fourteen additional source-stage paths and cooling-trip execution require separate commissioning; disabled in this package",
                                  "Standalone HT start can energize existing commanded voltage; requires independent HT commissioning",
                                  "Focales ON/OFF use hash-pinned native Chroma driver and verified serial resources; worker quiescence is not physical OFF",
-                                 "No additional stage GUI buttons or HTTP/Tango mutation routes"])
+                                 "No additional stage GUI buttons or HTTP/Tango mutation routes",
+                                 "Supervisor never restarts a live or unresponsive card owner; bounded nonzero-exit restarts open a cold window only",
+                                 "Dirty ownership and ambiguous child journals require qualified local recovery; no production process verifier shipped",
+                                 "Session/build fingerprints identify boot/source bytes, not commissioned deployment or physical OFF"])
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     archive = output.with_suffix(".zip")
     if archive.exists():
