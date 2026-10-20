@@ -21,6 +21,19 @@ Native worker exit does not establish physical OFF.
 HTTP exposes authenticated reads, not control. Deinitialization is resource
 release, not electrical shutdown.
 
+Two further local paths implement ctr3/ctr4 impulsion start/stop, with source
+`CO.PulseDone` polling rather than whole-task Done. The local HT-voltage adapter
+updates only C9[0]; the separately implemented forty-frame outer controlled stop
+uses the source command `<6.6` threshold, not measured zero or the Python 8 kV
+extension. These controls require the independent exact-Boolean
+`counter_controls_verified`, `ht_voltage_controls_verified` and
+`outer_stop_verified` flags, all false by default and forced false by the
+package builder. No additional GUI, HTTP, Tango or web mutation route is enabled.
+Ambiguous AO writes and failed counter/pulse cleanup retain ownership and block
+unsafe continuation; completed software stops do not establish electrical OFF.
+Full counter timing ingress, native sampling/error semantics, parallel VI
+scheduling and 27-bank parity remain incomplete.
+
 The prepared GUI reports protocol 2, a fresh boot session, a source/data
 fingerprint and a lifecycle revision. Production initialization acquires
 `<absolute-config-path>.ownership` before NI initialization; an unreleased or

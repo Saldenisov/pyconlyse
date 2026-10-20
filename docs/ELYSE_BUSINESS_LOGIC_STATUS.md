@@ -18,7 +18,7 @@ or issue NI, serial, PSP or Tango commands.
 | Original Supervision | Saved-source models, display mappings, event fragments and focused lifecycle traces | 39 original VI/XML identities accounted; complete semantic coverage remains false |
 | Pure Python models | Explicit supplied inputs/returns; 16 modulator procedures and 120 frames including nested frames | No stage actuators or native error-handler replacement |
 | Copied LabVIEW telemetry | Latest 27 shared-variable banks through Python 3.4 to Everest | Sequential/non-atomic; transport does not qualify the source data or replace Acquisition |
-| XP GUI server, default port 8771 | Cold IDLE or recovery-blocked, explicit local initialization, six AI/DI banks, General, fourteen additional source-stage paths and conditional cooling-trip evaluation on the same owner | New paths default uncommissioned; no new HTTP/Tango commands; native error semantics, HT-voltage/counter and full 27-bank parity remain incomplete |
+| XP GUI server, default port 8771 | Cold IDLE or recovery-blocked; explicit initialization; six AI/DI banks; General; sixteen additional stage paths; C9 voltage transfer; seven-phase outer stop; conditional cooling trip, all on the same owner | New paths default uncommissioned; no new HTTP/Tango commands; native error semantics, counter timing ingress and full 27-bank parity remain incomplete |
 | Simulator, port 8765 | Signed named procedures, replay and durable intent state | Logical simulation only, not the GUI NI server |
 | Everest Tango/web | Separate read-only views of LabVIEW telemetry and Python runtime; replay/business simulation | No remote NI control route; replay values are not measurements |
 
@@ -62,7 +62,7 @@ as a claim of full shutdown. No verification flag was relaxed in this audit.
 | NI6071E requested samples/channel | 1000 in three explicit I/O callers | 10, with finite task configuration | Review task timing, trigger, read count and timeout together; 100× is a count ratio, not measured averaging time or precision |
 | Snapshot schema | 27 LabVIEW shared-variable banks | Six input banks, 144 AI + 176 DI | Explicit schema adapter and validation; no guessed missing banks |
 | Read scheduling | Parallel VI loops with asynchronous output writers | Single NI owner; normal reads pause during General procedures and FAULT | Qualify timing and continued fault observation before replacement |
-| Stage/fault logic | Source traces and inert models | Fourteen additional stage paths and seven cooling-trip frames integrated, default uncommissioned | Remaining native error semantics/HT-voltage/counter/ingress/lifecycle paths and separate hardware qualification |
+| Stage/fault logic | Source traces and inert models | Sixteen additional stage paths, HT command transfer, forty outer-stop frames and seven cooling-trip frames integrated, default uncommissioned | Remaining native error semantics, counter timing ingress, scheduling and separate hardware qualification |
 
 ## Executable stage transfer on 20 October 2026
 
@@ -133,8 +133,8 @@ remain stale until a postcommand read. Resource release still requires General
 Arrêt or explicit confirmation that the cabinet was switched off locally.
 
 Remaining transfer is real implementation work: native helper/error-handler
-semantics, HT-voltage/counter procedures, full shared-variable ingress/publication semantics,
-and original outer-stop/resource/error scheduling. The six-bank and sample-count
+semantics, counter timing and other shared-variable ingress/publication semantics,
+and original parallel resource/error scheduling. The six-bank and sample-count
 discrepancies remain open. No code was deployed or executed on hardware.
 
 Focales helper callbacks are now executed, not assumed successful opaque
@@ -167,13 +167,82 @@ they continue until completion or their execution deadline/cancellation. The
 error still makes the helper fail. ON uses the separate conservative fail-fast
 policy. Neither policy is claimed as the vendor's native error semantics.
 
-The package builder now includes both execution modules and builds its
+The package builder includes the reviewed execution modules and builds its
 configuration from the committed example, not an ignored site configuration.
-Stage, cooling, standalone HT, Focales, feedback and Chroma permissions are forced false in generated candidates.
+Stage, cooling, standalone HT, Focales, impulsion, HT-voltage, outer-stop,
+feedback and Chroma permissions are forced false in generated candidates.
 All three package profiles are checked for complete dependency/file closure,
 manifest hashes, unchanged catalog bytes and absence of keys, telemetry history,
 native drivers or an interpreter. A packaged cold runtime was also imported and
 started in IDLE on actual Python 3.4 with native-library loading denied.
+
+## Impulsion HT voltage and outer stop transfer
+
+Two additional local paths implement the four frames of event 23 and five
+frames of event 24. `modulator_impulse.start` starts retained ctr3 then ctr4;
+stop polls and stops each counter. The channel property is `CO.PulseDone`,
+not whole-task `Task.is_task_done()`. Stop polling retains the source condition
+`Done OR i > 40`: at most 42 reads, with a requested 1 ms wait including the
+last iteration. This is not a wall-clock deadline or physical pulse measurement.
+The stop assigns EPS42 true and EPS52 false; it does not substitute EPS55.
+Both paths retain the error-wired DPS to EPS publication chain as bounded RAM
+snapshots. `counter_controls_verified=false` is an additional commissioning gate.
+
+`AcquisitionRuntime.set_ht_voltage()` transfers a finite supplied logical
+command into C9[0], preserving fields 1 through 9. Source PSP reader UID10449
+feeds local12 and the independent AO writer UID7386; the NI6703 helper applies
+gain 0.5, so logical 12.7 maps to 6.35 V. This local adapter neither opens PSP
+nor invents its event producer, clamp, ramp or EPS admission predicate.
+Its +/-20 logical validation follows the +/-10 V driver domain, not an
+operating permit. `ht_voltage_controls_verified=false` remains independent of
+the supply start/reset/stop gate and of feedback qualification.
+
+The seven-phase `outer_controlled_stop()` executes the reviewed forty-frame
+plan: command ramp, ctr3/4 stop, HT supply stop, selected analog/digital output
+clearing, five C4 stop pulses, cooling pulses/software status, then final local
+flags. Its strict ramp exit is command `<6.6`, not measured zero, not the
+Python 8 kV preamble, and not General event 6. C6[8] and C7[2] are preserved.
+Fixed requested waits total 12.85 s, excluding ramp and counter-poll waits. The
+executor does not invent Chroma OFF, PSP publications, automatic root-loop
+dispatch, NI resource release or electrical-OFF acknowledgement.
+`outer_stop_verified=false` separately gates this local entry point.
+
+These executors serialize nominal effects on the existing owner. Source
+Clear Errors boundaries continue the counter chain; Python retains their
+exceptions and reports aggregate failure. A failed/cancelled start attempts
+counter cleanup, and an interrupted outer stop attempts remaining dedicated
+counter/HT-stop cleanup without continuing to cooling OFF or final flags.
+The 200-decrement bound and failure/cancellation policy are Python additions.
+Failed counter stops and pulse restorations retain ownership. Held General or
+RAZ commands block ordinary stage requests; only the dedicated General/outer
+recovery path may release those fields before further whole-bank stop writes.
+
+An AO callback can apply a command and then raise. The last successful image
+then remains diagnostic history, not the current C9 command. An owner-lifetime
+uncertainty latch blocks new energy/start commands, another C9 write and the
+source outer ramp's use of that stale image. Outer cleanup still attempts
+dedicated counter/HT stops; it cannot claim completion. Qualified independent
+reconciliation or a new initialization after explicit electrical OFF is
+required. Successful source stop callbacks alone do not clear HT release
+requirements. Legacy General event 6 cannot clear an outstanding impulsion
+stop requirement, because that event does not stop those counters.
+
+NI6071E input streams now explicitly set the recovered current-read-position
+and AutoStart properties. Timing remains finite ten samples; Python reads ten
+with its explicit start/read/stop lifecycle. The original three callers request
+1000 with a 1 s timeout from that finite ten-sample task, and their helper can
+process returned partial rows along an error path. The Python SDK raises a
+negative driver error before returning such rows. Blindly changing ten to 1000
+would not reproduce that behavior. Startup fallback trigger selection and
+native partial-error semantics remain open.
+
+Original VI/XML/screenshot reproduction requires the external evidence archive.
+`acquisition_outer_stop.SOURCE_ARCHIVE` names its actual external location;
+that archive is not bundled in a clean checkout. Committed software tests
+compare the forty-frame executable plan with the independently retained inert
+plan, including source identities and ramp projections. They are not a fresh
+LabVIEW wire inspection or hardware qualification. Frozen source catalogs and
+historical evidence remain unchanged.
 
 ## Cold recovery and Python runtime observation on 20 October 2026
 
@@ -328,6 +397,26 @@ immutable deployed build identity. See [HT readiness evidence](ELYSE_PYTHON_HT_R
 
 ## Software verification
 
+The impulsion/HT-voltage/outer-stop integration passed **3729 offline tests**,
+no skips, 7300 warnings, in **209.16 s** on Python 3.12.14, with the actual
+Python 3.4 cold-package process lane enabled. A final 32-test control/contract
+selection also passed after tightening oversized-integer validation. The
+catalog SHA256 remains
+`A9D821E7519EA50F6B35593E58C78129EC7D8A7BFEDCC06098E247BEF011A0B0`.
+
+The expanded focused gate ran **464 tests on actual Python 3.4.4: 463 passed,
+one skipped**, in **7.425 s** using the extracted interpreter; a second existing
+3.4 environment repeated the result in 7.358 s. The skipped modern-source-model
+cross-check runs in the Python 3.12 gate. Twelve low-level task tests use fake
+tasks and a scoped six-enum fixture transcribed from reviewed SDK constants;
+they do not import a vendor driver. Real child processes, external networking
+and native-library loading are denied, and no NI/VISA module remains loaded.
+These overlapping totals are not additive. The candidate now contains 26
+Python modules with complete package/fingerprint closure; every new permission
+is forced false. Critical Ruff checks, `git diff --check` and independent
+source/lifecycle review passed. No frontend source changed or was rebuilt in
+this batch. No XP deployment or hardware execution was performed.
+
 The final cold-recovery/runtime-web integration on 20 October 2026 passed
 **3617 offline tests**, no skips, 7300 warnings, in **231.94 s** on Python
 3.12.14 with the actual Python 3.4 package/process lane enabled. The independent
@@ -342,7 +431,7 @@ connections and ctypes driver loading; tests inject fake NI/native processes,
 and no NI/VISA driver module was loaded. This focused result overlaps the
 offline gate rather than adding 360 independent tests. Package checks separately
 start only a cold IDLE interpreter process, with native loading denied. The
-candidate contains 22 Python modules; the fingerprint and package source/data
+earlier candidate contained 22 Python modules; the fingerprint and package source/data
 closures agree, and catalog bytes remain unchanged.
 
 The final frontend selection passed **11 suites / 200 tests in 38.412 s**.
