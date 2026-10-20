@@ -16,6 +16,9 @@ from .acquisition_stage_execution import (
 from .acquisition_stage_model import cooling_flow_trip
 from .runtime_identity import new_runtime_identity, RUNTIME_PROTOCOL_VERSION, valid_hex
 from .acquisition_recovery import RecoveryRequired
+from .acquisition_source_controls import IMPULSION_OPERATIONS, validate_ht_command
+from .acquisition_impulsion import ImpulsionExecutionCancelled
+from .acquisition_ht_voltage import HTVoltageCancelled
 
 
 class AcquisitionRuntime(object):
@@ -43,6 +46,8 @@ class AcquisitionRuntime(object):
         # Source event 6 does not directly stop the HT supply. A standalone
         # HT procedure cannot turn its software EPS literals into release ACK.
         self._ht_supply_stop_required = False
+        self._pulse_stop_required = False
+        self._ht_command = None
         self._stage_command = None
         self._identity = dict(new_runtime_identity() if identity is None else identity)
         if (type(self._identity.get("runtime_protocol_version")) is not int
@@ -115,6 +120,7 @@ class AcquisitionRuntime(object):
     @staticmethod
     def _stop_in_progress(operation):
         return (operation == "modulator.general.stop"
+                or operation == "acq.outer.controlled_stop"
                 or operation == "acq.timeout.cooling_trip"
                 or (isinstance(operation, str) and operation.startswith("acq.stage.")
                     and operation.endswith(".stop")))
@@ -125,7 +131,7 @@ class AcquisitionRuntime(object):
         Commissioning is independent of source EPS flags and off by default.
         This API does not add an HTTP/Tango command or a GUI activation button.
         """
-        if operation not in SUPPORTED_OPERATIONS or type(new_value) is not bool:
+        if operation not in SUPPORTED_OPERATIONS + IMPULSION_OPERATIONS or type(new_value) is not bool:
             raise ValueError("Reviewed stage operation and Boolean NewVal required")
         if operator_confirmed is not True:
             raise ValueError("Explicit local stage confirmation required")
@@ -147,6 +153,9 @@ class AcquisitionRuntime(object):
             if (operation.startswith("focales.")
                     and getattr(self._backend, "focal_controls_verified", False) is not True):
                 raise RuntimeError("Separate Focales stage controls are not commissioned")
+            if (operation in IMPULSION_OPERATIONS
+                    and getattr(self._backend, "counter_controls_verified", False) is not True):
+                raise RuntimeError("Separate counter controls are not commissioned")
             self._stage_command = operation
             self._pending = "stage"
             self._operation = "acq.stage." + operation
@@ -155,8 +164,57 @@ class AcquisitionRuntime(object):
             self._general_stop_required = True
             if operation.startswith("alimentation_ht."):
                 self._ht_supply_stop_required = True
+            if operation == "modulator_impulse.start":
+                self._pulse_stop_required = True
             self._wake.set()
             self._state_revision += 1
+            return True
+
+    def set_ht_voltage(self, command_kv, operator_confirmed=False):
+        """Local source-derived C9[0] transfer; never a network setpoint route."""
+        command_kv = validate_ht_command(command_kv)
+        if operator_confirmed is not True:
+            raise ValueError("Explicit local HT command confirmation required")
+        with self._lock:
+            self._require_recovery_clear()
+            if (self._backend is None or not self._backend.resource_count or self._state != "RUNNING"
+                    or self._pending is not None or self._operation is not None or self._shutdown_requested):
+                raise RuntimeError("HT command requires idle existing NI ownership")
+            if (getattr(self._backend, "stage_controls_verified", False) is not True
+                    or getattr(self._backend, "ht_voltage_controls_verified", False) is not True
+                    or getattr(self._backend, "control_profile", None) == "general_only_test"):
+                raise RuntimeError("Separate HT-voltage controls are not commissioned")
+            self._ht_command = command_kv
+            self._pending = "ht_voltage"
+            self._operation = "acq.stage.ht_voltage.set"
+            self._state, self._received_at = "EXECUTING", None
+            self._general_stop_required = self._ht_supply_stop_required = True
+            self._state_revision += 1
+            self._wake.set()
+            return True
+
+    def outer_controlled_stop(self, operator_confirmed=False):
+        """Explicit seven-phase source command sequence; no release or OFF ACK."""
+        if operator_confirmed is not True:
+            raise ValueError("Explicit local outer-stop confirmation required")
+        with self._lock:
+            self._require_recovery_clear()
+            if (self._backend is None or not self._backend.resource_count or self._shutdown_requested
+                    or self._pending not in (None, "general_start", "stage", "ht_voltage")
+                    or self._state not in ("RUNNING", "FAULT", "EXECUTING")
+                    or (self._state == "EXECUTING" and self._stop_in_progress(self._operation))):
+                raise RuntimeError("Outer stop requires an existing owner without another stop/cleanup")
+            if (getattr(self._backend, "stage_controls_verified", False) is not True
+                    or getattr(self._backend, "outer_stop_verified", False) is not True
+                    or getattr(self._backend, "control_profile", None) == "general_only_test"):
+                raise RuntimeError("Separate outer-stop controls are not commissioned")
+            self._cancel.set()  # Interrupt a read/start, not the accepted stop.
+            self._stage_command = self._ht_command = None
+            self._pending, self._operation = "outer_stop", "acq.outer.controlled_stop"
+            self._state, self._received_at = "EXECUTING", None
+            self._general_stop_required = self._ht_supply_stop_required = True
+            self._state_revision += 1
+            self._wake.set()
             return True
 
     def general_start(self, operator_confirmed=False):
@@ -178,7 +236,7 @@ class AcquisitionRuntime(object):
             if operator_confirmed is not True:
                 raise ValueError("Explicit local General Arret confirmation required")
             if (self._backend is None or not self._backend.resource_count or self._shutdown_requested
-                    or self._pending not in (None, "general_start", "stage")
+                    or self._pending not in (None, "general_start", "stage", "ht_voltage")
                     or self._state not in ("RUNNING", "FAULT", "EXECUTING")
                     or (self._state == "EXECUTING"
                         and (self._stop_in_progress(self._operation)
@@ -194,6 +252,7 @@ class AcquisitionRuntime(object):
             self._operation = "modulator.general.stop"
             self._pending = "general_stop"
             self._stage_command = None
+            self._ht_command = None
             self._wake.set()
             self._state_revision += 1
 
@@ -228,15 +287,18 @@ class AcquisitionRuntime(object):
             self._state_revision += 1
 
     def _check_release(self, electrical_off_confirmed):
-        if self._stop_in_progress(self._operation) or self._pending == "general_stop":
+        if self._stop_in_progress(self._operation) or self._pending in ("general_stop", "outer_stop"):
             raise RuntimeError("Wait for stop procedure to finish; NI ownership must be retained")
         if self._ht_supply_stop_required and electrical_off_confirmed is not True:
             raise RuntimeError("HT supply stop is unconfirmed: qualified extended stop or local electrical OFF required")
+        if self._pulse_stop_required and electrical_off_confirmed is not True:
+            raise RuntimeError("Modulator pulse stops unconfirmed; retain this NI owner")
         if self._general_stop_required and electrical_off_confirmed is not True:
             raise RuntimeError("Execute General Arret first, or confirm cabinet switched off locally")
         if electrical_off_confirmed is True:
             self._general_stop_required = False
             self._ht_supply_stop_required = False
+            self._pulse_stop_required = False
 
     def deinitialize(self, electrical_off_confirmed=False):
         with self._lock:
@@ -282,6 +344,7 @@ class AcquisitionRuntime(object):
                 current_operation=self._operation,
                 general_stop_required=self._general_stop_required,
                 ht_supply_stop_required=self._ht_supply_stop_required,
+                pulse_stop_required=self._pulse_stop_required,
                 procedure=copy.deepcopy(getattr(self._backend, "procedure", None)),
                 control_profile=getattr(self._backend, "control_profile", None),
                 sequence=self._sequence, latest=copy.deepcopy(self._latest),
@@ -298,6 +361,10 @@ class AcquisitionRuntime(object):
                                      ht_commissioned=getattr(self._backend, "ht_controls_verified", False) is True,
                                      focal_commissioned=getattr(self._backend, "focal_controls_verified", False) is True,
                                      cooling_trip_commissioned=getattr(self._backend, "cooling_trip_verified", False) is True,
+                                     impulsion_implemented=list(IMPULSION_OPERATIONS),
+                                     counter_commissioned=getattr(self._backend, "counter_controls_verified", False) is True,
+                                     ht_voltage_commissioned=getattr(self._backend, "ht_voltage_controls_verified", False) is True,
+                                     outer_stop_commissioned=getattr(self._backend, "outer_stop_verified", False) is True,
                                      remote_commands_enabled=False),
             )
 
@@ -338,8 +405,12 @@ class AcquisitionRuntime(object):
         # substitute for electrical stop; keep the same owner for Arret/retry.
         with self._lock:
             self._error = type(error).__name__ + ": " + str(error)
-            self._state = "FAULT"
-            self._operation = None
+            # A failing in-flight start/read must not erase a stop already
+            # accepted by another thread or open a cleanup/replacement window.
+            queued_stop = self._pending is not None and self._stop_in_progress(self._operation)
+            if not queued_stop:
+                self._state = "FAULT"
+                self._operation = None
             self._state_revision += 1
             # A separately confirmed local OFF/close request still belongs to
             # this owner. Do not strand a shutdown as IDLE after start failure.
@@ -382,6 +453,9 @@ class AcquisitionRuntime(object):
                 stage_command = self._stage_command if pending == "stage" else None
                 if pending == "stage":
                     self._stage_command = None
+                ht_command = self._ht_command if pending == "ht_voltage" else None
+                if pending == "ht_voltage":
+                    self._ht_command = None
                 running = self._state == "RUNNING"
             if pending == "initialize":
                 try:
@@ -439,7 +513,8 @@ class AcquisitionRuntime(object):
                             # That separate Python profile has already checked
                             # fresh zero/OFF and counter stops before returning.
                             self._ht_supply_stop_required = False
-                        self._general_stop_required = self._ht_supply_stop_required
+                            self._pulse_stop_required = False
+                        self._general_stop_required = self._ht_supply_stop_required or self._pulse_stop_required
                         self._cancel.clear()
                         self._error = ""
                         self._operation = None
@@ -457,15 +532,47 @@ class AcquisitionRuntime(object):
                             # procedure only on the owner, never over a newly
                             # queued General stop/confirmed close.
                             self._cancel.clear()
-                    self._backend.execute_stage(stage_command, self._cancel, operator_confirmed=True)
+                    if stage_command in IMPULSION_OPERATIONS:
+                        self._backend.execute_impulsion(stage_command, self._cancel, operator_confirmed=True)
+                        if stage_command.endswith(".stop"):
+                            with self._lock:
+                                self._pulse_stop_required = False
+                    else:
+                        self._backend.execute_stage(stage_command, self._cancel, operator_confirmed=True)
                     self._finish_stage()
-                except StageExecutionCancelled as error:
+                except (StageExecutionCancelled, ImpulsionExecutionCancelled) as error:
                     # The executor has attempted pulse restoration. Preserve
                     # a queued General stop/confirmed close on this owner.
                     with self._lock:
                         pending_recovery = self._pending is not None
                     if not pending_recovery:
                         self._procedure_fault(error)
+                except Exception as error:
+                    self._procedure_fault(error)
+            elif pending == "ht_voltage":
+                try:
+                    with self._lock:
+                        self._require_recovery_clear()
+                    self._backend.set_ht_voltage(ht_command, self._cancel, operator_confirmed=True)
+                    self._finish_stage()
+                except HTVoltageCancelled as error:
+                    with self._lock:
+                        pending_recovery = self._pending is not None
+                    if not pending_recovery:
+                        self._procedure_fault(error)
+                except Exception as error:
+                    self._procedure_fault(error)
+            elif pending == "outer_stop":
+                with self._lock:
+                    self._state, self._operation = "EXECUTING", "acq.outer.controlled_stop"
+                try:
+                    with self._lock:
+                        self._require_recovery_clear()
+                    self._backend.outer_controlled_stop(operator_confirmed=True)
+                    with self._lock:
+                        self._pulse_stop_required = False  # Both StopTask calls returned, not physical HT zero.
+                        self._cancel.clear()
+                    self._finish_stage()
                 except Exception as error:
                     self._procedure_fault(error)
             elif running:

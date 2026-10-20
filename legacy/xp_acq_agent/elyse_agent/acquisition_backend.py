@@ -21,7 +21,8 @@ from .acquisition_procedures import (
     execute_general_start, execute_general_stop, execute_general_only_stop, GeneralStopError,
 )
 from .chroma_focal_stop import ChromaFocalStop
-from .hardware_plan import analog_startup_logical_image, digital_startup_image
+from .hardware_plan import analog_startup_logical_image, digital_startup_image, load_ao_calibration
+from .acquisition_source_controls import SourceControls
 from .acquisition_ht_shutdown import (
     execute_ht_shutdown, execute_ht_supply_stop, validate_policy,
     PULSE_STOP_TASKS, PULSE_STOP_EPS, PULSE_STOP_DPS,
@@ -305,6 +306,16 @@ class _StageState(object):
         if self.control_profile == "general_only_test":
             raise RuntimeError("General-only profile forbids other stage commands")
         self._stage_require_initialized()
+        if operation is not None and operation.endswith(".start"):
+            require_known_ht = getattr(self, "_require_known_ht_command", None)
+            if require_known_ht is not None:
+                require_known_ht()
+        if (getattr(self, "_stage_simulated", True) is False
+                and any(self.commanded_digital["C4_DIO96_DO"][i] is not False for i in (0, 2))):
+            raise RuntimeError("Unreleased General/RAZ pulse requires General Arret before another stage")
+        retry_counters = getattr(self, "_retry_source_counter_stops", None)
+        if retry_counters is not None:
+            retry_counters()
 
     def execute_stage(self, operation, cancel, operator_confirmed=False, new_value=True):
         """Execute one qualified local stage path; no public/remote mutation API."""
@@ -397,13 +408,14 @@ class _StageState(object):
         return result
 
 
-class CardBackend(_StageState):
+class CardBackend(SourceControls, _StageState):
     def __init__(self, factory=None, read_timeout=0.5, focal_off=None, stop_wait=None,
                  control_profile="legacy_full", ht_feedback_verified=False,
                  ht_zero_tolerance_kv=0.0, ht_zero_timeout=10.0,
                  stage_controls_verified=False, cooling_trip_verified=False,
                  ht_controls_verified=False, focal_controls_verified=False,
-                 focal_command=None):
+                 focal_command=None, counter_controls_verified=False,
+                 ht_voltage_controls_verified=False, outer_stop_verified=False):
         if not 0 < read_timeout <= 2:
             raise ValueError("read timeout must be in (0, 2] seconds")
         if control_profile not in CONTROL_PROFILES:
@@ -416,6 +428,12 @@ class CardBackend(_StageState):
         self.cooling_trip_verified = cooling_trip_verified
         self.ht_controls_verified = ht_controls_verified
         self.focal_controls_verified = focal_controls_verified
+        for name, value in (("counter_controls_verified", counter_controls_verified),
+                            ("ht_voltage_controls_verified", ht_voltage_controls_verified),
+                            ("outer_stop_verified", outer_stop_verified)):
+            if type(value) is not bool:
+                raise ValueError("Exact Boolean source-control commissioning required")
+            setattr(self, name, value)
         legacy_focal = isinstance(focal_off, _LEGACY_CHROMA_STOP_TYPE)
         legacy_settings = None
         if legacy_focal:
@@ -451,6 +469,8 @@ class CardBackend(_StageState):
                           _OwnedFocalOff(self) if focal_off is None or legacy_focal else focal_off)
         self.stop_wait = stop_wait or time.sleep
         self._reset_stage_state()
+        self._reset_source_controls()
+        self._ao_control_calibration = {}
 
     def _stage_require_initialized(self):
         if self.owner is None or not self.commanded_digital:
@@ -493,6 +513,7 @@ class CardBackend(_StageState):
                 self.calibration[key] = (scale, offset)
         if len(self.calibration) != 144:
             raise ValueError("All 144 AI calibration entries required")
+        self._ao_control_calibration = load_ao_calibration()
         try:
             self.owner = self.factory(authorized=True, outputs_commissioned=True)
         except PartialTaskCreationError as error:
@@ -508,6 +529,7 @@ class CardBackend(_StageState):
         self.commanded_analog = analog_startup_logical_image()
         self.software_status_assignments = {"EPS": {}, "DPS": {}}
         self._reset_stage_state()
+        self._reset_source_controls()
         self.procedure = None
         if cancel.is_set():
             raise AcquisitionCancelled()
@@ -517,7 +539,9 @@ class CardBackend(_StageState):
             raise RuntimeError("General Marche requires initialized card ownership")
         if operator_confirmed is not True:
             raise ValueError("General Marche confirmation required")
+        self._require_known_ht_command()
         self._ensure_focal_quiescent()
+        self._retry_source_counter_stops()
         if self.control_profile == "general_only_test":
             # This verifies command scope, not the physical state of switches
             # operated outside Python. The GUI requires those stages OFF.
@@ -607,6 +631,7 @@ class CardBackend(_StageState):
 
         try:
             self._ensure_focal_quiescent()
+            self._retry_source_counter_stops()
             self._retry_stage_restorations()
             # A failed start can retain a last-successful asserted pulse image.
             # Release it before either stop profile, on this same NI owner. A
@@ -683,14 +708,13 @@ class CardBackend(_StageState):
                     age_seconds=time.monotonic() - started)
 
     def _lower_ht_shutdown_command(self, command_kv):
+        self._require_known_ht_command()
         bank = list(self.commanded_analog["C9NI6703"])
         if (type(command_kv) not in (int, float) or not math.isfinite(command_kv)
                 or not 0 <= command_kv < bank[0]):
             raise ValueError("Shutdown HT command must strictly decrease")
         bank[0] = command_kv
-        self._ensure_focal_quiescent()
-        self.owner.write_analog_logical_bank("C9NI6703", bank)
-        self.commanded_analog["C9NI6703"] = tuple(bank)
+        self._source_commit_analog("C9NI6703", bank)
 
     def _stop_modulator_pulses(self, assign_status):
         self._ensure_focal_quiescent()
@@ -703,7 +727,7 @@ class CardBackend(_StageState):
                 continue
             try:
                 for iteration in range(42):
-                    done = task.is_task_done()
+                    done = self.owner.read_counter_pulse_done(number)
                     if type(done) is not bool:
                         raise ValueError("Counter Done must be Boolean")
                     self.stop_wait(.001)
@@ -712,9 +736,7 @@ class CardBackend(_StageState):
             except Exception as error:
                 failures.append("counter {0} poll: {1}".format(number, error))
             try:
-                task.stop()
-                if number in self.started_counters:
-                    self.started_counters.remove(number)
+                self._source_counter_stop(number)
             except Exception as error:
                 failures.append("counter {0} stop: {1}".format(number, error))
         try:
@@ -765,6 +787,7 @@ class CardBackend(_StageState):
             commanded_analog_logical=copy.deepcopy(self.commanded_analog),
             software_status_assignments=copy.deepcopy(self.software_status_assignments),
             stage_state=self._stage_snapshot(),
+            source_controls=self._source_control_snapshot(),
             procedure=copy.deepcopy(self.procedure),
             started_counters=list(self.started_counters),
             output_interpretation="Last successful software bank commands, not physical output readback",
@@ -782,13 +805,16 @@ class CardBackend(_StageState):
         self.commanded_digital = {}
         self.commanded_analog = {}
         self._reset_stage_state()
+        self._reset_source_controls()
+        self._ao_control_calibration = {}
 
 
 class DemoBackend(_StageState):
     """Explicit GUI/test mode. Never imports or delegates to an NI adapter."""
     def __init__(self, control_profile="legacy_full", stage_controls_verified=False,
                  cooling_trip_verified=False, ht_controls_verified=False,
-                 focal_controls_verified=False, focal_command=None):
+                 focal_controls_verified=False, focal_command=None, counter_controls_verified=False,
+                 ht_voltage_controls_verified=False, outer_stop_verified=False):
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
@@ -799,6 +825,12 @@ class DemoBackend(_StageState):
         self.cooling_trip_verified = cooling_trip_verified
         self.ht_controls_verified = ht_controls_verified
         self.focal_controls_verified = focal_controls_verified
+        for name, value in (("counter_controls_verified", counter_controls_verified),
+                            ("ht_voltage_controls_verified", ht_voltage_controls_verified),
+                            ("outer_stop_verified", outer_stop_verified)):
+            if type(value) is not bool or value is True:
+                raise ValueError("Demo cannot commission NI source controls; use injected offline executors")
+            setattr(self, name, False)
         if focal_command is not None and getattr(focal_command, "simulated", False) is not True:
             raise ValueError("Demo Focal adapter must explicitly be simulated")
         self.focal_command = focal_command if focal_command is not None else _DemoFocalCommand()

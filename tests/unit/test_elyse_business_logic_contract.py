@@ -156,7 +156,8 @@ class BusinessLogicContractTests(unittest.TestCase):
         close = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_backend.py", "CardBackend", "close")
         attrs = [node.func.attr for node in ast.walk(close)
                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
-        self.assertCountEqual(attrs, ["_ensure_focal_quiescent", "close", "_reset_stage_state"])
+        self.assertCountEqual(attrs, ["_ensure_focal_quiescent", "close", "_reset_stage_state",
+                                      "_reset_source_controls"])
         self.assertFalse(self.contract["parity_gaps"]["lifecycle"]["resource_release_is_electrical_off"])
 
     def test_integrated_stage_paths_and_cooling_remain_separately_uncommissioned(self):
@@ -192,8 +193,132 @@ class BusinessLogicContractTests(unittest.TestCase):
         defaults = dict(zip([arg.arg for arg in backend.args.args][-len(backend.args.defaults):],
                             backend.args.defaults))
         for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
-                     "focal_controls_verified"):
+                     "focal_controls_verified", "counter_controls_verified",
+                     "ht_voltage_controls_verified", "outer_stop_verified"):
             self.assertIs(ast.literal_eval(defaults[flag]), False)
+
+    def test_original_xml_archive_is_external_evidence_not_claimed_bundled(self):
+        source = self.contract["sources"]["original_acquisition"]
+        self.assertFalse(source["xml_archive_bundled"])
+        self.assertTrue(source["xml_archive_external_location_hash_verified_at_review"])
+        self.assertFalse(source["xml_archive_review_is_current_availability_or_deployment_attestation"])
+        self.assertIn("external reviewed evidence", source["xml_archive_path_role"])
+        self.assertTrue(source["xml_archive_external_evidence_path"].startswith("C:/dev/pyconlyse/"))
+        self.assertEqual(len(source["xml_archive_sha256"]), 64)
+        # Availability is an explicit provenance boundary, not an existence
+        # test against another chat's ignored/local evidence directory.
+        self.assertTrue(self.contract["originals_require_external_evidence"])
+
+    def test_source_impulsion_counts_match_two_paths_and_nine_saved_frames(self):
+        path = "legacy/xp_acq_agent/elyse_agent/acquisition_impulsion.py"
+        implementation = self.contract["layers"]["xp_gui_runtime"]["source_impulsion_execution"]
+        paths = literal_assignment(path, "SUPPORTED_OPERATIONS")
+        frames = literal_assignment(path, "FRAME_UIDS")
+        self.assertEqual(implementation["implemented"], list(paths))
+        self.assertEqual(implementation["source_events"], [23, 24])
+        self.assertEqual(implementation["source_frame_count"], sum(map(len, frames.values())))
+        self.assertEqual(implementation["physical_counter_numbers"], [3, 4])
+        self.assertEqual(implementation["maximum_polls_if_done_false"], 42)
+        self.assertEqual(implementation["poll_wait_ms_including_final_iteration"], 1)
+        self.assertFalse(implementation["poll_limit_is_wall_clock_deadline"])
+        self.assertFalse(implementation["completion_is_physical_ack"])
+        self.assertFalse(implementation["releases_resources"])
+
+    def test_ht_transfer_contract_maps_only_c9_field0_without_operating_permit(self):
+        path = "legacy/xp_acq_agent/elyse_agent/acquisition_ht_voltage.py"
+        implementation = self.contract["layers"]["xp_gui_runtime"]["source_ht_voltage_transfer"]
+        self.assertEqual(implementation["logical_bank"], literal_assignment(path, "BANK_NAME"))
+        self.assertEqual(implementation["logical_field"], literal_assignment(path, "HT_FIELD"))
+        self.assertEqual(implementation["gain_to_driver_volts"], literal_assignment(path, "HT_GAIN_TO_VOLTS"))
+        self.assertEqual(implementation["driver_domain_kv"], [
+            literal_assignment(path, "HT_DRIVER_MIN_KV"),
+            literal_assignment(path, "HT_DRIVER_MAX_KV")])
+        self.assertTrue(implementation["whole_bank_commit_preserves_other_fields"])
+        self.assertTrue(implementation["ambiguous_commit_blocks_later_c9_commands"])
+        for key in ("driver_domain_is_operating_permit", "automatic_retry_or_rollback",
+                    "is_voltage_ramp_or_zero_procedure", "completion_is_physical_ack",
+                    "releases_resources"):
+            self.assertFalse(implementation[key], key)
+
+    def test_outer_stop_counts_and_threshold_are_not_general_event6_or_release(self):
+        path = "legacy/xp_acq_agent/elyse_agent/acquisition_outer_stop.py"
+        implementation = self.contract["layers"]["xp_gui_runtime"]["source_outer_controlled_stop"]
+        module = tree(path)
+        plan = next(node.value for node in module.body if isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == "CONTROLLED_STOP"
+                            for target in node.targets))
+        frames = [node for node in ast.walk(plan) if isinstance(node, ast.Call)
+                  and isinstance(node.func, ast.Name) and node.func.id == "_phase"]
+        self.assertEqual(implementation["source_phase_count"], len(plan.elts))
+        self.assertEqual(implementation["source_frame_count_including_wrappers"], len(frames))
+        waits = [ast.literal_eval(node.elts[1]) for node in ast.walk(plan)
+                 if isinstance(node, ast.Tuple) and len(node.elts) == 2
+                 and isinstance(node.elts[0], ast.Constant) and node.elts[0].value == "wait"]
+        self.assertEqual(implementation["source_fixed_wait_ms_excluding_ramp_and_polls"], sum(waits))
+        executor = next(node for node in module.body if isinstance(node, ast.FunctionDef)
+                        and node.name == "execute_outer_stop")
+        defaults = dict(zip([arg.arg for arg in executor.args.args][-len(executor.args.defaults):],
+                            executor.args.defaults))
+        self.assertEqual(implementation["python_max_ramp_decrements"],
+                         ast.literal_eval(defaults["max_ramp_steps"]))
+        self.assertEqual(implementation["ht_command_stop_comparison"], "C9NI6703[0] < 6.6")
+        self.assertTrue(implementation["duplicate_dps_eps_frames_preserved"])
+        self.assertEqual(implementation["preserved_analog_fields"],
+                         {"C6NI6703": [8], "C7NI6703": [2]})
+        for key in ("aliases_general_event6_or_deinitialize", "ramp_bound_is_source_property",
+                    "uses_physical_ht_feedback_or_zero_extension", "final_flags_are_physical_off_ack",
+                    "releases_resources", "native_failure_or_timing_equivalence",
+                    "prior_failure_allows_cooling_off_or_final_flags"):
+            self.assertFalse(implementation[key], key)
+
+    def test_new_source_control_gates_are_independent_local_and_default_false(self):
+        runtime = self.contract["layers"]["xp_gui_runtime"]
+        config = json.loads((ROOT / "legacy/xp_acq_agent/config.acquisition.example.json").read_text())
+        flags = set()
+        for section in ("source_impulsion_execution", "source_ht_voltage_transfer",
+                        "source_outer_controlled_stop"):
+            implementation = runtime[section]
+            self.assertFalse(implementation["default_commissioned"])
+            self.assertTrue(implementation["local_only"])
+            self.assertTrue(implementation["requires_stage_controls_verified"])
+            flag = implementation["commissioning_flag"]
+            self.assertIs(config[flag], False)
+            flags.add(flag)
+        self.assertEqual(flags, {"counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified"})
+        self.assertFalse(runtime["http_hardware_commands_enabled"])
+        for method in ("execute_impulsion", "set_ht_voltage", "outer_controlled_stop"):
+            adapter = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_source_controls.py",
+                                   "SourceControls", method)
+            called = [node.func.attr for node in ast.walk(adapter) if isinstance(node, ast.Call)
+                      and isinstance(node.func, ast.Attribute)]
+            self.assertNotIn("close", called)
+
+    def test_counter_pulse_property_is_not_task_done_and_stream_properties_are_explicit(self):
+        implementation = self.contract["layers"]["xp_gui_runtime"]["ni_driver_semantics"]
+        path = "legacy/xp_acq_agent/elyse_agent/hardware_tasks.py"
+        pulse = class_method(path, "LegacyCardTasks", "read_counter_pulse_done")
+        attrs = {node.attr for node in ast.walk(pulse) if isinstance(node, ast.Attribute)}
+        self.assertIn("co_pulse_done", attrs)
+        self.assertNotIn("is_task_done", attrs)
+        self.assertEqual(implementation["counter_completion_source_property"], "CO.PulseDone (6414)")
+        self.assertFalse(implementation["task_is_task_done_is_pulse_done"])
+        self.assertTrue(implementation["counter_property_result_requires_exact_bool"])
+        factory = next(node for node in tree(path).body if isinstance(node, ast.FunctionDef)
+                       and node.name == "create_legacy_card_tasks")
+        two_cards_loop = next(node for node in ast.walk(factory)
+                              if isinstance(node, ast.For) and isinstance(node.iter, ast.Subscript)
+                              and isinstance(node.iter.value, ast.Name) and node.iter.value.id == "AI_BANKS")
+        self.assertEqual(ast.literal_eval(two_cards_loop.iter.slice.upper), 2)
+        assignments = {node.targets[0].attr: node.value for node in ast.walk(two_cards_loop)
+                       if isinstance(node, ast.Assign) and len(node.targets) == 1
+                       and isinstance(node.targets[0], ast.Attribute)
+                       and isinstance(node.targets[0].value, ast.Attribute)
+                       and node.targets[0].value.attr == "in_stream"}
+        self.assertEqual(assignments["relative_to"].attr, implementation["ni6071e_read_relative_to"])
+        self.assertIs(ast.literal_eval(assignments["auto_start"]), implementation["ni6071e_read_auto_start"])
+        self.assertFalse(implementation["ni6220_stream_properties_inferred"])
+        self.assertFalse(implementation["finite_read_sample_parity_closed"])
+        self.assertFalse(self.contract["parity_gaps"]["ni6071e_requested_samples"]["equivalent"])
 
     def test_source_hash_matches_supervision_adapter_not_deployment(self):
         expected = literal_assignment("web/backend/elyse_supervision_service.py", "SOURCE_SHA256")

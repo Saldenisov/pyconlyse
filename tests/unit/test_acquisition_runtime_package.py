@@ -27,12 +27,22 @@ def test_clean_source_package_contains_stage_dependencies_without_live_configura
         assert config["cooling_trip_verified"] is False
         assert config["ht_controls_verified"] is False
         assert config["focal_controls_verified"] is False
+        assert config["counter_controls_verified"] is False
+        assert config["ht_voltage_controls_verified"] is False
+        assert config["outer_stop_verified"] is False
         assert config["focal_stop"]["resources_verified"] is False
         assert config["ht_shutdown"]["feedback_verified"] is False
         assert manifest["auto_initialize"] is False
         assert manifest["source_stage_controls_default_enabled"] is False
         assert manifest["ht_stage_controls_default_enabled"] is False
         assert manifest["focal_stage_controls_default_enabled"] is False
+        assert manifest["impulsion_paths_implemented"] == 2
+        assert manifest["impulsion_controls_default_enabled"] is False
+        assert manifest["ht_voltage_transfer_implemented"] is True
+        assert manifest["ht_voltage_transfer_default_enabled"] is False
+        assert manifest["outer_controlled_stop_frames"] == 40
+        assert manifest["outer_controlled_stop_default_enabled"] is False
+        assert manifest["source_stage_paths_implemented"] == 14
         assert manifest["runtime_protocol_version"] == 2
         assert manifest["cold_process_supervisor_included"] is True
         assert manifest["automatic_ni_recovery"] is False
@@ -57,6 +67,43 @@ def test_source_fingerprint_covers_exact_packaged_source_closure():
     assert set(SOURCE_PATHS) == {"acquisition_server.pyw"} | {
         "elyse_agent/" + name for name in MODULES
     } | {"data/" + name for name in DATA}
+    assert {"acquisition_source_controls.py", "acquisition_impulsion.py",
+            "acquisition_ht_voltage.py", "acquisition_outer_stop.py"} <= set(MODULES)
+    assert len(SOURCE_MODULES) == len(set(SOURCE_MODULES))
+    assert len(SOURCE_PATHS) == len(set(SOURCE_PATHS))
+
+
+def test_package_forces_new_source_permissions_off_even_if_template_changes(tmp_path, monkeypatch):
+    template = ROOT / "legacy/xp_acq_agent/config.acquisition.example.json"
+    original_read = Path.read_text
+    modified = json.loads(original_read(template, encoding="utf-8"))
+    flags = ("counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified")
+    for key in flags:
+        modified[key] = True
+
+    def altered_template(path, *args, **kwargs):
+        return json.dumps(modified) if path == template else original_read(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", altered_template)
+    output = tmp_path / "cold"
+    build(output, ROOT)
+    packaged = json.loads((output / "config.acquisition.json").read_text(encoding="utf-8"))
+    assert all(packaged[key] is False for key in flags)
+
+
+@pytest.mark.parametrize("module", ["acquisition_source_controls.py", "acquisition_impulsion.py",
+                                   "acquisition_ht_voltage.py", "acquisition_outer_stop.py"])
+def test_each_new_module_byte_change_changes_packaged_source_identity(tmp_path, module):
+    from legacy.xp_acq_agent.elyse_agent.runtime_identity import source_fingerprint
+    output = tmp_path / "cold"
+    build(output, ROOT)
+    original = source_fingerprint(str(output))
+    path = output / "elyse_agent" / module
+    raw = path.read_bytes()
+    path.write_bytes(raw + b"\n# Synthetic fingerprint test only.\n")
+    assert source_fingerprint(str(output)) != original
+    path.write_bytes(raw)
+    assert source_fingerprint(str(output)) == original
 
 
 def test_gui_entrypoint_propagates_error_exit_instead_of_hiding_it_from_supervisor(monkeypatch):
@@ -90,6 +137,10 @@ ctypes.WinDLL = denied
 from elyse_agent.acquisition_runtime import AcquisitionRuntime
 from elyse_agent.acquisition_stage_execution import SUPPORTED_OPERATIONS
 from elyse_agent.acquisition_stage_model import load_model
+from elyse_agent.acquisition_impulsion import SUPPORTED_OPERATIONS as IMPULSION_OPERATIONS
+from elyse_agent.acquisition_ht_voltage import execute_ht_voltage
+from elyse_agent.acquisition_outer_stop import CONTROLLED_STOP
+from elyse_agent.acquisition_source_controls import SourceControls
 load_model()
 runtime = AcquisitionRuntime(denied)
 runtime.start()
@@ -102,6 +153,14 @@ assert snapshot['runtime_protocol_version'] == 2
 assert len(snapshot['session_id']) == 32 and len(snapshot['build_id']) == 64
 assert type(snapshot['state_revision']) is int
 assert snapshot['recovery']['protection_active'] is False
+assert snapshot['stage_execution']['counter_commissioned'] is False
+assert snapshot['stage_execution']['ht_voltage_commissioned'] is False
+assert snapshot['stage_execution']['outer_stop_commissioned'] is False
+assert snapshot['stage_execution']['remote_commands_enabled'] is False
+assert snapshot['stage_execution']['impulsion_implemented'] == list(IMPULSION_OPERATIONS)
+assert len(IMPULSION_OPERATIONS) == 2
+assert callable(execute_ht_voltage) and isinstance(SourceControls, type)
+assert len(CONTROLLED_STOP) == 7
 from elyse_agent.acquisition_command_admission import CommandAdmission
 from elyse_agent.acquisition_supervisor import ColdAcquisitionSupervisor
 from elyse_agent.runtime_identity import source_fingerprint

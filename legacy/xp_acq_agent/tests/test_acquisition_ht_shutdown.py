@@ -290,8 +290,11 @@ class ExtendedStopBackendTests(unittest.TestCase):
         owner = runtime_tests.BackendTests().fake_owner()
         for number in (3, 4):
             task = Mock()
-            task.is_task_done.return_value = True
+            task.is_task_done.side_effect = AssertionError("TaskDone is not source CO PulseDone")
             owner.tasks["C10_NI6602_CO_{0}".format(number)] = task
+        owner.read_counter_pulse_done.return_value = True
+        owner.stop_counter.side_effect = lambda number: owner.tasks[
+            "C10_NI6602_CO_{0}".format(number)].stop()
         backend = CardBackend(
             Mock(return_value=owner),
             focal_off=Mock(),
@@ -339,6 +342,10 @@ class ExtendedStopBackendTests(unittest.TestCase):
         backend.general_stop(operator_confirmed=True)
         owner.write_analog_logical_bank.assert_not_called()
         self.assertEqual(events, [("pulse", 3), ("pulse", 4), ("focal_off",)])
+        self.assertEqual([call[0] for call in owner.read_counter_pulse_done.call_args_list], [(3,), (4,)])
+        self.assertEqual([call[0] for call in owner.stop_counter.call_args_list], [(3,), (4,)])
+        for number in (3, 4):
+            owner.tasks["C10_NI6602_CO_{0}".format(number)].is_task_done.assert_not_called()
         self.assertEqual(owner.write_digital_bank.call_count, 10)
         self.assertEqual(backend.commanded_analog["C9NI6703"][0], 6.5)
         self.assertEqual(backend.procedure["source_frames_attempted"], list(range(17)))
@@ -406,17 +413,51 @@ class ExtendedStopBackendTests(unittest.TestCase):
 
     def test_counter_polls_bounded_and_done_error_still_stops_both(self):
         owner, backend = self.backend()
-        owner.tasks["C10_NI6602_CO_3"].is_task_done.return_value = False
-        owner.tasks["C10_NI6602_CO_4"].is_task_done.side_effect = RuntimeError(
-            "Done query failure"
-        )
+        def pulse_done(number):
+            if number == 3:
+                return False
+            raise RuntimeError("Pulse-done query failure")
+        owner.read_counter_pulse_done.side_effect = pulse_done
         with self.assertRaises(GeneralStopError):
             backend._stop_modulator_pulses(Mock())
-        self.assertEqual(owner.tasks["C10_NI6602_CO_3"].is_task_done.call_count, 42)
+        calls = [call[0][0] for call in owner.read_counter_pulse_done.call_args_list]
+        self.assertEqual(calls, [3] * 42 + [4])
+        self.assertEqual([call[0] for call in owner.stop_counter.call_args_list], [(3,), (4,)])
         for number in (3, 4):
             owner.tasks[
                 "C10_NI6602_CO_{0}".format(number)
             ].stop.assert_called_once_with()
+            owner.tasks["C10_NI6602_CO_{0}".format(number)].is_task_done.assert_not_called()
+
+    def test_pulse_done_requires_exact_bool_without_task_done_fallback(self):
+        for invalid in (None, 0, 1, "False", object()):
+            owner, backend = self.backend()
+            owner.read_counter_pulse_done.return_value = invalid
+            with self.assertRaises(GeneralStopError) as caught:
+                backend._stop_modulator_pulses(Mock())
+            self.assertIn("Counter Done must be Boolean", str(caught.exception))
+            self.assertEqual([call[0] for call in owner.stop_counter.call_args_list], [(3,), (4,)])
+            for number in (3, 4):
+                owner.tasks["C10_NI6602_CO_{0}".format(number)].is_task_done.assert_not_called()
+
+    def test_missing_pulse_done_capability_retains_owner_and_attempts_both_stops(self):
+        owner, backend = self.backend()
+        del owner.read_counter_pulse_done
+        with self.assertRaises(GeneralStopError):
+            backend._stop_modulator_pulses(Mock())
+        self.assertEqual([call[0] for call in owner.stop_counter.call_args_list], [(3,), (4,)])
+        self.assertIs(backend.owner, owner)
+        owner.close.assert_not_called()
+
+    def test_pulse_done_final_iteration_wait_precedes_each_owner_stop(self):
+        owner, backend = self.backend()
+        events = []
+        owner.read_counter_pulse_done.side_effect = lambda number: events.append(("done", number)) or True
+        owner.stop_counter.side_effect = lambda number: events.append(("stop", number))
+        backend.stop_wait = lambda seconds: events.append(("wait", seconds))
+        backend._stop_modulator_pulses(Mock())
+        self.assertEqual(events, [("done", 3), ("wait", 0.001), ("stop", 3),
+                                  ("done", 4), ("wait", 0.001), ("stop", 4), ("wait", 0.1)])
 
     def test_lowering_preserves_other_nine_AO_fields_and_updates_only_after_ack(self):
         owner, backend = self.backend()
@@ -425,13 +466,19 @@ class ExtendedStopBackendTests(unittest.TestCase):
         name, values = owner.write_analog_logical_bank.call_args[0]
         self.assertEqual(name, "C9NI6703")
         self.assertEqual(tuple(values[1:]), old["C9NI6703"][1:])
+        for forbidden in (6.4, 6.5, 8.0, float("nan")):
+            with self.assertRaises(ValueError):
+                backend._lower_ht_shutdown_command(forbidden)
         owner.write_analog_logical_bank.side_effect = RuntimeError("AO write failed")
         with self.assertRaises(RuntimeError):
             backend._lower_ht_shutdown_command(6.3)
         self.assertEqual(backend.commanded_analog["C9NI6703"][0], 6.4)
-        for forbidden in (6.4, 6.5, 8.0, float("nan")):
-            with self.assertRaises(ValueError):
-                backend._lower_ht_shutdown_command(forbidden)
+        owner.write_analog_logical_bank.reset_mock()
+        with self.assertRaisesRegex(RuntimeError, "Ambiguous C9 write"):
+            backend._lower_ht_shutdown_command(6.2)
+        owner.write_analog_logical_bank.assert_not_called()
+        self.assertIs(backend.owner, owner)
+        owner.close.assert_not_called()
 
     def test_unverified_profile_refuses_start_and_stop_before_any_output(self):
         owner, backend = self.backend(verified=False)

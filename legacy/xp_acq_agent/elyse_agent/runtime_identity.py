@@ -13,6 +13,8 @@ SOURCE_MODULES = (
     "acquisition_stage_execution.py", "acquisition_cooling_trip.py", "runtime_identity.py",
     "acquisition_recovery.py",
     "acquisition_supervisor.py", "acquisition_command_admission.py",
+    "acquisition_source_controls.py", "acquisition_impulsion.py",
+    "acquisition_ht_voltage.py", "acquisition_outer_stop.py",
 )
 SOURCE_PATHS = ("acquisition_server.pyw",) + tuple("elyse_agent/" + name for name in SOURCE_MODULES) + (
     "data/calibration_map.csv", "data/ni6602_timing.csv", "data/modulator_stage_catalog.json",

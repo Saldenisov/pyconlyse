@@ -9,6 +9,9 @@
   "cooling_trip_verified": false,
   "ht_controls_verified": false,
   "focal_controls_verified": false,
+  "counter_controls_verified": false,
+  "ht_voltage_controls_verified": false,
+  "outer_stop_verified": false,
   "focal_stop": {
     "resources_verified": false,
     "timeout_seconds": 10

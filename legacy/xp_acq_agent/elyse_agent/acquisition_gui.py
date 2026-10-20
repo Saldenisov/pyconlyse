@@ -35,10 +35,12 @@ def load_configuration(path):
     required = {"bind_host", "port", "key_file", "period_seconds", "read_timeout_seconds"}
     if (not required <= set(config) or set(config) - required
             - {"focal_stop", "control_profile", "ht_shutdown", "stage_controls_verified",
-               "cooling_trip_verified", "ht_controls_verified", "focal_controls_verified"}):
+               "cooling_trip_verified", "ht_controls_verified", "focal_controls_verified",
+               "counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified"}):
         raise ValueError("Invalid acquisition configuration fields")
     for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
-                 "focal_controls_verified"):
+                 "focal_controls_verified", "counter_controls_verified",
+                 "ht_voltage_controls_verified", "outer_stop_verified"):
         if type(config.get(flag, False)) is not bool:
             raise ValueError("Explicit Boolean " + flag + " required")
     if config.get("control_profile", "legacy_full") not in CONTROL_PROFILES:
@@ -296,6 +298,8 @@ def main(entrypoint, argv=None):
         trip_verified = config.get("cooling_trip_verified", False)
         ht_controls_verified = config.get("ht_controls_verified", False)
         focal_controls_verified = config.get("focal_controls_verified", False)
+        source_flags = {name: config.get(name, False) for name in (
+            "counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified")}
         focal_command = (None if args.demo else
                          ChromaFocalCommand(focal.get("dll_path", DEFAULT_DLL),
                                             focal.get("resources_verified", False),
@@ -304,7 +308,7 @@ def main(entrypoint, argv=None):
                                        stage_controls_verified=stage_verified,
                                        ht_controls_verified=ht_controls_verified,
                                        focal_controls_verified=focal_controls_verified,
-                                       cooling_trip_verified=trip_verified)) if args.demo else
+                                       cooling_trip_verified=trip_verified, **source_flags)) if args.demo else
                    lambda: CardBackend(read_timeout=config["read_timeout_seconds"],
                                        control_profile=profile,
                                        ht_feedback_verified=ht.get("feedback_verified", False),
@@ -314,7 +318,7 @@ def main(entrypoint, argv=None):
                                        ht_controls_verified=ht_controls_verified,
                                        focal_controls_verified=focal_controls_verified,
                                        focal_command=focal_command,
-                                       cooling_trip_verified=trip_verified))
+                                       cooling_trip_verified=trip_verified, **source_flags))
         runtime = create_cold_runtime(factory, config["period_seconds"], args.config, demo=args.demo)
         # Binding guards against a second service window before starting a worker.
         server = RuntimeHTTPServer((config["bind_host"], config["port"]), runtime, key)

@@ -17,6 +17,8 @@ MODULES = (
     "acquisition_stage_execution.py", "acquisition_cooling_trip.py",
     "runtime_identity.py", "acquisition_recovery.py", "acquisition_supervisor.py",
     "acquisition_command_admission.py",
+    "acquisition_source_controls.py", "acquisition_impulsion.py",
+    "acquisition_ht_voltage.py", "acquisition_outer_stop.py",
 )
 DATA = ("calibration_map.csv", "ni6602_timing.csv", "modulator_stage_catalog.json")
 
@@ -55,6 +57,9 @@ def build(output, root=None, control_profile="legacy_full"):
             config["cooling_trip_verified"] = False
             config["ht_controls_verified"] = False
             config["focal_controls_verified"] = False
+            config["counter_controls_verified"] = False
+            config["ht_voltage_controls_verified"] = False
+            config["outer_stop_verified"] = False
             config.setdefault("focal_stop", {})["resources_verified"] = False
             # No uncommissioned feedback claim is packaged as a permit, even
             # in a profile where that extension currently remains unused.
@@ -74,6 +79,9 @@ def build(output, root=None, control_profile="legacy_full"):
                     cooling_trip_default_enabled=False,
                     ht_stage_controls_default_enabled=False,
                     focal_stage_controls_default_enabled=False,
+                    impulsion_paths_implemented=2, impulsion_controls_default_enabled=False,
+                    ht_voltage_transfer_implemented=True, ht_voltage_transfer_default_enabled=False,
+                    outer_controlled_stop_frames=40, outer_controlled_stop_default_enabled=False,
                     initialized_hardware_during_packaging=False, secret_files_included=False,
                     telemetry_storage="ram_latest", files=records,
                     runtime_protocol_version=2,
