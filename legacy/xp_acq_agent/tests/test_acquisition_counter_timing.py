@@ -6,7 +6,7 @@ from legacy.xp_acq_agent.elyse_agent.acquisition_counter_timing import (
     CALLER_FRAME_UIDS, CALLER_UIDS, HELPER_UIDS, PROPERTY_CODES,
     SOURCE_HELPER_SHA256, CounterTimingCancelled, CounterTimingError,
     decode_counter_bank, execute_counter_timing, labview_i32_to_u32_ticks,
-    validate_counter_bank,
+    validate_counter_bank, project_counter_selector,
 )
 
 
@@ -99,10 +99,32 @@ class CounterTimingDecodeTests(unittest.TestCase):
         for selector in (-100.0, -1.0, 0.0, 17.0, 32.0, 100.0):
             self.assertIsNone(decode_counter_bank(bank(selector)))
 
-    def test_fractional_true_guard_is_rejected_not_coerced(self):
-        for selector in (0.1, 0.5, 1.5, 15.5, 16.5):
-            with self.assertRaisesRegex(ValueError, "Fractional"):
+    def test_source_admitted_invalid_task_is_not_python_negative_indexing(self):
+        for selector in (5e-324, 0.1, 0.5, 0.9999999999999999):
+            projection = project_counter_selector(selector)
+            self.assertTrue(projection["source_guard"])
+            self.assertEqual((projection["counter"], projection["delay_index"], projection["width_index"]),
+                             (-1, -2, -1))
+            self.assertFalse(projection["task_in_bounds"])
+            self.assertFalse(projection["native_default_task_qualified"])
+            with self.assertRaisesRegex(ValueError, "out-of-range"):
                 decode_counter_bank(bank(selector))
+
+    def test_fractions_follow_source_floor_before_i32_not_rounding_selector(self):
+        for selector, q in ((1.0, 0), (1.5, 0), (2.5, 0), (2.9, 0),
+                            (2.9999999999999996, 0), (3.0, 1), (3.5, 1),
+                            (14.5, 6), (15.0, 7), (15.9, 7), (16.9, 7),
+                            (16.999999999999996, 7)):
+            decoded = decode_counter_bank(bank(selector))
+            self.assertEqual(decoded["counter"], q)
+            self.assertEqual((decoded["delay_index"], decoded["width_index"]), (2*q, 2*q+1))
+            self.assertEqual(decoded["selector"], selector)
+            self.assertIs(type(decoded["selector"]), float)
+
+    def test_selector_projection_rejects_non_dbl_and_nonfinite_without_coercion(self):
+        for selector in (True, 1, "1.5", float("nan"), float("inf")):
+            with self.assertRaises(ValueError):
+                project_counter_selector(selector)
 
     def test_c11_fields_do_not_affect_selected_c10_pair(self):
         before = bank(16.0)
@@ -244,9 +266,9 @@ class CounterTimingFailureTests(unittest.TestCase):
         self.assertFalse(result["hardware_acknowledged"])
         return result
 
-    def test_fractional_selector_fails_before_any_counter_or_consumption(self):
+    def test_invalid_task_selector_fails_before_any_counter_or_consumption(self):
         h = Harness()
-        h.image = bank(1.5)
+        h.image = bank(.5)
         result = self.get_failure(h)
         self.assertEqual(h.trace, [("read",)])
         self.assertFalse(result["stop_attempted"])

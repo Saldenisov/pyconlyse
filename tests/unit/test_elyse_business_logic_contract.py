@@ -249,7 +249,21 @@ class BusinessLogicContractTests(unittest.TestCase):
             self.assertEqual(implementation[key], literal_assignment(path, constant))
         self.assertEqual(implementation["source_selector_guard"], "0 < n < 17")
         self.assertEqual(implementation["proved_integer_selectors"], [1, 16])
-        self.assertEqual(implementation["physical_counter_mapping"], "q = (n - 1) // 2; C10 ctr0..7")
+        self.assertEqual(implementation["physical_counter_mapping"],
+                         "q = floor((n - 1.0) / 2.0) in DBL, then I32 Index Array; C10 ctr0..7")
+        self.assertFalse(implementation["fractional_selector_routing_qualified"])
+        self.assertTrue(implementation["fractional_in_bounds_selector_routing_qualified"])
+        self.assertEqual(implementation["finite_valid_task_selector_interval"], "1 <= n < 17")
+        self.assertEqual(implementation["source_admitted_invalid_task_interval"], "0 < n < 1 -> q=-1")
+        self.assertFalse(implementation["native_invalid_task_return_qualified"])
+        self.assertTrue(implementation["native_error_wire_preview_implemented"])
+        self.assertEqual(implementation["source_clear_error_code_default"], 0)
+        self.assertFalse(implementation["clear_errors_resets_driver_or_task"])
+        self.assertEqual(implementation["saved_simple_handler_dialog_mode"], 1)
+        self.assertEqual(implementation["inspected_local_2020_default_buttons"], ["Continue"])
+        self.assertFalse(implementation["saved_dialog_mode_input_wired"])
+        self.assertFalse(implementation["deployed_xp_handler_binary_qualified"])
+        self.assertFalse(implementation["automatic_continue_or_python_exception_clear"])
         self.assertEqual(implementation["delay_field_mapping"], "2 * q")
         self.assertEqual(implementation["width_field_mapping"], "2 * q + 1")
         self.assertIn("saturating I32, ties to even", implementation["timing_conversion"])
@@ -265,7 +279,7 @@ class BusinessLogicContractTests(unittest.TestCase):
         self.assertTrue(implementation["publication_uses_independently_reread_bank"])
         self.assertEqual(implementation["publication_transport"], "LOCAL_RAM_REPLACEMENT_NOT_PSP")
         self.assertTrue(implementation["nominal_path_executable"])
-        for key in ("selects_c11", "fractional_selector_routing_qualified",
+        for key in ("selects_c11",
                     "conversion_is_driver_acceptance_or_operating_permit",
                     "poll_limit_is_wall_clock_deadline", "atomic_snapshot_or_compare_exchange",
                     "psp_delivery_acknowledged", "automatic_property_retry_or_rollback",
@@ -275,8 +289,9 @@ class BusinessLogicContractTests(unittest.TestCase):
         self.assertTrue(implementation["configuration_ambiguity_blocks_starts"])
         gap = self.contract["parity_gaps"]["counter_timing_native_integration"]
         self.assertTrue(gap["local_source_path_transferred"])
+        self.assertTrue(gap["fractional_selector_coercion_proven"])
         self.assertTrue(all(value is False for key, value in gap.items()
-                            if key != "local_source_path_transferred"))
+                            if key not in ("local_source_path_transferred", "fractional_selector_coercion_proven")))
 
     def test_counter_timing_release_latch_covers_every_retimed_counter_not_only_3_4(self):
         implementation = self.contract["layers"]["xp_gui_runtime"]["source_counter_timing_transfer"]

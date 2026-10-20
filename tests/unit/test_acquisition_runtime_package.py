@@ -41,6 +41,9 @@ def test_clean_source_package_contains_stage_dependencies_without_live_configura
         assert manifest["impulsion_controls_default_enabled"] is False
         assert manifest["counter_timing_transfer_implemented"] is True
         assert manifest["counter_timing_controls_default_enabled"] is False
+        assert manifest["counter_native_error_preview"] == "local_supplied_return_data_only"
+        assert manifest["native_error_execution_equivalence"] is False
+        assert manifest["deployed_xp_dialog_binary_qualified"] is False
         assert manifest["ht_voltage_transfer_implemented"] is True
         assert manifest["ht_voltage_transfer_default_enabled"] is False
         assert manifest["outer_controlled_stop_frames"] == 40
@@ -72,8 +75,9 @@ def test_source_fingerprint_covers_exact_packaged_source_closure():
     } | {"data/" + name for name in DATA}
     assert {"acquisition_source_controls.py", "acquisition_impulsion.py",
             "acquisition_ht_voltage.py", "acquisition_outer_stop.py",
-            "acquisition_counter_timing.py"} <= set(MODULES)
-    assert len(SOURCE_MODULES) == 27
+            "acquisition_counter_timing.py", "acquisition_counter_error_flow.py",
+            "acquisition_counter_native_preview.py"} <= set(MODULES)
+    assert len(SOURCE_MODULES) == 29
     assert len(SOURCE_MODULES) == len(set(SOURCE_MODULES))
     assert len(SOURCE_PATHS) == len(set(SOURCE_PATHS))
 
@@ -99,7 +103,8 @@ def test_package_forces_new_source_permissions_off_even_if_template_changes(tmp_
 
 @pytest.mark.parametrize("module", ["acquisition_source_controls.py", "acquisition_impulsion.py",
                                    "acquisition_ht_voltage.py", "acquisition_outer_stop.py",
-                                   "acquisition_counter_timing.py"])
+                                   "acquisition_counter_timing.py", "acquisition_counter_error_flow.py",
+                                   "acquisition_counter_native_preview.py"])
 def test_each_new_module_byte_change_changes_packaged_source_identity(tmp_path, module):
     from legacy.xp_acq_agent.elyse_agent.runtime_identity import source_fingerprint
     output = tmp_path / "cold"
@@ -149,6 +154,7 @@ from elyse_agent.acquisition_ht_voltage import execute_ht_voltage
 from elyse_agent.acquisition_outer_stop import CONTROLLED_STOP
 from elyse_agent.acquisition_source_controls import SourceControls
 from elyse_agent.acquisition_counter_timing import execute_counter_timing
+from elyse_agent.acquisition_counter_native_preview import plan_simple_error_dialog
 load_model()
 runtime = AcquisitionRuntime(denied)
 runtime.start()
@@ -172,6 +178,19 @@ assert len(IMPULSION_OPERATIONS) == 2
 assert callable(execute_ht_voltage) and isinstance(SourceControls, type)
 assert callable(execute_counter_timing)
 assert callable(runtime.configure_counter_timing)
+assert callable(runtime.inspect_counter_error_flow)
+assert plan_simple_error_dialog(dict(status=True, code=-1, source='fixture'))['buttons'] == ['Continue']
+clean_error = dict(status=False, code=0, source='')
+supplied_returns = [dict(stage=stage, task_token='fixture', error=clean_error)
+                    for stage in ('read_co_pulse_done', 'wait_ms', 'stop_task',
+                                  'clear_errors', 'write_co_timing_properties', 'start_task')]
+supplied_returns[0]['data'] = [True]
+supplied_returns[-1]['error'] = dict(status=True, code=-1, source='supplied fixture')
+proof = runtime.inspect_counter_error_flow(tuple(float(i) for i in range(32)) + (2.9,),
+    supplied_returns, dict(disposition='NO_RESPONSE'), error_in=clean_error)
+assert proof['request']['counter'] == 0 and proof['fixture_effects'] == []
+assert proof['hardware_execution'] is False and proof['native_execution'] is False
+assert proof['caller']['suspended_at'] == 'handler_response'
 assert len(CONTROLLED_STOP) == 7
 from elyse_agent.acquisition_command_admission import CommandAdmission
 from elyse_agent.acquisition_supervisor import ColdAcquisitionSupervisor

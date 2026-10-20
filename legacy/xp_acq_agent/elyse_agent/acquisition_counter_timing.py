@@ -1,8 +1,10 @@
 """Injected Python 3.4 executor for the saved C10 NI6602 timing path.
 
 No driver, process, clock or transport is opened. An explicit caller-owned
-33-DBL image supplies the selector and timings. Only integer selectors 1..16
-have a proved mapping: paired selectors select C10 ctr0..7, not C11. The
+33-DBL image supplies the selector and timings. Source DBL arithmetic floors
+(n-1)/2 BEFORE Index Array's I32 coercion. Selectors1<=n<17, including fractions,
+select C10 ctr0..7, not C11. The source also admits0<n<1 but produces an invalid
+task index; this executor refuses that request before callbacks. The
 helper reads CO.PulseDone, requests 1ms per iteration (including final), and
 exits Done OR i>20. It then stops, crosses Clear Errors, writes initial/low/
 high ticks, and starts the same retained counter. DBL*20 -> saturating I32
@@ -92,26 +94,47 @@ def labview_i32_to_u32_ticks(microseconds):
     return signed & 0xFFFFFFFF
 
 
-def decode_counter_bank(snapshot):
-    """Return the proved C10 pair, or None for the source guard's false arm.
+def project_counter_selector(selector):
+    """Saved finite DBL graph, including the source-admitted invalid -1 index.
 
-    Fractional selectors pass the original 0<n<17 guard but Index Array
-    coercion is unproved. Reject them rather than truncating/rounding a task.
+    Decrement15887 -> Q&R26175 (/2.0) -> integral-valued DBL q; q fans out
+    to IndexArray21122 and Multiply22328 (*2.0) -> Increment22884. The I32
+    input coercions cannot change these bounded integral-valued DBLs. This
+    projects indices, NOT a native out-of-range refnum or a DAQmx return.
+    """
+    if type(selector) is not float or not math.isfinite(selector):
+        raise ValueError("Explicit finite DBL selector required")
+    accepted = 0.0 < selector < 17.0
+    result = dict(selector=selector, source_guard=accepted, counter=None,
+                  delay_index=None, width_index=None, task_in_bounds=False,
+                  native_default_task_qualified=False)
+    if accepted:
+        quotient = float(math.floor((selector - 1.0) / 2.0))
+        result.update(counter=int(quotient), delay_index=int(2.0 * quotient),
+                      width_index=int(2.0 * quotient + 1.0),
+                      task_in_bounds=0 <= quotient < 8)
+    return result
+
+
+def decode_counter_bank(snapshot):
+    """Return a source-selected valid C10 pair or no request outside the guard.
+
+    Source0<n<1 reaches an out-of-range task. Refusing driver execution is
+    Python policy, not an invented native guard or negative Python indexing.
     Fields16..31 never select C11 in this Acquisition path.
     """
     values = validate_counter_bank(snapshot)
-    selector = values[SELECTOR_INDEX]
-    if not 0.0 < selector < 17.0:
+    projection = project_counter_selector(values[SELECTOR_INDEX])
+    if not projection["source_guard"]:
         return None
-    if not selector.is_integer():
-        raise ValueError("Fractional Acquisition counter selector is unqualified")
-    number = int(selector)
-    counter = (number - 1) // 2
+    if not projection["task_in_bounds"]:
+        raise ValueError("Source selector reaches an out-of-range C10 task; execution refused")
+    counter = projection["counter"]
     delay_index = 2 * counter
     width_index = delay_index + 1
     delay, width = values[delay_index], values[width_index]
     return {
-        "selector": number, "counter": counter,
+        "selector": values[SELECTOR_INDEX], "counter": counter,
         "delay_index": delay_index, "width_index": width_index,
         "delay_microseconds": delay, "width_microseconds": width,
         "delay_ticks": labview_i32_to_u32_ticks(delay),

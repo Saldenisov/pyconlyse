@@ -20,6 +20,7 @@ MODULES = (
     "acquisition_source_controls.py", "acquisition_impulsion.py",
     "acquisition_ht_voltage.py", "acquisition_outer_stop.py",
     "acquisition_counter_timing.py",
+    "acquisition_counter_error_flow.py", "acquisition_counter_native_preview.py",
 )
 DATA = ("calibration_map.csv", "ni6602_timing.csv", "modulator_stage_catalog.json")
 
@@ -83,6 +84,9 @@ def build(output, root=None, control_profile="legacy_full"):
                     focal_stage_controls_default_enabled=False,
                     impulsion_paths_implemented=2, impulsion_controls_default_enabled=False,
                     counter_timing_transfer_implemented=True, counter_timing_controls_default_enabled=False,
+                    counter_native_error_preview="local_supplied_return_data_only",
+                    native_error_execution_equivalence=False,
+                    deployed_xp_dialog_binary_qualified=False,
                     ht_voltage_transfer_implemented=True, ht_voltage_transfer_default_enabled=False,
                     outer_controlled_stop_frames=40, outer_controlled_stop_default_enabled=False,
                     initialized_hardware_during_packaging=False, secret_files_included=False,

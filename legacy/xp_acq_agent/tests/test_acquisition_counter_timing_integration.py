@@ -72,9 +72,19 @@ class CounterTimingBackendTests(unittest.TestCase):
         self.assertEqual(cancel.waits, [.001] * 22)
         owner.write_counter_ticks.assert_called_once_with(0, 0, 0, 2)
 
+    def test_confirmed_fractional_indices_reach_only_the_source_selected_counter(self):
+        for selector, q in ((1.5, 0), (2.5, 0), (3.1, 1), (15.9, 7), (16.9, 7)):
+            backend, owner, _ = fixture()
+            result = backend.configure_counter_timing(bank(selector), Cancel(), True)
+            owner.start_counter.assert_called_once_with(q)
+            owner.stop_counter.assert_called_once_with(q)
+            self.assertEqual(result["selector"], selector)
+            self.assertEqual(owner.write_counter_ticks.call_args[0][0], q)
+            owner.close.assert_not_called()
+
     def test_invalid_snapshot_and_confirmation_fail_before_io_or_command_image_change(self):
         backend, owner, _ = fixture()
-        bad = (list(bank()), bank()[:-1], bank(1.5), bank(True),
+        bad = (list(bank()), bank()[:-1], bank(.5), bank(True),
                bank()[:4] + (float("nan"),) + bank()[5:])
         for value in bad:
             with self.assertRaises(ValueError):
@@ -161,7 +171,7 @@ class CounterTimingRuntimeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.runtime.configure_counter_timing(bank(), True)
         with self.assertRaises(ValueError):
-            self.runtime.configure_counter_timing(bank(1.5), True)
+            self.runtime.configure_counter_timing(bank(.5), True)
         self.assertFalse(self.runtime.configure_counter_timing(bank(17.0), True))
         self.assertEqual(self.runtime.snapshot()["state_revision"], before)
         self.assertEqual(self.backend.calls, [])
@@ -191,6 +201,23 @@ class CounterTimingRuntimeTests(unittest.TestCase):
         self.runtime.stage_request("modulator_impulse.stop", True)
         wait_state(self.runtime, "RUNNING")
         self.assertEqual(self.runtime.snapshot()["counter_timing_stop_required"], [6])
+
+    def test_fractional_selector_release_latch_uses_source_quotient(self):
+        for selector, required in ((2.9, [0]), (3.1, [0, 1]), (16.9, [0, 1, 7])):
+            self.runtime.configure_counter_timing(bank(selector), True)
+            wait_state(self.runtime, "RUNNING")
+            self.assertEqual(self.runtime.snapshot()["counter_timing_stop_required"], required)
+        self.assertTrue(all(call[0][0] == "timing" for call in self.backend.calls))
+        self.assertEqual([call[0][1][32] for call in self.backend.calls], [2.9, 3.1, 16.9])
+
+    def test_invalid_fractional_task_never_changes_runtime_or_latch(self):
+        revision = self.runtime.snapshot()["state_revision"]
+        for selector in (5e-324, 0.1, 0.9999999999999999):
+            with self.assertRaises(ValueError):
+                self.runtime.configure_counter_timing(bank(selector), True)
+        self.assertEqual(self.runtime.snapshot()["state_revision"], revision)
+        self.assertEqual(self.runtime.snapshot()["counter_timing_stop_required"], [])
+        self.assertEqual(self.backend.calls, [])
 
     def test_fault_retains_counter_requirement_and_owner(self):
         self.backend.fail_control = True

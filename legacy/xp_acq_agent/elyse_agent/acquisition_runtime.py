@@ -220,6 +220,19 @@ class AcquisitionRuntime(object):
             self._wake.set()
             return True
 
+    @staticmethod
+    def inspect_counter_error_flow(snapshot, returns, handler,
+                                   reset_snapshot=None, publication_snapshot=None,
+                                   error_in=None):
+        """Local data-only proof replay; no owner, backend or runtime mutation.
+
+        This method is not exposed by GUI/HTTP/Tango. Supplied native error
+        clusters must never clear Python exceptions or release NI ownership.
+        """
+        from .acquisition_counter_native_preview import preview_counter_native_flow
+        return preview_counter_native_flow(snapshot, returns, handler,
+                                           reset_snapshot, publication_snapshot, error_in)
+
     def outer_controlled_stop(self, operator_confirmed=False):
         """Explicit seven-phase source command sequence; no release or OFF ACK."""
         if operator_confirmed is not True:

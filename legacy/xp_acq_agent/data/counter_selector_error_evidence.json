@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-10-20",
+  "scope": "Bounded static provenance for Acquisition C10 NI6602 selector arithmetic, helper error wires and caller continuation; not a native execution receipt or driver qualification.",
+  "qualification": "STATIC_SOURCE_TYPES_WIRES_AND_DOCUMENTED_VALUE_TRANSFORMS",
+  "source_pins": {
+    "acquisition_vi": {
+      "path": "C:/dev/ELYSE-ACQ-analysis/offline/extracted/ACQUISITION_VIs/0_ACQ_ELYSE.vi",
+      "sha256": "6FE801E023CF755FBDE89B4AD17854D5FC08447517010C2122E66C9F3DF5C3CF"
+    },
+    "acquisition_xml_archive": {
+      "path": "C:/dev/pyconlyse/legacy/xp_acq_agent/data/source_exports/0_ACQ_ELYSE_XML_sha6fe8.zip",
+      "sha256": "6A518B319B2D35B465DB9AAB557CCA751ACC8B58A600FBA0B8E13771B6EA1527",
+      "diagram_member": "vi_BDHb.xml",
+      "diagram_sha256": "36E2857BF3031A1C7AB5A5BE9C8A0C2FADEB91E32D60A29652F536F7F3DDB5CB",
+      "metadata_member": "vi.xml",
+      "metadata_sha256": "71E0929301A628DB3DB814C1ADF8C679C6AEF1C10416BFAFD139EED636C59AAC"
+    },
+    "matching_external_diagram": {
+      "path": "C:/dev/ELYSE-ACQ-analysis/review_20261015/safeopen_export/0_ACQ_ELYSE_BDHb.xml",
+      "sha256": "36E2857BF3031A1C7AB5A5BE9C8A0C2FADEB91E32D60A29652F536F7F3DDB5CB"
+    },
+    "helper_vi": {
+      "path": "C:/dev/ELYSE-ACQ-analysis/review_20261015/native_subvi_originals/1_ACQ_WRITE_NI6602.vi",
+      "sha256": "4DB9022F837C5629DE670347D00C39285ACEAA61FE7CCA592D99D6F67713E211"
+    },
+    "helper_xml_archive": {
+      "path": "C:/dev/pyconlyse/legacy/xp_acq_agent/data/source_exports/ACQ_17_original_members_XML_20261001.zip",
+      "sha256": "645694B964BA594F0563DAE37E67E49A03A0B57B4BA6C2A0639C916717F04A2F",
+      "diagram_member": "1_ACQ_WRITE_NI6602.vi/vi_BDHb.xml",
+      "diagram_sha256": "9973BC934A351E8B3969D5FD6D8CAC67139285F0589D57A0BBAC1AE01D4C4FBB"
+    },
+    "cached_ni_numeric_documentation": {
+      "path": "C:/dev/ELYSE-ACQ-analysis/converter/lvkit/src/lvkit/data/vilib/numeric.json",
+      "sha256": "B57A8B31AD706D339CE8FE4CDD11E14AD30340759F29B4E04C4EBB9C91B07B5F",
+      "entry": "Quotient & Remainder Function",
+      "recorded_primary_url": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/quotient-remainder.html",
+      "current_network_fetch_performed": false
+    },
+    "cached_ni_clear_errors_help": {
+      "path": "C:/dev/pyconlyse/Supervision/integration_analysis/orchestrator/primitive_followup_20261008/ni_help/Clear_Errors.html",
+      "sha256": "8C7141DADF017337603DA943292C804E59806B181E98881B32FD8F06075CA7F1"
+    },
+    "cached_ni_simple_handler_help": {
+      "path": "C:/dev/pyconlyse/Supervision/integration_analysis/orchestrator/primitive_followup_20261008/ni_help/Simple_Error_Handler.html",
+      "sha256": "208A0F3EE5F3B768165B6E06AB16837043BF0B2FA64B403D5F018C8262EBC7EC"
+    },
+    "prior_local_handler_source_proof": {
+      "path": "C:/dev/pyconlyse/Supervision/integration_analysis/simple_error_handler_stop_20261017/RESULT.json",
+      "sha256": "3AA7E2E8130356339F93D0A7E30747DD539C63DCC56FA70B1B0386359274B09F",
+      "scope": "Existing Supervision source review and local library extraction; only the inspected handler library semantics are reused here, not Supervision caller wiring."
+    },
+    "inspected_local_simple_handler": {
+      "installed_library": "C:/Program Files (x86)/National Instruments/LabVIEW 2020/vi.lib/Utility/error.llb",
+      "extracted_vi_path": "C:/dev/pyconlyse/Supervision/integration_analysis/simple_error_handler_stop_20261017/library/Simple Error Handler.vi",
+      "sha256": "50DBDF398DE7DE36AF277C30145A23BF1D613D8E6BA62AB13F41160394585073",
+      "diagram_path": "C:/dev/pyconlyse/Supervision/integration_analysis/simple_error_handler_stop_20261017/library/Simple Error Handler_BDHb.xml",
+      "diagram_sha256": "5DB81EAE7B85AB76C95D4E282A5DCCE63ABDAE4238446361A99010875A6E87DE",
+      "metadata_path": "C:/dev/pyconlyse/Supervision/integration_analysis/simple_error_handler_stop_20261017/library/Simple Error Handler.xml",
+      "metadata_sha256": "19A950E8789AAA8AF3BC33D17C4AAF1ADACDB6FB3EE0FC1687E5D02E38972342",
+      "identity_with_deployed_xp_labview_2012_library_qualified": false
+    }
+  },
+  "selector_arithmetic": {
+    "bank": "C1011NI6602",
+    "local_param_index": 39,
+    "selector_field": 32,
+    "selector_unbundle_uid": "22699",
+    "selector_terminal_uid": "24075",
+    "source_guard": "0.0 < n < 17.0",
+    "guard_scope": "The DBL comparisons admit fractional values; integer-only admission was not a source interlock.",
+    "true_sequence_uid": "23633",
+    "helper_frame_uid": "23641",
+    "decrement_node_uid": "15887",
+    "quotient_remainder_node_uid": "26175",
+    "multiply_node_uid": "22328",
+    "increment_node_uid": "22884",
+    "task_index_array_node_uid": "21122",
+    "timing_index_array_node_uid": "21053",
+    "quotient_rule": "floor((DBL(n) - 1.0) / 2.0)",
+    "quotient_output_representation": "NumFloat64 with an integer value before Index Array input coercion",
+    "delay_index_rule": "2.0 * quotient",
+    "width_index_rule": "2.0 * quotient + 1.0",
+    "i32_coercion_scope": "All three source index inputs receive bounded integral-valued DBLs. No fractional tie, saturation, truncation or nearest-integer rule is needed at these inputs.",
+    "quotient_remainder_remainder_output_wired": false,
+    "divisor_constant": {"terminal_uid": "27138", "dbl_hex": "4000000000000000", "value": 2.0},
+    "multiplier_constant": {"terminal_uid": "23152", "dbl_hex": "4000000000000000", "value": 2.0},
+    "type_resolution": {
+      "metadata_source": "source_pins.acquisition_xml_archive.metadata_member",
+      "dthp_index_shift": 6033,
+      "consolidated_rule": "IndexShift + heap_type_id - 1",
+      "flat_rule": "VCTP/TopLevel entry matching consolidated Index supplies zero-based FlatTypeID",
+      "terminal_types": [
+        {"terminal_uid": "24075", "heap_type_id": 3931, "consolidated_type_id": 9963, "flat_type_id": 776, "representation": "NumFloat64"},
+        {"terminal_uid": "23009", "heap_type_id": 3863, "consolidated_type_id": 9895, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "23012", "heap_type_id": 3864, "consolidated_type_id": 9896, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "26193", "heap_type_id": 3865, "consolidated_type_id": 9897, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "26197", "heap_type_id": 3866, "consolidated_type_id": 9898, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "26200", "heap_type_id": 3867, "consolidated_type_id": 9899, "flat_type_id": 742, "representation": "NumFloat64"},
+        {"terminal_uid": "26203", "heap_type_id": 3868, "consolidated_type_id": 9900, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "22384", "heap_type_id": 3858, "consolidated_type_id": 9890, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "22410", "heap_type_id": 3859, "consolidated_type_id": 9891, "flat_type_id": 742, "representation": "NumFloat64"},
+        {"terminal_uid": "22423", "heap_type_id": 3860, "consolidated_type_id": 9892, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "22890", "heap_type_id": 3861, "consolidated_type_id": 9893, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "22893", "heap_type_id": 3862, "consolidated_type_id": 9894, "flat_type_id": 89, "representation": "NumFloat64"},
+        {"terminal_uid": "21193", "heap_type_id": 3895, "consolidated_type_id": 9927, "flat_type_id": 115, "representation": "NumInt32"},
+        {"terminal_uid": "31347", "heap_type_id": 3898, "consolidated_type_id": 9930, "flat_type_id": 115, "representation": "NumInt32"},
+        {"terminal_uid": "21088", "heap_type_id": 3900, "consolidated_type_id": 9932, "flat_type_id": 115, "representation": "NumInt32"}
+      ]
+    },
+    "wires": [
+      {"signal_uid": "29097", "terminal_uids": ["24075", "5740", "21110", "28879"], "role": "selector to guard comparisons and case tunnel"},
+      {"signal_uid": "26512", "terminal_uids": ["28856", "23012"], "role": "selector tunnel to Decrement"},
+      {"signal_uid": "23266", "terminal_uids": ["23009", "26203"], "role": "Decrement to Q&R dividend"},
+      {"signal_uid": "27149", "terminal_uids": ["27138", "26200"], "role": "2.0 divisor"},
+      {"signal_uid": "22476", "terminal_uids": ["26193", "22423", "21193"], "role": "integral-valued quotient to multiplier and I32 task index"},
+      {"signal_uid": "23156", "terminal_uids": ["23152", "22410"], "role": "2.0 multiplier"},
+      {"signal_uid": "21099", "terminal_uids": ["22384", "31347", "22893"], "role": "2*q to I32 delay index and Increment"},
+      {"signal_uid": "22899", "terminal_uids": ["22890", "21088"], "role": "2*q+1 to I32 width index"},
+      {"signal_uid": "21199", "terminal_uids": ["21189", "23671"], "role": "selected task to helper input7"},
+      {"signal_uid": "1397", "terminal_uids": ["31344", "23677"], "role": "selected delay to helper input9"},
+      {"signal_uid": "18960", "terminal_uids": ["21083", "23680"], "role": "selected width to helper input10"}
+    ],
+    "representative_cases": [
+      {"selector": 0.0, "source_guard": false, "counter": null, "delay_index": null, "width_index": null, "task_in_bounds": false},
+      {"selector": 0.1, "source_guard": true, "counter": -1, "delay_index": -2, "width_index": -1, "task_in_bounds": false},
+      {"selector": 0.9999999999999999, "source_guard": true, "counter": -1, "delay_index": -2, "width_index": -1, "task_in_bounds": false},
+      {"selector": 1.0, "source_guard": true, "counter": 0, "delay_index": 0, "width_index": 1, "task_in_bounds": true},
+      {"selector": 1.5, "source_guard": true, "counter": 0, "delay_index": 0, "width_index": 1, "task_in_bounds": true},
+      {"selector": 2.5, "source_guard": true, "counter": 0, "delay_index": 0, "width_index": 1, "task_in_bounds": true},
+      {"selector": 2.9, "source_guard": true, "counter": 0, "delay_index": 0, "width_index": 1, "task_in_bounds": true},
+      {"selector": 2.9999999999999996, "source_guard": true, "counter": 0, "delay_index": 0, "width_index": 1, "task_in_bounds": true},
+      {"selector": 3.0, "source_guard": true, "counter": 1, "delay_index": 2, "width_index": 3, "task_in_bounds": true},
+      {"selector": 15.9, "source_guard": true, "counter": 7, "delay_index": 14, "width_index": 15, "task_in_bounds": true},
+      {"selector": 16.9, "source_guard": true, "counter": 7, "delay_index": 14, "width_index": 15, "task_in_bounds": true},
+      {"selector": 17.0, "source_guard": false, "counter": null, "delay_index": null, "width_index": null, "task_in_bounds": false}
+    ],
+    "out_of_range_boundary": {
+      "source_admitted_interval": "0 < n < 1",
+      "projected_task_index": -1,
+      "projected_delay_index": -2,
+      "projected_width_index": -1,
+      "native_default_task_qualified": false,
+      "native_out_of_range_timing_values_qualified": false,
+      "native_driver_return_for_default_task_qualified": false,
+      "python_negative_indexing_equivalent": false,
+      "execution_policy": "Reject out-of-range projected task before any driver callback; preserve source_guard=true in the pure projection. This is an additional Python policy, not a saved VI guard."
+    }
+  },
+  "native_helper_error_flow": {
+    "helper_name": "1_ACQ_WRITE_NI6602.vi",
+    "poll_property_uid": "3202",
+    "poll_property_code": 6414,
+    "poll_property": "CO.PulseDone",
+    "loop_uid": "3129",
+    "poll_inputs": {
+      "task_source_terminal": "2758",
+      "task_ordinary_tunnel_terminals": ["3135", "3138"],
+      "error_source_terminal": "13028",
+      "error_ordinary_tunnel_terminals": ["184", "180"],
+      "shift_register_or_error_feedback": false,
+      "rule": "Each iteration receives the original task/error, not the previous poll return."
+    },
+    "poll_exit": {
+      "predicate": "PulseDone == True OR zero_based_i > 20",
+      "maximum_polls_when_done_false": 22,
+      "wait_uid": "3194",
+      "requested_wait_ms_each_iteration_including_final": 1,
+      "error_status_part_of_exit_predicate": false,
+      "wait_and_property_native_relative_order_proven": false,
+      "hard_22ms_deadline_proven": false
+    },
+    "last_poll_routes": {
+      "task": ["3207", "3146", "3143", "2983"],
+      "error": ["3213", "3134", "3131", "3016"],
+      "destination_node_uid": "2976",
+      "destination": "DAQmx Stop Task"
+    },
+    "downstream_terminal_routes": [
+      {"from_terminal": "2995", "to_terminal": "3085", "role": "Stop task output to timing Property reference input"},
+      {"from_terminal": "3028", "to_terminal": "334", "role": "Stop error output to Clear Errors309 error input slot4"},
+      {"from_terminal": "316", "to_terminal": "3091", "role": "Clear Errors309 error output slot0 to timing Property3083 error input"},
+      {"from_terminal": "3088", "to_terminal": "3035", "role": "Property reference output to Start3032 task input"},
+      {"from_terminal": "3094", "to_terminal": "3068", "role": "Property error output to Start3032 error input"},
+      {"from_terminal": "3080", "to_terminal": "13111", "role": "Start error output to helper public error output"}
+    ],
+    "property_node_uid": "3083",
+    "ordered_property_codes": [664, 4465, 4457],
+    "ordered_property_arguments": ["initial_delay_ticks", "low_ticks", "high_ticks"],
+    "property_row_driver_gating_and_partial_side_effects_qualified": false,
+    "native_call_error_in_short_circuit_inferred": false,
+    "clear_errors": {
+      "node_uid": "309",
+      "connected_connector_slots": [0, 4],
+      "specific_error_code_input_wired": false,
+      "documented_unwired_default": 0,
+      "documented_profile_result": {"status": false, "code": 0, "source": ""},
+      "scope": "Documented value transform for default code0 clears any incoming cluster; it does not clear tasks, native driver state, Python exceptions or uncertainty about prior effects.",
+      "deployed_xp_binary_identity_qualified": false,
+      "replay_requires_explicit_supplied_return": true
+    }
+  },
+  "caller_error_handler_and_continuation": {
+    "helper_call_uid": "23634",
+    "helper_error_output_terminal": "23650",
+    "error_wire_uid": "21671",
+    "handler_call_uid": "22439",
+    "handler_name": "Simple Error Handler.vi",
+    "handler_error_input_terminal": "22517",
+    "handler_error_input_slot": 9,
+    "handler_dialog_mode_input_terminal": "22514",
+    "handler_dialog_mode_input_slot": 8,
+    "handler_dialog_mode_input_wired": false,
+    "handler_outputs_consumed": false,
+    "ordered_frame_uids_after_normal_return": ["23641", "22979", "1507"],
+    "selector_reset": {
+      "frame_uid": "22979",
+      "read_local_uid": "23233",
+      "write_local_uid": "23248",
+      "field": 32,
+      "value": -1.0,
+      "snapshot_same_as_helper_dispatch_read": false
+    },
+    "publication": {
+      "frame_uid": "1507",
+      "read_local_uid": "5036",
+      "publication_uid": "21449",
+      "uri": "ni.var.psp://10.20.30.2/SUPERVISION/C1011NI6602",
+      "snapshot_same_as_selector_reset_read": false
+    },
+    "normal_handler_return_required_for_frame_completion": true,
+    "returned_error_status_gates_reset_or_publication": false,
+    "modal_no_response": "Frame0 cannot complete; no ordinary reset/publication continuation is inferred.",
+    "top_level_abort": "Ordinary sequence continuation is interrupted; no orderly cleanup or resource release is inferred.",
+    "local_labview_2020_profile": {
+      "unwired_public_mode_default": 1,
+      "default_mode_label": "OK message",
+      "default_response_buttons": ["Continue"],
+      "default_stop_button_present": false,
+      "public_to_core_mode_map": [[0, 0], [1, 1], [2, 2], [3, 4], [4, 5]],
+      "public_mode_with_continue_stop_buttons": [2, 4],
+      "continue_semantics": "Return control without repairing/retrying the failed operation or clearing the returned error cluster.",
+      "stop_semantics_for_modes_2_and_4": "Invoke the LabVIEW Stop primitive and abort the calling top-level hierarchy, not a Boolean stop flag or a guaranteed orderly cleanup path.",
+      "core_mode_3": "Separate automatic error-handling mode; source suppresses the Stop primitive there. Do not confuse public mode3 with CORE mode3."
+    },
+    "deployed_xp_labview_2012_profile": {
+      "binary_identity_qualified": false,
+      "default_mode_qualified": false,
+      "physical_dialog_response_qualified": false,
+      "no_local_2020_to_xp_equivalence_claim": true
+    }
+  },
+  "python_transfer_boundaries": {
+    "fractional_in_bounds_route": "Source-derived arithmetic is transferable for finite DBL selectors1<=n<17; selected task remains C10 ctr0..7 and timing fields remain0..15.",
+    "nonfinite_and_nondbl_rejection": "Additional Python validation policy, not an inferred native guard.",
+    "native_error_flow_model": "Every DAQmx/property/Clear Errors boundary requires an explicit supplied return; an incoming error does not cause invented driver success, pass-through or failure.",
+    "handler_replay": "Normal return, no response and top-level abort are explicit supplied dispositions, not observed deployed XP dialogs.",
+    "effectful_executor_policy": "Python callback exceptions/cancellation fail closed and retain uncertainty/ownership; they are not silently cleared or converted to a guessed Continue response.",
+    "hardware_adapter_added_by_evidence": false,
+    "new_operating_permission_granted": false,
+    "commissioning_or_deployment_qualified": false
+  },
+  "limitations": [
+    "No VI execution, LabVIEW dialog experiment, screen control, hardware command, native task or transport was used for this review.",
+    "No equivalence is claimed for the installed local2020 error library and the deployed XP LabVIEW2012 library.",
+    "Native out-of-range task references, default timing outputs and ensuing driver returns remain unqualified.",
+    "Individual native call error-in gating, row short-circuiting, native task replacement and partially applied property side effects remain supplied boundaries.",
+    "Ordinary tunnels prove per-iteration input identity, not successful completion of a native call or a hard wall-clock deadline.",
+    "A cleared error cluster does not prove successful Stop, a safe physical state, successful timing reconfiguration or releasable resource ownership.",
+    "The helper, selector reset and publication use separate reads; no atomic snapshot, compare/exchange or protection from consuming a newer selector is inferred.",
+    "The external safeopen_export/0_ACQ_ELYSE.xml metadata has a different hash and is deliberately not substituted for the pinned archive metadata."
+  ],
+  "verification_performed": {
+    "source_file_and_archive_member_hashes_checked": true,
+    "selector_types_resolved_from_pinned_archive_metadata": true,
+    "selector_wires_checked_against_pinned_diagram": true,
+    "fractional_examples_evaluated_by_pure_finite_arithmetic": true,
+    "native_error_path_source_audit_received_and_documentation_pins_rechecked": true,
+    "native_vi_or_driver_execution": false,
+    "hardware_access": false,
+    "network_fetch": false,
+    "telemetry_history_written": false,
+    "frozen_evidence_modified": false
+  }
+}
