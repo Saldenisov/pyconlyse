@@ -28,6 +28,7 @@ try {
         "legacy/xp_acq_agent/tests",
         "Supervision/python_reconstruction/tests",
         "tests/unit/test_acq_runtime_health.py",
+        "tests/unit/test_acquisition_runtime_package.py",
         "tests/unit/test_elyse_business_logic_contract.py"
     )
     $selectedTests += Get-ChildItem -Path @(

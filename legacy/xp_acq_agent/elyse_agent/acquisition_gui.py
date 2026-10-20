@@ -16,8 +16,12 @@ def load_configuration(path):
     with open(path, "r") as source:
         config = json.load(source)
     required = {"bind_host", "port", "key_file", "period_seconds", "read_timeout_seconds"}
-    if not required <= set(config) or set(config) - required - {"focal_stop", "control_profile", "ht_shutdown"}:
+    if (not required <= set(config) or set(config) - required
+            - {"focal_stop", "control_profile", "ht_shutdown", "stage_controls_verified", "cooling_trip_verified"}):
         raise ValueError("Invalid acquisition configuration fields")
+    for flag in ("stage_controls_verified", "cooling_trip_verified"):
+        if type(config.get(flag, False)) is not bool:
+            raise ValueError("Explicit Boolean " + flag + " required")
     if config.get("control_profile", "legacy_full") not in CONTROL_PROFILES:
         raise ValueError("Invalid control_profile")
     ht = config.get("ht_shutdown", {})
@@ -242,12 +246,18 @@ def main(entrypoint, argv=None):
         focal_off = (None if profile == "general_only_test" else
                      ChromaFocalStop(focal.get("dll_path", DEFAULT_DLL),
                                     focal.get("resources_verified", False), focal.get("timeout_seconds", 10)))
-        factory = ((lambda: DemoBackend(control_profile=profile)) if args.demo else
+        stage_verified = config.get("stage_controls_verified", False)
+        trip_verified = config.get("cooling_trip_verified", False)
+        factory = ((lambda: DemoBackend(control_profile=profile,
+                                       stage_controls_verified=stage_verified,
+                                       cooling_trip_verified=trip_verified)) if args.demo else
                    lambda: CardBackend(read_timeout=config["read_timeout_seconds"],
                                        focal_off=focal_off, control_profile=profile,
                                        ht_feedback_verified=ht.get("feedback_verified", False),
                                        ht_zero_tolerance_kv=ht.get("zero_tolerance_kv", 0.0),
-                                       ht_zero_timeout=ht.get("timeout_seconds", 10.0)))
+                                       ht_zero_timeout=ht.get("timeout_seconds", 10.0),
+                                       stage_controls_verified=stage_verified,
+                                       cooling_trip_verified=trip_verified))
         runtime = AcquisitionRuntime(factory, period=config["period_seconds"])
         # Binding guards against a second service window before starting a worker.
         server = RuntimeHTTPServer((config["bind_host"], config["port"]), runtime, key)

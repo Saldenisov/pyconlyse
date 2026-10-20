@@ -60,8 +60,32 @@ def business_logic_contract():
                 "http_read_paths": ["/status", "/snapshot"],
                 "http_hardware_commands_enabled": False,
                 "local_operation_implementations": [
-                    "initialize", "general_start", "general_stop", "deinitialize", "request_shutdown"
+                    "initialize", "general_start", "general_stop", "stage_request",
+                    "deinitialize", "request_shutdown"
                 ],
+                "source_stage_execution": {
+                    "module": "legacy/xp_acq_agent/elyse_agent/acquisition_stage_execution.py",
+                    "owner_integration": "AcquisitionRuntime.stage_request -> CardBackend.execute_stage",
+                    "implemented": ["cooling.start", "cooling.stop", "chauffage.start", "chauffage.stop",
+                                    "prema.start", "prema.stop", "relays_ht.start", "relays_ht.stop",
+                                    "modulator.reset"],
+                    "nominal_paths_executable": True,
+                    "default_commissioned": False,
+                    "source_frame_count": 58,
+                    "physical_timing_equivalence": False,
+                    "failure_policy_is_native_equivalent": False,
+                    "psp_publication_replaced_by_bounded_ram": True,
+                    "psp_delivery_acknowledged": False,
+                },
+                "cooling_trip_execution": {
+                    "module": "legacy/xp_acq_agent/elyse_agent/acquisition_cooling_trip.py",
+                    "owner_integration": "after successful raw NI read; no extra NI read",
+                    "source_frames": 7,
+                    "executable": True,
+                    "default_commissioned": False,
+                    "requires_separate_enabled_arm_qualification": True,
+                    "automatically_stops_klystron_stages": False,
+                },
                 "auto_initialize": False,
                 "configuration_default_profile": "legacy_full",
                 "full_general_start_preflights_focal_stop": True,

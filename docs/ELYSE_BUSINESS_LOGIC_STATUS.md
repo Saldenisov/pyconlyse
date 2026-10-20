@@ -18,7 +18,7 @@ or issue NI, serial, PSP or Tango commands.
 | Original Supervision | Saved-source models, display mappings, event fragments and focused lifecycle traces | 39 original VI/XML identities accounted; complete semantic coverage remains false |
 | Pure Python models | Explicit supplied inputs/returns; 16 modulator procedures and 120 frames including nested frames | No stage actuators or native error-handler replacement |
 | Copied LabVIEW telemetry | Latest 27 shared-variable banks through Python 3.4 to Everest | Sequential/non-atomic; transport does not qualify the source data or replace Acquisition |
-| XP GUI server, default port 8771 | Cold IDLE, explicit local initialization, six AI/DI banks, local General Marche/Arrêt, resource release | Not the 27-bank schema; no runtime Chauffage/PREMA/Focales start controls or cooling-trip evaluation |
+| XP GUI server, default port 8771 | Cold IDLE, explicit local initialization, six AI/DI banks, General, nine additional source-stage paths and conditional cooling-trip evaluation on the same owner | New paths default uncommissioned; no new HTTP/Tango commands; Focales/HT starts and full 27-bank parity remain incomplete |
 | Simulator, port 8765 | Signed named procedures, replay and durable intent state | Logical simulation only, not the GUI NI server |
 | Everest Tango/web | Separate read-only views of LabVIEW telemetry and Python runtime; replay/business simulation | No remote NI control route; replay values are not measurements |
 
@@ -40,7 +40,7 @@ The separately reviewed cooling timeout condition is
 `(C4_IN[19] OR C4_IN[38]) AND ((NOT C3_IN[0]) OR (NOT C3_IN[6]))`.
 Its true arm pulses C3 outputs and changes cooling EPS/DPS state. It is not a
 demonstrated automatic klystron-stage shutdown, and the prepared Python NI
-runtime does not execute it. Raw input polarity and physical interlock authority
+runtime now has a separately gated executor for it. Raw input polarity and physical interlock authority
 remain unqualified. See [admission evidence](ELYSE_ACQ_STAGE_ADMISSION_2026-10-19.json)
 and [running-fault evidence](ELYSE_ACQ_RUNNING_FAULT_RESPONSE_2026-10-19.json).
 
@@ -62,7 +62,70 @@ as a claim of full shutdown. No verification flag was relaxed in this audit.
 | NI6071E requested samples/channel | 1000 in three explicit I/O callers | 10, with finite task configuration | Review task timing, trigger, read count and timeout together; 100× is a count ratio, not measured averaging time or precision |
 | Snapshot schema | 27 LabVIEW shared-variable banks | Six input banks, 144 AI + 176 DI | Explicit schema adapter and validation; no guessed missing banks |
 | Read scheduling | Parallel VI loops with asynchronous output writers | Single NI owner; normal reads pause during General procedures and FAULT | Qualify timing and continued fault observation before replacement |
-| Stage/fault logic | Source traces and inert models | No live runtime transfer of remaining stages/cooling guard | Separate reviewed implementation and tests before any activation |
+| Stage/fault logic | Source traces and inert models | Nine additional stage paths and seven cooling-trip frames integrated, default uncommissioned | Remaining Focales/HT/counter/ingress/lifecycle paths and separate hardware qualification |
+
+## Executable stage transfer on 20 October 2026
+
+`AcquisitionRuntime.stage_request()` dispatches the following additional paths
+to `CardBackend.execute_stage()` on the existing NI owner thread. The executor
+consumes the hash-pinned source catalog rather than duplicating its nominal
+constants:
+
+| Paths | Source event indices | Ordered frames |
+| --- | --- | --- |
+| cooling.start / cooling.stop | 3 / 4 | 12 / 7 |
+| chauffage.start / chauffage.stop | 12 / 7 | 7 / 4 |
+| prema.start / prema.stop | 13 / 8 | 8 / 4 |
+| relays_ht.start / relays_ht.stop | 14 / 9 | 8 / 4 |
+| modulator.reset | 11 | 4 |
+
+These are 58 executable nominal frames, not another projection-only catalog.
+Backend callbacks commit complete C3/C4 output banks through the existing owner,
+preserving untouched fields; EPS/DPS are typed local software memory. The saved
+False `NewVal` arms are empty. Source waits, including the extra 150 ms restore
+wait in `cooling.stop`, are retained. Publications retain only the latest RAM
+snapshot per name and explicitly do not acknowledge PSP delivery.
+
+After a successful raw NI read, the same worker can evaluate the source cooling
+condition and execute its seven frames without another NI read. This requires
+both `stage_controls_verified` and `cooling_trip_verified`; both default to
+false in constructors and example configuration. The general-only profile and
+synthetic Demo input source cannot activate this background branch. The deployed
+LV2012 enabled-arm selection still requires independent qualification.
+
+This implementation uses an explicit deterministic writes/publication/wait
+schedule within each native unordered frame. It does not reproduce independent
+VI-loop timing or prove electrical pulse widths. EPS literals never authorize a
+start, and the cooling trip does not invent automatic Chauffage/PREMA/Focales
+shutdown. No remote mutation route or new GUI command button was enabled.
+
+Failure handling is explicit Python policy: starts/reset abort further effects;
+stops attempt remaining source effects and retain every failure. Unfinished
+output pulses are restored to known preprocedure values, including when a
+write may have applied before raising. Failed restorations survive in backend
+memory. Before any later output procedure, those exact fields must be recovered;
+failed recovery blocks subsequent whole-bank writes instead of echoing a held
+start bit. This policy is not claimed as native VI error-path equivalence.
+
+Stage failures keep NI ownership in FAULT. Accepted stop procedures cannot be
+cancelled by close/deinit; General Arrêt can interrupt a start on the same owner.
+Previously set cancellation is cleared only by that owner for an accepted
+recovery, without overwriting a newly queued stop/close. Precommand measurements
+remain stale until a postcommand read. Resource release still requires General
+Arrêt or explicit confirmation that the cabinet was switched off locally.
+
+Remaining transfer is real implementation work: the Focales helper/error-handler
+paths, HT/counter procedures, full shared-variable ingress/publication semantics,
+and original outer-stop/resource/error scheduling. The six-bank and sample-count
+discrepancies remain open. No code was deployed or executed on hardware.
+
+The package builder now includes both execution modules and builds its
+configuration from the committed example, not an ignored site configuration.
+Stage, cooling and Chroma permissions are forced false in generated candidates.
+All three package profiles are checked for complete dependency/file closure,
+manifest hashes, unchanged catalog bytes and absence of keys, telemetry history,
+native drivers or an interpreter. A packaged cold runtime was also imported and
+started in IDLE on actual Python 3.4 with native-library loading denied.
 
 ## Supervision corrections and remaining work
 
@@ -119,6 +182,17 @@ be treated as interchangeable. HMAC proves response authentication, not an
 immutable deployed build identity. See [HT readiness evidence](ELYSE_PYTHON_HT_READINESS_2026-10-19.json).
 
 ## Software verification
+
+The 20 October 2026 nine-stage/cooling integration passed the offline software
+gate on Python 3.12.14: **3384 passed, no skips, 7300 warnings, 207.46 s**, with
+the actual Python 3.4 process lane enabled. Its focused runtime/General/HT/stage
+suites passed **208 tests on actual Python 3.4.4 in 3.307 s**, with external
+connections and native-library loading denied and no NI/VISA module loaded.
+These suites overlap the offline gate; their counts must not be added together.
+Four package/profile checks, including a packaged Python 3.4 cold start, passed;
+after strengthening the feedback reset across all package profiles, those four
+checks were repeated successfully (1.29 s). No frontend source changed in this
+integration, and no new frontend or hardware acceptance result is claimed.
 
 Verification on 19 October 2026 used the isolated review worktree, not the
 running lab services:

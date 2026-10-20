@@ -130,8 +130,30 @@ class BusinessLogicContractTests(unittest.TestCase):
         close = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_backend.py", "CardBackend", "close")
         attrs = [node.func.attr for node in ast.walk(close)
                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
-        self.assertEqual(attrs, ["close"])
+        self.assertCountEqual(attrs, ["close", "_reset_stage_state"])
         self.assertFalse(self.contract["parity_gaps"]["lifecycle"]["resource_release_is_electrical_off"])
+
+    def test_integrated_stage_paths_and_cooling_remain_separately_uncommissioned(self):
+        runtime = self.contract["layers"]["xp_gui_runtime"]
+        implementation = runtime["source_stage_execution"]
+        paths = literal_assignment(
+            "legacy/xp_acq_agent/elyse_agent/acquisition_stage_execution.py", "SUPPORTED_OPERATIONS")
+        self.assertEqual(implementation["implemented"], list(paths))
+        raw = (ROOT / self.contract["layers"]["pure_acquisition_model"]["catalog"]).read_bytes()
+        catalog = json.loads(raw)["procedures"]
+        self.assertEqual(implementation["source_frame_count"],
+                         sum(len(catalog[path]["frames"]) for path in paths))
+        self.assertTrue(implementation["nominal_paths_executable"])
+        self.assertFalse(implementation["default_commissioned"])
+        self.assertFalse(implementation["psp_delivery_acknowledged"])
+        self.assertTrue(runtime["cooling_trip_execution"]["executable"])
+        self.assertFalse(runtime["cooling_trip_execution"]["default_commissioned"])
+        backend = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_backend.py",
+                               "CardBackend", "__init__")
+        defaults = dict(zip([arg.arg for arg in backend.args.args][-len(backend.args.defaults):],
+                            backend.args.defaults))
+        for flag in ("stage_controls_verified", "cooling_trip_verified"):
+            self.assertIs(ast.literal_eval(defaults[flag]), False)
 
     def test_source_hash_matches_supervision_adapter_not_deployment(self):
         expected = literal_assignment("web/backend/elyse_supervision_service.py", "SOURCE_SHA256")

@@ -13,6 +13,7 @@ MODULES = (
     "acquisition_ht_shutdown.py",
     "hardware_plan.py", "input_tasks.py", "transforms.py", "errors.py", "chroma_focal_stop.py",
     "acquisition_stage_model.py",
+    "acquisition_stage_execution.py", "acquisition_cooling_trip.py",
 )
 DATA = ("calibration_map.csv", "ni6602_timing.csv", "modulator_stage_catalog.json")
 
@@ -26,26 +27,34 @@ def build(output, root=None, control_profile="legacy_full"):
     if output.exists():
         raise ValueError("Use a new package output directory")
     paths = [Path("acquisition_server.pyw"), Path("config.acquisition.json")]
+    # A clean checkout has the reviewed template, never the private/site
+    # configuration. Packaging must not silently inherit live permissions.
+    config_template = source / "config.acquisition.example.json"
     paths += [Path("elyse_agent") / name for name in MODULES]
     paths += [Path("data") / name for name in DATA]
     for path in paths:
-        if not (source / path).is_file():
+        input_path = config_template if path.as_posix() == "config.acquisition.json" else source / path
+        if not input_path.is_file():
             raise ValueError("Missing package input: " + str(path))
     output.mkdir(parents=True)
     records = []
     for relative in paths:
         target = output / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source / relative, target)
+        input_path = config_template if relative.as_posix() == "config.acquisition.json" else source / relative
+        shutil.copy2(input_path, target)
         if relative.as_posix() == "config.acquisition.json":
             # Pin both profiles explicitly: the full candidate must not inherit
             # a commissioning subset from a future source-config change.
             config = json.loads(target.read_text(encoding="utf-8"))
             config["control_profile"] = control_profile
-            if control_profile == "extended_ht_stop":
-                # No uncommissioned feedback claim is packaged as a permit.
-                config["ht_shutdown"] = dict(feedback_verified=False,
-                                             zero_tolerance_kv=0.0, timeout_seconds=10.0)
+            config["stage_controls_verified"] = False
+            config["cooling_trip_verified"] = False
+            config.setdefault("focal_stop", {})["resources_verified"] = False
+            # No uncommissioned feedback claim is packaged as a permit, even
+            # in a profile where that extension currently remains unused.
+            config["ht_shutdown"] = dict(feedback_verified=False,
+                                         zero_tolerance_kv=0.0, timeout_seconds=10.0)
             target.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
         records.append(dict(path=relative.as_posix(), sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
     manifest = dict(schema_version=1, python="3.4", driver_wrapper="nidaqmx==0.5.7",
@@ -56,6 +65,8 @@ def build(output, root=None, control_profile="legacy_full"):
                                         else "source_event_6_all_17_frames"),
                     general_stop_includes_ht_supply_stop=control_profile == "extended_ht_stop",
                     ht_feedback_commissioning_required=control_profile == "extended_ht_stop",
+                    source_stage_paths_implemented=9, source_stage_controls_default_enabled=False,
+                    cooling_trip_default_enabled=False,
                     initialized_hardware_during_packaging=False, secret_files_included=False,
                     telemetry_storage="ram_latest", files=records,
                     limitations=["Not the full LabVIEW business/safety state machine",
@@ -73,7 +84,8 @@ def build(output, root=None, control_profile="legacy_full"):
                                  "Chroma OFF native adapter has not been commissioned on hardware",
                                  "Source General Arret does not command separate HT-supply stop C4[19] or cooling stop",
                                  "Python extended_ht_stop adds an8-kV/zero-readback HT preamble; not source-identical; feedback permission defaults False",
-                                 "16-stage static catalog/model is non-actuating and does not enable additional GUI/HTTP controls"])
+                                 "Nine additional source-stage paths and cooling-trip execution require separate commissioning; disabled in this package",
+                                 "No additional stage GUI buttons or HTTP/Tango mutation routes"])
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     archive = output.with_suffix(".zip")
     if archive.exists():
