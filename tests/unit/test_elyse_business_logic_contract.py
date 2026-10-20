@@ -194,7 +194,7 @@ class BusinessLogicContractTests(unittest.TestCase):
                             backend.args.defaults))
         for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
                      "focal_controls_verified", "counter_controls_verified",
-                     "ht_voltage_controls_verified", "outer_stop_verified"):
+                     "counter_timing_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified"):
             self.assertIs(ast.literal_eval(defaults[flag]), False)
 
     def test_original_xml_archive_is_external_evidence_not_claimed_bundled(self):
@@ -240,6 +240,77 @@ class BusinessLogicContractTests(unittest.TestCase):
                     "releases_resources"):
             self.assertFalse(implementation[key], key)
 
+    def test_counter_timing_contract_preserves_source_routing_conversion_and_reads(self):
+        path = "legacy/xp_acq_agent/elyse_agent/acquisition_counter_timing.py"
+        implementation = self.contract["layers"]["xp_gui_runtime"]["source_counter_timing_transfer"]
+        for key, constant in (("logical_bank", "BANK_NAME"), ("local_bank", "BANK_LOCAL"),
+                              ("bank_size", "BANK_SIZE"), ("selector_field", "SELECTOR_INDEX"),
+                              ("source_helper_sha256", "SOURCE_HELPER_SHA256")):
+            self.assertEqual(implementation[key], literal_assignment(path, constant))
+        self.assertEqual(implementation["source_selector_guard"], "0 < n < 17")
+        self.assertEqual(implementation["proved_integer_selectors"], [1, 16])
+        self.assertEqual(implementation["physical_counter_mapping"], "q = (n - 1) // 2; C10 ctr0..7")
+        self.assertEqual(implementation["delay_field_mapping"], "2 * q")
+        self.assertEqual(implementation["width_field_mapping"], "2 * q + 1")
+        self.assertIn("saturating I32, ties to even", implementation["timing_conversion"])
+        self.assertIn("low 32 bits as U32", implementation["timing_conversion"])
+        self.assertEqual(implementation["property_codes_in_order"],
+                         list(literal_assignment(path, "PROPERTY_CODES")))
+        limit = literal_assignment(path, "POLL_LIMIT_INDEX")
+        self.assertEqual(implementation["pulse_done_or_iteration_greater_than"], limit)
+        self.assertEqual(implementation["maximum_polls_if_done_false"], limit + 2)
+        self.assertEqual(implementation["poll_wait_ms_including_final_iteration"], 1)
+        self.assertEqual(implementation["independent_bank_reads"], 3)
+        self.assertEqual(implementation["selector_reset_value"], -1.0)
+        self.assertTrue(implementation["publication_uses_independently_reread_bank"])
+        self.assertEqual(implementation["publication_transport"], "LOCAL_RAM_REPLACEMENT_NOT_PSP")
+        self.assertTrue(implementation["nominal_path_executable"])
+        for key in ("selects_c11", "fractional_selector_routing_qualified",
+                    "conversion_is_driver_acceptance_or_operating_permit",
+                    "poll_limit_is_wall_clock_deadline", "atomic_snapshot_or_compare_exchange",
+                    "psp_delivery_acknowledged", "automatic_property_retry_or_rollback",
+                    "completion_is_physical_ack", "releases_resources",
+                    "native_error_or_dialog_equivalence", "native_timing_equivalence"):
+            self.assertFalse(implementation[key], key)
+        self.assertTrue(implementation["configuration_ambiguity_blocks_starts"])
+        gap = self.contract["parity_gaps"]["counter_timing_native_integration"]
+        self.assertTrue(gap["local_source_path_transferred"])
+        self.assertTrue(all(value is False for key, value in gap.items()
+                            if key != "local_source_path_transferred"))
+
+    def test_counter_timing_release_latch_covers_every_retimed_counter_not_only_3_4(self):
+        implementation = self.contract["layers"]["xp_gui_runtime"]["source_counter_timing_transfer"]
+        release = implementation["release_latch"]
+        self.assertEqual(release["snapshot_key"], "counter_timing_stop_required")
+        self.assertTrue(release["tracks_every_retimed_counter"])
+        self.assertTrue(release["latches_backend_dispatch_not_queue_admission"])
+        self.assertEqual(release["legacy_general_stop_acknowledges"], [])
+        self.assertEqual(release["extended_general_or_outer_stop_acknowledges"], [3, 4])
+        self.assertEqual(release["impulsion_stop_acknowledges"], [3, 4])
+        self.assertTrue(release["other_counters_require_explicit_electrical_off_confirmation"])
+        self.assertFalse(release["command_stop_ack_is_physical_off"])
+        configure = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_runtime.py",
+                                 "AcquisitionRuntime", "configure_counter_timing")
+        def latch_additions(method):
+            return [node for node in ast.walk(method) if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute) and node.func.attr == "add"
+                    and isinstance(node.func.value, ast.Attribute)
+                    and node.func.value.attr == "_counter_timing_stop_required"]
+
+        self.assertEqual(latch_additions(configure), [])
+        owner = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_runtime.py",
+                             "AcquisitionRuntime", "_run")
+        additions = latch_additions(owner)
+        self.assertEqual(len(additions), 1)
+        self.assertEqual(ast.dump(additions[0].args[0]),
+                         ast.dump(ast.parse('decode_counter_bank(counter_timing_command)["counter"]',
+                                            mode="eval").body))
+        callbacks = [node for node in ast.walk(owner) if isinstance(node, ast.Call)
+                     and isinstance(node.func, ast.Attribute)
+                     and node.func.attr == "configure_counter_timing"]
+        self.assertEqual(len(callbacks), 1)
+        self.assertLess(additions[0].lineno, callbacks[0].lineno)
+
     def test_outer_stop_counts_and_threshold_are_not_general_event6_or_release(self):
         path = "legacy/xp_acq_agent/elyse_agent/acquisition_outer_stop.py"
         implementation = self.contract["layers"]["xp_gui_runtime"]["source_outer_controlled_stop"]
@@ -276,7 +347,7 @@ class BusinessLogicContractTests(unittest.TestCase):
         config = json.loads((ROOT / "legacy/xp_acq_agent/config.acquisition.example.json").read_text())
         flags = set()
         for section in ("source_impulsion_execution", "source_ht_voltage_transfer",
-                        "source_outer_controlled_stop"):
+                        "source_outer_controlled_stop", "source_counter_timing_transfer"):
             implementation = runtime[section]
             self.assertFalse(implementation["default_commissioned"])
             self.assertTrue(implementation["local_only"])
@@ -284,9 +355,10 @@ class BusinessLogicContractTests(unittest.TestCase):
             flag = implementation["commissioning_flag"]
             self.assertIs(config[flag], False)
             flags.add(flag)
-        self.assertEqual(flags, {"counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified"})
+        self.assertEqual(flags, {"counter_controls_verified", "counter_timing_controls_verified",
+                                 "ht_voltage_controls_verified", "outer_stop_verified"})
         self.assertFalse(runtime["http_hardware_commands_enabled"])
-        for method in ("execute_impulsion", "set_ht_voltage", "outer_controlled_stop"):
+        for method in ("execute_impulsion", "configure_counter_timing", "set_ht_voltage", "outer_controlled_stop"):
             adapter = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_source_controls.py",
                                    "SourceControls", method)
             called = [node.func.attr for node in ast.walk(adapter) if isinstance(node, ast.Call)
@@ -303,6 +375,17 @@ class BusinessLogicContractTests(unittest.TestCase):
         self.assertEqual(implementation["counter_completion_source_property"], "CO.PulseDone (6414)")
         self.assertFalse(implementation["task_is_task_done_is_pulse_done"])
         self.assertTrue(implementation["counter_property_result_requires_exact_bool"])
+        writer = class_method(path, "LegacyCardTasks", "write_counter_ticks")
+        properties = [node.targets[0].attr for node in writer.body if isinstance(node, ast.Assign)
+                      and len(node.targets) == 1 and isinstance(node.targets[0], ast.Attribute)]
+        self.assertEqual(properties, implementation["counter_tick_properties_in_order"])
+        self.assertTrue(implementation["counter_tick_write_validates_all_u32_before_first_write"])
+        self.assertTrue(implementation["counter_tick_property_failure_retains_owner"])
+        self.assertFalse(implementation["counter_tick_write_automatically_manages_lifecycle"])
+        lifecycle_calls = {node.func.attr for node in ast.walk(writer) if isinstance(node, ast.Call)
+                           and isinstance(node.func, ast.Attribute)}
+        self.assertFalse(lifecycle_calls & {"start", "stop", "close", "sleep", "is_task_done",
+                                          "read_counter_pulse_done"})
         factory = next(node for node in tree(path).body if isinstance(node, ast.FunctionDef)
                        and node.name == "create_legacy_card_tasks")
         two_cards_loop = next(node for node in ast.walk(factory)

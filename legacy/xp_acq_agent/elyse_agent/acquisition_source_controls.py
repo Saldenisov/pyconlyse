@@ -27,9 +27,15 @@ class SourceControls(object):
         self._pending_counter_stops = set()
         self.last_impulsion = self.last_ht_command = self.last_outer_stop = None
         self.ht_command_uncertain = False
+        self._counter_configuration_uncertain = set()
+        self.commanded_counter_ticks = {}
+        self._counter_timing_bank = None  # Explicit supplied local39 image only.
+        self.last_counter_timing = self.counter_timing_publication = None
 
     def _source_counter_start(self, number):
         self._ensure_focal_quiescent()
+        if number in self._counter_configuration_uncertain:
+            raise RuntimeError("Counter timing uncertain: qualified reconciliation required before restart")
         self._pending_counter_stops.add(number)  # A failing call may have applied.
         self.owner.start_counter(number)
         if number not in self.started_counters:
@@ -64,7 +70,7 @@ class SourceControls(object):
         self._stage_require_initialized()
         self._ensure_focal_quiescent()
         if retry_counters:
-            self._require_known_ht_command()
+            self._require_known_source_commands()
         if retry_counters and any(self.commanded_digital["C4_DIO96_DO"][i] is not False for i in (0, 2)):
             raise RuntimeError("Release unconfirmed General/RAZ pulse before further source energy commands")
         if retry_counters:
@@ -83,6 +89,62 @@ class SourceControls(object):
     def _require_known_ht_command(self):
         if self.ht_command_uncertain:
             raise RuntimeError("Ambiguous C9 write: retained command is not current; qualified reconciliation required")
+
+    def _require_known_source_commands(self):
+        self._require_known_ht_command()
+        if self._counter_configuration_uncertain:
+            raise RuntimeError("Ambiguous counter timing properties: qualified reconciliation required")
+
+    def _source_counter_timing_properties(self, number, initial, low, high):
+        self._ensure_focal_quiescent()
+        # A property callback may partially apply before raising. Never claim
+        # the previous three-property image still describes this channel.
+        self._counter_configuration_uncertain.add(number)
+        self.owner.write_counter_ticks(number, initial, low, high)
+        self.commanded_counter_ticks[number] = dict(
+            initial_delay_ticks=initial, low_ticks=low, high_ticks=high)
+        self._counter_configuration_uncertain.discard(number)
+
+    def configure_counter_timing(self, snapshot, cancel, operator_confirmed=False):
+        from .acquisition_counter_timing import (
+            decode_counter_bank, execute_counter_timing, validate_counter_bank,
+        )
+        snapshot = validate_counter_bank(snapshot)
+        request = decode_counter_bank(snapshot)
+        if operator_confirmed is not True:
+            raise ValueError("Explicit local counter timing confirmation required")
+        if request is None:
+            return False
+        self._source_preflight("counter_timing_controls_verified", True)
+        self._counter_timing_bank = snapshot
+        self.procedure = dict(name="counter.timing", state="EXECUTING", hardware_acknowledged=False)
+
+        def read_bank():
+            return self._counter_timing_bank
+
+        def write_bank(values):
+            self._counter_timing_bank = validate_counter_bank(values)
+
+        def publish(values):
+            self.counter_timing_publication = dict(
+                name="C1011NI6602", values=validate_counter_bank(values),
+                transport="LOCAL_RAM_REPLACEMENT_NOT_PSP", psp_delivered=False,
+                hardware_acknowledged=False, physical_readback=False)
+
+        try:
+            result = execute_counter_timing(
+                read_bank, write_bank, publish, self.owner.read_counter_pulse_done,
+                self._source_counter_stop, self._source_counter_timing_properties,
+                self._source_counter_start, cancel.wait, cancel.is_set)
+        except Exception as error:
+            self._retain_control_failure(error)
+            self.last_counter_timing = copy.deepcopy(self.procedure.get("report"))
+            if isinstance(self.last_counter_timing, dict):
+                self._pending_counter_stops.update(self.last_counter_timing.get("pending_counter_stops", ()))
+            raise
+        self.last_counter_timing = copy.deepcopy(result)
+        self.procedure.update(state="SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK", report=result)
+        return result
 
     def _source_commit_analog(self, group, values):
         if group == "C9NI6703":
@@ -224,6 +286,12 @@ class SourceControls(object):
         return dict(source_scalars=copy.deepcopy(self._source_scalars),
                     pending_counter_stops=sorted(self._pending_counter_stops),
                     ht_command_uncertain=self.ht_command_uncertain,
+                    counter_configuration_uncertain=sorted(self._counter_configuration_uncertain),
+                    commanded_counter_ticks=copy.deepcopy(self.commanded_counter_ticks),
+                    counter_ticks_interpretation="Last successful property callbacks; not physical timing readback",
+                    counter_timing_local_image=self._counter_timing_bank,
+                    counter_timing_publication=copy.deepcopy(self.counter_timing_publication),
+                    last_counter_timing=copy.deepcopy(self.last_counter_timing),
                     last_impulsion=copy.deepcopy(self.last_impulsion),
                     last_ht_command=copy.deepcopy(self.last_ht_command),
                     last_outer_stop=copy.deepcopy(self.last_outer_stop),

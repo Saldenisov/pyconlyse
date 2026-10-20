@@ -307,7 +307,7 @@ class _StageState(object):
             raise RuntimeError("General-only profile forbids other stage commands")
         self._stage_require_initialized()
         if operation is not None and operation.endswith(".start"):
-            require_known_ht = getattr(self, "_require_known_ht_command", None)
+            require_known_ht = getattr(self, "_require_known_source_commands", None)
             if require_known_ht is not None:
                 require_known_ht()
         if (getattr(self, "_stage_simulated", True) is False
@@ -415,7 +415,8 @@ class CardBackend(SourceControls, _StageState):
                  stage_controls_verified=False, cooling_trip_verified=False,
                  ht_controls_verified=False, focal_controls_verified=False,
                  focal_command=None, counter_controls_verified=False,
-                 ht_voltage_controls_verified=False, outer_stop_verified=False):
+                 ht_voltage_controls_verified=False, outer_stop_verified=False,
+                 counter_timing_controls_verified=False):
         if not 0 < read_timeout <= 2:
             raise ValueError("read timeout must be in (0, 2] seconds")
         if control_profile not in CONTROL_PROFILES:
@@ -430,7 +431,8 @@ class CardBackend(SourceControls, _StageState):
         self.focal_controls_verified = focal_controls_verified
         for name, value in (("counter_controls_verified", counter_controls_verified),
                             ("ht_voltage_controls_verified", ht_voltage_controls_verified),
-                            ("outer_stop_verified", outer_stop_verified)):
+                            ("outer_stop_verified", outer_stop_verified),
+                            ("counter_timing_controls_verified", counter_timing_controls_verified)):
             if type(value) is not bool:
                 raise ValueError("Exact Boolean source-control commissioning required")
             setattr(self, name, value)
@@ -539,7 +541,7 @@ class CardBackend(SourceControls, _StageState):
             raise RuntimeError("General Marche requires initialized card ownership")
         if operator_confirmed is not True:
             raise ValueError("General Marche confirmation required")
-        self._require_known_ht_command()
+        self._require_known_source_commands()
         self._ensure_focal_quiescent()
         self._retry_source_counter_stops()
         if self.control_profile == "general_only_test":
@@ -814,7 +816,8 @@ class DemoBackend(_StageState):
     def __init__(self, control_profile="legacy_full", stage_controls_verified=False,
                  cooling_trip_verified=False, ht_controls_verified=False,
                  focal_controls_verified=False, focal_command=None, counter_controls_verified=False,
-                 ht_voltage_controls_verified=False, outer_stop_verified=False):
+                 ht_voltage_controls_verified=False, outer_stop_verified=False,
+                 counter_timing_controls_verified=False):
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
@@ -827,7 +830,8 @@ class DemoBackend(_StageState):
         self.focal_controls_verified = focal_controls_verified
         for name, value in (("counter_controls_verified", counter_controls_verified),
                             ("ht_voltage_controls_verified", ht_voltage_controls_verified),
-                            ("outer_stop_verified", outer_stop_verified)):
+                            ("outer_stop_verified", outer_stop_verified),
+                            ("counter_timing_controls_verified", counter_timing_controls_verified)):
             if type(value) is not bool or value is True:
                 raise ValueError("Demo cannot commission NI source controls; use injected offline executors")
             setattr(self, name, False)

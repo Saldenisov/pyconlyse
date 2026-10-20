@@ -19,6 +19,7 @@ from .acquisition_recovery import RecoveryRequired
 from .acquisition_source_controls import IMPULSION_OPERATIONS, validate_ht_command
 from .acquisition_impulsion import ImpulsionExecutionCancelled
 from .acquisition_ht_voltage import HTVoltageCancelled
+from .acquisition_counter_timing import decode_counter_bank, CounterTimingCancelled
 
 
 class AcquisitionRuntime(object):
@@ -48,6 +49,8 @@ class AcquisitionRuntime(object):
         self._ht_supply_stop_required = False
         self._pulse_stop_required = False
         self._ht_command = None
+        self._counter_timing_command = None
+        self._counter_timing_stop_required = set()
         self._stage_command = None
         self._identity = dict(new_runtime_identity() if identity is None else identity)
         if (type(self._identity.get("runtime_protocol_version")) is not int
@@ -193,6 +196,30 @@ class AcquisitionRuntime(object):
             self._wake.set()
             return True
 
+    def configure_counter_timing(self, snapshot, operator_confirmed=False):
+        """Explicit local39 request; no PSP listener or remote timing route."""
+        request = decode_counter_bank(snapshot)
+        if operator_confirmed is not True:
+            raise ValueError("Explicit local counter timing confirmation required")
+        if request is None:
+            return False
+        with self._lock:
+            self._require_recovery_clear()
+            if (self._backend is None or not self._backend.resource_count or self._state != "RUNNING"
+                    or self._pending is not None or self._operation is not None or self._shutdown_requested):
+                raise RuntimeError("Counter timing requires idle existing NI ownership")
+            if (getattr(self._backend, "stage_controls_verified", False) is not True
+                    or getattr(self._backend, "counter_timing_controls_verified", False) is not True
+                    or getattr(self._backend, "control_profile", None) == "general_only_test"):
+                raise RuntimeError("Separate counter timing controls are not commissioned")
+            self._counter_timing_command = snapshot  # Validated immutable tuple.
+            self._pending, self._operation = "counter_timing", "acq.stage.counter_timing.configure"
+            self._state, self._received_at = "EXECUTING", None
+            self._general_stop_required = True
+            self._state_revision += 1
+            self._wake.set()
+            return True
+
     def outer_controlled_stop(self, operator_confirmed=False):
         """Explicit seven-phase source command sequence; no release or OFF ACK."""
         if operator_confirmed is not True:
@@ -200,7 +227,7 @@ class AcquisitionRuntime(object):
         with self._lock:
             self._require_recovery_clear()
             if (self._backend is None or not self._backend.resource_count or self._shutdown_requested
-                    or self._pending not in (None, "general_start", "stage", "ht_voltage")
+                    or self._pending not in (None, "general_start", "stage", "ht_voltage", "counter_timing")
                     or self._state not in ("RUNNING", "FAULT", "EXECUTING")
                     or (self._state == "EXECUTING" and self._stop_in_progress(self._operation))):
                 raise RuntimeError("Outer stop requires an existing owner without another stop/cleanup")
@@ -210,6 +237,7 @@ class AcquisitionRuntime(object):
                 raise RuntimeError("Separate outer-stop controls are not commissioned")
             self._cancel.set()  # Interrupt a read/start, not the accepted stop.
             self._stage_command = self._ht_command = None
+            self._counter_timing_command = None
             self._pending, self._operation = "outer_stop", "acq.outer.controlled_stop"
             self._state, self._received_at = "EXECUTING", None
             self._general_stop_required = self._ht_supply_stop_required = True
@@ -236,7 +264,7 @@ class AcquisitionRuntime(object):
             if operator_confirmed is not True:
                 raise ValueError("Explicit local General Arret confirmation required")
             if (self._backend is None or not self._backend.resource_count or self._shutdown_requested
-                    or self._pending not in (None, "general_start", "stage", "ht_voltage")
+                    or self._pending not in (None, "general_start", "stage", "ht_voltage", "counter_timing")
                     or self._state not in ("RUNNING", "FAULT", "EXECUTING")
                     or (self._state == "EXECUTING"
                         and (self._stop_in_progress(self._operation)
@@ -253,6 +281,7 @@ class AcquisitionRuntime(object):
             self._pending = "general_stop"
             self._stage_command = None
             self._ht_command = None
+            self._counter_timing_command = None
             self._wake.set()
             self._state_revision += 1
 
@@ -293,12 +322,15 @@ class AcquisitionRuntime(object):
             raise RuntimeError("HT supply stop is unconfirmed: qualified extended stop or local electrical OFF required")
         if self._pulse_stop_required and electrical_off_confirmed is not True:
             raise RuntimeError("Modulator pulse stops unconfirmed; retain this NI owner")
+        if self._counter_timing_stop_required and electrical_off_confirmed is not True:
+            raise RuntimeError("Retimed counter stops unconfirmed; dedicated stop or local electrical OFF required")
         if self._general_stop_required and electrical_off_confirmed is not True:
             raise RuntimeError("Execute General Arret first, or confirm cabinet switched off locally")
         if electrical_off_confirmed is True:
             self._general_stop_required = False
             self._ht_supply_stop_required = False
             self._pulse_stop_required = False
+            self._counter_timing_stop_required.clear()
 
     def deinitialize(self, electrical_off_confirmed=False):
         with self._lock:
@@ -308,6 +340,7 @@ class AcquisitionRuntime(object):
             self._cancel.set()
             self._state = "DEINITIALIZING"
             self._pending = "close"
+            self._counter_timing_command = None
             self._wake.set()
             self._state_revision += 1
 
@@ -320,6 +353,7 @@ class AcquisitionRuntime(object):
             self._cancel.set()
             self._state = "DEINITIALIZING"
             self._pending = "close"
+            self._counter_timing_command = None
             self._wake.set()
             self._state_revision += 1
 
@@ -345,6 +379,7 @@ class AcquisitionRuntime(object):
                 general_stop_required=self._general_stop_required,
                 ht_supply_stop_required=self._ht_supply_stop_required,
                 pulse_stop_required=self._pulse_stop_required,
+                counter_timing_stop_required=sorted(self._counter_timing_stop_required),
                 procedure=copy.deepcopy(getattr(self._backend, "procedure", None)),
                 control_profile=getattr(self._backend, "control_profile", None),
                 sequence=self._sequence, latest=copy.deepcopy(self._latest),
@@ -363,6 +398,7 @@ class AcquisitionRuntime(object):
                                      cooling_trip_commissioned=getattr(self._backend, "cooling_trip_verified", False) is True,
                                      impulsion_implemented=list(IMPULSION_OPERATIONS),
                                      counter_commissioned=getattr(self._backend, "counter_controls_verified", False) is True,
+                                     counter_timing_commissioned=getattr(self._backend, "counter_timing_controls_verified", False) is True,
                                      ht_voltage_commissioned=getattr(self._backend, "ht_voltage_controls_verified", False) is True,
                                      outer_stop_commissioned=getattr(self._backend, "outer_stop_verified", False) is True,
                                      remote_commands_enabled=False),
@@ -456,6 +492,9 @@ class AcquisitionRuntime(object):
                 ht_command = self._ht_command if pending == "ht_voltage" else None
                 if pending == "ht_voltage":
                     self._ht_command = None
+                counter_timing_command = self._counter_timing_command if pending == "counter_timing" else None
+                if pending == "counter_timing":
+                    self._counter_timing_command = None
                 running = self._state == "RUNNING"
             if pending == "initialize":
                 try:
@@ -514,7 +553,9 @@ class AcquisitionRuntime(object):
                             # fresh zero/OFF and counter stops before returning.
                             self._ht_supply_stop_required = False
                             self._pulse_stop_required = False
-                        self._general_stop_required = self._ht_supply_stop_required or self._pulse_stop_required
+                            self._counter_timing_stop_required.difference_update((3, 4))
+                        self._general_stop_required = bool(self._ht_supply_stop_required or self._pulse_stop_required
+                                                           or self._counter_timing_stop_required)
                         self._cancel.clear()
                         self._error = ""
                         self._operation = None
@@ -537,6 +578,7 @@ class AcquisitionRuntime(object):
                         if stage_command.endswith(".stop"):
                             with self._lock:
                                 self._pulse_stop_required = False
+                                self._counter_timing_stop_required.difference_update((3, 4))
                     else:
                         self._backend.execute_stage(stage_command, self._cancel, operator_confirmed=True)
                     self._finish_stage()
@@ -562,6 +604,32 @@ class AcquisitionRuntime(object):
                         self._procedure_fault(error)
                 except Exception as error:
                     self._procedure_fault(error)
+            elif pending == "counter_timing":
+                try:
+                    with self._lock:
+                        self._require_recovery_clear()
+                        if self._pending is not None:
+                            # A newly accepted stop/confirmed close supersedes
+                            # this extracted request before backend preflight.
+                            continue
+                        if (self._shutdown_requested or self._state != "EXECUTING"
+                                or self._operation != "acq.stage.counter_timing.configure"):
+                            # No callback ran. Keep a preceding FAULT's actual
+                            # cause and any older stop requirements unchanged.
+                            continue
+                        self._counter_timing_stop_required.add(
+                            decode_counter_bank(counter_timing_command)["counter"])
+                        self._cancel.clear()
+                    self._backend.configure_counter_timing(
+                        counter_timing_command, self._cancel, operator_confirmed=True)
+                    self._finish_stage()
+                except CounterTimingCancelled as error:
+                    with self._lock:
+                        pending_recovery = self._pending is not None
+                    if not pending_recovery:
+                        self._procedure_fault(error)
+                except Exception as error:
+                    self._procedure_fault(error)
             elif pending == "outer_stop":
                 with self._lock:
                     self._state, self._operation = "EXECUTING", "acq.outer.controlled_stop"
@@ -571,6 +639,7 @@ class AcquisitionRuntime(object):
                     self._backend.outer_controlled_stop(operator_confirmed=True)
                     with self._lock:
                         self._pulse_stop_required = False  # Both StopTask calls returned, not physical HT zero.
+                        self._counter_timing_stop_required.difference_update((3, 4))
                         self._cancel.clear()
                     self._finish_stage()
                 except Exception as error:

@@ -10,6 +10,7 @@
   "ht_controls_verified": false,
   "focal_controls_verified": false,
   "counter_controls_verified": false,
+  "counter_timing_controls_verified": false,
   "ht_voltage_controls_verified": false,
   "outer_stop_verified": false,
   "focal_stop": {
