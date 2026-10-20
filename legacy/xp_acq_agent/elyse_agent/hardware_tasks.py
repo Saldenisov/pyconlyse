@@ -157,6 +157,28 @@ class LegacyCardTasks(object):
         """Stop a retained counter task; a failure never removes its handle."""
         return self._counter_task(number).stop()
 
+    def write_counter_ticks(self, number, initial_delay_ticks, low_ticks, high_ticks):
+        """Apply source NI6602 properties in order, without task lifecycle work.
+
+        All arguments are validated before the first property write. Zero is a
+        valid U32 source representation, not a claim that the driver accepts it.
+        A property failure may leave earlier properties applied; the exception
+        propagates while this owner retains every task and channel handle.
+        """
+        if type(number) is not int or number not in range(8):
+            raise ValueError("physical NI6602 counter must be in 0..7")
+        ticks = (initial_delay_ticks, low_ticks, high_ticks)
+        if any(type(value) is not int or not 0 <= value <= 0xffffffff
+               for value in ticks):
+            raise ValueError("NI6602 ticks require exact U32 integers")
+        self._counter_task(number)
+        channel = self.counter_channels[number]
+        channel.co_pulse_ticks_initial_delay = initial_delay_ticks
+        channel.co_pulse_low_ticks = low_ticks
+        channel.co_pulse_high_ticks = high_ticks
+        return {"counter": number, "initial_delay_ticks": initial_delay_ticks,
+                "low_ticks": low_ticks, "high_ticks": high_ticks}
+
     def update_counter_microseconds(self, number, delay_us, width_us):
         """Manual policy for 1_ACQ_WRITE_NI6602.vi's three properties.
 

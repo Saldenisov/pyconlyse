@@ -26,6 +26,37 @@ class FakeDaqmx(object):
         raise KeyError(name)
 
 
+class RecordingTickProperty(object):
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return instance.values[self.name]
+
+    def __set__(self, instance, value):
+        instance.attempts.append((self.name, value))
+        if instance.fail_on == self.name:
+            raise RuntimeError("property failure: " + self.name)
+        instance.values[self.name] = value
+
+
+class RecordingTicksChannel(object):
+    co_pulse_ticks_initial_delay = RecordingTickProperty("initial_delay")
+    co_pulse_low_ticks = RecordingTickProperty("low")
+    co_pulse_high_ticks = RecordingTickProperty("high")
+
+    def __init__(self, fail_on=None):
+        self.attempts = []
+        self.values = {}
+        self.fail_on = fail_on
+
+    @property
+    def co_pulse_done(self):
+        raise AssertionError("tick property writes must not poll pulse completion")
+
+
 class HardwareTaskTests(unittest.TestCase):
     def test_default_gate_rejects_even_task_creation(self):
         fake = FakeDaqmx()
@@ -102,6 +133,106 @@ class HardwareTaskTests(unittest.TestCase):
         self.assertEqual(channel.co_pulse_high_ticks, 1000)
         fake.named("C10_NI6602_CO_3").is_task_done.assert_not_called()
         owner.close()
+
+    def test_counter_tick_writes_have_exact_order_without_lifecycle_changes(self):
+        fake = FakeDaqmx()
+        owner = create_legacy_card_tasks(True, True, fake)
+        channel = RecordingTicksChannel()
+        owner.counter_channels[3] = channel
+        owner.sleep = Mock(side_effect=AssertionError("tick writes must not sleep"))
+        result = owner.write_counter_ticks(3, 123, 456, 789)
+        self.assertEqual(channel.attempts,
+                         [("initial_delay", 123), ("low", 456), ("high", 789)])
+        self.assertEqual(channel.values, {"initial_delay": 123, "low": 456,
+                                          "high": 789})
+        self.assertEqual(result, {"counter": 3, "initial_delay_ticks": 123,
+                                  "low_ticks": 456, "high_ticks": 789})
+        self.assertEqual(len(fake.created), 21)
+        self.assertFalse(owner.closed)
+        for task in fake.created:
+            task.start.assert_not_called()
+            task.stop.assert_not_called()
+            task.close.assert_not_called()
+            task.is_task_done.assert_not_called()
+        owner.sleep.assert_not_called()
+        owner.close()
+
+    def test_counter_tick_u32_boundaries_are_forwarded_without_driver_claim(self):
+        fake = FakeDaqmx()
+        owner = create_legacy_card_tasks(True, True, fake)
+        for number in range(8):
+            channel = RecordingTicksChannel()
+            owner.counter_channels[number] = channel
+            owner.write_counter_ticks(number, 0, 0xffffffff, 0)
+            self.assertEqual(channel.attempts,
+                             [("initial_delay", 0), ("low", 0xffffffff), ("high", 0)])
+            owner.write_counter_ticks(number, 0xffffffff, 0, 0xffffffff)
+            self.assertEqual(channel.attempts[3:],
+                             [("initial_delay", 0xffffffff), ("low", 0),
+                              ("high", 0xffffffff)])
+        owner.close()
+
+    def test_counter_tick_bad_arguments_fail_before_any_property_write(self):
+        fake = FakeDaqmx()
+        owner = create_legacy_card_tasks(True, True, fake)
+        channels = [RecordingTicksChannel() for _ in range(8)]
+        owner.counter_channels.update(enumerate(channels))
+        for number in (False, True, -1, 8, 3.0, "3", None):
+            with self.assertRaises(ValueError):
+                owner.write_counter_ticks(number, 1, 2, 3)
+        for field in range(3):
+            for value in (False, True, -1, 0x100000000, 1.0, "1", None,
+                          float("nan"), float("inf")):
+                ticks = [1, 2, 3]
+                ticks[field] = value
+                with self.assertRaises(ValueError):
+                    owner.write_counter_ticks(3, *ticks)
+        self.assertTrue(all(not channel.attempts for channel in channels))
+        for task in fake.created:
+            task.start.assert_not_called()
+            task.stop.assert_not_called()
+            task.close.assert_not_called()
+        owner.close()
+
+    def test_counter_tick_property_failures_keep_partial_values_and_owner(self):
+        writes = [("initial_delay", 123), ("low", 456), ("high", 789)]
+        for index, (name, _value) in enumerate(writes):
+            fake = FakeDaqmx()
+            owner = create_legacy_card_tasks(True, True, fake)
+            channel = RecordingTicksChannel(fail_on=name)
+            owner.counter_channels[3] = channel
+            owner.sleep = Mock(side_effect=AssertionError("tick writes must not sleep"))
+            with self.assertRaises(RuntimeError) as context:
+                owner.write_counter_ticks(3, 123, 456, 789)
+            self.assertEqual(str(context.exception), "property failure: " + name)
+            self.assertEqual(channel.attempts, writes[:index + 1])
+            self.assertEqual(channel.values, dict(writes[:index]))
+            self.assertIs(owner.counter_channels[3], channel)
+            self.assertEqual(len(owner.tasks), 21)
+            self.assertFalse(owner.closed)
+            for task in fake.created:
+                task.start.assert_not_called()
+                task.stop.assert_not_called()
+                task.close.assert_not_called()
+                task.is_task_done.assert_not_called()
+            owner.sleep.assert_not_called()
+            owner.close()
+
+    def test_counter_tick_write_rejects_closed_owner_before_properties(self):
+        fake = FakeDaqmx()
+        owner = create_legacy_card_tasks(True, True, fake)
+        channel = RecordingTicksChannel()
+        owner.counter_channels[3] = channel
+        owner.close()
+        with self.assertRaises(RuntimeError):
+            owner.write_counter_ticks(3, 1, 2, 3)
+        self.assertEqual(channel.attempts, [])
+        self.assertTrue(owner.closed)
+        self.assertEqual(owner.tasks, {})
+        for task in fake.created:
+            task.start.assert_not_called()
+            task.stop.assert_not_called()
+            task.close.assert_called_once_with()
 
     def test_fractional_counter_number_is_rejected_before_output_change(self):
         fake = FakeDaqmx()

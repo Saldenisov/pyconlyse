@@ -153,7 +153,7 @@ def fake_constants_scope(constants):
 
 
 class FakeHardwareSuite(unittest.TestSuite):
-    """Scope the constants-only shim to the twelve fake low-level tests."""
+    """Scope the constants-only shim to fake low-level tests."""
     def __init__(self):
         self.constants = reviewed_fake_constants()
         with fake_constants_scope(self.constants):
