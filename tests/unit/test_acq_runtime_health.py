@@ -9,6 +9,9 @@ import threading
 import types
 import unittest
 
+from DeviceServers.control.elyse_acq.runtime_polling import RuntimePollingWorker
+from tests.unit.test_acq_runtime_contract import runtime_snapshot
+
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "DeviceServers/control/elyse_acq/runtime_health.py"
@@ -157,11 +160,11 @@ class RuntimeDeviceProjectionTests(unittest.TestCase):
         device = next(node for node in tree.body if isinstance(node, ast.ClassDef)
                       and node.name == "AcqRuntime")
         methods = [node for node in device.body if isinstance(node, ast.FunctionDef)
-                   and node.name in ("_poll", "_health", "runtime_json", "dev_state")]
+                   and node.name in ("_view", "_health", "runtime_json", "dev_state", "delete_device")]
         for node in methods:
             node.decorator_list = []
         namespace = dict(json=json, time=types.SimpleNamespace(monotonic=lambda: 100.0),
-                         project_runtime_health=HEALTH.project_runtime_health,
+                         project_runtime_contract=HEALTH.project_runtime_contract,
                          tango=types.SimpleNamespace(DevState=types.SimpleNamespace(
                              FAULT="FAULT", UNKNOWN="UNKNOWN", RUNNING="RUNNING",
                              STANDBY="STANDBY", MOVING="MOVING")))
@@ -169,22 +172,19 @@ class RuntimeDeviceProjectionTests(unittest.TestCase):
         exec(compile(ast.fix_missing_locations(module), str(path), "exec"), namespace)
         cls.namespace = namespace
         cls.device_type = type("OfflineRuntimeView", (), {
-            name: namespace[name] for name in ("_poll", "_health", "runtime_json", "dev_state")})
+            name: namespace[name] for name in ("_view", "_health", "runtime_json", "dev_state", "delete_device")})
 
     def make_device(self, value):
         device = self.device_type()
-        device._cache_lock = threading.RLock()
-        device._last_read = 100.0
-        device._last_read_duration = 0.0
-        device._latest = value
-        device._last_error = ""
-        device._worker = object()
+        device._reader = RuntimePollingWorker(b"synthetic-device-read-key-at-least32", clock=lambda: 100.0,
+                                              reader=lambda *args, **kwargs: value)
+        device._reader.poll_once()
         device.set_status = lambda status: setattr(device, "status", status)
         device.set_state = lambda state: setattr(device, "state", state)
         return device
 
     def test_device_no_longer_reports_running_for_fresh_http_stale_source(self):
-        device = self.make_device(snapshot(stale=True, age_seconds=99.0))
+        device = self.make_device(runtime_snapshot(stale=True, age_seconds=99.0))
         self.assertEqual(device.dev_state(), "UNKNOWN")
         body = json.loads(device.runtime_json())
         self.assertFalse(body["bridge_stale"])
@@ -194,7 +194,7 @@ class RuntimeDeviceProjectionTests(unittest.TestCase):
         self.assertEqual(device.state, "UNKNOWN")
 
     def test_device_fresh_data_remain_running(self):
-        device = self.make_device(snapshot())
+        device = self.make_device(runtime_snapshot())
         body = json.loads(device.runtime_json())
         self.assertTrue(body["source_current"])
         self.assertEqual(device.state, "RUNNING")
@@ -203,45 +203,57 @@ class RuntimeDeviceProjectionTests(unittest.TestCase):
     def test_device_distinguishes_idle_from_executing(self):
         for state, expected in (("IDLE", "STANDBY"), ("EXECUTING", "MOVING")):
             with self.subTest(state=state):
-                device = self.make_device(snapshot(state=state, stale=True))
+                device = self.make_device(runtime_snapshot(state=state, stale=True))
                 body = json.loads(device.runtime_json())
                 self.assertEqual(body["runtime_state"], state)
                 self.assertFalse(body["source_current"])
                 self.assertEqual(device.dev_state(), expected)
 
     def test_device_adds_last_http_duration_before_claiming_source_current(self):
-        device = self.make_device(snapshot(age_seconds=1.9))
-        device._last_read_duration = 0.2
+        device = self.make_device(runtime_snapshot(age_seconds=1.9))
+        device._reader._duration = 0.2
         body = json.loads(device.runtime_json())
         self.assertAlmostEqual(body["source_age_seconds"], 2.1)
         self.assertEqual(body["source_reported_age_seconds"], 1.9)
         self.assertEqual(device.dev_state(), "UNKNOWN")
 
-    def test_poll_records_elapsed_duration_without_network(self):
-        class OnePoll:
-            stopped = False
-
-            def is_set(self):
-                return self.stopped
-
-            def wait(self, _seconds):
-                self.stopped = True
-
-        device = self.make_device(None)
-        device._stop = OnePoll()
-        device._key = b"synthetic key"
-        device.xp_port = 8771
+    def test_reader_records_elapsed_duration_without_network(self):
         times = iter((100.0, 100.3))
-        self.namespace["time"].monotonic = lambda: next(times)
-        self.namespace["read_runtime"] = lambda _key, **_kwargs: snapshot()
-        try:
-            device._poll()
-        finally:
-            self.namespace["time"].monotonic = lambda: 100.0
-            del self.namespace["read_runtime"]
-        self.assertEqual(device._last_read, 100.3)
-        self.assertAlmostEqual(device._last_read_duration, 0.3)
-        self.assertEqual(device._latest["state"], "RUNNING")
+        reader = RuntimePollingWorker(b"synthetic-duration-key-at-least-32bytes",
+                                      clock=lambda: next(times),
+                                      reader=lambda *args, **kwargs: runtime_snapshot())
+        reader.poll_once()
+        self.assertEqual(reader._received, 100.3)
+        self.assertAlmostEqual(reader._duration, 0.3)
+        self.assertEqual(reader._runtime["state"], "RUNNING")
+
+    def test_device_missing_protocol_is_unknown_and_hides_latest(self):
+        device = self.make_device(snapshot())
+        self.assertEqual(device.dev_state(), "UNKNOWN")
+        body = json.loads(device.runtime_json())
+        self.assertEqual(body["quality"], "INCOMPATIBLE")
+        self.assertIsNone(body["runtime"]["latest"])
+
+    def test_device_delete_stops_reader_without_hardware_calls(self):
+        device = self.make_device(runtime_snapshot())
+        device.delete_device()
+        body = json.loads(device.runtime_json())
+        self.assertEqual(body["quality"], "UNAVAILABLE")
+        self.assertIsNone(body["runtime"])
+
+    def test_device_delete_reports_retained_blocked_reader(self):
+        device = self.make_device(runtime_snapshot())
+        class RetainedReader:
+            def stop(self, timeout):
+                return False
+        device._reader = RetainedReader()
+        warnings = []
+        device.warn_stream = warnings.append
+        device.delete_device()
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("live owner retained", warnings[0])
+        self.assertIn("restart refused", device.status)
+        self.assertIsInstance(device._reader, RetainedReader)
 
 
 if __name__ == "__main__":

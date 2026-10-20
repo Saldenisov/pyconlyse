@@ -129,6 +129,7 @@ from pump_probe_v0_api import pump_probe_v0_api  # Pump-probe V0 emulator API
 from pump_probe_vd2_api import pump_probe_vd2_api  # VD2 streak-camera control API
 from elyse_supervision_api import elyse_supervision_api
 from acq_telemetry_api import acq_telemetry_api
+from acq_runtime_api import acq_runtime_api
 from auth import auth, configured_users  # Authentication endpoints
 from websocket_handler import init_socketio  # WebSocket support
 
@@ -147,6 +148,7 @@ app.register_blueprint(pump_probe_v0_api)  # Add pump-probe V0 emulator API
 app.register_blueprint(pump_probe_vd2_api)
 app.register_blueprint(elyse_supervision_api)
 app.register_blueprint(acq_telemetry_api)
+app.register_blueprint(acq_runtime_api)
 app.register_blueprint(auth)        # Add auth API
 
 # Initialize WebSocket support
