@@ -254,13 +254,19 @@ reader, HTTP/Tango mutation route or additional task owner is introduced. The
 runtime does not invent a startup local39 image or report requested timings as
 measured pulse widths.
 
-The reviewed Acquisition guard is `0 < n < 17` for selector field32. Integer
-selectors 1 through 16 map in pairs to `q=(n-1)//2`, C10 ctr0 through ctr7.
+The reviewed Acquisition guard is `0 < n < 17` for selector field32. Source
+DBL arithmetic computes `q=floor((n-1.0)/2.0)` before the Index Array I32 inputs.
+Finite selectors `1 <= n < 17`, including fractions, select C10 ctr0 through ctr7:
+`1.5` and `2.9` select ctr0; `3.1` selects ctr1; `16.9` selects ctr7.
 Delay and width come from fields `2*q` and `2*q+1`; fields16 through31 belong
 to the other half of the combined image and do not address C11 here. Values
-outside the guard have no counter/reset/publication effect. Fractional values
-inside the guard are rejected because their native array-index coercion remains
-unqualified. Requiring a finite exact-float tuple is additional Python policy.
+outside the guard have no counter/reset/publication effect. The source also
+admits `0 < n < 1`, which produces task index -1 and timing indices -2/-1.
+Python rejects that request before callbacks rather than treating negative
+indices as valid array accesses. The native default task and ensuing driver
+error remain unqualified. Requiring a finite exact-float tuple is additional
+Python policy. The source types, wires and artifact hashes are recorded in
+[`counter_selector_error_evidence.json`](../legacy/xp_acq_agent/data/counter_selector_error_evidence.json).
 
 The original writer converts each finite timing as follows:
 
@@ -311,6 +317,53 @@ before backend entry introduces no new counter-stop requirement and preserves
 any earlier requirement and the original read fault. Stop/confirmed-close
 requests supersede an unexecuted timing request; no callback runs concurrently
 with NI cleanup.
+
+### Native error and dialog inspection
+
+`acquisition_counter_error_flow.py` transfers the helper's task/error wires into
+a supplied-return model compatible with Python 3.4. Each poll receives the
+original task/error through ordinary tunnels, not the previous poll's result.
+The last poll feeds Stop2976. Stop's task feeds Property3083, while its error
+passes through Clear Errors309; Property's task/error then feed Start3032.
+The final Start error is the helper output. Native error status alone is not
+a polling exit condition or a source-proven driver short circuit.
+
+Clear Errors has only connector slots0/4 connected. The unwired specific-error
+code defaults to0; the documented transform returns `(False, 0, "")` for any
+incoming cluster. `clear_all_errors()` implements that explicit value transform.
+It does not clear a task, undo a write, catch a Python exception or establish
+that Stop succeeded. Every native boundary in the replay still requires a
+supplied return; partially applied property effects remain outside its scope.
+
+The caller wires only the helper error into Simple Error Handler22439; the
+dialog-mode input and all outputs are unwired. A normal handler return permits
+selector reset and independent publication even if its returned error remains
+set. A pending modal handler prevents ordinary frame completion. The inspected
+local LabVIEW 2020 wrapper defaults to public mode1, with one Continue button,
+not Continue/Stop. Continue does not clear or retry the failed operation.
+Public modes0..4 map to CORE modes0/1/2/4/5; only public2/4 expose Stop. Their
+Stop primitive aborts the calling top-level hierarchy without guaranteeing
+normal cleanup. CORE3 is separate automatic error handling, not public3.
+The deployed XP LabVIEW 2012 library has not been matched to this local binary.
+
+`AcquisitionRuntime.inspect_counter_error_flow()` exposes a local data-only
+replay: explicit error clusters, opaque task tokens and bounded return fixtures
+produce a report and RAM-only fixture reset/publication. It cannot accept a
+driver callback, mutate runtime state, open a dialog or stop the server. The
+saved-default profile rejects a fabricated Stop response and a pending response
+when that profile would show no dialog. Hypothetical hierarchy abort remains
+available only in the lower-level supplied-return model, with explicit labels.
+Neither API is installed on GUI/HTTP/Tango control routes. Actual backend
+exceptions continue to fail closed and retain configuration/ownership latches;
+native masking is not silently substituted for this Python safety policy.
+
+Source reproduction uses the read-only validator below. It requires the pinned
+external XML archives, metadata and saved NI help; these are not clean-checkout
+test inputs or a deployment receipt.
+
+```powershell
+& C:/Users/elyse/miniconda3/envs/pyconlyse312/python.exe tools/validate_acq_counter_selector_errors.py
+```
 
 Clean-checkout tests compare all sixteen selector mappings, the nominal helper
 trace, independent reset/publication images and 4301 deterministic finite
@@ -473,6 +526,38 @@ be treated as interchangeable. HMAC proves response authentication, not an
 immutable deployed build identity. See [HT readiness evidence](ELYSE_PYTHON_HT_READINESS_2026-10-19.json).
 
 ## Software verification
+
+The native-error and fractional-selector extension passed **3873 offline tests**,
+no skips, 7300 existing warnings, in **164.26 s** on Python 3.12.14, including
+the actual Python 3.4 cold-package process lane. The selected additions include
+27 native wire-flow tests, 13 data-only dialog/caller tests, 17 differential
+tests against the retained inert helper and two committed-evidence checks.
+Fractional backend selection and runtime release-latch tests cover ctr0/1/7;
+source-admitted negative task indices are rejected before callbacks. These
+selections overlap the full gate and are not additive coverage totals.
+
+The guarded actual Python 3.4.4 suite ran **563 tests: 562 passed, one skipped**,
+in **7.627 s** with the extracted interpreter; a second existing 3.4 environment
+repeated the result in **9.763 s**. The skipped modern-model comparison runs in
+the Python 3.12 gate. External networking, real child processes and native
+library loading are denied in the focused harness; no NI/VISA module remains
+loaded. The package now contains **29 Python modules**, both new inspection
+modules are fingerprinted, and every commissioning permission remains false.
+After import/layout formatting, the affected modern selection repeated
+**146 passed in 6.62 s**, including the actual Python 3.4 cold-package lane;
+the focused Python 3.4 result above was repeated on that final source layout.
+
+The separate read-only source validator passed against **13 pinned artifacts,
+three archive members, 15 terminal types, 11 selector nets, 14 helper error nets,
+four ordinary loop tunnels and 12 selector examples**. It also checked the
+caller's sole wired handler slot9 and the inspected local-2020 saved mode1.
+This external-source reproduction is not a clean-checkout test or XP acceptance
+test. Independent review found no remaining blocker in this bounded transfer.
+Full Ruff checks pass for the seven new Python files; the critical Ruff subset
+and `git diff --check` pass for the entire change. Frozen catalog SHA256 remains
+`A9D821E7519EA50F6B35593E58C78129EC7D8A7BFEDCC06098E247BEF011A0B0`.
+No screen, lab endpoint, VI execution, hardware, deployment or lab process was
+operated. The documented XP-library/native-side-effect gaps remain open.
 
 The source counter-timing integration passed **3807 offline tests**, no skips,
 7300 warnings, in **173.56 s** on Python 3.12.14 with the actual Python 3.4
