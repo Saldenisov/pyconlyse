@@ -10,6 +10,7 @@ from __future__ import division
 import csv
 import copy
 import io
+import json
 import math
 import os
 import time
@@ -29,10 +30,58 @@ from .acquisition_ht_shutdown import (
 
 CONTROL_PROFILES = ("legacy_full", "general_only_test", "extended_ht_stop")
 HT_STAGE_OPERATIONS = ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset")
+FOCAL_STAGE_OPERATIONS = ("focales.start", "focales.stop")
+_LEGACY_CHROMA_STOP_TYPE = ChromaFocalStop
 
 
 class AcquisitionCancelled(Exception):
     pass
+
+
+def _json_helper_diagnostics(value):
+    try:
+        return json.loads(json.dumps(value, allow_nan=False))
+    except (TypeError, ValueError):
+        # Never expose process handles/native objects through HTTP JSON.
+        return dict(returned_type=type(value).__name__, retained=False,
+                    reason="Only finite JSON-compatible helper diagnostics are retained")
+
+
+class _DemoFocalCommand(object):
+    """Pure RAM fixture, not qualification of a COM port or native driver."""
+    simulated = True
+    resources_verified = True
+
+    def ensure_ready(self):
+        pass
+
+    def ensure_quiescent(self):
+        pass
+
+    def snapshot(self):
+        return dict(simulated=True, pending_worker_count=0, workers=[],
+                    hardware_acknowledged=False, physical_output_state="UNKNOWN")
+
+    def execute(self, output_enabled, cancelled):
+        if type(output_enabled) is not bool or not callable(cancelled):
+            raise ValueError("Explicit Boolean simulated Focal command required")
+        if cancelled():
+            raise RuntimeError("Simulated Focal command cancelled")
+        return dict(simulated=True, output_enabled=output_enabled,
+                    native_calls=False, hardware_acknowledged=False)
+
+
+class _OwnedFocalOff(object):
+    """General OFF uses the same retained worker owner as standalone ON/OFF."""
+    def __init__(self, backend):
+        self.backend = backend
+
+    def ensure_ready(self):
+        self.backend._ensure_focal_ready()
+
+    def __call__(self):
+        self.ensure_ready()
+        return self.backend._stage_focal_helper("1_Focales OFF.vi", lambda: False)
 
 
 class _StageState(object):
@@ -50,6 +99,51 @@ class _StageState(object):
         self._stage_restoration_origin = None
         self._stage_restoration_attempts = []
         self._stage_restoration_attempt_count = 0
+        self._focal_helper_results = {}
+        self._focal_quiescence_error = None
+
+    def _ensure_focal_quiescent(self):
+        # A timed-out ON worker must not race a subsequent OFF or DO write.
+        # This process-ownership guard does not infer electrical output state.
+        try:
+            self.focal_command.ensure_quiescent()
+        except Exception as error:
+            self._focal_quiescence_error = type(error).__name__ + ": " + str(error)
+            raise
+        self._focal_quiescence_error = None
+
+    def _ensure_focal_ready(self):
+        if getattr(self.focal_command, "resources_verified", False) is not True:
+            raise RuntimeError("Focal commands blocked: serial resources not commissioned")
+        self.focal_command.ensure_ready()
+
+    def _stage_focal_helper(self, helper_name, cancelled):
+        if helper_name not in ("1_Focales ON.vi", "1_Focales OFF.vi"):
+            raise ValueError("Unqualified Focal helper")
+        enabled = helper_name == "1_Focales ON.vi"
+        self._ensure_focal_quiescent()
+        result = dict(helper=helper_name, output_enabled=enabled, state="EXECUTING",
+                      simulated=self._stage_simulated, hardware_acknowledged=False)
+        self._focal_helper_results[helper_name] = result
+        try:
+            returned = self.focal_command.execute(enabled, cancelled)
+            self._ensure_focal_quiescent()
+        except Exception as error:
+            result.update(state="FAILED_OR_CANCELLED", error_type=type(error).__name__, error=str(error))
+            raise
+        retained = _json_helper_diagnostics(returned)
+        result.update(state="CALLBACK_COMPLETED_NOT_HARDWARE_ACK", returned=retained)
+        return returned
+
+    def _focal_diagnostics(self):
+        snapshot = getattr(self.focal_command, "snapshot", None)
+        if not callable(snapshot):
+            return dict(available=False, hardware_acknowledged=False)
+        try:
+            return _json_helper_diagnostics(snapshot())
+        except Exception as error:
+            return dict(available=False, error_type=type(error).__name__, error=str(error),
+                        hardware_acknowledged=False)
 
     def _remember_stage_restorations(self, error, cooling=False):
         report = getattr(error, "result" if cooling else "report", None)
@@ -184,6 +278,11 @@ class _StageState(object):
             stage_controls_verified=self.stage_controls_verified,
             cooling_trip_verified=self.cooling_trip_verified,
             ht_controls_verified=self.ht_controls_verified,
+            focal_controls_verified=self.focal_controls_verified,
+            focal_resources_verified=getattr(self.focal_command, "resources_verified", False) is True,
+            focal_helper_results=copy.deepcopy(self._focal_helper_results),
+            focal_quiescence_error=self._focal_quiescence_error,
+            focal_command_diagnostics=self._focal_diagnostics(),
             pending_output_restorations=self._stage_pending_snapshot(),
             restoration_origin=copy.deepcopy(self._stage_restoration_origin),
             restoration_attempts=copy.deepcopy(self._stage_restoration_attempts),
@@ -201,6 +300,8 @@ class _StageState(object):
             # Starting HT can energize the already-commanded startup voltage;
             # it is independent of extended-stop feedback qualification.
             raise RuntimeError("HT stage commands blocked: HT controls not commissioned")
+        if operation in FOCAL_STAGE_OPERATIONS and self.focal_controls_verified is not True:
+            raise RuntimeError("Focal stage commands blocked: Focal controls not commissioned")
         if self.control_profile == "general_only_test":
             raise RuntimeError("General-only profile forbids other stage commands")
         self._stage_require_initialized()
@@ -215,23 +316,29 @@ class _StageState(object):
         def observe(frame, source_uid):
             self.procedure.update(frame=frame, source_uid=source_uid)
 
+        def focal_helper(helper_name):
+            return self._stage_focal_helper(helper_name, cancel.is_set)
+
         try:
             # Validate the source operation even before any recovery write.
             # False NewVal is source-empty and must never drain old pulses.
             preflight = execute_stage(
                 operation, self._stage_read_local, self._stage_write_local,
                 self._stage_publish, cancel.wait, cancel.is_set, observe,
-                operator_confirmed=True, new_value=False)
+                operator_confirmed=True, new_value=False, focal_helper=focal_helper)
             if type(new_value) is not bool:
                 raise ValueError("Explicit Boolean NewVal required")
             if not new_value:
                 self.procedure.update(state="SOURCE_NEWVAL_FALSE_NOOP", report=preflight)
                 return preflight
+            if operation in FOCAL_STAGE_OPERATIONS:
+                self._ensure_focal_ready()
+            self._ensure_focal_quiescent()
             self._retry_stage_restorations()
             result = execute_stage(
                 operation, self._stage_read_local, self._stage_write_local,
                 self._stage_publish, cancel.wait, cancel.is_set, observe,
-                operator_confirmed=True, new_value=new_value)
+                operator_confirmed=True, new_value=new_value, focal_helper=focal_helper)
         except Exception as error:
             self._remember_stage_restorations(error)
             self.procedure.update(state="INTERRUPTED_OR_FAILED",
@@ -266,6 +373,7 @@ class _StageState(object):
 
         try:
             if cooling_trip_predicate(c4, c3):
+                self._ensure_focal_quiescent()
                 self._retry_stage_restorations()
             result = execute_cooling_trip(
                 c4, c3, self._stage_read_local, self._stage_write_local,
@@ -294,18 +402,33 @@ class CardBackend(_StageState):
                  control_profile="legacy_full", ht_feedback_verified=False,
                  ht_zero_tolerance_kv=0.0, ht_zero_timeout=10.0,
                  stage_controls_verified=False, cooling_trip_verified=False,
-                 ht_controls_verified=False):
+                 ht_controls_verified=False, focal_controls_verified=False,
+                 focal_command=None):
         if not 0 < read_timeout <= 2:
             raise ValueError("read timeout must be in (0, 2] seconds")
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
         if (type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool
-                or type(ht_controls_verified) is not bool):
+                or type(ht_controls_verified) is not bool or type(focal_controls_verified) is not bool):
             raise ValueError("Explicit Boolean stage commissioning flags required")
         self.stage_controls_verified = stage_controls_verified
         self.cooling_trip_verified = cooling_trip_verified
         self.ht_controls_verified = ht_controls_verified
+        self.focal_controls_verified = focal_controls_verified
+        legacy_focal = isinstance(focal_off, _LEGACY_CHROMA_STOP_TYPE)
+        legacy_settings = None
+        if legacy_focal:
+            legacy_settings = dict(dll_path=focal_off.dll_path,
+                                   resources_verified=focal_off.resources_verified,
+                                   timeout=focal_off.timeout)
+        if focal_command is None:
+            from .chroma_focal_command import ChromaFocalCommand
+            focal_command = ChromaFocalCommand(**(legacy_settings or {}))
+        elif legacy_focal and any(getattr(focal_command, name, None) != value
+                                  for name, value in legacy_settings.items()):
+            raise ValueError("Conflicting legacy OFF and owned Focal command configuration")
+        self.focal_command = focal_command
         self._stage_simulated = False
         validate_policy(ht_feedback_verified, ht_zero_tolerance_kv, ht_zero_timeout)
         self.ht_feedback_verified = ht_feedback_verified
@@ -321,8 +444,11 @@ class CardBackend(_StageState):
         self.commanded_analog = {}
         self.software_status_assignments = {"EPS": {}, "DPS": {}}
         self.procedure = None
+        # Plain callable injection remains an offline-test boundary. Production
+        # defaults and known legacy native adapters share ONE retained worker
+        # owner; an unconfirmed OFF must also block later ON/reopen/cleanup.
         self.focal_off = (None if control_profile == "general_only_test" else
-                          focal_off if focal_off is not None else ChromaFocalStop())
+                          _OwnedFocalOff(self) if focal_off is None or legacy_focal else focal_off)
         self.stop_wait = stop_wait or time.sleep
         self._reset_stage_state()
 
@@ -331,6 +457,7 @@ class CardBackend(_StageState):
             raise RuntimeError("Stage command requires initialized card ownership")
 
     def _stage_write_digital(self, name, values):
+        self._ensure_focal_quiescent()
         self.owner.write_digital_bank(name, values)
 
     @property
@@ -342,6 +469,7 @@ class CardBackend(_StageState):
             raise ValueError("Explicit local confirmation of legacy startup effects required")
         if self.owner is not None:
             raise RuntimeError("Resources already owned; deinitialize first")
+        self._ensure_focal_quiescent()
         if cancel.is_set():
             raise AcquisitionCancelled()
         # Pin and validate the calibration before any driver/resource calls.
@@ -389,6 +517,7 @@ class CardBackend(_StageState):
             raise RuntimeError("General Marche requires initialized card ownership")
         if operator_confirmed is not True:
             raise ValueError("General Marche confirmation required")
+        self._ensure_focal_quiescent()
         if self.control_profile == "general_only_test":
             # This verifies command scope, not the physical state of switches
             # operated outside Python. The GUI requires those stages OFF.
@@ -413,7 +542,7 @@ class CardBackend(_StageState):
         def commit(index, value):
             bank = list(self.commanded_digital["C4_DIO96_DO"])
             bank[index] = value
-            self.owner.write_digital_bank("C4_DIO96_DO", bank)
+            self._stage_write_digital("C4_DIO96_DO", bank)
             self.commanded_digital["C4_DIO96_DO"] = tuple(bank)
 
         def assign(eps, dps):
@@ -462,7 +591,7 @@ class CardBackend(_StageState):
                 # normal source command images already have both bits False.
                 bank[0] = bank[2] = False
             bank[index] = value
-            self.owner.write_digital_bank("C4_DIO96_DO", bank)
+            self._stage_write_digital("C4_DIO96_DO", bank)
             self.commanded_digital["C4_DIO96_DO"] = tuple(bank)
 
         def assign(eps, dps):
@@ -472,7 +601,12 @@ class CardBackend(_StageState):
             self.procedure.update(frame=frame, source_uid=source_uid)
             self.procedure["source_frames_attempted"].append(frame)
 
+        def focal_off():
+            self._ensure_focal_quiescent()
+            return self.focal_off()
+
         try:
+            self._ensure_focal_quiescent()
             self._retry_stage_restorations()
             # A failed start can retain a last-successful asserted pulse image.
             # Release it before either stop profile, on this same NI owner. A
@@ -512,7 +646,7 @@ class CardBackend(_StageState):
                     except GeneralStopError as error:
                         raise GeneralStopError(restore_failures + list(error.failures))
                 try:
-                    execute_general_stop(commit, self.focal_off, assign, self.stop_wait,
+                    execute_general_stop(commit, focal_off, assign, self.stop_wait,
                                          observe, operator_confirmed=True)
                 except GeneralStopError as error:
                     raise GeneralStopError(restore_failures + list(error.failures))
@@ -554,10 +688,12 @@ class CardBackend(_StageState):
                 or not 0 <= command_kv < bank[0]):
             raise ValueError("Shutdown HT command must strictly decrease")
         bank[0] = command_kv
+        self._ensure_focal_quiescent()
         self.owner.write_analog_logical_bank("C9NI6703", bank)
         self.commanded_analog["C9NI6703"] = tuple(bank)
 
     def _stop_modulator_pulses(self, assign_status):
+        self._ensure_focal_quiescent()
         failures = []
         for number in PULSE_STOP_TASKS:
             try:
@@ -637,6 +773,7 @@ class CardBackend(_StageState):
         )
 
     def close(self):
+        self._ensure_focal_quiescent()
         if self.owner is not None:
             self.owner.close()
             self.owner = None
@@ -650,16 +787,21 @@ class CardBackend(_StageState):
 class DemoBackend(_StageState):
     """Explicit GUI/test mode. Never imports or delegates to an NI adapter."""
     def __init__(self, control_profile="legacy_full", stage_controls_verified=False,
-                 cooling_trip_verified=False, ht_controls_verified=False):
+                 cooling_trip_verified=False, ht_controls_verified=False,
+                 focal_controls_verified=False, focal_command=None):
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
         if (type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool
-                or type(ht_controls_verified) is not bool):
+                or type(ht_controls_verified) is not bool or type(focal_controls_verified) is not bool):
             raise ValueError("Explicit Boolean stage commissioning flags required")
         self.stage_controls_verified = stage_controls_verified
         self.cooling_trip_verified = cooling_trip_verified
         self.ht_controls_verified = ht_controls_verified
+        self.focal_controls_verified = focal_controls_verified
+        if focal_command is not None and getattr(focal_command, "simulated", False) is not True:
+            raise ValueError("Demo Focal adapter must explicitly be simulated")
+        self.focal_command = focal_command if focal_command is not None else _DemoFocalCommand()
         self._stage_simulated = True
         self.active = False
         self.commanded_digital = {}
@@ -673,7 +815,7 @@ class DemoBackend(_StageState):
 
     def _stage_write_digital(self, name, values):
         # No NI owner exists in demo mode. The shared adapter updates RAM only.
-        pass
+        self._ensure_focal_quiescent()
 
     @property
     def resource_count(self):
@@ -682,6 +824,7 @@ class DemoBackend(_StageState):
     def initialize(self, cancel, startup_confirmed=False):
         if cancel.is_set():
             raise AcquisitionCancelled()
+        self._ensure_focal_quiescent()
         self.commanded_digital = digital_startup_image()
         self.software_status_assignments = {"EPS": {}, "DPS": {}}
         self.procedure = None
@@ -699,10 +842,12 @@ class DemoBackend(_StageState):
                     stage_state=self._stage_snapshot(), procedure=copy.deepcopy(self.procedure))
 
     def general_start(self, cancel, operator_confirmed=False):
+        self._ensure_focal_quiescent()
         execute_general_start(lambda *_args: None, lambda *_args: None,
                               cancel.wait, cancel.is_set, operator_confirmed=operator_confirmed)
 
     def general_stop(self, operator_confirmed=False):
+        self._ensure_focal_quiescent()
         if self.control_profile == "general_only_test":
             execute_general_only_stop(lambda *_args: None, lambda *_args: None,
                                       time.sleep, operator_confirmed=operator_confirmed)
@@ -716,6 +861,7 @@ class DemoBackend(_StageState):
                                  time.sleep, operator_confirmed=operator_confirmed)
 
     def close(self):
+        self._ensure_focal_quiescent()
         self.active = False
         self.commanded_digital = {}
         self._reset_stage_state()

@@ -1,5 +1,6 @@
 """Offline real CardBackend methods with an injected fake NI owner only."""
 import copy
+import json
 import threading
 import unittest
 from unittest.mock import Mock
@@ -7,6 +8,7 @@ from unittest.mock import Mock
 from legacy.xp_acq_agent.elyse_agent.acquisition_backend import CardBackend, DemoBackend
 from legacy.xp_acq_agent.elyse_agent.acquisition_stage_execution import StageExecutionError
 from legacy.xp_acq_agent.elyse_agent.acquisition_procedures import GeneralStopError
+from legacy.xp_acq_agent.elyse_agent.chroma_focal_stop import ChromaFocalStop
 from legacy.xp_acq_agent.elyse_agent.hardware_plan import digital_startup_image
 
 
@@ -26,6 +28,39 @@ class FastCancel(object):
 class FailedWait(FastCancel):
     def wait(self, seconds):
         raise RuntimeError("synthetic wait failure after asserted pulse")
+
+
+class FakeFocalCommand(object):
+    """No process, DLL, COM port or NI call exists in this test adapter."""
+    simulated = True
+
+    def __init__(self, resources_verified=True):
+        self.resources_verified = resources_verified
+        self.calls = []
+        self.blocked = False
+        self.ready_error = None
+        self.execute_callback = None
+
+    def ensure_ready(self):
+        self.calls.append(("ready",))
+        if self.ready_error is not None:
+            raise self.ready_error
+        self.ensure_quiescent()
+
+    def ensure_quiescent(self):
+        self.calls.append(("quiet",))
+        if self.blocked:
+            raise RuntimeError("synthetic ON worker remains unconfirmed alive")
+
+    def execute(self, output_enabled, cancelled):
+        self.calls.append(("execute", output_enabled))
+        if self.execute_callback is not None:
+            return self.execute_callback(output_enabled, cancelled)
+        return dict(simulated=True, output_enabled=output_enabled, hardware_acknowledged=False)
+
+    def snapshot(self):
+        return dict(simulated=True, pending_worker_count=1 if self.blocked else 0,
+                    hardware_acknowledged=False, physical_output_state="UNKNOWN")
 
 
 def fake_owner():
@@ -170,10 +205,10 @@ class AcquisitionStageBackendTests(unittest.TestCase):
         self.assertEqual(cancel.waits, [])
         owner.write_digital_bank.assert_not_called()
 
-    def test_unsupplied_focal_helpers_never_partly_execute(self):
+    def test_focal_helpers_default_blocked_before_any_effect(self):
         backend, owner = self.backend(stage_controls_verified=True)
         for operation in ("focales.start", "focales.stop"):
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(RuntimeError, "Focal controls not commissioned"):
                 backend.execute_stage(operation, FastCancel(), operator_confirmed=True)
         owner.write_digital_bank.assert_not_called()
         self.assertEqual(backend.software_status_assignments, {"EPS": {}, "DPS": {}})
@@ -389,7 +424,7 @@ class AcquisitionStageBackendTests(unittest.TestCase):
         owner.write_digital_bank.reset_mock()
         owner.write_digital_bank.side_effect = None
         backend.execute_stage("prema.stop", FastCancel(), operator_confirmed=True, new_value=False)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(RuntimeError, "Focal controls not commissioned"):
             backend.execute_stage("focales.start", FastCancel(), operator_confirmed=True)
         backend.cooling_trip_verified = True
         backend.execute_cooling_guard(backend.read_snapshot(FastCancel()), FastCancel())
@@ -597,6 +632,280 @@ class AcquisitionStageBackendTests(unittest.TestCase):
         self.assertFalse(snapshot["hardware_writes"])
         self.assertTrue(snapshot["stage_state"]["ht_controls_verified"])
         self.assertTrue(snapshot["stage_state"]["local_banks"]["EPS"][49])
+
+    def test_focal_flag_exact_boolean_and_default_native_resources_unqualified(self):
+        for value in (None, 0, 1, "yes"):
+            for constructor in (CardBackend, DemoBackend):
+                with self.assertRaises(ValueError):
+                    constructor(focal_controls_verified=value)
+        backend, owner = self.backend(stage_controls_verified=True, focal_controls_verified=True)
+        self.assertIs(getattr(backend.focal_command, "resources_verified", None), False)
+        cancel = FastCancel()
+        with self.assertRaisesRegex(RuntimeError, "serial resources not commissioned"):
+            backend.execute_stage("focales.start", cancel, operator_confirmed=True)
+        owner.write_digital_bank.assert_not_called()
+        self.assertEqual(cancel.waits, [])
+        self.assertEqual(backend.stage_publication_count, 0)
+        self.assertEqual(backend.software_status_assignments, {"EPS": {}, "DPS": {}})
+
+    def test_focal_gate_is_independent_and_checked_before_adapter_or_recovery_effects(self):
+        adapter = FakeFocalCommand()
+        backend, owner = self.backend(stage_controls_verified=True, focal_command=adapter)
+        adapter.calls[:] = []
+        before = backend._stage_snapshot()
+        for operation in ("focales.start", "focales.stop"):
+            with self.assertRaisesRegex(RuntimeError, "Focal controls not commissioned"):
+                backend.execute_stage(operation, FastCancel(), operator_confirmed=True)
+        self.assertEqual(adapter.calls, [])
+        self.assertEqual(backend._stage_snapshot(), before)
+        owner.write_digital_bank.assert_not_called()
+        backend = CardBackend(focal_controls_verified=True, focal_command=adapter)
+        with self.assertRaisesRegex(RuntimeError, "stage controls not commissioned"):
+            backend.execute_stage("focales.start", FastCancel(), operator_confirmed=True)
+
+    def test_focal_false_newval_does_not_check_ready_or_restore_pending_pulse(self):
+        backend, owner = self.leave_unrestored_chauffage_pulse()
+        adapter = FakeFocalCommand(resources_verified=False)
+        adapter.blocked = True
+        backend.focal_command = adapter
+        backend.focal_controls_verified = True
+        before = backend._stage_snapshot()
+        owner.write_digital_bank.reset_mock()
+        owner.write_digital_bank.side_effect = None
+        cancel = FastCancel()
+        for operation in ("focales.start", "focales.stop"):
+            result = backend.execute_stage(operation, cancel, operator_confirmed=True, new_value=False)
+            self.assertEqual(result["status"], "NOOP")
+        self.assertEqual(adapter.calls, [])
+        self.assertEqual(cancel.waits, [])
+        self.assertEqual(backend._stage_snapshot(), before)
+        owner.write_digital_bank.assert_not_called()
+
+    def test_focal_ready_is_checked_before_c4_pulse_pending_recovery_or_wait(self):
+        backend, owner = self.leave_unrestored_chauffage_pulse()
+        adapter = FakeFocalCommand()
+        adapter.ready_error = RuntimeError("synthetic reviewed DLL hash / x86 readiness failure")
+        backend.focal_command = adapter
+        backend.focal_controls_verified = True
+        owner.write_digital_bank.reset_mock()
+        owner.write_digital_bank.side_effect = None
+        cancel = FastCancel()
+        with self.assertRaisesRegex(RuntimeError, "readiness failure"):
+            backend.execute_stage("focales.start", cancel, operator_confirmed=True)
+        self.assertEqual(adapter.calls, [("ready",)])
+        self.assertEqual(backend._stage_pending_snapshot(), [(15, 3, False)])
+        self.assertEqual(cancel.waits, [])
+        owner.write_digital_bank.assert_not_called()
+
+    def test_focal_start_exact_nominal_do_status_and_helper_sequence(self):
+        adapter = FakeFocalCommand()
+        backend, owner = self.backend(stage_controls_verified=True, focal_controls_verified=True,
+                                      focal_command=adapter)
+        log = []
+        def write(name, bank):
+            log.append(("write", name, tuple(bank)))
+        owner.write_digital_bank.side_effect = write
+        def helper(output_enabled, cancelled):
+            log.append(("helper", output_enabled))
+            return dict(simulated=True, hardware_acknowledged=False)
+        adapter.execute_callback = helper
+        cancel = FastCancel()
+        result = backend.execute_stage("focales.start", cancel, operator_confirmed=True)
+        self.assertEqual(result["status"], "COMPLETED")
+        fields = ((7, True), (7, False), (2, True), (2, False))
+        expected = list(backend.initial_images["digital"]["C4_DIO96_DO"])
+        rows = [row for row in log if row[0] == "write"]
+        for row, (index, value) in zip(rows, fields):
+            expected[index] = value
+            self.assertEqual(row, ("write", "C4_DIO96_DO", tuple(expected)))
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(log[2], ("helper", True))
+        self.assertEqual(cancel.waits, [.15, 29.0, 1.5, .15, .25, .1])
+        self.assertEqual(backend.software_status_assignments,
+                         {"DPS": {10: False}, "EPS": {30: False, 32: True, 35: False}})
+        self.assertEqual([call for call in adapter.calls if call[0] == "execute"], [("execute", True)])
+        self.assertFalse(backend._stage_snapshot()["hardware_acknowledged"])
+        owner.write_analog_logical_bank.assert_not_called()
+
+    def test_focal_stop_exact_nominal_off_then_two_do_images_and_status(self):
+        adapter = FakeFocalCommand()
+        backend, owner = self.backend(stage_controls_verified=True, focal_controls_verified=True,
+                                      focal_command=adapter)
+        log = []
+        owner.write_digital_bank.side_effect = lambda name, values: log.append(("write", values[8]))
+        adapter.execute_callback = lambda enabled, cancelled: log.append(("helper", enabled))
+        cancel = FastCancel()
+        result = backend.execute_stage("focales.stop", cancel, operator_confirmed=True)
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertEqual(log, [("helper", False), ("write", False), ("write", True)])
+        self.assertEqual(cancel.waits, [.5, .15, .15, .1])
+        self.assertEqual(backend.software_status_assignments,
+                         {"DPS": {11: False}, "EPS": {32: False, 33: False, 35: True}})
+        self.assertEqual(backend.stage_publications["DPS"]["values"], backend._stage_read_local(36))
+        self.assertFalse(backend.stage_publications["DPS"]["psp_delivered"])
+        owner.write_analog_logical_bank.assert_not_called()
+
+    def make_failed_focal_on(self, cancelled=False, returned_pending=False):
+        adapter = FakeFocalCommand()
+        focal_off = Mock()
+        backend, owner = self.backend(stage_controls_verified=True, focal_controls_verified=True,
+                                      focal_command=adapter, focal_off=focal_off,
+                                      stop_wait=lambda seconds: None)
+        cancel = FastCancel()
+        def fail(enabled, ignored_cancelled):
+            adapter.blocked = True
+            cancel.cancelled = cancelled
+            if returned_pending:
+                return dict(callback_returned=True)
+            raise RuntimeError("synthetic native helper / cleanup failure")
+        adapter.execute_callback = fail
+        with self.assertRaises(StageExecutionError):
+            backend.execute_stage("focales.start", cancel, operator_confirmed=True)
+        self.assertEqual([call for call in adapter.calls if call[0] == "execute"], [("execute", True)])
+        return backend, owner, adapter, focal_off
+
+    def test_failed_or_cancelled_native_on_cannot_race_general_off_or_other_outputs(self):
+        for cancelled in (False, True):
+            with self.subTest(cancelled=cancelled):
+                backend, owner, adapter, focal_off = self.make_failed_focal_on(cancelled)
+                owner.write_digital_bank.reset_mock()
+                with self.assertRaises(RuntimeError):
+                    backend.general_start(FastCancel(), operator_confirmed=True)
+                with self.assertRaises(RuntimeError):
+                    backend.general_stop(operator_confirmed=True)
+                with self.assertRaises(RuntimeError):
+                    backend.execute_stage("prema.stop", FastCancel(), operator_confirmed=True)
+                focal_off.assert_not_called()
+                owner.write_digital_bank.assert_not_called()
+                self.assertFalse(backend.procedure.get("command_sequence_completed", False))
+                self.assertIs(backend.owner, owner)
+                self.assertTrue(backend._stage_snapshot()["focal_helper_results"])
+                self.assertEqual(backend._stage_snapshot()["focal_command_diagnostics"]["pending_worker_count"], 1)
+                json.dumps(backend._stage_snapshot(), allow_nan=False)
+
+    def test_returned_helper_with_unconfirmed_cleanup_is_failure_not_eps_ok(self):
+        backend, owner, adapter, focal_off = self.make_failed_focal_on(returned_pending=True)
+        self.assertEqual(backend._stage_read_local(44)[32], False)
+        self.assertEqual(backend._focal_helper_results["1_Focales ON.vi"]["state"], "FAILED_OR_CANCELLED")
+        self.assertIs(backend.owner, owner)
+
+    def test_unconfirmed_on_worker_blocks_close_and_reinitialization_until_quiescent(self):
+        backend, owner, adapter, focal_off = self.make_failed_focal_on()
+        with self.assertRaises(RuntimeError):
+            backend.close()
+        self.assertIs(backend.owner, owner)
+        owner.close.assert_not_called()
+        with self.assertRaises(RuntimeError):
+            backend.initialize(FastCancel(), startup_confirmed=True)
+        adapter.blocked = False  # Simulated confirmed process death/reap.
+        backend.general_stop(operator_confirmed=True)
+        focal_off.assert_called_once_with()
+        self.assertTrue(backend.procedure["command_sequence_completed"])
+        backend.close()
+        owner.close.assert_called_once_with()
+        self.assertIsNone(backend.owner)
+        self.assertEqual(backend.commanded_digital, {})
+
+    def test_cold_initialize_denies_pending_native_worker_before_factory(self):
+        adapter = FakeFocalCommand()
+        adapter.blocked = True
+        factory = Mock()
+        backend = CardBackend(factory, focal_command=adapter)
+        with self.assertRaises(RuntimeError):
+            backend.initialize(FastCancel(), startup_confirmed=True)
+        factory.assert_not_called()
+        self.assertIsNone(backend.owner)
+
+    def test_focal_helper_results_never_export_raw_native_objects(self):
+        adapter = FakeFocalCommand()
+        adapter.execute_callback = lambda enabled, cancelled: object()
+        backend, owner = self.backend(stage_controls_verified=True, focal_controls_verified=True,
+                                      focal_command=adapter)
+        backend.execute_stage("focales.start", FastCancel(), operator_confirmed=True)
+        json.dumps(backend.read_snapshot(FastCancel()), allow_nan=False)
+        returned = backend._stage_snapshot()["focal_helper_results"]["1_Focales ON.vi"]["returned"]
+        self.assertEqual(returned["returned_type"], "object")
+        self.assertFalse(returned["retained"])
+
+    def test_demo_focal_is_pure_ram_and_rejects_unlabelled_native_injection(self):
+        with self.assertRaises(ValueError):
+            DemoBackend(focal_command=object())
+        backend = DemoBackend(stage_controls_verified=True, focal_controls_verified=True)
+        backend.initialize(FastCancel())
+        backend.execute_stage("focales.start", FastCancel(), operator_confirmed=True)
+        snapshot = backend.read_snapshot(FastCancel())
+        self.assertTrue(snapshot["simulated"])
+        self.assertFalse(snapshot["hardware_writes"])
+        self.assertTrue(snapshot["stage_state"]["focal_controls_verified"])
+        self.assertTrue(snapshot["stage_state"]["local_banks"]["EPS"][32])
+        self.assertFalse(snapshot["stage_state"]["focal_helper_results"]["1_Focales ON.vi"]["returned"]
+                         ["native_calls"])
+        json.dumps(snapshot, allow_nan=False)
+
+    def test_default_general_off_uses_same_owned_adapter_without_enabling_focal_on(self):
+        adapter = FakeFocalCommand()
+        backend, owner = self.backend(focal_command=adapter, stop_wait=lambda seconds: None)
+        self.assertFalse(backend.focal_controls_verified)
+        self.assertIs(backend.focal_command, adapter)
+        backend.general_stop(operator_confirmed=True)
+        self.assertEqual([call for call in adapter.calls if call[0] == "execute"], [("execute", False)])
+        self.assertEqual(owner.write_digital_bank.call_count, 10)
+        self.assertNotIn("1_Focales ON.vi", backend._focal_helper_results)
+        self.assertEqual(backend._focal_helper_results["1_Focales OFF.vi"]["state"],
+                         "CALLBACK_COMPLETED_NOT_HARDWARE_ACK")
+
+    def test_failed_general_off_retains_same_worker_owner_and_blocks_later_on_and_close(self):
+        adapter = FakeFocalCommand()
+        backend, owner = self.backend(stage_controls_verified=True, focal_controls_verified=True,
+                                      focal_command=adapter, stop_wait=lambda seconds: None)
+        def fail_off(enabled, cancelled):
+            self.assertIs(enabled, False)
+            adapter.blocked = True
+            raise RuntimeError("synthetic OFF worker unconfirmed after timeout")
+        adapter.execute_callback = fail_off
+        with self.assertRaises(GeneralStopError):
+            backend.general_stop(operator_confirmed=True)
+        self.assertEqual([call for call in adapter.calls if call[0] == "execute"], [("execute", False)])
+        self.assertFalse(backend.procedure["command_sequence_completed"])
+        owner.write_digital_bank.assert_not_called()
+        with self.assertRaises(RuntimeError):
+            backend.execute_stage("focales.start", FastCancel(), operator_confirmed=True)
+        with self.assertRaises(RuntimeError):
+            backend.close()
+        owner.close.assert_not_called()
+        self.assertIs(backend.owner, owner)
+        self.assertEqual([call for call in adapter.calls if call[0] == "execute"], [("execute", False)])
+        adapter.blocked = False
+        adapter.execute_callback = None
+        backend.general_stop(operator_confirmed=True)
+        self.assertTrue(backend.procedure["command_sequence_completed"])
+        backend.close()
+        owner.close.assert_called_once_with()
+
+    def test_known_legacy_off_adapter_is_normalized_to_owned_command_without_native_calls(self):
+        legacy = ChromaFocalStop(dll_path=r"C:\offline\chr62000.dll", resources_verified=False, timeout=4)
+        backend = CardBackend(focal_off=legacy)
+        self.assertIsNot(backend.focal_off, legacy)
+        self.assertEqual(backend.focal_command.dll_path, legacy.dll_path)
+        self.assertIs(backend.focal_command.resources_verified, False)
+        self.assertEqual(backend.focal_command.timeout, 4)
+        self.assertEqual(backend.focal_command.pending_worker_count, 0)
+        self.assertIsNone(backend.owner)
+
+    def test_matching_legacy_off_and_owned_command_normalize_but_conflicts_reject_cold(self):
+        legacy = ChromaFocalStop(dll_path=r"C:\offline\chr62000.dll", resources_verified=True, timeout=4)
+        legacy.ensure_ready = Mock(side_effect=AssertionError("Legacy native OFF must not be called"))
+        adapter = FakeFocalCommand()
+        adapter.dll_path, adapter.timeout = legacy.dll_path, legacy.timeout
+        backend, owner = self.backend(focal_off=legacy, focal_command=adapter, stop_wait=lambda seconds: None)
+        backend.general_stop(operator_confirmed=True)
+        legacy.ensure_ready.assert_not_called()
+        self.assertEqual([call for call in adapter.calls if call[0] == "execute"], [("execute", False)])
+        factory = Mock()
+        adapter.timeout = 5
+        with self.assertRaisesRegex(ValueError, "Conflicting legacy OFF"):
+            CardBackend(factory, focal_off=legacy, focal_command=adapter)
+        factory.assert_not_called()
 
 
 if __name__ == "__main__":

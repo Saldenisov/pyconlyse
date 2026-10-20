@@ -1,9 +1,10 @@
-"""Callback-based execution of twelve pinned Acquisition procedures (Python 3.4).
+"""Callback-based execution of fourteen Acquisition procedures (Python 3.4).
 
 No driver is imported here. Callers own local banks, output serialization and
 authorization. The adapter serializes same-frame independent effects as local
-writes, publications, then waits. This is NOT a claim that LabVIEW's concurrent
-nodes, independent DAQ writer or PSP publication have identical timing.
+writes, nested/helper effects, publications, then waits. This is NOT a claim
+that LabVIEW's concurrent nodes, independent DAQ writer or PSP publication have
+identical timing.
 
 Each frame obtains independent full local snapshots before its effects. A
 publication uses that frame-entry snapshot, never an invented post-write value.
@@ -12,6 +13,11 @@ HT supply commands here are Boolean source pulses, not voltage ramps or proof
 of physical high voltage. Their DPS -> EPS -> C4_OUT publications are source
 error-wired: a failed publication short-circuits later publications in that
 chain. A stop may then attempt its later frames under the Python policy below.
+The Focales OFF container's nested 500 ms and independent outer 150 ms waits
+are serialized (650 ms); this explicit Python schedule is not native timing
+equivalence. Helper callbacks are required; normal return means only callback
+completion, not inferred native or physical acknowledgement. Original error-
+dialog Continue/Stop behavior is not reproduced by these Python policies.
 
 Python failure policy (not a recovered VI property): a failed start/reset stops
 immediately; stop procedures attempt all remaining literal source effects and
@@ -28,6 +34,7 @@ SUPPORTED_OPERATIONS = (
     "prema.start", "prema.stop", "relays_ht.start", "relays_ht.stop",
     "modulator.reset", "alimentation_ht.start", "alimentation_ht.stop",
     "alimentation_ht.reset",
+    "focales.start", "focales.stop",
 )
 OUTPUT_BANKS = (15, 17)
 
@@ -54,12 +61,19 @@ def _snapshot(bank, value):
     return value
 
 
-def _validate_plan(frames):
+def _validate_plan(frames, operation):
     """Validate the entire plan before any callback can produce effects."""
     if not isinstance(frames, list) or not frames:
         raise ValueError("Nonempty ordered stage plan required")
-    banks, uids, last_writes = set(), set(), {}
-    for frame_index, frame in enumerate(frames):
+    banks, uids, last_writes, helpers = set(), set(), {}, set()
+
+    def validate_frames(sequence, depth=0):
+        if not isinstance(sequence, list) or not sequence or depth > 16:
+            raise ValueError("Nonempty bounded ordered source frames required")
+        for frame in sequence:
+            validate_frame(frame, depth)
+
+    def validate_frame(frame, depth):
         if not isinstance(frame, (tuple, list)) or len(frame) != 2:
             raise ValueError("Invalid source frame")
         uid, effects = frame
@@ -91,7 +105,7 @@ def _validate_plan(frames):
                         raise ValueError("Invalid local field/type")
                     seen.add(index)
                     if bank in OUTPUT_BANKS:
-                        last_writes[(bank, index)] = (frame_index, effect_index)
+                        last_writes[(bank, index)] = (uid, effect_index)
                 if bank != 35:
                     # ACTION is a literal scalar assignment, not a local
                     # read/merge. No source-qualified initial value is known.
@@ -109,29 +123,55 @@ def _validate_plan(frames):
                                                    ("C4_OUT_DIO96", 15))):
                         raise ValueError("Unqualified source publication")
                     banks.add(pair[1])
+            elif kind == "subsequence":
+                if len(effect) != 2 or operation not in ("focales.start", "focales.stop"):
+                    raise ValueError("Unqualified nested source frames")
+                validate_frames(effect[1], depth + 1)
+            elif kind == "call_handle_error":
+                required = {"focales.start": "1_Focales ON.vi",
+                            "focales.stop": "1_Focales OFF.vi"}.get(operation)
+                if len(effect) != 2 or effect[1] != required or required is None:
+                    raise ValueError("Unqualified source helper")
+                helpers.add(required)
             else:
                 # Focales/helper calls and nested procedures must never be
                 # partly executed merely because their first frames look safe.
                 raise ValueError("Unsupported stage effect: " + str(kind))
-    return sorted(banks), last_writes
+
+    validate_frames(frames)
+    # Determine releases in the actual selected schedule, not arbitrary
+    # same-frame source effect list order. Container writes precede children.
+    last_writes.clear()
+    def collect_releases(sequence):
+        for uid, effects in sequence:
+            for index, effect in enumerate(effects):
+                if effect[0] == "write" and effect[1] in OUTPUT_BANKS:
+                    for field, value in effect[2]:
+                        last_writes[(effect[1], field)] = (uid, index)
+            for effect in effects:
+                if effect[0] == "subsequence":
+                    collect_releases(effect[1])
+    collect_releases(frames)
+    return sorted(banks), last_writes, helpers
 
 
 def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                   cancelled, frame_observer=None, operator_confirmed=False,
-                  new_value=True):
-    """Execute one helper-free source path through injected local callbacks.
+                  new_value=True, focal_helper=None):
+    """Execute one source path through injected local callbacks.
 
     read_local(bank) -> complete tuple of bool, or scalar bool for bank 35.
     write_local(bank, ((field, bool), ...)) must merge only the named fields.
     publish(name, bank, tuple_snapshot) observes an independent frame-entry read.
     wait_seconds(seconds), cancelled() -> bool, observer(frame_index, source_uid).
+    focal_helper(helper_name) is mandatory only for a True Focales request.
 
     Confirmation is explicit even for a False NewVal no-op. Callback shapes,
     the complete pinned source plan and all initial bank snapshots are checked
     before any local write/publication/wait. A return never means hardware ACK.
     """
     if operation not in SUPPORTED_OPERATIONS:
-        raise ValueError("Unsupported helper-free stage operation")
+        raise ValueError("Unsupported stage operation")
     if operator_confirmed is not True:
         raise ValueError("Explicit local stage confirmation required")
     if type(new_value) is not bool:
@@ -144,17 +184,22 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
     model = load_model()
     # Validate the True source plan even if this event is a False no-op.
     frames = model.plan(operation, True)
-    banks, last_writes = _validate_plan(frames)
+    banks, last_writes, required_helpers = _validate_plan(frames, operation)
     report = dict(operation=operation, status="NOOP" if not new_value else "EXECUTING",
                   completed_frames=[], failures=[], restoration_failures=[],
                   restored_fields=[], pending_output_restorations=[],
                   local_write_attempts=0,
+                  helper_attempts=[], frame_observer_order="preorder",
+                  completed_frames_order="completion_postorder",
                   hardware_acknowledged=False, source_frame_effects_ordered=False,
-                  adapter_schedule="writes_then_publish_then_wait",
+                  adapter_schedule=("writes_then_nested_or_helper_then_publish_then_wait"
+                                    if required_helpers else "writes_then_publish_then_wait"),
                   failure_policy="best_effort_stop" if operation.endswith(".stop")
                   else "abort_start_or_reset", cancelled=False)
     if not new_value:
         return report
+    if required_helpers and not callable(focal_helper):
+        raise ValueError("Explicit Focales helper callback required before effects")
     baseline = {bank: _snapshot(bank, read_local(bank)) for bank in banks}
     pending = set()
     best_effort = operation.endswith(".stop")
@@ -199,8 +244,12 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
             restore()
             raise StageExecutionCancelled(report)
 
-    try:
-        for frame_index, (uid, effects) in enumerate(frames):
+    next_frame = [0]
+    def execute_frames(sequence):
+        sequence_failed = False
+        for uid, effects in sequence:
+            frame_index = next_frame[0]
+            next_frame[0] += 1
             check_cancel()
             frame_failed = False
             if frame_observer is not None:
@@ -229,12 +278,17 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
             # Frame list order is evidence for frames only; same-frame nodes
             # are independent. This deterministic schedule preserves a pulse
             # dwell and deliberately does not assert native concurrent timing.
-            for kind in ("write", "publish", "wait"):
+            for kind in ("write", "subsequence", "call_handle_error", "publish", "wait"):
                 for effect_index, effect in enumerate(effects):
                     if effect[0] != kind:
                         continue
                     check_cancel()
+                    if kind == "subsequence":
+                        child_failed = execute_frames(effect[1])
+                        frame_failed = frame_failed or child_failed
+                        continue
                     current_publication = None
+                    helper_attempt = None
                     try:
                         if kind == "write":
                             _, bank, fields = effect
@@ -245,8 +299,16 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                             write_local(bank, changes)
                             if bank in OUTPUT_BANKS:
                                 for index, value in changes:
-                                    if last_writes[(bank, index)] == (frame_index, effect_index):
+                                    if last_writes[(bank, index)] == (uid, effect_index):
                                         pending.discard((bank, index))
+                        elif kind == "call_handle_error":
+                            helper_attempt = dict(helper=effect[1], source_uid=uid,
+                                                  source_error_policy=kind,
+                                                  status="CALLBACK_STARTED")
+                            report["helper_attempts"].append(helper_attempt)
+                            focal_helper(effect[1])
+                            helper_attempt["status"] = "CALLBACK_COMPLETED"
+                            check_cancel()
                         elif kind == "publish":
                             for name, bank in effect[1]:
                                 current_publication = (name, bank)
@@ -264,6 +326,14 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                                 current_publication[1] if current_publication else None)
                         if current_publication is not None:
                             report["failures"][-1]["publication"] = current_publication[0]
+                        if helper_attempt is not None:
+                            helper_attempt["status"] = "FAILED"
+                            helper_attempt["error_type"] = type(error).__name__
+                            helper_attempt["error"] = str(error)
+                            report["failures"][-1]["helper"] = effect[1]
+                            # Cancellation takes precedence over best-effort
+                            # OFF continuation when an unquiesced helper fails.
+                            check_cancel()
                         frame_failed = True
                         if kind == "write" and effect[1] in OUTPUT_BANKS:
                             restore()
@@ -271,6 +341,11 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                             raise
             if not frame_failed:
                 report["completed_frames"].append(uid)
+            sequence_failed = sequence_failed or frame_failed
+        return sequence_failed
+
+    try:
+        execute_frames(frames)
         check_cancel()
     except StageExecutionCancelled:
         raise

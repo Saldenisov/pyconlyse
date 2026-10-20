@@ -18,7 +18,7 @@ or issue NI, serial, PSP or Tango commands.
 | Original Supervision | Saved-source models, display mappings, event fragments and focused lifecycle traces | 39 original VI/XML identities accounted; complete semantic coverage remains false |
 | Pure Python models | Explicit supplied inputs/returns; 16 modulator procedures and 120 frames including nested frames | No stage actuators or native error-handler replacement |
 | Copied LabVIEW telemetry | Latest 27 shared-variable banks through Python 3.4 to Everest | Sequential/non-atomic; transport does not qualify the source data or replace Acquisition |
-| XP GUI server, default port 8771 | Cold IDLE, explicit local initialization, six AI/DI banks, General, twelve additional source-stage paths and conditional cooling-trip evaluation on the same owner | New paths default uncommissioned; no new HTTP/Tango commands; Focales, HT-voltage/counter and full 27-bank parity remain incomplete |
+| XP GUI server, default port 8771 | Cold IDLE, explicit local initialization, six AI/DI banks, General, fourteen additional source-stage paths and conditional cooling-trip evaluation on the same owner | New paths default uncommissioned; no new HTTP/Tango commands; native error semantics, HT-voltage/counter and full 27-bank parity remain incomplete |
 | Simulator, port 8765 | Signed named procedures, replay and durable intent state | Logical simulation only, not the GUI NI server |
 | Everest Tango/web | Separate read-only views of LabVIEW telemetry and Python runtime; replay/business simulation | No remote NI control route; replay values are not measurements |
 
@@ -62,7 +62,7 @@ as a claim of full shutdown. No verification flag was relaxed in this audit.
 | NI6071E requested samples/channel | 1000 in three explicit I/O callers | 10, with finite task configuration | Review task timing, trigger, read count and timeout together; 100× is a count ratio, not measured averaging time or precision |
 | Snapshot schema | 27 LabVIEW shared-variable banks | Six input banks, 144 AI + 176 DI | Explicit schema adapter and validation; no guessed missing banks |
 | Read scheduling | Parallel VI loops with asynchronous output writers | Single NI owner; normal reads pause during General procedures and FAULT | Qualify timing and continued fault observation before replacement |
-| Stage/fault logic | Source traces and inert models | Twelve additional stage paths and seven cooling-trip frames integrated, default uncommissioned | Remaining Focales/HT-voltage/counter/ingress/lifecycle paths and separate hardware qualification |
+| Stage/fault logic | Source traces and inert models | Fourteen additional stage paths and seven cooling-trip frames integrated, default uncommissioned | Remaining native error semantics/HT-voltage/counter/ingress/lifecycle paths and separate hardware qualification |
 
 ## Executable stage transfer on 20 October 2026
 
@@ -79,8 +79,9 @@ constants:
 | relays_ht.start / relays_ht.stop | 14 / 9 | 8 / 4 |
 | modulator.reset | 11 | 4 |
 | alimentation_ht.start / alimentation_ht.stop / alimentation_ht.reset | 20 / 21 / 22 | 5 / 5 / 5 |
+| focales.start / focales.stop | 15 / 10 | 11 / 7 including nested frames |
 
-These are 73 executable nominal frames, not another projection-only catalog.
+These are 91 executable nominal frames, not another projection-only catalog.
 Backend callbacks commit complete C3/C4 output banks through the existing owner,
 preserving untouched fields; EPS/DPS are typed local software memory. The saved
 False `NewVal` arms are empty. Source waits, including the extra 150 ms restore
@@ -94,7 +95,7 @@ false in constructors and example configuration. The general-only profile and
 synthetic Demo input source cannot activate this background branch. The deployed
 LV2012 enabled-arm selection still requires independent qualification.
 
-This implementation uses an explicit deterministic writes/publication/wait
+This implementation uses an explicit deterministic writes/nested-helper/publication/wait
 schedule within each native unordered frame. It does not reproduce independent
 VI-loop timing or prove electrical pulse widths. EPS literals never authorize a
 start, and the cooling trip does not invent automatic Chauffage/PREMA/Focales
@@ -131,25 +132,44 @@ recovery, without overwriting a newly queued stop/close. Precommand measurements
 remain stale until a postcommand read. Resource release still requires General
 Arrêt or explicit confirmation that the cabinet was switched off locally.
 
-Remaining transfer is real implementation work: the Focales helper/error-handler
-paths, HT-voltage/counter procedures, full shared-variable ingress/publication semantics,
+Remaining transfer is real implementation work: native helper/error-handler
+semantics, HT-voltage/counter procedures, full shared-variable ingress/publication semantics,
 and original outer-stop/resource/error scheduling. The six-bank and sample-count
 discrepancies remain open. No code was deployed or executed on hardware.
 
-The next Focales start transfer must not treat its helper as a successful opaque
-call. The reviewed source first pulses C4[7], waits 29 s, runs three independent
+Focales helper callbacks are now executed, not assumed successful opaque
+boundaries. The reviewed source first pulses C4[7], waits 29 s, runs three independent
 serial branches, waits 1.5 s and later pulses reset. Each Chroma ON/OFF branch
 initializes with reset enabled and writes nonzero voltage/current before the
-output command; OFF is not merely a zero-write operation. Native ON workers must
-be confirmed terminated before any later OFF procedure can run, including after
-cancellation or timeout. Otherwise a delayed ON could race after the stop.
-The existing OFF-only adapter was not changed or promoted to ON in this transfer.
-Actual serial mapping, vendor warning/error propagation and physical mains/
-interlock authority remain separate from nominal source-frame knowledge.
+output command; OFF is not merely a zero-write operation. The separate
+`focal_controls_verified=false` gate and verified serial resources are required
+before the first cabinet/NI write. Native workers must be confirmed joined before
+any later ON/OFF, NI output or resource release, including after cancellation or
+timeout. Unkillable or unconfirmed children remain owned and block those actions.
+General OFF uses that same owned command adapter, rather than an independent
+legacy process owner that could forget a failed join. Three branches execute in
+parallel; their 1–30 s execution deadline has separate bounded safety-reaping
+waits. Process termination is never physical-OFF acknowledgement.
+
+`run_branch()` keeps its original OFF default and now accepts an exact Boolean
+for the saved ON/OFF difference. The x86 DLL hash, resources and source setpoints
+remain unchanged. A separate worker entry point validates its ON/OFF flag.
+Focales stop serializes the independent native 500 ms nested and 150 ms outer
+waits as 650 ms; this is an explicit scheduling deviation, not electrical timing
+equivalence. The original Simple Error Handler Continue/Stop behavior, vendor
+incoming-error and positive-warning conversion remain unproven. Python uses
+explicit fail-start/best-effort-stop, warning-as-failure, close-in-finally and
+owned-worker deadlines. Actual serial mapping and physical mains/interlock
+authority remain separate from nominal source-frame knowledge. Normal NI reads
+pause during the long owner procedure; retained precommand telemetry stays stale.
+An OFF-branch error does not terminate independent OFF branches prematurely;
+they continue until completion or their execution deadline/cancellation. The
+error still makes the helper fail. ON uses the separate conservative fail-fast
+policy. Neither policy is claimed as the vendor's native error semantics.
 
 The package builder now includes both execution modules and builds its
 configuration from the committed example, not an ignored site configuration.
-Stage, cooling, standalone HT, feedback and Chroma permissions are forced false in generated candidates.
+Stage, cooling, standalone HT, Focales, feedback and Chroma permissions are forced false in generated candidates.
 All three package profiles are checked for complete dependency/file closure,
 manifest hashes, unchanged catalog bytes and absence of keys, telemetry history,
 native drivers or an interpreter. A packaged cold runtime was also imported and
@@ -228,6 +248,20 @@ tests in 3.996 s** under the same external-network/native-driver denial, with
 no NI/VISA driver module loaded. This supersedes the earlier nine-path count;
 the overlapping counts are not cumulative. The HT release-latch, interrupted
 start, failed extended stop and physical-OFF prompt tests use fake owners only.
+
+The final fourteen-path/Focales integration, including the OFF-branch
+best-effort correction, passed **3465 offline tests**, no skips, 7300 warnings,
+in **216.84 s**. Focused actual Python 3.4 suites passed **289 tests in 5.134 s**
+with external connections and ctypes driver loading denied; no NI/VISA driver
+module was loaded. These are final overlapping totals, not additions to the
+earlier counts. All native-driver and process-lifecycle tests use fake DLLs and
+fake worker processes. The actual Python 3.4 subprocess package lane starts
+only a cold IDLE runtime. The package contains 18 Python modules with complete
+relative-import closure and no native driver, private key or telemetry history.
+The critical syntax/undefined-name Ruff selection and `git diff --check` passed.
+Independent source/lifecycle review found no remaining blocker in these selected
+paths after the shared General-OFF worker-ownership correction. None of these
+checks establishes complete VI equivalence or hardware commissioning.
 
 Verification on 19 October 2026 used the isolated review worktree, not the
 running lab services:

@@ -6,7 +6,7 @@
 Its hardware-write block does not describe the separate
 `acquisition_server.pyw` GUI/default port-8771 NI runtime. That GUI starts cold
 in IDLE; explicit local initialization configures cards and writes startup AO/DO
-images. General and twelve additional source-stage paths are implemented on the
+images. General and fourteen additional source-stage paths are implemented on the
 NI owner; the latter require `stage_controls_verified`, default false. The
 cooling-trip branch additionally requires `cooling_trip_verified`, default
 false. Standalone HT supply start/stop/reset additionally require the independent
@@ -14,6 +14,10 @@ false. Standalone HT supply start/stop/reset additionally require the independen
 acknowledge supply OFF; legacy General Arrêt cannot clear their release
 requirement. Only existing General buttons are exposed in the GUI; the new local
 stage API has no HTTP/Tango route or GUI activation button.
+Focales additionally requires `focal_controls_verified` and qualified serial
+resources. Its native ON/OFF workers share ownership with General OFF; a failed
+kill/join blocks later outputs and NI release until quiescence is confirmed.
+Native worker exit does not establish physical OFF.
 HTTP exposes authenticated reads, not control. Deinitialization is resource
 release, not electrical shutdown.
 

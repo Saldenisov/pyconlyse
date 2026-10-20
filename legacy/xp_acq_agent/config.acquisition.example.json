@@ -8,6 +8,7 @@
   "stage_controls_verified": false,
   "cooling_trip_verified": false,
   "ht_controls_verified": false,
+  "focal_controls_verified": false,
   "focal_stop": {
     "resources_verified": false,
     "timeout_seconds": 10

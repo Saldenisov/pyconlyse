@@ -74,6 +74,9 @@ class AcquisitionRuntime(object):
             if (operation.startswith("alimentation_ht.")
                     and getattr(self._backend, "ht_controls_verified", False) is not True):
                 raise RuntimeError("Separate HT stage controls are not commissioned")
+            if (operation.startswith("focales.")
+                    and getattr(self._backend, "focal_controls_verified", False) is not True):
+                raise RuntimeError("Separate Focales stage controls are not commissioned")
             self._stage_command = operation
             self._pending = "stage"
             self._operation = "acq.stage." + operation
@@ -200,6 +203,7 @@ class AcquisitionRuntime(object):
                 stage_execution=dict(implemented=list(SUPPORTED_OPERATIONS),
                                      commissioned=getattr(self._backend, "stage_controls_verified", False) is True,
                                      ht_commissioned=getattr(self._backend, "ht_controls_verified", False) is True,
+                                     focal_commissioned=getattr(self._backend, "focal_controls_verified", False) is True,
                                      cooling_trip_commissioned=getattr(self._backend, "cooling_trip_verified", False) is True,
                                      remote_commands_enabled=False),
             )

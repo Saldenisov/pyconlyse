@@ -23,6 +23,7 @@ class StageBackend(FakeBackend):
         self._stage_simulated = False  # Fake NI owner, not a synthetic Demo source.
         self.cooling_trip_verified = False
         self.ht_controls_verified = True  # Fake-only explicit HT qualification.
+        self.focal_controls_verified = True  # Fake-only; no native helper here.
         self.stage_entered = threading.Event()
         self.stage_release = threading.Event()
         self.stage_release.set()
@@ -95,7 +96,7 @@ class StageRuntimeTests(unittest.TestCase):
 
     def test_cold_false_newval_and_invalid_requests_have_no_effects(self):
         self.assertFalse(self.runtime.stage_request("chauffage.start", True, False))
-        for operation in ("focales.start", "arbitrary"):
+        for operation in ("arbitrary",):
             with self.assertRaises(ValueError):
                 self.runtime.stage_request(operation, True)
         with self.assertRaises(ValueError):
@@ -119,7 +120,7 @@ class StageRuntimeTests(unittest.TestCase):
         self.assertEqual(self.backend.stage_calls, [])
         self.assertFalse(self.runtime.snapshot()["general_stop_required"])
 
-    def test_all_twelve_operations_run_on_the_existing_ni_owner(self):
+    def test_all_fourteen_operations_run_on_the_existing_ni_owner(self):
         self.initialize()
         for number, operation in enumerate(SUPPORTED_OPERATIONS, 1):
             self.assertTrue(self.runtime.stage_request(operation, True))
@@ -142,6 +143,43 @@ class StageRuntimeTests(unittest.TestCase):
         self.assertFalse(state["general_stop_required"])
         self.assertFalse(state["stage_execution"]["ht_commissioned"])
         self.assertEqual(self.backend.stage_calls, [])
+
+    def test_focal_gate_is_independent_and_noop_does_not_change_release_state(self):
+        self.initialize()
+        self.backend.focal_controls_verified = False
+        for operation in ("focales.start", "focales.stop"):
+            self.assertFalse(self.runtime.stage_request(operation, True, False))
+            with self.assertRaises(RuntimeError):
+                self.runtime.stage_request(operation, True)
+        state = self.runtime.snapshot()
+        self.assertFalse(state["general_stop_required"])
+        self.assertFalse(state["stage_execution"]["focal_commissioned"])
+        self.assertEqual(self.backend.stage_calls, [])
+
+    def test_general_stop_interrupts_long_focal_start_on_same_owner(self):
+        self.initialize()
+        self.backend.stage_release.clear()
+        self.runtime.stage_request("focales.start", True)
+        self.assertTrue(self.backend.stage_entered.wait(1))
+        self.runtime.general_stop(True)
+        wait_state(self.runtime, "RUNNING")
+        self.assertEqual(self.backend.close_calls, 0)
+        self.assertEqual(self.backend.procedure["name"], "general.stop")
+
+    def test_focal_stop_cannot_be_interrupted_or_close_the_owner(self):
+        self.initialize()
+        self.backend.stage_release.clear()
+        self.runtime.stage_request("focales.stop", True)
+        self.assertTrue(self.backend.stage_entered.wait(1))
+        try:
+            with self.assertRaises(RuntimeError):
+                self.runtime.request_shutdown(electrical_off_confirmed=True)
+            with self.assertRaises(RuntimeError):
+                self.runtime.general_stop(True)
+            self.assertFalse(self.runtime._cancel.is_set())
+        finally:
+            self.backend.stage_release.set()
+        wait_state(self.runtime, "RUNNING")
 
     def test_standalone_ht_stop_and_legacy_general_stop_do_not_authorize_release(self):
         self.initialize()
@@ -351,19 +389,22 @@ class StageConfigurationTests(unittest.TestCase):
         self.assertIs(value.get("stage_controls_verified", False), False)
         self.assertIs(value.get("cooling_trip_verified", False), False)
         self.assertIs(value.get("ht_controls_verified", False), False)
+        self.assertIs(value.get("focal_controls_verified", False), False)
 
     def test_explicit_separate_boolean_gates_are_accepted_without_creating_an_owner(self):
         with tempfile.TemporaryDirectory() as directory:
             value, unused_key = load_configuration(self.config(
                 directory, stage_controls_verified=True, cooling_trip_verified=False,
-                ht_controls_verified=True))
+                ht_controls_verified=True, focal_controls_verified=False))
         self.assertIs(value["stage_controls_verified"], True)
         self.assertIs(value["cooling_trip_verified"], False)
         self.assertIs(value["ht_controls_verified"], True)
+        self.assertIs(value["focal_controls_verified"], False)
 
     def test_malformed_flag_values_are_not_treated_as_commissioning(self):
         with tempfile.TemporaryDirectory() as directory:
-            for name in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified"):
+            for name in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
+                         "focal_controls_verified"):
                 for invalid in ("true", 1, None, []):
                     with self.assertRaises(ValueError):
                         load_configuration(self.config(directory, **{name: invalid}))

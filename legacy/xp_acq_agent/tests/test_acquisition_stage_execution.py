@@ -1,4 +1,4 @@
-"""Twelve literal VI paths, fake callbacks only; runnable on Python 3.4."""
+"""Fourteen literal VI paths, fake callbacks only; runnable on Python 3.4."""
 import copy
 import unittest
 from unittest.mock import patch
@@ -119,6 +119,37 @@ EXPECTED = {
 }
 
 
+# Flattened preorder observer schedule includes source containers. Container
+# completion follows children, separately checked below, not asserted preorder.
+FOCAL_EXPECTED = {
+    "focales.start": [
+        ("40162", [W(15, (7, True)), A, T(150)]),
+        ("40245", [W(15, (7, False))]), ("40293", []),
+        ("46840", [T(29000)]),
+        ("48404", [("helper", "1_Focales ON.vi")]),
+        ("49054", [T(1500)]),
+        ("40323", [W(15, (2, True)), T(150)]),
+        ("40383", [W(15, (2, False))]), ("40432", [T(250)]),
+        ("40463", [W(36, (10, False)), W(44, (30, False), (32, True), (35, False))]),
+        ("40573", [P, T(100)]),
+    ],
+    "focales.stop": [
+        ("23518", [A]),
+        ("57312", [("helper", "1_Focales OFF.vi")]),
+        ("47864", [T(500), T(150)]),
+        ("54833", [W(15, (8, False)), T(150)]),
+        ("23774", [W(15, (8, True))]),
+        ("23880", [W(36, (11, False)), W(44, (32, False), (33, False), (35, True))]),
+        ("24054", [P, T(100)]),
+    ],
+}
+FOCAL_COMPLETED = {
+    "focales.start": ["40162", "40245", "46840", "48404", "49054", "40293",
+                      "40323", "40383", "40432", "40463", "40573"],
+    "focales.stop": ["57312", "47864", "23518", "54833", "23774", "23880", "24054"],
+}
+
+
 class FakeLocals(object):
     def __init__(self):
         self.locals = {bank: tuple(bool(i % 2) for i in range(size))
@@ -162,6 +193,9 @@ class FakeLocals(object):
     def cancelled(self):
         return self.cancel
 
+    def helper(self, name):
+        self.trace.append(("helper", name))
+
     def execute(self, operation, **changes):
         options = dict(read_local=self.read, write_local=self.write,
                        publish=self.publish, wait_seconds=self.wait,
@@ -172,8 +206,255 @@ class FakeLocals(object):
 
 
 class StageExecutionTests(unittest.TestCase):
+    def test_focal_nominal_nested_order_all_18_frames_and_literal_effects(self):
+        observed_count = 0
+        for operation, frames in FOCAL_EXPECTED.items():
+            fake = FakeLocals()
+            expected, state = [], copy.deepcopy(fake.locals)
+            for index, (uid, effects) in enumerate(frames):
+                expected.append(("frame", index, uid))
+                entry = copy.deepcopy(state)
+                for effect in effects:
+                    if effect[0] == "write":
+                        expected.append(effect)
+                        _, bank, changes = effect
+                        if bank == 35:
+                            state[bank] = True
+                        else:
+                            values = list(state[bank])
+                            for field, value in changes:
+                                values[field] = value
+                            state[bank] = tuple(values)
+                    elif effect[0] == "publish":
+                        expected.append(effect + (entry[effect[2]],))
+                    else:
+                        expected.append(effect)
+            report = fake.execute(operation, focal_helper=fake.helper)
+            self.assertEqual(fake.trace, expected, operation)
+            self.assertEqual(fake.locals, state, operation)
+            self.assertEqual(report["completed_frames"], FOCAL_COMPLETED[operation])
+            self.assertEqual(report["completed_frames_order"], "completion_postorder")
+            self.assertEqual(report["frame_observer_order"], "preorder")
+            self.assertEqual(report["status"], "COMPLETED")
+            self.assertFalse(report["hardware_acknowledged"])
+            self.assertEqual(report["helper_attempts"][0]["status"], "CALLBACK_COMPLETED")
+            self.assertEqual(report["pending_output_restorations"], [])
+            self.assertEqual(report["adapter_schedule"],
+                             "writes_then_nested_or_helper_then_publish_then_wait")
+            observed_count += len([item for item in fake.trace if item[0] == "frame"])
+        self.assertEqual(observed_count, 18)
+
+    def test_focal_true_requires_helper_before_initial_local_reads_or_effects(self):
+        for operation in FOCAL_EXPECTED:
+            for callback in (None, 0, "fake helper"):
+                fake = FakeLocals()
+                with self.assertRaises(ValueError):
+                    fake.execute(operation, focal_helper=callback)
+                self.assertEqual(fake.trace + fake.reads, [])
+
+    def test_focal_false_newval_needs_no_helper_and_has_no_callbacks(self):
+        for operation in FOCAL_EXPECTED:
+            fake = FakeLocals()
+            report = fake.execute(operation, new_value=False)
+            self.assertEqual(report["status"], "NOOP")
+            self.assertEqual(report["helper_attempts"], [])
+            self.assertEqual(fake.trace + fake.reads, [])
+
+    def test_focal_long_waits_use_injected_wait_and_stop_serialization_is_explicit(self):
+        start, stop = FakeLocals(), FakeLocals()
+        start.execute("focales.start", focal_helper=start.helper)
+        stop.execute("focales.stop", focal_helper=stop.helper)
+        self.assertEqual([item[1] for item in start.trace if item[0] == "wait"],
+                         [0.15, 29.0, 1.5, 0.15, 0.25, 0.1])
+        self.assertEqual([item[1] for item in stop.trace if item[0] == "wait"],
+                         [0.5, 0.15, 0.15, 0.1])
+        self.assertLess(stop.trace.index(("wait", 0.5)), stop.trace.index(("wait", 0.15)))
+
+    def test_focal_helper_failure_start_aborts_but_stop_attempts_remaining_frames(self):
+        for operation in FOCAL_EXPECTED:
+            fake = FakeLocals()
+            def helper(name):
+                fake.helper(name)
+                raise RuntimeError("injected helper failure")
+            with self.assertRaises(StageExecutionError) as raised:
+                fake.execute(operation, focal_helper=helper)
+            report = raised.exception.report
+            self.assertEqual(report["status"], "PARTIAL_FAILURE")
+            self.assertEqual(report["helper_attempts"][0]["status"], "FAILED")
+            self.assertEqual(report["failures"][0]["helper"],
+                             "1_Focales OFF.vi" if operation.endswith(".stop") else "1_Focales ON.vi")
+            self.assertFalse(report["hardware_acknowledged"])
+            self.assertEqual(report["pending_output_restorations"], [])
+            if operation.endswith(".stop"):
+                self.assertEqual(fake.trace[-1], T(100))
+                self.assertIn(W(15, (8, False)), fake.trace)
+                self.assertIn(W(15, (8, True)), fake.trace)
+                self.assertTrue(fake.locals[44][35])  # Source software intent only.
+                self.assertNotIn("23518", report["completed_frames"])
+                self.assertNotIn("57312", report["completed_frames"])
+            else:
+                self.assertNotIn(("wait", 1.5), fake.trace)
+                self.assertNotIn(W(15, (2, True)), fake.trace)
+                self.assertFalse(any(item[0] == "publish" for item in fake.trace))
+                self.assertNotIn("40293", report["completed_frames"])
+
+    def test_focal_helper_failure_with_cancel_takes_precedence_and_keeps_diagnostics(self):
+        for operation in FOCAL_EXPECTED:
+            fake = FakeLocals()
+            def helper(name):
+                fake.helper(name)
+                fake.cancel = True
+                raise RuntimeError("cancelled while helper remained active")
+            with self.assertRaises(StageExecutionCancelled) as raised:
+                fake.execute(operation, focal_helper=helper)
+            report = raised.exception.report
+            self.assertEqual(report["status"], "CANCELLED")
+            self.assertEqual(report["helper_attempts"][0]["status"], "FAILED")
+            self.assertIn("helper remained active", report["helper_attempts"][0]["error"])
+            self.assertIn("helper", report["failures"][0])
+            self.assertFalse(any(item[0] == "publish" for item in fake.trace))
+            if operation.endswith(".stop"):
+                self.assertFalse(any(item[0] == "write" and item[1] == 15 for item in fake.trace))
+
+    def test_focal_cancel_after_successful_helper_prevents_later_frames(self):
+        for operation in FOCAL_EXPECTED:
+            fake = FakeLocals()
+            def helper(name):
+                fake.helper(name)
+                fake.cancel = True
+            with self.assertRaises(StageExecutionCancelled) as raised:
+                fake.execute(operation, focal_helper=helper)
+            self.assertEqual(raised.exception.report["helper_attempts"][0]["status"],
+                             "CALLBACK_COMPLETED")
+            self.assertFalse(any(item[0] == "publish" for item in fake.trace))
+
+    def test_focal_every_local_write_fault_is_visible_with_inflight_restoration(self):
+        for operation, frames in FOCAL_EXPECTED.items():
+            writes = [effect for uid, effects in frames for effect in effects if effect[0] == "write"]
+            for number, effect in enumerate(writes, 1):
+                fake = FakeLocals()
+                fake.fail_write = number
+                with self.assertRaises(StageExecutionError) as raised:
+                    fake.execute(operation, focal_helper=fake.helper)
+                self.assertEqual(raised.exception.report["status"], "PARTIAL_FAILURE")
+                self.assertTrue(any(item["phase"] == "write" for item in raised.exception.report["failures"]))
+                if effect[1] in (15, 17):
+                    offset = [i for i, item in enumerate(fake.trace) if item[0] == "write"][number - 1]
+                    baseline = tuple((field, fake.before[effect[1]][field]) for field, value in effect[2])
+                    self.assertEqual(fake.trace[offset + 1], ("write", effect[1], baseline))
+                if operation.endswith(".stop"):
+                    self.assertEqual(fake.trace[-1], T(100))
+
+    def test_focal_cancel_at_every_write_and_wait_boundary(self):
+        for operation, frames in FOCAL_EXPECTED.items():
+            for target_kind in ("write", "wait"):
+                effects = [effect for uid, effects in frames for effect in effects if effect[0] == target_kind]
+                for target in range(1, len(effects) + 1):
+                    fake, count = FakeLocals(), [0]
+                    def write(bank, changes):
+                        fake.write(bank, changes)
+                        if target_kind == "write":
+                            count[0] += 1
+                            if count[0] == target:
+                                fake.cancel = True
+                    def wait(seconds):
+                        fake.wait(seconds)
+                        if target_kind == "wait":
+                            count[0] += 1
+                            if count[0] == target:
+                                fake.cancel = True
+                    with self.assertRaises(StageExecutionCancelled) as raised:
+                        fake.execute(operation, focal_helper=fake.helper,
+                                     write_local=write, wait_seconds=wait)
+                    self.assertEqual(raised.exception.report["status"], "CANCELLED")
+                    self.assertFalse(raised.exception.report["hardware_acknowledged"])
+
+    def test_focal_every_wait_fault_is_visible_and_stop_keeps_software_intent(self):
+        for operation, frames in FOCAL_EXPECTED.items():
+            waits = [effect for uid, effects in frames for effect in effects if effect[0] == "wait"]
+            for target in range(1, len(waits) + 1):
+                fake, count = FakeLocals(), [0]
+                def wait(seconds):
+                    fake.wait(seconds)
+                    count[0] += 1
+                    if count[0] == target:
+                        raise RuntimeError("injected wait failure")
+                with self.assertRaises(StageExecutionError) as raised:
+                    fake.execute(operation, focal_helper=fake.helper, wait_seconds=wait)
+                self.assertEqual(raised.exception.report["status"], "PARTIAL_FAILURE")
+                self.assertEqual(raised.exception.report["failures"][0]["phase"], "wait")
+                self.assertFalse(raised.exception.report["hardware_acknowledged"])
+                if operation.endswith(".stop"):
+                    self.assertEqual(fake.trace[-1], T(100))
+                    self.assertTrue(fake.locals[44][35])
+
+    def test_focal_publication_fault_cannot_be_reported_as_completion(self):
+        for operation in FOCAL_EXPECTED:
+            fake = FakeLocals()
+            def publish(name, bank, snapshot):
+                fake.publish(name, bank, snapshot)
+                raise RuntimeError("injected DPS publication failure")
+            with self.assertRaises(StageExecutionError) as raised:
+                fake.execute(operation, focal_helper=fake.helper, publish=publish)
+            report = raised.exception.report
+            self.assertEqual(report["status"], "PARTIAL_FAILURE")
+            self.assertEqual(report["failures"][0]["publication"], "DPS")
+            self.assertEqual(report["helper_attempts"][0]["status"], "CALLBACK_COMPLETED")
+            self.assertNotIn(FOCAL_EXPECTED[operation][-1][0], report["completed_frames"])
+            self.assertEqual(report["pending_output_restorations"], [])
+
+    def test_focal_nested_observer_fault_marks_parent_incomplete(self):
+        for operation, nested_uid, parent_uid in (("focales.start", "48404", "40293"),
+                                                  ("focales.stop", "57312", "23518")):
+            fake = FakeLocals()
+            def observe(index, uid):
+                fake.observe(index, uid)
+                if uid == nested_uid:
+                    raise RuntimeError("injected nested observer failure")
+            with self.assertRaises(StageExecutionError) as raised:
+                fake.execute(operation, focal_helper=fake.helper, frame_observer=observe)
+            report = raised.exception.report
+            self.assertNotIn(parent_uid, report["completed_frames"])
+            self.assertNotIn(nested_uid, report["completed_frames"])
+            if operation.endswith(".stop"):
+                self.assertEqual(fake.trace[-1], T(100))
+
+    def test_focal_recursive_preflight_rejects_last_nested_effect_and_wrong_helper(self):
+        class Plan(object):
+            def __init__(self, last):
+                self.last = last
+            def plan(self, operation, value):
+                return [["1", [["write", 15, [[7, True]]]]],
+                        ["2", [["subsequence", [["3", [self.last]]]]]]]
+        for last in (["write", 15, [[32, False]]], ["wait", -1],
+                     ["call_handle_error", "GUESS.vi"],
+                     ["call_handle_error", "1_Focales OFF.vi"],
+                     ["call_clear_error", "1_Focales ON.vi"]):
+            fake = FakeLocals()
+            with patch("legacy.xp_acq_agent.elyse_agent.acquisition_stage_execution.load_model",
+                       return_value=Plan(last)):
+                with self.assertRaises(ValueError):
+                    fake.execute("focales.start", focal_helper=fake.helper)
+            self.assertEqual(fake.trace + fake.reads, [])
+
+    def test_focal_nested_publication_uses_its_own_entry_snapshot(self):
+        fake = FakeLocals()
+        original = fake.locals[36]
+        class Plan(object):
+            def plan(self, operation, value):
+                return [["1", [["write", 36, [[0, True]]],
+                                ["subsequence", [["2", [["write", 36, [[0, False]]],
+                                                         ["publish", [["DPS", 36]]]]]]]]]]
+        with patch("legacy.xp_acq_agent.elyse_agent.acquisition_stage_execution.load_model",
+                   return_value=Plan()):
+            fake.execute("focales.start", focal_helper=fake.helper)
+        published = [item for item in fake.trace if item[0] == "publish"][0]
+        self.assertTrue(published[3][0])
+        self.assertNotEqual(published[3], original)
+        self.assertFalse(fake.locals[36][0])
+
     def test_all_twelve_literal_paths_and_all_source_frames(self):
-        self.assertEqual(set(SUPPORTED_OPERATIONS), set(EXPECTED))
+        self.assertEqual(set(SUPPORTED_OPERATIONS), set(EXPECTED) | set(FOCAL_EXPECTED))
         for operation, frames in EXPECTED.items():
             fake = FakeLocals()
             expected, state = [], copy.deepcopy(fake.locals)

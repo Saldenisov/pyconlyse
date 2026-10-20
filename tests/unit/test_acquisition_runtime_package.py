@@ -26,11 +26,13 @@ def test_clean_source_package_contains_stage_dependencies_without_live_configura
         assert config["stage_controls_verified"] is False
         assert config["cooling_trip_verified"] is False
         assert config["ht_controls_verified"] is False
+        assert config["focal_controls_verified"] is False
         assert config["focal_stop"]["resources_verified"] is False
         assert config["ht_shutdown"]["feedback_verified"] is False
         assert manifest["auto_initialize"] is False
         assert manifest["source_stage_controls_default_enabled"] is False
         assert manifest["ht_stage_controls_default_enabled"] is False
+        assert manifest["focal_stage_controls_default_enabled"] is False
         expected = {"acquisition_server.pyw", "config.acquisition.json"}
         expected.update("elyse_agent/" + name for name in MODULES)
         expected.update("data/" + name for name in DATA)
@@ -75,4 +77,4 @@ print(json.dumps(dict(version=list(sys.version_info[:2]), paths=len(SUPPORTED_OP
         env = dict(os.environ, PYTHONPATH=str(output))
         result = subprocess.run([interpreter, "-c", code], cwd=output, env=env,
                                 capture_output=True, text=True, timeout=10, check=True)
-        assert json.loads(result.stdout) == {"version": [3, 4], "paths": 12}
+        assert json.loads(result.stdout) == {"version": [3, 4], "paths": 14}

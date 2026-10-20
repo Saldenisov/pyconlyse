@@ -130,7 +130,7 @@ class BusinessLogicContractTests(unittest.TestCase):
         close = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_backend.py", "CardBackend", "close")
         attrs = [node.func.attr for node in ast.walk(close)
                  if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)]
-        self.assertCountEqual(attrs, ["close", "_reset_stage_state"])
+        self.assertCountEqual(attrs, ["_ensure_focal_quiescent", "close", "_reset_stage_state"])
         self.assertFalse(self.contract["parity_gaps"]["lifecycle"]["resource_release_is_electrical_off"])
 
     def test_integrated_stage_paths_and_cooling_remain_separately_uncommissioned(self):
@@ -141,8 +141,12 @@ class BusinessLogicContractTests(unittest.TestCase):
         self.assertEqual(implementation["implemented"], list(paths))
         raw = (ROOT / self.contract["layers"]["pure_acquisition_model"]["catalog"]).read_bytes()
         catalog = json.loads(raw)["procedures"]
+        def count_frames(frames):
+            return sum(1 + sum(count_frames(effect[1]) for effect in effects
+                               if effect[0] == "subsequence") for _, effects in frames)
         self.assertEqual(implementation["source_frame_count"],
-                         sum(len(catalog[path]["frames"]) for path in paths))
+                         sum(count_frames(catalog[path]["frames"]) for path in paths))
+        self.assertTrue(implementation["source_frame_count_includes_nested"])
         self.assertTrue(implementation["nominal_paths_executable"])
         self.assertFalse(implementation["default_commissioned"])
         self.assertFalse(implementation["psp_delivery_acknowledged"])
@@ -151,13 +155,18 @@ class BusinessLogicContractTests(unittest.TestCase):
         self.assertFalse(implementation["standalone_ht_procedure_is_voltage_ramp"])
         self.assertFalse(implementation["standalone_ht_completion_is_zero_or_off_ack"])
         self.assertFalse(implementation["legacy_general_stop_clears_ht_release_requirement"])
+        self.assertTrue(implementation["focal_requires_separate_commissioning"])
+        self.assertFalse(implementation["focal_default_commissioned"])
+        self.assertTrue(implementation["native_on_workers_must_quiesce_before_other_outputs_or_release"])
+        self.assertFalse(implementation["native_worker_exit_is_physical_off_ack"])
         self.assertTrue(runtime["cooling_trip_execution"]["executable"])
         self.assertFalse(runtime["cooling_trip_execution"]["default_commissioned"])
         backend = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_backend.py",
                                "CardBackend", "__init__")
         defaults = dict(zip([arg.arg for arg in backend.args.args][-len(backend.args.defaults):],
                             backend.args.defaults))
-        for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified"):
+        for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
+                     "focal_controls_verified"):
             self.assertIs(ast.literal_eval(defaults[flag]), False)
 
     def test_source_hash_matches_supervision_adapter_not_deployment(self):
