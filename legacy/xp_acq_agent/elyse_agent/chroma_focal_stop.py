@@ -1,4 +1,8 @@
-"""Bounded, OFF-only adapter for the copied 32-bit chr62000 driver.
+"""Shared native branch and historical OFF-only chr62000 process adapter.
+
+The prepared server uses ChromaFocalCommand's retained process ownership for
+both ON and OFF. This historical wrapper is not its General-OFF process owner.
+run_branch retains an OFF default and accepts the reviewed ON/OFF Boolean.
 
 No DLL load/process/device access on import or construction. COM10/11/12 are
 saved VI defaults, NOT evidence of current Moxa mapping. Until an operator
@@ -29,14 +33,16 @@ def verify_driver(path):
         raise ValueError("Chroma DLL differs from reviewed source copy")
 
 
-def run_branch(dll, branch):
-    """One saved Initialize(reset=True)->V->slew->I->OFF->Close chain.
+def run_branch(dll, branch, output_enabled=False):
+    """One saved Initialize(reset=True)->V->slew->I->Output->Close chain.
 
     DLL exports/disassembly: stdcall; session uint32, status int32, Boolean
     uint16, setpoints double. Init consumes 16 stack bytes, Close 4, DBL
     setters 12, Output 8. Close-in-finally is an explicit Python safeguard.
     Function is used only in an isolated, time-bounded worker process.
     """
+    if type(output_enabled) is not bool:
+        raise ValueError("Explicit Boolean Chroma output state required")
     _number, resource, voltage, slew, current = branch
     init = dll.chr62000_init
     init.argtypes = [ctypes.c_char_p, ctypes.c_uint16, ctypes.c_uint16,
@@ -51,7 +57,7 @@ def run_branch(dll, branch):
         if status < 0:
             raise RuntimeError("{0}: status {1}".format(name, status))
         if status > 0:
-            # Warnings do not bypass subsequent OFF/Close, but must not be
+            # Warnings do not bypass subsequent Output/Close, but must not be
             # silently converted to an unqualified successful stop.
             errors.append("{0}: warning status {1}".format(name, status))
 
@@ -67,7 +73,7 @@ def run_branch(dll, branch):
             check(name, session.value, value)
         function = dll.chr62000_SetOutput
         function.argtypes, function.restype = [ctypes.c_uint32, ctypes.c_uint16], ctypes.c_int32
-        check("chr62000_SetOutput", session.value, 0)
+        check("chr62000_SetOutput", session.value, int(output_enabled))
     except Exception as error:
         errors.append(str(error))
     finally:
