@@ -9,6 +9,7 @@ No service configuration or network command can reach this adapter.
 from __future__ import division
 
 import time
+import math
 
 from .errors import HardwareWriteBlocked
 from .hardware_plan import (
@@ -75,11 +76,19 @@ class LegacyCardTasks(object):
     def read_analog_means(self, name, samples_per_channel=10, timeout_seconds=10.0):
         if name not in dict((entry[0], True) for entry in AI_BANKS):
             raise ValueError("unknown analog input bank")
-        count = int(samples_per_channel)
-        if count <= 0:
-            raise ValueError("samples_per_channel must be positive")
+        count = samples_per_channel
+        if type(count) is not int or not 0 < count <= AI_TIMING[name][2]:
+            raise ValueError("samples_per_channel requires a positive exact integer within configured finite samples")
+        if type(timeout_seconds) not in (int, float):
+            raise ValueError("timeout_seconds requires a finite positive number")
+        try:
+            timeout = float(timeout_seconds)
+        except (OverflowError, ValueError):
+            raise ValueError("timeout_seconds requires a finite positive number")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout_seconds requires a finite positive number")
         raw = self._task(name).read(number_of_samples_per_channel=count,
-                                    timeout=float(timeout_seconds))
+                                    timeout=timeout)
         expected = dict((entry[0], entry[2]) for entry in AI_BANKS)[name]
         return channel_means(raw, expected_channels=expected, expected_samples=count)
 
@@ -122,21 +131,47 @@ class LegacyCardTasks(object):
             self._task("{0}_AO".format(group)).write(list(analog[group]), auto_start=True)
         return {"digital": digital, "analog_volts": analog}
 
+    def _counter_task(self, number):
+        if type(number) is not int or number not in range(8):
+            raise ValueError("physical NI6602 counter must be in 0..7")
+        return self._task("C10_NI6602_CO_{0}".format(number))
+
+    def start_counter(self, number):
+        """Explicit start of a retained physical counter task, no new owner."""
+        return self._counter_task(number).start()
+
+    def read_counter_pulse_done(self, number):
+        """Read source CO.GénImpTerminée (property 6414), not task completion.
+
+        A retriggerable task can remain active after its current pulse ends.
+        Missing channel capability and non-Boolean responses fail closed;
+        Task.is_task_done is intentionally never consulted.
+        """
+        self._counter_task(number)
+        done = self.counter_channels[number].co_pulse_done
+        if type(done) is not bool:
+            raise TypeError("NI6602 co_pulse_done must be an exact Boolean")
+        return done
+
+    def stop_counter(self, number):
+        """Stop a retained counter task; a failure never removes its handle."""
+        return self._counter_task(number).stop()
+
     def update_counter_microseconds(self, number, delay_us, width_us):
-        """Manual equivalent of 1_ACQ_WRITE_NI6602.vi's three properties.
+        """Manual policy for 1_ACQ_WRITE_NI6602.vi's three properties.
 
         Saved-VI parent mapping pairs commands 1..16 onto physical ctr0..7;
         this manual method accepts the physical zero-based counter directly.
+        Pulse-done property matches source 6414. Conversion and 22-attempt
+        polling remain manual policy, not established source timing parity.
         """
-        if type(number) is not int or number not in range(8):
-            raise ValueError("physical NI6602 counter must be in 0..7")
+        task = self._counter_task(number)
         low_and_initial = microseconds_to_20mhz_ticks(delay_us)
         high = microseconds_to_20mhz_ticks(width_us)
         if low_and_initial <= 0 or high <= 0:
             raise ValueError("counter low/high time must be positive")
-        task = self._task("C10_NI6602_CO_{0}".format(number))
         for _attempt in range(22):
-            if task.is_task_done():
+            if self.read_counter_pulse_done(number):
                 break
             self.sleep(0.001)
         task.stop()
@@ -178,7 +213,10 @@ def create_legacy_card_tasks(authorized=False, outputs_commissioned=False, daqmx
     plan = card_initialization_plan()
     if daqmx is None:
         import nidaqmx as daqmx
-    from nidaqmx.constants import AcquisitionType, Edge, Level, LineGrouping, TerminalConfiguration
+    from nidaqmx.constants import (
+        AcquisitionType, Edge, Level, LineGrouping, ReadRelativeTo,
+        TerminalConfiguration,
+    )
 
     tasks = {}
     counter_channels = {}
@@ -219,6 +257,11 @@ def create_legacy_card_tasks(authorized=False, outputs_commissioned=False, daqmx
                 sample_mode=AcquisitionType.FINITE, samps_per_chan=samples,
             )
             task.triggers.start_trigger.cfg_dig_edge_start_trig(trigger, trigger_edge=Edge.RISING)
+            # Original NI6071E initializer property codes 6410/6182:
+            # 0x28B9 == CURRENT_READ_POSITION, Read.AutoStart == True.
+            # No equivalent C11 property assignment is inferred here.
+            task.in_stream.relative_to = ReadRelativeTo.CURRENT_READ_POSITION
+            task.in_stream.auto_start = True
 
         for name, device, first, last, _size in DI_BANKS + DO_BANKS:
             task = daqmx.Task(new_task_name=name)
