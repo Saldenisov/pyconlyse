@@ -146,13 +146,18 @@ class BusinessLogicContractTests(unittest.TestCase):
         self.assertTrue(implementation["nominal_paths_executable"])
         self.assertFalse(implementation["default_commissioned"])
         self.assertFalse(implementation["psp_delivery_acknowledged"])
+        self.assertTrue(implementation["standalone_ht_requires_separate_commissioning"])
+        self.assertFalse(implementation["standalone_ht_default_commissioned"])
+        self.assertFalse(implementation["standalone_ht_procedure_is_voltage_ramp"])
+        self.assertFalse(implementation["standalone_ht_completion_is_zero_or_off_ack"])
+        self.assertFalse(implementation["legacy_general_stop_clears_ht_release_requirement"])
         self.assertTrue(runtime["cooling_trip_execution"]["executable"])
         self.assertFalse(runtime["cooling_trip_execution"]["default_commissioned"])
         backend = class_method("legacy/xp_acq_agent/elyse_agent/acquisition_backend.py",
                                "CardBackend", "__init__")
         defaults = dict(zip([arg.arg for arg in backend.args.args][-len(backend.args.defaults):],
                             backend.args.defaults))
-        for flag in ("stage_controls_verified", "cooling_trip_verified"):
+        for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified"):
             self.assertIs(ast.literal_eval(defaults[flag]), False)
 
     def test_source_hash_matches_supervision_adapter_not_deployment(self):

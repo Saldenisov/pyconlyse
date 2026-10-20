@@ -1,4 +1,4 @@
-"""Nine literal VI paths, fake callbacks only; runnable on Python 3.4."""
+"""Twelve literal VI paths, fake callbacks only; runnable on Python 3.4."""
 import copy
 import unittest
 from unittest.mock import patch
@@ -19,6 +19,8 @@ def T(milliseconds):
 
 
 P = ("publish", "DPS", 36)
+E = ("publish", "EPS", 44)
+C = ("publish", "C4_OUT_DIO96", 15)
 A = W(35, (-1, True))
 # Independent transcription of source frame UIDs and literal effects. Same-
 # frame effect order below is the explicitly selected Python adapter schedule.
@@ -93,6 +95,27 @@ EXPECTED = {
         ("33828", [W(36, (12, False)), W(44, (36, False))]),
         ("33986", [P, T(100)]),
     ],
+    "alimentation_ht.start": [
+        ("53995", [W(15, (18, True)), A, T(150)]),
+        ("54078", [W(15, (18, False))]),
+        ("54126", [W(36, (15, False)), W(44, (45, True), (49, False))]),
+        ("54238", [P, E, C]),
+        ("50555", [T(100)]),
+    ],
+    "alimentation_ht.stop": [
+        ("31696", [W(15, (19, False)), A, T(150)]),
+        ("31883", [W(15, (19, True))]),
+        ("32123", [W(36, (17, False)), W(44, (45, False), (49, True))]),
+        ("32374", [P, E, C]),
+        ("32729", [T(100)]),
+    ],
+    "alimentation_ht.reset": [
+        ("32931", [W(15, (20, True)), A, T(150)]),
+        ("33169", [W(15, (20, False))]),
+        ("33217", [W(36, (16, False))]),
+        ("33438", [P, E, C]),
+        ("33886", [T(100)]),
+    ],
 }
 
 
@@ -149,7 +172,7 @@ class FakeLocals(object):
 
 
 class StageExecutionTests(unittest.TestCase):
-    def test_all_nine_literal_paths_and_all_source_frames(self):
+    def test_all_twelve_literal_paths_and_all_source_frames(self):
         self.assertEqual(set(SUPPORTED_OPERATIONS), set(EXPECTED))
         for operation, frames in EXPECTED.items():
             fake = FakeLocals()
@@ -192,9 +215,9 @@ class StageExecutionTests(unittest.TestCase):
             self.assertEqual(fake.reads, [])
             self.assertEqual(fake.locals, fake.before)
 
-    def test_unknown_focal_general_and_ht_rejected_before_any_callbacks(self):
+    def test_unknown_focal_general_and_ht_ramp_rejected_before_any_callbacks(self):
         for operation in ("unknown", "focales.start", "focales.stop", "general.start",
-                          "general.stop", "alimentation_ht.start", "alimentation_ht.stop"):
+                          "general.stop", "alimentation_ht.ramp", "ht_voltage_12.7kv"):
             fake = FakeLocals()
             with self.assertRaises(ValueError):
                 fake.execute(operation)
@@ -275,6 +298,95 @@ class StageExecutionTests(unittest.TestCase):
         fake.execute("chauffage.start")
         publication = [item for item in fake.trace if item[0] == "publish"][0]
         self.assertFalse(publication[3][4])
+
+    def test_ht_exact_error_wired_publication_order_and_each_failure_short_circuit(self):
+        names = ("DPS", "EPS", "C4_OUT_DIO96")
+        banks = (36, 44, 15)
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop",
+                          "alimentation_ht.reset"):
+            for fail_at in range(3):
+                fake = FakeLocals()
+                def publish(name, bank, snapshot):
+                    fake.publish(name, bank, snapshot)
+                    if name == names[fail_at]:
+                        raise RuntimeError("injected publication failure: " + name)
+                with self.assertRaises(StageExecutionError) as raised:
+                    fake.execute(operation, publish=publish)
+                attempts = [item for item in fake.trace if item[0] == "publish"]
+                self.assertEqual([item[1] for item in attempts], list(names[:fail_at + 1]))
+                self.assertEqual([item[2] for item in attempts], list(banks[:fail_at + 1]))
+                report = raised.exception.report
+                self.assertEqual(report["status"], "PARTIAL_FAILURE")
+                self.assertFalse(report["hardware_acknowledged"])
+                self.assertEqual(report["failures"][0]["publication"], names[fail_at])
+                self.assertEqual(report["failures"][0]["bank"], banks[fail_at])
+                self.assertNotIn(EXPECTED[operation][3][0], report["completed_frames"])
+                if operation.endswith(".stop"):
+                    # Explicit Python best-effort policy attempts later wait;
+                    # it does not bypass the source publication error chain.
+                    self.assertEqual(fake.trace[-1], T(100))
+                else:
+                    self.assertNotIn(("frame", 4, EXPECTED[operation][4][0]), fake.trace)
+
+    def test_ht_cancel_between_each_publication_prevents_remaining_effects(self):
+        names = ("DPS", "EPS", "C4_OUT_DIO96")
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop",
+                          "alimentation_ht.reset"):
+            for cancel_at in range(3):
+                fake = FakeLocals()
+                def publish(name, bank, snapshot):
+                    fake.publish(name, bank, snapshot)
+                    if name == names[cancel_at]:
+                        fake.cancel = True
+                with self.assertRaises(StageExecutionCancelled) as raised:
+                    fake.execute(operation, publish=publish)
+                attempts = [item for item in fake.trace if item[0] == "publish"]
+                self.assertEqual([item[1] for item in attempts], list(names[:cancel_at + 1]))
+                self.assertEqual(raised.exception.report["pending_output_restorations"], [])
+                self.assertEqual(raised.exception.report["status"], "CANCELLED")
+                self.assertNotIn(("frame", 4, EXPECTED[operation][4][0]), fake.trace)
+
+    def test_ht_reset_preserves_entire_eps_and_has_no_analog_counter_or_ramp_effect(self):
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop",
+                          "alimentation_ht.reset"):
+            fake = FakeLocals()
+            fake.execute(operation)
+            writes = [item for item in fake.trace if item[0] == "write"]
+            self.assertTrue(set(item[1] for item in writes).issubset({15, 35, 36, 44}))
+            self.assertEqual([item[1] for item in fake.trace if item[0] == "wait"],
+                             [0.15, 0.1])
+            if operation.endswith(".reset"):
+                self.assertEqual(fake.locals[44], fake.before[44])
+                self.assertFalse(any(item[1] == 44 for item in writes))
+                self.assertEqual([item[2] for item in writes if item[1] == 36],
+                                 [((16, False),)])
+
+    def test_ht_reset_preflights_eps_for_publication_despite_no_eps_write(self):
+        fake = FakeLocals()
+        fake.locals[44] = None
+        with self.assertRaises(ValueError):
+            fake.execute("alimentation_ht.reset")
+        self.assertEqual(fake.trace, [])
+
+    def test_ht_publications_share_selected_frame_entry_reads_not_live_mutations(self):
+        fake = FakeLocals()
+        entry = {}
+        def observer(index, uid):
+            fake.observe(index, uid)
+            if index == 3:
+                entry.update({bank: fake.locals[bank] for bank in (15, 36, 44)})
+        def publish(name, bank, snapshot):
+            fake.publish(name, bank, snapshot)
+            # Inter-callback mutation must not turn the next publication into
+            # a post-write read. This is the documented adapter schedule, not
+            # an assertion of source-wide atomic snapshots.
+            for target in (15, 36, 44):
+                fake.locals[target] = tuple(not value for value in fake.locals[target])
+        fake.execute("alimentation_ht.start", frame_observer=observer, publish=publish)
+        attempts = [item for item in fake.trace if item[0] == "publish"]
+        self.assertEqual(len(attempts), 3)
+        for kind, name, bank, snapshot in attempts:
+            self.assertEqual(snapshot, entry[bank])
 
     def test_no_invented_input_gate_eps_or_ni_ack(self):
         fake = FakeLocals()

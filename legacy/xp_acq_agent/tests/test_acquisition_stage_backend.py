@@ -170,9 +170,9 @@ class AcquisitionStageBackendTests(unittest.TestCase):
         self.assertEqual(cancel.waits, [])
         owner.write_digital_bank.assert_not_called()
 
-    def test_unsupplied_focal_and_ht_helpers_never_partly_execute(self):
+    def test_unsupplied_focal_helpers_never_partly_execute(self):
         backend, owner = self.backend(stage_controls_verified=True)
-        for operation in ("focales.start", "focales.stop", "alimentation_ht.start", "alimentation_ht.stop"):
+        for operation in ("focales.start", "focales.stop"):
             with self.assertRaises(ValueError):
                 backend.execute_stage(operation, FastCancel(), operator_confirmed=True)
         owner.write_digital_bank.assert_not_called()
@@ -419,6 +419,184 @@ class AcquisitionStageBackendTests(unittest.TestCase):
         self.assertEqual(first[0], "C3_DIO96_DO")
         self.assertTrue(first[1][1])
         self.assertEqual(backend._stage_pending_snapshot(), [])
+
+    def test_ht_gate_defaults_false_and_is_independent_from_feedback_qualification(self):
+        factory = Mock()
+        backend = CardBackend(factory, stage_controls_verified=True, ht_feedback_verified=True)
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset"):
+            with self.assertRaisesRegex(RuntimeError, "HT controls not commissioned"):
+                backend.execute_stage(operation, FastCancel(), operator_confirmed=True)
+        factory.assert_not_called()
+        self.assertFalse(backend.ht_controls_verified)
+        backend, owner = self.backend(stage_controls_verified=True)
+        self.assertFalse(backend._stage_snapshot()["ht_controls_verified"])
+        owner.write_digital_bank.assert_not_called()
+
+    def test_ht_commissioning_flag_is_an_exact_boolean_for_card_and_demo(self):
+        for value in (None, 0, 1, "yes"):
+            for constructor in (CardBackend, DemoBackend):
+                with self.assertRaises(ValueError):
+                    constructor(ht_controls_verified=value)
+
+    def test_ht_gate_false_prevents_pending_recovery_and_every_procedure_effect(self):
+        backend, owner = self.leave_unrestored_chauffage_pulse()
+        before = backend._stage_snapshot()
+        assignments = copy.deepcopy(backend.software_status_assignments)
+        owner.write_digital_bank.reset_mock()
+        owner.write_digital_bank.side_effect = None
+        cancel = FastCancel()
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset"):
+            with self.assertRaisesRegex(RuntimeError, "HT controls not commissioned"):
+                backend.execute_stage(operation, cancel, operator_confirmed=True)
+        owner.write_digital_bank.assert_not_called()
+        self.assertEqual(cancel.waits, [])
+        self.assertEqual(backend._stage_snapshot(), before)
+        self.assertEqual(backend.software_status_assignments, assignments)
+
+    def test_ht_gate_alone_does_not_replace_stage_confirmation_profile_or_owner_guards(self):
+        backend, owner = self.backend(ht_controls_verified=True)
+        with self.assertRaisesRegex(RuntimeError, "stage controls not commissioned"):
+            backend.execute_stage("alimentation_ht.start", FastCancel(), operator_confirmed=True)
+        owner.write_digital_bank.assert_not_called()
+        backend, owner = self.backend(stage_controls_verified=True, ht_controls_verified=True,
+                                      control_profile="general_only_test")
+        with self.assertRaisesRegex(RuntimeError, "General-only"):
+            backend.execute_stage("alimentation_ht.stop", FastCancel(), operator_confirmed=True)
+        owner.write_digital_bank.assert_not_called()
+        backend = CardBackend(stage_controls_verified=True, ht_controls_verified=True)
+        with self.assertRaises(ValueError):
+            backend.execute_stage("alimentation_ht.reset", FastCancel())
+        with self.assertRaisesRegex(RuntimeError, "initialized"):
+            backend.execute_stage("alimentation_ht.reset", FastCancel(), operator_confirmed=True)
+
+    def test_all_three_ht_paths_write_only_the_two_source_c4_images(self):
+        cases = (("alimentation_ht.start", 18, True, False, 15, ((45, True), (49, False))),
+                 ("alimentation_ht.stop", 19, False, True, 17, ((45, False), (49, True))),
+                 ("alimentation_ht.reset", 20, True, False, 16, ()))
+        for operation, index, asserted, released, dps, eps in cases:
+            with self.subTest(operation=operation):
+                backend, owner = self.backend(stage_controls_verified=True, ht_controls_verified=True)
+                c4 = list(backend.commanded_digital["C4_DIO96_DO"])
+                c4[31] = True
+                backend.commanded_digital["C4_DIO96_DO"] = tuple(c4)
+                before_analog = copy.deepcopy(backend.commanded_analog)
+                before_start = owner.start_legacy_counters.call_count
+                self.assertFalse(backend.ht_feedback_verified)  # Independent qualification.
+                cancel = FastCancel()
+                result = backend.execute_stage(operation, cancel, operator_confirmed=True)
+                self.assertEqual(result["status"], "COMPLETED")
+                self.assertEqual(cancel.waits, [.15, .1])
+                self.assertEqual(owner.write_digital_bank.call_count, 2)
+                for call, value in zip(owner.write_digital_bank.call_args_list, (asserted, released)):
+                    c4[index] = value
+                    self.assertEqual(call[0], ("C4_DIO96_DO", c4))
+                self.assertEqual(backend.software_status_assignments["DPS"], {dps: False})
+                self.assertEqual(backend.software_status_assignments["EPS"], dict(eps))
+                self.assertEqual(backend.commanded_analog, before_analog)
+                self.assertEqual(owner.start_legacy_counters.call_count, before_start)
+                owner.write_analog_logical_bank.assert_not_called()
+                for task in owner.tasks.values():
+                    task.start.assert_not_called()
+                    task.stop.assert_not_called()
+                    task.read.assert_not_called()
+                self.assertEqual(set(backend.stage_publications), {"DPS", "EPS", "C4_OUT_DIO96"})
+                self.assertFalse(result["hardware_acknowledged"])
+
+    def test_ht_false_newval_never_recovers_pending_commands_or_updates_status(self):
+        backend, owner = self.leave_unrestored_chauffage_pulse()
+        backend.ht_controls_verified = True
+        before = backend._stage_snapshot()
+        owner.write_digital_bank.reset_mock()
+        owner.write_digital_bank.side_effect = None
+        cancel = FastCancel()
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset"):
+            result = backend.execute_stage(operation, cancel, operator_confirmed=True, new_value=False)
+            self.assertEqual(result["status"], "NOOP")
+        owner.write_digital_bank.assert_not_called()
+        self.assertEqual(cancel.waits, [])
+        self.assertEqual(backend._stage_snapshot(), before)
+
+    def test_ht_publications_follow_chain_but_keep_independent_frame_entry_snapshots(self):
+        backend, owner = self.backend(stage_controls_verified=True, ht_controls_verified=True)
+        original_publish = backend._stage_publish
+        attempted = []
+        def publish(name, bank, values):
+            attempted.append(name)
+            original_publish(name, bank, values)
+            if name == "DPS":
+                # Simulate an independent local writer after frame-entry reads.
+                eps = list(backend._stage_status[44])
+                eps[60] = True
+                backend._stage_status[44] = tuple(eps)
+                c4 = list(backend.commanded_digital["C4_DIO96_DO"])
+                c4[31] = True
+                backend.commanded_digital["C4_DIO96_DO"] = tuple(c4)
+        backend._stage_publish = publish
+        backend.execute_stage("alimentation_ht.start", FastCancel(), operator_confirmed=True)
+        self.assertEqual(attempted, ["DPS", "EPS", "C4_OUT_DIO96"])
+        publications = backend.stage_publications
+        self.assertEqual([publications[name]["sequence"] for name in attempted], [1, 2, 3])
+        self.assertTrue(backend._stage_read_local(44)[60])
+        self.assertFalse(publications["EPS"]["values"][60])
+        self.assertTrue(backend._stage_read_local(15)[31])
+        self.assertFalse(publications["C4_OUT_DIO96"]["values"][31])
+        self.assertTrue(publications["EPS"]["values"][45])
+        self.assertFalse(publications["EPS"]["psp_delivered"])
+
+    def test_ht_publication_failure_short_circuits_later_chain_without_ack(self):
+        backend, owner = self.backend(stage_controls_verified=True, ht_controls_verified=True)
+        original_publish = backend._stage_publish
+        attempted = []
+        def publish(name, bank, values):
+            attempted.append(name)
+            if name == "EPS":
+                raise RuntimeError("synthetic publication boundary failure")
+            original_publish(name, bank, values)
+        backend._stage_publish = publish
+        with self.assertRaises(StageExecutionError):
+            backend.execute_stage("alimentation_ht.start", FastCancel(), operator_confirmed=True)
+        self.assertEqual(attempted, ["DPS", "EPS"])
+        self.assertEqual(set(backend.stage_publications), {"DPS"})
+        self.assertTrue(backend._stage_read_local(44)[45])  # Source literal, not physical ACK.
+        self.assertFalse(backend.procedure["hardware_acknowledged"])
+        self.assertIs(backend.owner, owner)
+        owner.close.assert_not_called()
+
+    def test_ht_assertion_restore_failure_is_drained_before_later_ht_stop(self):
+        backend, owner = self.backend(stage_controls_verified=True, ht_controls_verified=True)
+        count = [0]
+        def write(_name, _values):
+            count[0] += 1
+            if count[0] > 1:
+                raise RuntimeError("synthetic HT restore failure")
+        owner.write_digital_bank.side_effect = write
+        with self.assertRaises(StageExecutionError):
+            backend.execute_stage("alimentation_ht.start", FailedWait(), operator_confirmed=True)
+        self.assertEqual(backend._stage_pending_snapshot(), [(15, 18, False)])
+        self.assertTrue(backend.commanded_digital["C4_DIO96_DO"][18])
+        owner.write_digital_bank.reset_mock()
+        owner.write_digital_bank.side_effect = None
+        backend.execute_stage("alimentation_ht.stop", FastCancel(), operator_confirmed=True)
+        self.assertEqual(owner.write_digital_bank.call_count, 3)
+        for call in owner.write_digital_bank.call_args_list:
+            self.assertFalse(call[0][1][18])
+        self.assertEqual(backend._stage_pending_snapshot(), [])
+        owner.write_analog_logical_bank.assert_not_called()
+
+    def test_ht_demo_uses_independent_gate_and_same_literal_executor(self):
+        backend = DemoBackend(stage_controls_verified=True)
+        backend.initialize(FastCancel())
+        with self.assertRaisesRegex(RuntimeError, "HT controls not commissioned"):
+            backend.execute_stage("alimentation_ht.start", FastCancel(), operator_confirmed=True)
+        backend = DemoBackend(stage_controls_verified=True, ht_controls_verified=True)
+        backend.initialize(FastCancel())
+        result = backend.execute_stage("alimentation_ht.stop", FastCancel(), operator_confirmed=True)
+        snapshot = backend.read_snapshot(FastCancel())
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertTrue(snapshot["simulated"])
+        self.assertFalse(snapshot["hardware_writes"])
+        self.assertTrue(snapshot["stage_state"]["ht_controls_verified"])
+        self.assertTrue(snapshot["stage_state"]["local_banks"]["EPS"][49])
 
 
 if __name__ == "__main__":

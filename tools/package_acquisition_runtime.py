@@ -50,6 +50,7 @@ def build(output, root=None, control_profile="legacy_full"):
             config["control_profile"] = control_profile
             config["stage_controls_verified"] = False
             config["cooling_trip_verified"] = False
+            config["ht_controls_verified"] = False
             config.setdefault("focal_stop", {})["resources_verified"] = False
             # No uncommissioned feedback claim is packaged as a permit, even
             # in a profile where that extension currently remains unused.
@@ -65,8 +66,9 @@ def build(output, root=None, control_profile="legacy_full"):
                                         else "source_event_6_all_17_frames"),
                     general_stop_includes_ht_supply_stop=control_profile == "extended_ht_stop",
                     ht_feedback_commissioning_required=control_profile == "extended_ht_stop",
-                    source_stage_paths_implemented=9, source_stage_controls_default_enabled=False,
+                    source_stage_paths_implemented=12, source_stage_controls_default_enabled=False,
                     cooling_trip_default_enabled=False,
+                    ht_stage_controls_default_enabled=False,
                     initialized_hardware_during_packaging=False, secret_files_included=False,
                     telemetry_storage="ram_latest", files=records,
                     limitations=["Not the full LabVIEW business/safety state machine",
@@ -84,7 +86,8 @@ def build(output, root=None, control_profile="legacy_full"):
                                  "Chroma OFF native adapter has not been commissioned on hardware",
                                  "Source General Arret does not command separate HT-supply stop C4[19] or cooling stop",
                                  "Python extended_ht_stop adds an8-kV/zero-readback HT preamble; not source-identical; feedback permission defaults False",
-                                 "Nine additional source-stage paths and cooling-trip execution require separate commissioning; disabled in this package",
+                                 "Twelve additional source-stage paths and cooling-trip execution require separate commissioning; disabled in this package",
+                                 "Standalone HT start can energize existing commanded voltage; requires independent HT commissioning",
                                  "No additional stage GUI buttons or HTTP/Tango mutation routes"])
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     archive = output.with_suffix(".zip")

@@ -17,9 +17,10 @@ def load_configuration(path):
         config = json.load(source)
     required = {"bind_host", "port", "key_file", "period_seconds", "read_timeout_seconds"}
     if (not required <= set(config) or set(config) - required
-            - {"focal_stop", "control_profile", "ht_shutdown", "stage_controls_verified", "cooling_trip_verified"}):
+            - {"focal_stop", "control_profile", "ht_shutdown", "stage_controls_verified",
+               "cooling_trip_verified", "ht_controls_verified"}):
         raise ValueError("Invalid acquisition configuration fields")
-    for flag in ("stage_controls_verified", "cooling_trip_verified"):
+    for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified"):
         if type(config.get(flag, False)) is not bool:
             raise ValueError("Explicit Boolean " + flag + " required")
     if config.get("control_profile", "legacy_full") not in CONTROL_PROFILES:
@@ -177,14 +178,18 @@ class AcquisitionWindow(object):
             self.messagebox.showerror("General Arret refused", str(error), parent=self.root)
 
     def confirm_local_off(self):
-        if not self.runtime.snapshot()["general_stop_required"]:
+        state = self.runtime.snapshot()
+        if not (state["general_stop_required"] or state.get("ht_supply_stop_required", False)):
             return False
+        reason = ("HT supply stop remains unconfirmed. Source General Arret does not stop it directly.\n"
+                  if state.get("ht_supply_stop_required", False) else
+                  "General Arret has not completed successfully.\n")
         if not self.messagebox.askyesno(
-                "Physical OFF confirmation required", "General Arret has not completed successfully.\n"
+                "Physical OFF confirmation required", reason +
                 "Releasing NI tasks does NOT switch the installation off.\n\n"
                 "Has the cabinet already been switched OFF LOCALLY and verified?\n"
-                "Choose No to retain this card owner and use General Arret.", parent=self.root):
-            raise RuntimeError("Card ownership retained; General Arret or verified local shutdown required")
+                "Choose No to retain this card owner; use a qualified stop or local electrical shutdown.", parent=self.root):
+            raise RuntimeError("Card ownership retained; qualified stop or verified local shutdown required")
         return True
 
     def deinitialize(self):
@@ -248,8 +253,10 @@ def main(entrypoint, argv=None):
                                     focal.get("resources_verified", False), focal.get("timeout_seconds", 10)))
         stage_verified = config.get("stage_controls_verified", False)
         trip_verified = config.get("cooling_trip_verified", False)
+        ht_controls_verified = config.get("ht_controls_verified", False)
         factory = ((lambda: DemoBackend(control_profile=profile,
                                        stage_controls_verified=stage_verified,
+                                       ht_controls_verified=ht_controls_verified,
                                        cooling_trip_verified=trip_verified)) if args.demo else
                    lambda: CardBackend(read_timeout=config["read_timeout_seconds"],
                                        focal_off=focal_off, control_profile=profile,
@@ -257,6 +264,7 @@ def main(entrypoint, argv=None):
                                        ht_zero_tolerance_kv=ht.get("zero_tolerance_kv", 0.0),
                                        ht_zero_timeout=ht.get("timeout_seconds", 10.0),
                                        stage_controls_verified=stage_verified,
+                                       ht_controls_verified=ht_controls_verified,
                                        cooling_trip_verified=trip_verified))
         runtime = AcquisitionRuntime(factory, period=config["period_seconds"])
         # Binding guards against a second service window before starting a worker.

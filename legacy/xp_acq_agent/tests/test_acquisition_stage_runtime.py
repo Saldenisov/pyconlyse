@@ -6,12 +6,13 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import Mock
 
 from legacy.xp_acq_agent.elyse_agent.acquisition_runtime import AcquisitionRuntime
 from legacy.xp_acq_agent.elyse_agent.acquisition_stage_execution import (
     SUPPORTED_OPERATIONS, StageExecutionCancelled,
 )
-from legacy.xp_acq_agent.elyse_agent.acquisition_gui import load_configuration
+from legacy.xp_acq_agent.elyse_agent.acquisition_gui import load_configuration, AcquisitionWindow
 from legacy.xp_acq_agent.tests.test_acquisition_runtime import FakeBackend, wait_state
 
 
@@ -21,6 +22,7 @@ class StageBackend(FakeBackend):
         self.stage_controls_verified = True
         self._stage_simulated = False  # Fake NI owner, not a synthetic Demo source.
         self.cooling_trip_verified = False
+        self.ht_controls_verified = True  # Fake-only explicit HT qualification.
         self.stage_entered = threading.Event()
         self.stage_release = threading.Event()
         self.stage_release.set()
@@ -93,7 +95,7 @@ class StageRuntimeTests(unittest.TestCase):
 
     def test_cold_false_newval_and_invalid_requests_have_no_effects(self):
         self.assertFalse(self.runtime.stage_request("chauffage.start", True, False))
-        for operation in ("focales.start", "alimentation_ht.start", "arbitrary"):
+        for operation in ("focales.start", "arbitrary"):
             with self.assertRaises(ValueError):
                 self.runtime.stage_request(operation, True)
         with self.assertRaises(ValueError):
@@ -117,7 +119,7 @@ class StageRuntimeTests(unittest.TestCase):
         self.assertEqual(self.backend.stage_calls, [])
         self.assertFalse(self.runtime.snapshot()["general_stop_required"])
 
-    def test_all_nine_operations_run_on_the_existing_ni_owner(self):
+    def test_all_twelve_operations_run_on_the_existing_ni_owner(self):
         self.initialize()
         for number, operation in enumerate(SUPPORTED_OPERATIONS, 1):
             self.assertTrue(self.runtime.stage_request(operation, True))
@@ -127,6 +129,90 @@ class StageRuntimeTests(unittest.TestCase):
                             for row in self.backend.stage_calls))
         self.assertEqual(self.backend.close_calls, 0)
         self.assertTrue(self.runtime.snapshot()["general_stop_required"])
+
+    def test_ht_gate_is_independent_and_rejection_cannot_change_release_state(self):
+        self.initialize()
+        self.backend.ht_controls_verified = False
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset"):
+            self.assertFalse(self.runtime.stage_request(operation, True, False))
+            with self.assertRaises(RuntimeError):
+                self.runtime.stage_request(operation, True)
+        state = self.runtime.snapshot()
+        self.assertFalse(state["ht_supply_stop_required"])
+        self.assertFalse(state["general_stop_required"])
+        self.assertFalse(state["stage_execution"]["ht_commissioned"])
+        self.assertEqual(self.backend.stage_calls, [])
+
+    def test_standalone_ht_stop_and_legacy_general_stop_do_not_authorize_release(self):
+        self.initialize()
+        self.backend.control_profile = "legacy_full"
+        for operation in ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset"):
+            self.runtime.stage_request(operation, True)
+            wait_state(self.runtime, "RUNNING")
+            self.assertTrue(self.runtime.snapshot()["ht_supply_stop_required"])
+        self.runtime.general_stop(True)
+        wait_state(self.runtime, "RUNNING")
+        state = self.runtime.snapshot()
+        self.assertTrue(state["ht_supply_stop_required"])
+        self.assertTrue(state["general_stop_required"])
+        for action in (self.runtime.deinitialize, self.runtime.request_shutdown):
+            with self.assertRaises(RuntimeError):
+                action()
+        self.assertEqual(self.backend.close_calls, 0)
+
+    def test_only_qualified_extended_general_stop_clears_ht_release_requirement(self):
+        self.initialize()
+        self.backend.control_profile = "extended_ht_stop"
+        self.runtime.stage_request("alimentation_ht.start", True)
+        wait_state(self.runtime, "RUNNING")
+        self.backend.ht_feedback_verified = False
+        self.runtime.general_stop(True)
+        wait_state(self.runtime, "RUNNING")
+        self.assertTrue(self.runtime.snapshot()["ht_supply_stop_required"])
+        # Fake callback represents a successfully completed qualified extension;
+        # real backend must perform fresh zero/OFF and counter-stop checks.
+        self.backend.ht_feedback_verified = True
+        self.runtime.general_stop(True)
+        wait_state(self.runtime, "RUNNING")
+        self.assertFalse(self.runtime.snapshot()["ht_supply_stop_required"])
+        self.assertFalse(self.runtime.snapshot()["general_stop_required"])
+
+    def test_failed_ht_command_retains_requirement_until_explicit_local_off(self):
+        self.initialize()
+        self.backend.fail_stage = True
+        self.runtime.stage_request("alimentation_ht.start", True)
+        wait_state(self.runtime, "FAULT")
+        self.assertTrue(self.runtime.snapshot()["ht_supply_stop_required"])
+        self.runtime.deinitialize(electrical_off_confirmed=True)
+        wait_state(self.runtime, "IDLE")
+        self.assertFalse(self.runtime.snapshot()["ht_supply_stop_required"])
+        self.assertEqual(self.backend.close_calls, 1)
+
+    def test_failed_qualified_extended_stop_never_clears_ht_requirement(self):
+        self.initialize()
+        self.backend.control_profile = "extended_ht_stop"
+        self.backend.ht_feedback_verified = True
+        self.runtime.stage_request("alimentation_ht.start", True)
+        wait_state(self.runtime, "RUNNING")
+        self.backend.general_stop = Mock(side_effect=RuntimeError("synthetic HT zero/OFF check failure"))
+        self.runtime.general_stop(True)
+        wait_state(self.runtime, "FAULT")
+        self.assertTrue(self.runtime.snapshot()["ht_supply_stop_required"])
+        self.assertTrue(self.runtime.snapshot()["general_stop_required"])
+        self.assertEqual(self.backend.close_calls, 0)
+        with self.assertRaises(RuntimeError):
+            self.runtime.deinitialize()
+
+    def test_legacy_general_interrupts_ht_start_but_does_not_clear_ht_requirement(self):
+        self.initialize()
+        self.backend.control_profile = "legacy_full"
+        self.backend.stage_release.clear()
+        self.runtime.stage_request("alimentation_ht.start", True)
+        self.assertTrue(self.backend.stage_entered.wait(1))
+        self.runtime.general_stop(True)
+        wait_state(self.runtime, "RUNNING")
+        self.assertTrue(self.runtime.snapshot()["ht_supply_stop_required"])
+        self.assertEqual(self.backend.close_calls, 0)
 
     def test_partial_failure_keeps_owner_and_accepts_only_explicit_stop_recovery(self):
         self.initialize()
@@ -264,20 +350,34 @@ class StageConfigurationTests(unittest.TestCase):
             value, unused_key = load_configuration(self.config(directory))
         self.assertIs(value.get("stage_controls_verified", False), False)
         self.assertIs(value.get("cooling_trip_verified", False), False)
+        self.assertIs(value.get("ht_controls_verified", False), False)
 
     def test_explicit_separate_boolean_gates_are_accepted_without_creating_an_owner(self):
         with tempfile.TemporaryDirectory() as directory:
             value, unused_key = load_configuration(self.config(
-                directory, stage_controls_verified=True, cooling_trip_verified=False))
+                directory, stage_controls_verified=True, cooling_trip_verified=False,
+                ht_controls_verified=True))
         self.assertIs(value["stage_controls_verified"], True)
         self.assertIs(value["cooling_trip_verified"], False)
+        self.assertIs(value["ht_controls_verified"], True)
 
     def test_malformed_flag_values_are_not_treated_as_commissioning(self):
         with tempfile.TemporaryDirectory() as directory:
-            for name in ("stage_controls_verified", "cooling_trip_verified"):
+            for name in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified"):
                 for invalid in ("true", 1, None, []):
                     with self.assertRaises(ValueError):
                         load_configuration(self.config(directory, **{name: invalid}))
+
+    def test_gui_physical_off_prompt_includes_independent_ht_requirement(self):
+        window = object.__new__(AcquisitionWindow)
+        window.runtime, window.messagebox, window.root = Mock(), Mock(), object()
+        window.runtime.snapshot.return_value = dict(general_stop_required=False, ht_supply_stop_required=True)
+        window.messagebox.askyesno.return_value = False
+        with self.assertRaises(RuntimeError):
+            window.confirm_local_off()
+        self.assertIn("HT supply stop remains unconfirmed", window.messagebox.askyesno.call_args[0][1])
+        window.messagebox.askyesno.return_value = True
+        self.assertTrue(window.confirm_local_off())
 
 
 if __name__ == "__main__":

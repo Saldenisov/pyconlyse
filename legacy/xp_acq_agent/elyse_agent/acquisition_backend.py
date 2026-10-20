@@ -28,6 +28,7 @@ from .acquisition_ht_shutdown import (
 
 
 CONTROL_PROFILES = ("legacy_full", "general_only_test", "extended_ht_stop")
+HT_STAGE_OPERATIONS = ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset")
 
 
 class AcquisitionCancelled(Exception):
@@ -182,6 +183,7 @@ class _StageState(object):
             psp_delivery_acknowledged=False, hardware_acknowledged=False,
             stage_controls_verified=self.stage_controls_verified,
             cooling_trip_verified=self.cooling_trip_verified,
+            ht_controls_verified=self.ht_controls_verified,
             pending_output_restorations=self._stage_pending_snapshot(),
             restoration_origin=copy.deepcopy(self._stage_restoration_origin),
             restoration_attempts=copy.deepcopy(self._stage_restoration_attempts),
@@ -189,18 +191,23 @@ class _StageState(object):
             restoration_diagnostics_retained_limit=128,
             last_cooling_guard=copy.deepcopy(self.last_cooling_guard))
 
-    def _stage_preflight(self, operator_confirmed):
+    def _stage_preflight(self, operator_confirmed, operation=None):
         if operator_confirmed is not True:
             raise ValueError("Explicit local stage confirmation required")
         if self.stage_controls_verified is not True:
             raise RuntimeError("Stage commands blocked: stage controls not commissioned")
+        if operation in HT_STAGE_OPERATIONS and self.ht_controls_verified is not True:
+            # Deliberate Python commissioning gate, not a recovered VI permit.
+            # Starting HT can energize the already-commanded startup voltage;
+            # it is independent of extended-stop feedback qualification.
+            raise RuntimeError("HT stage commands blocked: HT controls not commissioned")
         if self.control_profile == "general_only_test":
             raise RuntimeError("General-only profile forbids other stage commands")
         self._stage_require_initialized()
 
     def execute_stage(self, operation, cancel, operator_confirmed=False, new_value=True):
         """Execute one qualified local stage path; no public/remote mutation API."""
-        self._stage_preflight(operator_confirmed)
+        self._stage_preflight(operator_confirmed, operation)
         from .acquisition_stage_execution import execute_stage
         self.procedure = dict(name=operation, state="EXECUTING", frame=None,
                               control_profile=self.control_profile, hardware_acknowledged=False)
@@ -286,16 +293,19 @@ class CardBackend(_StageState):
     def __init__(self, factory=None, read_timeout=0.5, focal_off=None, stop_wait=None,
                  control_profile="legacy_full", ht_feedback_verified=False,
                  ht_zero_tolerance_kv=0.0, ht_zero_timeout=10.0,
-                 stage_controls_verified=False, cooling_trip_verified=False):
+                 stage_controls_verified=False, cooling_trip_verified=False,
+                 ht_controls_verified=False):
         if not 0 < read_timeout <= 2:
             raise ValueError("read timeout must be in (0, 2] seconds")
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
-        if type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool:
+        if (type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool
+                or type(ht_controls_verified) is not bool):
             raise ValueError("Explicit Boolean stage commissioning flags required")
         self.stage_controls_verified = stage_controls_verified
         self.cooling_trip_verified = cooling_trip_verified
+        self.ht_controls_verified = ht_controls_verified
         self._stage_simulated = False
         validate_policy(ht_feedback_verified, ht_zero_tolerance_kv, ht_zero_timeout)
         self.ht_feedback_verified = ht_feedback_verified
@@ -640,14 +650,16 @@ class CardBackend(_StageState):
 class DemoBackend(_StageState):
     """Explicit GUI/test mode. Never imports or delegates to an NI adapter."""
     def __init__(self, control_profile="legacy_full", stage_controls_verified=False,
-                 cooling_trip_verified=False):
+                 cooling_trip_verified=False, ht_controls_verified=False):
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
-        if type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool:
+        if (type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool
+                or type(ht_controls_verified) is not bool):
             raise ValueError("Explicit Boolean stage commissioning flags required")
         self.stage_controls_verified = stage_controls_verified
         self.cooling_trip_verified = cooling_trip_verified
+        self.ht_controls_verified = ht_controls_verified
         self._stage_simulated = True
         self.active = False
         self.commanded_digital = {}

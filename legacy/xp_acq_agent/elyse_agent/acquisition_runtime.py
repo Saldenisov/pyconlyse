@@ -38,6 +38,9 @@ class AcquisitionRuntime(object):
         self._everest_seen = None
         self._operation = None
         self._general_stop_required = False
+        # Source event 6 does not directly stop the HT supply. A standalone
+        # HT procedure cannot turn its software EPS literals into release ACK.
+        self._ht_supply_stop_required = False
         self._stage_command = None
 
     @staticmethod
@@ -68,12 +71,17 @@ class AcquisitionRuntime(object):
             if (getattr(self._backend, "stage_controls_verified", False) is not True
                     or getattr(self._backend, "control_profile", None) == "general_only_test"):
                 raise RuntimeError("Stage controls are not commissioned for this backend")
+            if (operation.startswith("alimentation_ht.")
+                    and getattr(self._backend, "ht_controls_verified", False) is not True):
+                raise RuntimeError("Separate HT stage controls are not commissioned")
             self._stage_command = operation
             self._pending = "stage"
             self._operation = "acq.stage." + operation
             self._state = "EXECUTING"
             self._received_at = None  # A precommand input image is not fresh postcommand data.
             self._general_stop_required = True
+            if operation.startswith("alimentation_ht."):
+                self._ht_supply_stop_required = True
             self._wake.set()
             return True
 
@@ -136,10 +144,13 @@ class AcquisitionRuntime(object):
     def _check_release(self, electrical_off_confirmed):
         if self._stop_in_progress(self._operation) or self._pending == "general_stop":
             raise RuntimeError("Wait for stop procedure to finish; NI ownership must be retained")
+        if self._ht_supply_stop_required and electrical_off_confirmed is not True:
+            raise RuntimeError("HT supply stop is unconfirmed: qualified extended stop or local electrical OFF required")
         if self._general_stop_required and electrical_off_confirmed is not True:
             raise RuntimeError("Execute General Arret first, or confirm cabinet switched off locally")
         if electrical_off_confirmed is True:
             self._general_stop_required = False
+            self._ht_supply_stop_required = False
 
     def deinitialize(self, electrical_off_confirmed=False):
         with self._lock:
@@ -174,6 +185,7 @@ class AcquisitionRuntime(object):
                 state=self._state, error=self._error,
                 current_operation=self._operation,
                 general_stop_required=self._general_stop_required,
+                ht_supply_stop_required=self._ht_supply_stop_required,
                 procedure=copy.deepcopy(getattr(self._backend, "procedure", None)),
                 control_profile=getattr(self._backend, "control_profile", None),
                 sequence=self._sequence, latest=copy.deepcopy(self._latest),
@@ -187,6 +199,7 @@ class AcquisitionRuntime(object):
                 remote_initialization_enabled=False, remote_setpoints_enabled=False,
                 stage_execution=dict(implemented=list(SUPPORTED_OPERATIONS),
                                      commissioned=getattr(self._backend, "stage_controls_verified", False) is True,
+                                     ht_commissioned=getattr(self._backend, "ht_controls_verified", False) is True,
                                      cooling_trip_commissioned=getattr(self._backend, "cooling_trip_verified", False) is True,
                                      remote_commands_enabled=False),
             )
@@ -291,7 +304,12 @@ class AcquisitionRuntime(object):
                 try:
                     self._backend.general_stop(operator_confirmed=True)
                     with self._lock:
-                        self._general_stop_required = False
+                        if (getattr(self._backend, "control_profile", None) == "extended_ht_stop"
+                                and getattr(self._backend, "ht_feedback_verified", False) is True):
+                            # That separate Python profile has already checked
+                            # fresh zero/OFF and counter stops before returning.
+                            self._ht_supply_stop_required = False
+                        self._general_stop_required = self._ht_supply_stop_required
                         self._cancel.clear()
                         self._error = ""
                         self._operation = None

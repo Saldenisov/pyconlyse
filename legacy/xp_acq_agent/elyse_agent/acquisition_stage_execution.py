@@ -1,4 +1,4 @@
-"""Callback-based execution of nine pinned Acquisition procedures (Python 3.4).
+"""Callback-based execution of twelve pinned Acquisition procedures (Python 3.4).
 
 No driver is imported here. Callers own local banks, output serialization and
 authorization. The adapter serializes same-frame independent effects as local
@@ -8,6 +8,10 @@ nodes, independent DAQ writer or PSP publication have identical timing.
 Each frame obtains independent full local snapshots before its effects. A
 publication uses that frame-entry snapshot, never an invented post-write value.
 Literal EPS assignments report software intent, not physical acknowledgement.
+HT supply commands here are Boolean source pulses, not voltage ramps or proof
+of physical high voltage. Their DPS -> EPS -> C4_OUT publications are source
+error-wired: a failed publication short-circuits later publications in that
+chain. A stop may then attempt its later frames under the Python policy below.
 
 Python failure policy (not a recovered VI property): a failed start/reset stops
 immediately; stop procedures attempt all remaining literal source effects and
@@ -22,7 +26,8 @@ from .acquisition_stage_model import BANK_SHAPES, load_model
 SUPPORTED_OPERATIONS = (
     "cooling.start", "cooling.stop", "chauffage.start", "chauffage.stop",
     "prema.start", "prema.stop", "relays_ht.start", "relays_ht.stop",
-    "modulator.reset",
+    "modulator.reset", "alimentation_ht.start", "alimentation_ht.stop",
+    "alimentation_ht.reset",
 )
 OUTPUT_BANKS = (15, 17)
 
@@ -105,7 +110,7 @@ def _validate_plan(frames):
                         raise ValueError("Unqualified source publication")
                     banks.add(pair[1])
             else:
-                # Focales/helper calls and nested/HT procedures must never be
+                # Focales/helper calls and nested procedures must never be
                 # partly executed merely because their first frames look safe.
                 raise ValueError("Unsupported stage effect: " + str(kind))
     return sorted(banks), last_writes
@@ -229,6 +234,7 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                     if effect[0] != kind:
                         continue
                     check_cancel()
+                    current_publication = None
                     try:
                         if kind == "write":
                             _, bank, fields = effect
@@ -243,6 +249,8 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                                         pending.discard((bank, index))
                         elif kind == "publish":
                             for name, bank in effect[1]:
+                                current_publication = (name, bank)
+                                check_cancel()
                                 if bank not in entry:
                                     raise ValueError("Publication frame-entry read unavailable")
                                 publish(name, bank, entry[bank])
@@ -252,7 +260,10 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                         raise
                     except Exception as error:
                         failure(kind, frame_index, uid, error,
-                                effect[1] if kind == "write" else None)
+                                effect[1] if kind == "write" else
+                                current_publication[1] if current_publication else None)
+                        if current_publication is not None:
+                            report["failures"][-1]["publication"] = current_publication[0]
                         frame_failed = True
                         if kind == "write" and effect[1] in OUTPUT_BANKS:
                             restore()

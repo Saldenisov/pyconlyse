@@ -6,10 +6,13 @@
 Its hardware-write block does not describe the separate
 `acquisition_server.pyw` GUI/default port-8771 NI runtime. That GUI starts cold
 in IDLE; explicit local initialization configures cards and writes startup AO/DO
-images. General and nine additional source-stage paths are implemented on the
+images. General and twelve additional source-stage paths are implemented on the
 NI owner; the latter require `stage_controls_verified`, default false. The
 cooling-trip branch additionally requires `cooling_trip_verified`, default
-false. Only existing General buttons are exposed in the GUI; the new local
+false. Standalone HT supply start/stop/reset additionally require the independent
+`ht_controls_verified`, default false. They do not ramp voltage or independently
+acknowledge supply OFF; legacy General Arrêt cannot clear their release
+requirement. Only existing General buttons are exposed in the GUI; the new local
 stage API has no HTTP/Tango route or GUI activation button.
 HTTP exposes authenticated reads, not control. Deinitialization is resource
 release, not electrical shutdown.
