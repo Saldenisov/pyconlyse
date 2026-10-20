@@ -1,8 +1,9 @@
 """Python 3.4, non-actuating stage model; import performs no I/O.
 
-This is NOT connected to CardBackend, GUI commands, HTTP or a driver. Only
-static catalog reads and pure frame projections are supported. No method
-accepts a hardware callback or converts an EPS OK flag to a safety permit.
+This module provides static catalog reads and pure frame projections, not
+actuation. The separate acquisition_stage_execution adapter consumes its pinned
+plans for commissioned CardBackend callbacks. These model methods themselves
+accept no hardware callback or convert an EPS OK flag to a safety permit.
 Frame effects are unordered; callers supply each local-read snapshot.
 """
 import copy

@@ -1,0 +1,491 @@
+"""Nine literal VI paths, fake callbacks only; runnable on Python 3.4."""
+import copy
+import unittest
+from unittest.mock import patch
+
+from legacy.xp_acq_agent.elyse_agent.acquisition_stage_execution import (
+    SUPPORTED_OPERATIONS, StageExecutionCancelled, StageExecutionError,
+    execute_stage,
+)
+from legacy.xp_acq_agent.elyse_agent.acquisition_stage_model import BANK_SHAPES
+
+
+def W(bank, *changes):
+    return ("write", bank, tuple(changes))
+
+
+def T(milliseconds):
+    return ("wait", milliseconds / 1000.0)
+
+
+P = ("publish", "DPS", 36)
+A = W(35, (-1, True))
+# Independent transcription of source frame UIDs and literal effects. Same-
+# frame effect order below is the explicitly selected Python adapter schedule.
+EXPECTED = {
+    "cooling.start": [
+        ("18796", [W(17, (0, True)), A, T(1000)]),
+        ("22995", [W(17, (0, False))]), ("23795", [T(800)]),
+        ("11213", [W(17, (3, True)), T(1000)]),
+        ("31625", [W(17, (3, False))]),
+        ("23074", [W(15, (0, True)), T(1000)]),
+        ("26107", [W(15, (0, False))]), ("29164", [T(500)]),
+        ("20440", [W(15, (2, True)), T(1000)]),
+        ("18859", [W(15, (2, False))]),
+        ("24540", [W(36, (0, False)), W(44, (0, False), (1, False),
+                    (2, True), (5, False), (8, True))]),
+        ("18950", [P, T(5000)]),
+    ],
+    "cooling.stop": [
+        ("7963", [W(17, (1, False)), A, T(150)]),
+        ("18101", [W(17, (1, True))]), ("21010", [T(400)]),
+        ("21712", [W(17, (4, False)), T(150)]),
+        ("22060", [W(17, (4, True)), T(150)]),
+        ("22878", [W(36, (1, False)), W(44, (1, False), (2, False),
+                    (3, False), (5, True))]),
+        ("23117", [P, T(100)]),
+    ],
+    "chauffage.start": [
+        ("38074", [W(15, (3, True)), A, T(150)]),
+        ("38157", [W(15, (3, False))]), ("38205", [T(3000)]),
+        ("38235", [W(15, (2, True)), T(150)]),
+        ("38295", [W(15, (2, False))]),
+        ("38483", [W(36, (4, False)), W(44, (12, False), (14, True), (17, False))]),
+        ("38592", [P, T(100)]),
+    ],
+    "chauffage.stop": [
+        ("23304", [W(15, (4, False)), A, T(150)]),
+        ("23392", [W(15, (4, True))]),
+        ("24497", [W(36, (5, False)), W(44, (14, False), (15, False), (17, True))]),
+        ("25430", [P, T(100)]),
+    ],
+    "prema.start": [
+        ("24338", [W(15, (5, True)), A, T(150)]),
+        ("25366", [W(15, (5, False))]), ("28640", [T(500)]),
+        ("28837", [W(15, (2, True)), T(150)]),
+        ("28946", [W(15, (2, False))]), ("28995", [T(250)]),
+        ("29025", [W(36, (6, False)), W(44, (18, False), (20, True), (23, False))]),
+        ("29203", [P, T(100)]),
+    ],
+    "prema.stop": [
+        ("26246", [W(15, (6, False)), A, T(150)]),
+        ("26330", [W(15, (6, True))]),
+        ("26962", [W(36, (7, False)), W(44, (20, False), (21, False), (23, True))]),
+        ("27900", [P, T(100)]),
+    ],
+    "relays_ht.start": [
+        ("36023", [W(15, (16, True)), A, T(150)]),
+        ("36115", [W(15, (16, False))]), ("36163", [T(500)]),
+        ("36193", [W(15, (2, True)), T(150)]),
+        ("36255", [W(15, (2, False))]), ("36304", [T(250)]),
+        ("36334", [W(36, (8, False)), W(44, (24, False), (26, True), (29, False))]),
+        ("36443", [P, T(100)]),
+    ],
+    "relays_ht.stop": [
+        ("31017", [W(15, (17, False)), A, T(150)]),
+        ("31192", [W(15, (17, True))]),
+        ("31360", [W(36, (9, False)), W(44, (26, False), (27, False), (29, True))]),
+        ("31482", [P, T(100)]),
+    ],
+    "modulator.reset": [
+        ("33697", [W(15, (2, True)), A, T(150)]),
+        ("33780", [W(15, (2, False))]),
+        ("33828", [W(36, (12, False)), W(44, (36, False))]),
+        ("33986", [P, T(100)]),
+    ],
+}
+
+
+class FakeLocals(object):
+    def __init__(self):
+        self.locals = {bank: tuple(bool(i % 2) for i in range(size))
+                       for bank, size in BANK_SHAPES.items()}
+        self.locals[35] = None  # No invented initialization of scalar ACTION.
+        self.before = copy.deepcopy(self.locals)
+        self.trace, self.reads = [], []
+        self.write_count = 0
+        self.fail_write = None
+        self.fail_all_outputs = False
+        self.cancel = False
+
+    def read(self, bank):
+        self.reads.append(bank)
+        return self.locals[bank]
+
+    def write(self, bank, changes):
+        self.write_count += 1
+        self.trace.append(("write", bank, changes))
+        if bank == 35:
+            self.locals[bank] = changes[0][1]
+        else:
+            values = list(self.locals[bank])
+            for index, value in changes:
+                values[index] = value
+            self.locals[bank] = tuple(values)
+        # Model a partial/complete applied write followed by an adapter error.
+        if (self.write_count == self.fail_write or
+                (self.fail_all_outputs and bank in (15, 17))):
+            raise RuntimeError("injected post-application write error")
+
+    def publish(self, name, bank, snapshot):
+        self.trace.append(("publish", name, bank, snapshot))
+
+    def wait(self, seconds):
+        self.trace.append(("wait", seconds))
+
+    def observe(self, index, uid):
+        self.trace.append(("frame", index, uid))
+
+    def cancelled(self):
+        return self.cancel
+
+    def execute(self, operation, **changes):
+        options = dict(read_local=self.read, write_local=self.write,
+                       publish=self.publish, wait_seconds=self.wait,
+                       cancelled=self.cancelled, frame_observer=self.observe,
+                       operator_confirmed=True)
+        options.update(changes)
+        return execute_stage(operation, **options)
+
+
+class StageExecutionTests(unittest.TestCase):
+    def test_all_nine_literal_paths_and_all_source_frames(self):
+        self.assertEqual(set(SUPPORTED_OPERATIONS), set(EXPECTED))
+        for operation, frames in EXPECTED.items():
+            fake = FakeLocals()
+            expected, state = [], copy.deepcopy(fake.locals)
+            for index, (uid, effects) in enumerate(frames):
+                expected.append(("frame", index, uid))
+                entry = copy.deepcopy(state)
+                for effect in effects:
+                    if effect[0] == "write":
+                        _, bank, changes = effect
+                        expected.append(effect)
+                        if bank == 35:
+                            state[bank] = True
+                        else:
+                            values = list(state[bank])
+                            for field, value in changes:
+                                values[field] = value
+                            state[bank] = tuple(values)
+                    elif effect[0] == "publish":
+                        expected.append(effect + (entry[effect[2]],))
+                    else:
+                        expected.append(effect)
+            report = fake.execute(operation)
+            self.assertEqual(fake.trace, expected, operation)
+            self.assertEqual(fake.locals, state, operation)
+            self.assertEqual(report["completed_frames"], [uid for uid, effects in frames])
+            self.assertEqual(report["status"], "COMPLETED")
+            self.assertFalse(report["hardware_acknowledged"])
+            self.assertFalse(report["source_frame_effects_ordered"])
+            self.assertEqual(report["pending_output_restorations"], [])
+            self.assertEqual(report["adapter_schedule"], "writes_then_publish_then_wait")
+            self.assertNotIn(35, fake.reads)
+
+    def test_newval_false_has_no_callbacks_for_all_paths(self):
+        for operation in EXPECTED:
+            fake = FakeLocals()
+            result = fake.execute(operation, new_value=False)
+            self.assertEqual(result["status"], "NOOP")
+            self.assertEqual(fake.trace, [])
+            self.assertEqual(fake.reads, [])
+            self.assertEqual(fake.locals, fake.before)
+
+    def test_unknown_focal_general_and_ht_rejected_before_any_callbacks(self):
+        for operation in ("unknown", "focales.start", "focales.stop", "general.start",
+                          "general.stop", "alimentation_ht.start", "alimentation_ht.stop"):
+            fake = FakeLocals()
+            with self.assertRaises(ValueError):
+                fake.execute(operation)
+            self.assertEqual(fake.trace + fake.reads, [])
+
+    def test_explicit_confirmation_and_boolean_newval_required(self):
+        for value in (False, None, 0, 1, "yes"):
+            fake = FakeLocals()
+            with self.assertRaises(ValueError):
+                fake.execute("chauffage.start", operator_confirmed=value)
+            self.assertEqual(fake.trace + fake.reads, [])
+        for value in (None, 0, 1, "False"):
+            fake = FakeLocals()
+            with self.assertRaises(ValueError):
+                fake.execute("chauffage.start", new_value=value)
+            self.assertEqual(fake.trace + fake.reads, [])
+
+    def test_all_callbacks_validated_before_initial_reads(self):
+        for name in ("read_local", "write_local", "publish", "wait_seconds",
+                     "cancelled", "frame_observer"):
+            fake = FakeLocals()
+            with self.assertRaises(ValueError):
+                fake.execute("chauffage.start", **{name: 42})
+            self.assertEqual(fake.trace + fake.reads, [])
+
+    def test_all_initial_banks_preflight_before_any_effects(self):
+        for bank in (15, 36, 44):
+            for invalid in ([], (), tuple([False] * (BANK_SHAPES[bank] - 1)),
+                            tuple([0] * BANK_SHAPES[bank])):
+                fake = FakeLocals()
+                fake.locals[bank] = invalid
+                with self.assertRaises(ValueError):
+                    fake.execute("chauffage.start")
+                self.assertEqual(fake.trace, [])
+
+    def test_complete_plan_preflight_includes_last_frame_and_rejects_helpers(self):
+        class Plan(object):
+            def plan(self, operation, value):
+                return [["1", [["write", 15, [[3, True]]]]],
+                        ["2", [["call_clear_error", "1_Focales OFF.vi"]]]]
+        fake = FakeLocals()
+        with patch("legacy.xp_acq_agent.elyse_agent.acquisition_stage_execution.load_model",
+                   return_value=Plan()):
+            with self.assertRaises(ValueError):
+                fake.execute("chauffage.start")
+        self.assertEqual(fake.trace + fake.reads, [])
+
+    def test_each_frame_rereads_snapshot_and_preserves_unrelated_local_fields(self):
+        fake = FakeLocals()
+        def observer(index, uid):
+            fake.observe(index, uid)
+            values = list(fake.locals[15])
+            values[31] = bool(index % 2)
+            fake.locals[15] = tuple(values)
+        fake.execute("chauffage.start", frame_observer=observer)
+        self.assertEqual(fake.reads.count(15), 5)  # Baseline plus four DO frames.
+        self.assertEqual(fake.reads.count(36), 3)  # Baseline, assignment, publication.
+        self.assertEqual(fake.locals[15][31], False)  # Final frame index6.
+
+    def test_publication_uses_independent_frame_entry_snapshot_not_reread(self):
+        fake = FakeLocals()
+        original = fake.locals[36]
+        class SameFramePlan(object):
+            def plan(self, operation, value):
+                return [["10", [["write", 36, [[0, True]]],
+                                  ["publish", [["DPS", 36]]]]]]
+        with patch("legacy.xp_acq_agent.elyse_agent.acquisition_stage_execution.load_model",
+                   return_value=SameFramePlan()):
+            fake.execute("modulator.reset")
+        self.assertEqual(fake.trace[-1], ("publish", "DPS", 36, original))
+        self.assertTrue(fake.locals[36][0])
+
+    def test_final_separate_publication_normally_sees_previous_frame_assignment(self):
+        fake = FakeLocals()
+        values = list(fake.locals[36])
+        values[4] = True
+        fake.locals[36] = tuple(values)
+        fake.execute("chauffage.start")
+        publication = [item for item in fake.trace if item[0] == "publish"][0]
+        self.assertFalse(publication[3][4])
+
+    def test_no_invented_input_gate_eps_or_ni_ack(self):
+        fake = FakeLocals()
+        fake.locals[44] = tuple([False] * 77)
+        report = fake.execute("chauffage.start")
+        self.assertEqual(report["status"], "COMPLETED")
+        self.assertTrue(fake.locals[44][14])  # Literal completion, not input permit.
+        self.assertFalse(report["hardware_acknowledged"])
+        self.assertEqual(set(fake.reads), {15, 36, 44})
+
+    def test_every_write_failure_is_visible_and_not_success(self):
+        for operation, frames in EXPECTED.items():
+            writes = [effect for uid, effects in frames for effect in effects
+                      if effect[0] == "write"]
+            for number, effect in enumerate(writes, 1):
+                fake = FakeLocals()
+                fake.fail_write = number
+                with self.assertRaises(StageExecutionError) as raised:
+                    fake.execute(operation)
+                report = raised.exception.report
+                self.assertEqual(report["status"], "PARTIAL_FAILURE", (operation, number))
+                self.assertFalse(report["hardware_acknowledged"])
+                self.assertTrue(any(item["phase"] == "write" for item in report["failures"]))
+                if operation.endswith(".stop"):
+                    # Source software intent is retained, never presented as
+                    # an acknowledged shutdown after a callback failure.
+                    self.assertTrue(any(item[0] == "publish" for item in fake.trace))
+                    self.assertEqual(fake.trace[-1], T(100))
+                else:
+                    self.assertFalse(any(item[0] == "publish" for item in fake.trace))
+
+    def test_every_failed_output_attempt_restores_before_later_effects(self):
+        for operation, frames in EXPECTED.items():
+            writes = [effect for uid, effects in frames for effect in effects
+                      if effect[0] == "write"]
+            for number, effect in enumerate(writes, 1):
+                if effect[1] not in (15, 17):
+                    continue
+                fake = FakeLocals()
+                fake.fail_write = number
+                with self.assertRaises(StageExecutionError):
+                    fake.execute(operation)
+                index = [i for i, item in enumerate(fake.trace) if item[0] == "write"][number - 1]
+                expected = tuple((field, fake.before[effect[1]][field])
+                                 for field, value in effect[2])
+                self.assertEqual(fake.trace[index + 1], ("write", effect[1], expected),
+                                 (operation, number))
+
+    def test_stops_collect_multiple_failures_and_attempt_every_source_frame(self):
+        for operation in EXPECTED:
+            if not operation.endswith(".stop"):
+                continue
+            fake = FakeLocals()
+            fake.fail_all_outputs = True
+            with self.assertRaises(StageExecutionError) as raised:
+                fake.execute(operation)
+            report = raised.exception.report
+            self.assertGreaterEqual(len(report["failures"]), 2)
+            self.assertTrue(report["restoration_failures"])
+            observed = [item[2] for item in fake.trace if item[0] == "frame"]
+            self.assertEqual(observed, [uid for uid, effects in EXPECTED[operation]])
+
+    def test_final_pending_empty_after_failed_restore_then_successful_source_release(self):
+        fake = FakeLocals()
+        def write(bank, changes):
+            fake.write(bank, changes)
+            if fake.write_count in (1, 2):
+                raise RuntimeError("first write and immediate restore both failed")
+        with self.assertRaises(StageExecutionError) as raised:
+            fake.execute("chauffage.stop", write_local=write)
+        report = raised.exception.report
+        self.assertTrue(report["restoration_failures"])
+        self.assertEqual(report["pending_output_restorations"], [])
+        self.assertTrue(fake.locals[15][4])
+
+    def test_all_failed_restores_expose_exact_final_preprocedure_baselines(self):
+        fake = FakeLocals()
+        fake.fail_all_outputs = True
+        with self.assertRaises(StageExecutionError) as raised:
+            fake.execute("cooling.stop")
+        self.assertEqual(raised.exception.report["pending_output_restorations"],
+                         [(17, 1, fake.before[17][1]), (17, 4, fake.before[17][4])])
+        self.assertTrue(raised.exception.report["restoration_failures"])
+
+    def test_cancel_before_start_has_no_output_and_never_deinitializes(self):
+        fake = FakeLocals()
+        fake.cancel = True
+        with self.assertRaises(StageExecutionCancelled) as raised:
+            fake.execute("chauffage.start")
+        self.assertEqual(raised.exception.report["status"], "CANCELLED")
+        self.assertEqual(fake.trace, [])
+
+    def test_cancel_during_every_output_pulse_restores_command_baseline(self):
+        for operation in EXPECTED:
+            fake = FakeLocals()
+            first = next(effect for uid, effects in EXPECTED[operation]
+                         for effect in effects if effect[0] == "write" and effect[1] in (15, 17))
+            def write(bank, changes):
+                fake.write(bank, changes)
+                if bank == first[1] and changes == first[2]:
+                    fake.cancel = True
+            with self.assertRaises(StageExecutionCancelled) as raised:
+                fake.execute(operation, write_local=write)
+            report = raised.exception.report
+            self.assertEqual(report["status"], "CANCELLED")
+            self.assertEqual(fake.locals[first[1]], fake.before[first[1]])
+            self.assertFalse(any(item[0] == "publish" for item in fake.trace))
+            self.assertTrue(report["restored_fields"])
+
+    def test_cancel_during_wait_restores_inflight_output(self):
+        fake = FakeLocals()
+        def wait(seconds):
+            fake.wait(seconds)
+            fake.cancel = True
+        with self.assertRaises(StageExecutionCancelled):
+            fake.execute("chauffage.start", wait_seconds=wait)
+        self.assertEqual(fake.locals[15], fake.before[15])
+
+    def test_cancel_at_every_output_write_boundary_never_reports_success(self):
+        for operation, frames in EXPECTED.items():
+            writes = [effect for uid, effects in frames for effect in effects
+                      if effect[0] == "write"]
+            for target, effect in enumerate(writes, 1):
+                if effect[1] not in (15, 17):
+                    continue
+                fake = FakeLocals()
+                def write(bank, changes):
+                    fake.write(bank, changes)
+                    if fake.write_count == target:
+                        fake.cancel = True
+                with self.assertRaises(StageExecutionCancelled) as raised:
+                    fake.execute(operation, write_local=write)
+                report = raised.exception.report
+                self.assertEqual(report["status"], "CANCELLED", (operation, target))
+                self.assertFalse(report["hardware_acknowledged"])
+                self.assertFalse(any(item[0] == "publish" for item in fake.trace))
+                # A successfully completed last source write is not rolled
+                # back. Earlier writes leave a pulse in flight and restore.
+                field = effect[2][0][0]
+                later = any(item[1] == effect[1] and any(i == field for i, v in item[2])
+                            for item in writes[target:])
+                expected = fake.before[effect[1]][field] if later else effect[2][0][1]
+                self.assertIs(fake.locals[effect[1]][field], expected)
+
+    def test_cancel_at_every_wait_boundary_never_reports_success(self):
+        for operation, frames in EXPECTED.items():
+            waits = [effect for uid, effects in frames for effect in effects
+                     if effect[0] == "wait"]
+            for target in range(1, len(waits) + 1):
+                fake = FakeLocals()
+                count = [0]
+                def wait(seconds):
+                    fake.wait(seconds)
+                    count[0] += 1
+                    if count[0] == target:
+                        fake.cancel = True
+                with self.assertRaises(StageExecutionCancelled) as raised:
+                    fake.execute(operation, wait_seconds=wait)
+                self.assertEqual(raised.exception.report["status"], "CANCELLED")
+
+    def test_cancel_restore_failure_cannot_be_hidden(self):
+        fake = FakeLocals()
+        def write(bank, changes):
+            fake.write(bank, changes)
+            if bank == 15:
+                fake.cancel = True
+                if len([x for x in fake.trace if x[0] == "write" and x[1] == 15]) > 1:
+                    raise RuntimeError("restore failed")
+        with self.assertRaises(StageExecutionCancelled) as raised:
+            fake.execute("chauffage.start", write_local=write)
+        self.assertTrue(raised.exception.report["restoration_failures"])
+        self.assertEqual(raised.exception.report["pending_output_restorations"],
+                         [(15, 3, fake.before[15][3])])
+
+    def test_fault_after_completed_pulse_does_not_invent_output_rollback(self):
+        fake = FakeLocals()
+        def wait(seconds):
+            fake.wait(seconds)
+            if seconds == 3:
+                raise RuntimeError("later frame failure")
+        with self.assertRaises(StageExecutionError) as raised:
+            fake.execute("chauffage.start", wait_seconds=wait)
+        output = [item for item in fake.trace if item[0] == "write" and item[1] == 15]
+        self.assertEqual(output, [W(15, (3, True)), W(15, (3, False))])
+        self.assertEqual(raised.exception.report["restored_fields"], [])
+
+    def test_observer_read_publish_wait_and_cancel_callback_faults_visible(self):
+        for name in ("frame_observer", "publish", "wait_seconds", "cancelled"):
+            fake = FakeLocals()
+            def fail(*args):
+                raise RuntimeError("injected " + name)
+            with self.assertRaises(StageExecutionError) as raised:
+                fake.execute("chauffage.start", **{name: fail})
+            self.assertEqual(raised.exception.report["status"], "PARTIAL_FAILURE")
+        fake = FakeLocals()
+        def read(bank):
+            if fake.trace:
+                raise RuntimeError("frame local read failed")
+            return fake.read(bank)
+        with self.assertRaises(StageExecutionError) as raised:
+            fake.execute("chauffage.start", read_local=read)
+        self.assertEqual(raised.exception.report["failures"][0]["phase"], "read")
+
+    def test_invalid_cancellation_result_rejected_without_output(self):
+        for value in (None, 0, 1, "False"):
+            fake = FakeLocals()
+            with self.assertRaises(StageExecutionError) as raised:
+                fake.execute("chauffage.start", cancelled=lambda: value)
+            self.assertEqual(raised.exception.report["status"], "PARTIAL_FAILURE")
+            self.assertEqual(fake.trace, [])
+
+
+if __name__ == "__main__":
+    unittest.main()
