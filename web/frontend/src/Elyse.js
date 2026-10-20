@@ -4,6 +4,7 @@ import ElyseBeamline from './ElyseBeamline';
 import ElyseMotion from './ElyseMotion';
 import ElyseSupervisionBusiness from './ElyseSupervisionBusiness';
 import AcqTelemetry from './AcqTelemetry';
+import AcqRuntime from './AcqRuntime';
 import LiveSupervision from './LiveSupervision';
 import useAcquisitionTelemetry from './useAcquisitionTelemetry';
 import { AcquisitionWatchdog, MachineFrequency } from './SupervisionHeader';
@@ -15,7 +16,7 @@ const TABS = [['vide', 'Vide'], ['synchro', 'Synchro'],
   ['ht', 'HT'], ['hf', 'HF'], ['alimentations', 'Alimentations'],
   ['voie-directe', 'Voie directe'], ['voie-deviee', 'Voie déviée'], ['synoptique', 'Synoptique ELYSE'],
   ['newfocus', 'NewFocus'], ['camera', 'Caméra Ethernet'], ['business', 'Supervision / ACQ'],
-  ['telemetry', 'Télémétrie 10.20.30.10']];
+  ['telemetry', 'Télémétrie 10.20.30.10'], ['acq-runtime', 'Python Acquisition']];
 
 function Lamp() {
   return <span className="elyse-lamp elyse-lamp--unknown" aria-hidden="true" title="Télémétrie indisponible" />;
@@ -306,7 +307,7 @@ export default function Elyse({ client = elyseSupervisionClient }) {
   const [history, setHistory] = useState([]);
   const liveAvailable = typeof client.telemetry === 'function';
   const [telemetryRevision, setTelemetryRevision] = useState(0);
-  const telemetry = useAcquisitionTelemetry(client, liveAvailable, telemetryRevision);
+  const telemetry = useAcquisitionTelemetry(client, liveAvailable && activeTab !== 'acq-runtime', telemetryRevision);
   const controller = useRef(null);
   const busy = useRef(false);
   const consoleRef = useRef(null);
@@ -354,29 +355,31 @@ export default function Elyse({ client = elyseSupervisionClient }) {
   const context = { snapshot, dps, drafts, setDrafts, pending, run, attempt, history };
   const businessView = activeTab === 'business';
   const telemetryView = activeTab === 'telemetry';
-  const liveView = !businessView && !telemetryView && liveAvailable;
+  const runtimeView = activeTab === 'acq-runtime';
+  const readOnlyView = telemetryView || runtimeView;
+  const liveView = !businessView && !readOnlyView && liveAvailable;
   const simulatedConnection = businessView && businessAcq?.mode === 'SIMULATION'
     && businessAcq?.quality === 'SIMULATED';
   return <div className="elyse-console elyse-console--extended" ref={consoleRef}><header className={`elyse-console__header${liveAvailable ? ' elyse-console__header--live' : ''}`}>
     <div className="elyse-brand"><span className="elyse-brand__mark">E</span><div><strong>ELYSE</strong><small>SuperVision Web</small></div></div>
-    <AcquisitionWatchdog telemetry={telemetry} />
-    {!liveAvailable && <div className="elyse-mode-banner" role="status" aria-label="État du rejeu SuperVision">{businessView
+    {!runtimeView && <AcquisitionWatchdog telemetry={telemetry} />}
+    {!liveAvailable && !runtimeView && <div className="elyse-mode-banner" role="status" aria-label="État du rejeu SuperVision">{businessView
       ? `${simulatedConnection ? 'ACQ SIMULÉE CONNECTÉE' : 'ACQ NON QUALIFIÉE'} · INTENTIONS ET JOURNAL · AUCUNE TRANSMISSION MATÉRIELLE`
       : telemetryView || liveView ? 'TÉLÉMÉTRIE XP → EVEREST · LECTURE SEULE · AUCUNE COMMANDE' : message}
       </div>}
-    <MachineFrequency telemetry={telemetry} />
-  </header><div className={`elyse-console__layout${telemetryView ? ' elyse-console__layout--telemetry' : ''}${liveView ? ' elyse-console__layout--live' : ''}`}>
-    <main className={`elyse-workspace${businessView ? ' elyse-workspace--business' : ''}${telemetryView ? ' elyse-workspace--telemetry' : ''}${liveView ? ' elyse-workspace--live' : ''}`}><nav className="elyse-primary-tabs" role="tablist" aria-label="Pages SuperVision">
+    {!runtimeView && <MachineFrequency telemetry={telemetry} />}
+  </header><div className={`elyse-console__layout${readOnlyView ? ' elyse-console__layout--telemetry' : ''}${liveView ? ' elyse-console__layout--live' : ''}`}>
+    <main className={`elyse-workspace${businessView ? ' elyse-workspace--business' : ''}${readOnlyView ? ' elyse-workspace--telemetry' : ''}${liveView ? ' elyse-workspace--live' : ''}`}><nav className="elyse-primary-tabs" role="tablist" aria-label="Pages SuperVision">
       {TABS.map(([id, label]) => <button type="button" role="tab" aria-selected={activeTab === id}
         className={`${activeTab === id ? 'is-active' : ''}${id === 'business' ? ' elyse-business-tab' : ''}${id === 'telemetry' ? ' elyse-telemetry-tab' : ''}`}
         onClick={() => setActiveTab(id)} key={id}><Lamp /><span>{label}</span></button>)}
     </nav><section className="elyse-primary-view" role="tabpanel" aria-label={TABS.find(([id]) => id === activeTab)[1]}>
-      {telemetryView ? <AcqTelemetry client={client} telemetry={liveAvailable ? telemetry : undefined}
+      {runtimeView ? <AcqRuntime /> : telemetryView ? <AcqTelemetry client={client} telemetry={liveAvailable ? telemetry : undefined}
         onRefresh={liveAvailable ? () => setTelemetryRevision((value) => value + 1) : undefined} />
         : businessView ? <ElyseSupervisionBusiness client={client} onStatus={setBusinessAcq} />
         : liveView ? <LiveSupervision tab={activeTab} client={client} telemetry={telemetry} /> : <PrimaryPanel tab={activeTab} context={context} />}
-    </section>{!businessView && !telemetryView && !liveView && <BottomWorkspace context={context} />}</main>
-    {!telemetryView && !liveView && <aside className="elyse-corrector-rail" aria-label="Réglages rapides ELYSE"><div className="elyse-rail-heading">RÉGLAGES ELYSE</div>
+    </section>{!businessView && !readOnlyView && !liveView && <BottomWorkspace context={context} />}</main>
+    {!readOnlyView && !liveView && <aside className="elyse-corrector-rail" aria-label="Réglages rapides ELYSE"><div className="elyse-rail-heading">RÉGLAGES ELYSE</div>
       <div className="elyse-quick-links">
         <button type="button" onClick={() => setActiveTab('hf')}>Phase HF / Laser <span>—</span></button>
         {['H1', 'V1', 'H2', 'V2'].map((name) => <button type="button" key={name}
@@ -446,7 +449,7 @@ export default function Elyse({ client = elyseSupervisionClient }) {
           : <span>Aucun calcul de rejeu. Aucune commande matérielle.</span>}
       </div>
     </aside>}
-  </div><footer className="elyse-console__footer"><span><Lamp /> ACQ : {telemetryView || liveView ? 'STATUT MATÉRIEL NON ÉTABLI' : simulatedConnection ? 'SIMULÉE CONNECTÉE' : 'DÉCONNECTÉ'}</span>
-    <span>SuperVision : {telemetryView || liveView ? 'LECTURE TÉLÉMÉTRIE' : businessView ? 'INTENTIONS ET JOURNAL' : 'MODÈLES PYTHON'}</span>
-    <span>{telemetryView || liveView ? 'Valeurs LabVIEW · mesures physiques non qualifiées' : 'Télémétrie physique : INDISPONIBLE'}</span><span>Autorité commande : {simulatedConnection ? 'SIMULATION UNIQUEMENT' : 'AUCUNE'}</span></footer></div>;
+  </div><footer className="elyse-console__footer"><span><Lamp /> ACQ : {readOnlyView || liveView ? 'STATUT MATÉRIEL NON ÉTABLI' : simulatedConnection ? 'SIMULÉE CONNECTÉE' : 'DÉCONNECTÉ'}</span>
+    <span>SuperVision : {readOnlyView || liveView ? 'LECTURE TÉLÉMÉTRIE' : businessView ? 'INTENTIONS ET JOURNAL' : 'MODÈLES PYTHON'}</span>
+    <span>{runtimeView ? 'Entrées Python NI · pas de repli LabVIEW' : telemetryView || liveView ? 'Valeurs LabVIEW · mesures physiques non qualifiées' : 'Télémétrie physique : INDISPONIBLE'}</span><span>Autorité commande : {simulatedConnection ? 'SIMULATION UNIQUEMENT' : 'AUCUNE'}</span></footer></div>;
 }

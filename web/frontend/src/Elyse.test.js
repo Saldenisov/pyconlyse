@@ -82,6 +82,26 @@ test('telemetry is a separate readonly tab without the replay controls rail', as
   expect(client.replay).not.toHaveBeenCalled();
 });
 
+test('Python Acquisition tab has its own read-only endpoint and never inherits LabVIEW watchdog or replay controls', async () => {
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ schema_version: 1,
+    source: 'xp_python_acquisition_runtime', execution_allowed: false, hardware_writes: false,
+    quality: 'UNAVAILABLE', snapshot: null }) });
+  const client = clientFixture();
+  const view = await loaded(client);
+  try {
+    fireEvent.click(screen.getByRole('tab', { name: 'Python Acquisition', exact: true }));
+    await screen.findByText('Serveur indisponible');
+    expect(global.fetch).toHaveBeenCalledWith('/api/elyse/acquisition/runtime', expect.objectContaining({ method: 'GET' }));
+    expect(screen.getByRole('tabpanel', { name: 'Python Acquisition' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Watchdog Acquisition' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Réglages rapides ELYSE' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Fréquence machine' })).not.toBeInTheDocument();
+    expect(screen.getByText('Entrées Python NI · pas de repli LabVIEW')).toBeInTheDocument();
+    expect(client.replay).not.toHaveBeenCalled();
+  } finally { view.unmount(); global.fetch = previousFetch; }
+});
+
 test('connected business view labels simulation without claiming physical telemetry or replay-only commands', async () => {
   const client = clientFixture();
   client.business = jest.fn().mockResolvedValue({ catalog: [], intents: [], events: [], busy: false,
