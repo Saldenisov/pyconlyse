@@ -31,8 +31,21 @@ extension. These controls require the independent exact-Boolean
 package builder. No additional GUI, HTTP, Tango or web mutation route is enabled.
 Ambiguous AO writes and failed counter/pulse cleanup retain ownership and block
 unsafe continuation; completed software stops do not establish electrical OFF.
-Full counter timing ingress, native sampling/error semantics, parallel VI
+Native sampling/error semantics, live shared-variable ingress, parallel VI
 scheduling and 27-bank parity remain incomplete.
+
+`AcquisitionRuntime.configure_counter_timing()` implements the local C10 timing
+path for an explicit 33-DBL C1011NI6602 image. Selectors 1..16 map in pairs to
+ctr0..7; conversion preserves source DBL*20 -> saturating I32 ties-to-even ->
+U32 bits. The executor polls `CO.PulseDone` at most 22 times with a final 1 ms wait,
+then Stop -> Clear Errors boundary -> initial/low/high tick properties -> Start,
+followed by independent selector-reset and publication reads. Publication is
+latest-only RAM, not PSP delivery. `counter_timing_controls_verified=false` is
+independent and forced false in every package. Native errors/dialogs are not
+emulated by clearing Python exceptions. Partial writes retain configuration
+uncertainty and block new starts; retimed non-modulator counters cannot be
+released merely because General or ctr3/ctr4 stop completed. No network command
+or new GUI button is added.
 
 The prepared GUI reports protocol 2, a fresh boot session, a source/data
 fingerprint and a lifecycle revision. Production initialization acquires
