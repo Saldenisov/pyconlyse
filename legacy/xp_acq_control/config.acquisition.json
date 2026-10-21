@@ -1,0 +1,25 @@
+{
+  "bind_host": "10.20.30.10",
+  "port": 8772,
+  "key_file": "runtime/acquisition.key",
+  "period_seconds": 0.2,
+  "read_timeout_seconds": 0.5,
+  "control_profile": "extended_ht_stop",
+  "stage_controls_verified": false,
+  "cooling_trip_verified": false,
+  "ht_controls_verified": false,
+  "focal_controls_verified": false,
+  "counter_controls_verified": false,
+  "counter_timing_controls_verified": false,
+  "ht_voltage_controls_verified": false,
+  "outer_stop_verified": false,
+  "focal_stop": {
+    "resources_verified": false,
+    "timeout_seconds": 10
+  },
+  "ht_shutdown": {
+    "feedback_verified": false,
+    "zero_tolerance_kv": 0.0,
+    "timeout_seconds": 10.0
+  }
+}

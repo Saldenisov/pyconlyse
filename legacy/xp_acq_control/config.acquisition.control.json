@@ -1,0 +1,14 @@
+{
+  "remote_control_enabled": false,
+  "command_key_file": "runtime/acquisition-command.key",
+  "telemetry": {
+    "enabled": true,
+    "host": "10.20.30.202",
+    "port": 8767,
+    "period_seconds": 0.2
+  },
+  "cooling_safety": {
+    "polarity_verified": false,
+    "journal_file": "runtime/cooling-alarms.sqlite3"
+  }
+}

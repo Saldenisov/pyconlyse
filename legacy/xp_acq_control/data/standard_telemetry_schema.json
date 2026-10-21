@@ -1,0 +1,4466 @@
+{
+  "schema_version": 1,
+  "provenance": "Cached copied LabVIEW telemetry: type descriptors only; no values or freshness claim",
+  "observed_utc": "2026-10-21T14:39:41.434645+00:00",
+  "banks": {
+    "C1NI6071E": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 ACH00 b03 Mes temp\u00e9rature Canon",
+            "type": "DBL"
+          },
+          {
+            "name": "01 ACH01 b05 Mes Vide Chambre de pr\u00e9paration",
+            "type": "DBL"
+          },
+          {
+            "name": "02 ACH02 b07 Mes Vide Canon (PIQ 12)",
+            "type": "DBL"
+          },
+          {
+            "name": "03 ACH03 b09 Mes Vide Miroir (PIQ 21)",
+            "type": "DBL"
+          },
+          {
+            "name": "04 ACH04 b11 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "05 ACH05 b13 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "06 ACH06 b15 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "07 ACH07 b17 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "08 ACH08 b04 Mes temp\u00e9rature Section",
+            "type": "DBL"
+          },
+          {
+            "name": "09 ACH09 b06 Mes Vide SAS guide HF",
+            "type": "DBL"
+          },
+          {
+            "name": "10 ACH10 b08 Mes Vide Section (PIQ 16)",
+            "type": "DBL"
+          },
+          {
+            "name": "11 ACH11 b10 Mes Vide DIP 1 (PIQ27 + 33)",
+            "type": "DBL"
+          },
+          {
+            "name": "12 ACH12 b12 Mes Vide jauge canon",
+            "type": "DBL"
+          },
+          {
+            "name": "13 ACH13 b14 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "14 ACH14 b16 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "15 ACH15 b18 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "16 ACH16 b51 Mes I Triplet 1-1",
+            "type": "DBL"
+          },
+          {
+            "name": "17 ACH17 b53 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "18 ACH18 b55 Mes I Triplet 2-2",
+            "type": "DBL"
+          },
+          {
+            "name": "19 ACH19 b57 Mes I Quadrip\u00f4le 1",
+            "type": "DBL"
+          },
+          {
+            "name": "20 ACH20 b59 Mes I Sol\u00e9no\u00efde",
+            "type": "DBL"
+          },
+          {
+            "name": "21 ACH21 b61 Mes I Dip\u00f4le 2",
+            "type": "DBL"
+          },
+          {
+            "name": "22 ACH22 b63 Mes I Guidage V1",
+            "type": "DBL"
+          },
+          {
+            "name": "23 ACH23 b65 Mes I Guidage V2",
+            "type": "DBL"
+          },
+          {
+            "name": "24 ACH24 b52 Mes I Triplet 1-2",
+            "type": "DBL"
+          },
+          {
+            "name": "25 ACH25 b54 Mes I Triplet 2-1",
+            "type": "DBL"
+          },
+          {
+            "name": "26 ACH26 b56 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "27 ACH27 b58 Mes I Quadrip\u00f4le 2",
+            "type": "DBL"
+          },
+          {
+            "name": "28 ACH28 b60 Mes I Dip\u00f4le 1",
+            "type": "DBL"
+          },
+          {
+            "name": "29 ACH29 b62 Mes I Guidage H1",
+            "type": "DBL"
+          },
+          {
+            "name": "30 ACH30 b64 Mes I Guidage H2",
+            "type": "DBL"
+          },
+          {
+            "name": "31 ACH31 b66 Mes I correcte Dip\u00f4le 1 (H3)",
+            "type": "DBL"
+          },
+          {
+            "name": "32 ACH32 b67 Mes I Guidage V3",
+            "type": "DBL"
+          },
+          {
+            "name": "33 ACH33 b69 Mes I Guidage V4",
+            "type": "DBL"
+          },
+          {
+            "name": "34 ACH34 b71 Mes I Guidage V5",
+            "type": "DBL"
+          },
+          {
+            "name": "35 ACH35 b73 Mes champ Dip\u00f4le 2",
+            "type": "DBL"
+          },
+          {
+            "name": "36 ACH36 b77 Mes position D\u00e9phaseur",
+            "type": "DBL"
+          },
+          {
+            "name": "37 ACH37 b79 Mes position D\u00e9phaseur ajust",
+            "type": "DBL"
+          },
+          {
+            "name": "38 ACH38 b81 Mesure phase HF2",
+            "type": "DBL"
+          },
+          {
+            "name": "39 ACH39 b83 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "40 ACH40 b68 Mes I correcte Dip\u00f4le 21 (H4)",
+            "type": "DBL"
+          },
+          {
+            "name": "41 ACH41 b70 Mes Vide Ecran 1 (PIQ 53-63)",
+            "type": "DBL"
+          },
+          {
+            "name": "42 ACH42 b72 Mes champ Dip\u00f4le 2",
+            "type": "DBL"
+          },
+          {
+            "name": "43 ACH43 b74 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "44 ACH44 b78 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "45 ACH45 b80 Mesure phase HF1",
+            "type": "DBL"
+          },
+          {
+            "name": "46 ACH46 b82 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "47 ACH47 b84 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "48 ACH48 b85 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "49 ACH49 b87 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "50 ACH50 b89 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "51 ACH51 b91 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "52 ACH52 b93 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "53 ACH53 b95 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "54 ACH54 b97 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "55 ACH55 b99 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "56 ACH56 b86 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "57 ACH57 b88 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "58 ACH58 b90 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "59 ACH59 b92 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "60 ACH60 b94 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "61 ACH61 b96 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "62 ACH62 b98 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "63 ACH63 b100 Libre ?",
+            "type": "DBL"
+          }
+        ],
+        "name": "C1NI6071E",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C2NI6071E": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 ACH00 b03 Mes V Chauffage Thyratron",
+            "type": "DBL"
+          },
+          {
+            "name": "01 ACH01 b05 Mes V Chauffage Klystron",
+            "type": "DBL"
+          },
+          {
+            "name": "02 ACH02 b07 Mes I D'Qing",
+            "type": "DBL"
+          },
+          {
+            "name": "03 ACH03 b09 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "04 ACH04 b11 Mes I Pr\u00e9magn\u00e9tisation",
+            "type": "DBL"
+          },
+          {
+            "name": "05 ACH05 b13 Mes I Focalisateur 1",
+            "type": "DBL"
+          },
+          {
+            "name": "06 ACH06 b15 Mes I Focalisateur 3",
+            "type": "DBL"
+          },
+          {
+            "name": "07 ACH07 b17 Mes V alimentation HT",
+            "type": "DBL"
+          },
+          {
+            "name": "08 ACH08 b04 Mes I Chauffage Thyratron",
+            "type": "DBL"
+          },
+          {
+            "name": "09 ACH09 b06 Mes I  Chauffage Klystron",
+            "type": "DBL"
+          },
+          {
+            "name": "10 ACH10 b08 Mes I R\u00e9servoir Thyratron",
+            "type": "DBL"
+          },
+          {
+            "name": "11 ACH11 b10 Mes I Thyratron",
+            "type": "DBL"
+          },
+          {
+            "name": "12 ACH12 b12 Mes I fin de Ligne",
+            "type": "DBL"
+          },
+          {
+            "name": "13 ACH13 b14 Mes I Focalisateur 2",
+            "type": "DBL"
+          },
+          {
+            "name": "14 ACH14 b16 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "15 ACH15 b18 Mes I alimentation HT",
+            "type": "DBL"
+          },
+          {
+            "name": "16 ACH16 b51 Mes V Klystron",
+            "type": "DBL"
+          },
+          {
+            "name": "17 ACH17 b53 Mes V LAR",
+            "type": "DBL"
+          },
+          {
+            "name": "18 ACH18 b55 Mes HF directe Canon",
+            "type": "DBL"
+          },
+          {
+            "name": "19 ACH19 b57 Mes I Faraday 1",
+            "type": "DBL"
+          },
+          {
+            "name": "20 ACH20 b59 Mes I Faraday 3",
+            "type": "DBL"
+          },
+          {
+            "name": "21 ACH21 b61 Mes WCM 1B",
+            "type": "DBL"
+          },
+          {
+            "name": "22 ACH22 b63 Mes WCM 1D",
+            "type": "DBL"
+          },
+          {
+            "name": "23 ACH23 b65 Mes WCM 2B",
+            "type": "DBL"
+          },
+          {
+            "name": "24 ACH24 b52 Mes I Klystron",
+            "type": "DBL"
+          },
+          {
+            "name": "25 ACH25 b54 R\u00e9serv\u00e9",
+            "type": "DBL"
+          },
+          {
+            "name": "26 ACH26 b56 Mes HF directe Section",
+            "type": "DBL"
+          },
+          {
+            "name": "27 ACH27 b58 Mes I Faraday 2",
+            "type": "DBL"
+          },
+          {
+            "name": "28 ACH28 b60 Mes WCM 1H",
+            "type": "DBL"
+          },
+          {
+            "name": "29 ACH29 b62 Mes WCM 1G",
+            "type": "DBL"
+          },
+          {
+            "name": "30 ACH30 b64 Mes WCM 2H",
+            "type": "DBL"
+          },
+          {
+            "name": "31 ACH31 b66 Mes WCM 2G",
+            "type": "DBL"
+          },
+          {
+            "name": "32 ACH32 b67 Mes WCM 2D",
+            "type": "DBL"
+          },
+          {
+            "name": "33 ACH33 b69 Mes WCM 4",
+            "type": "DBL"
+          },
+          {
+            "name": "34 ACH34 b71 Mes Fente H position mors D",
+            "type": "DBL"
+          },
+          {
+            "name": "35 ACH35 b73 Mes Fente V position mors H",
+            "type": "DBL"
+          },
+          {
+            "name": "36 ACH36 b77 Mes position Ecran 1",
+            "type": "DBL"
+          },
+          {
+            "name": "37 ACH37 b79 Mes position Ecran 3",
+            "type": "DBL"
+          },
+          {
+            "name": "38 ACH38 b81 Mes I obcs Faraday 2",
+            "type": "DBL"
+          },
+          {
+            "name": "39 ACH39 b83 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "40 ACH40 b68 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "41 ACH41 b70 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "42 ACH42 b72 Mes Fente H position mors G",
+            "type": "DBL"
+          },
+          {
+            "name": "43 ACH43 b74 Mes Fente V position mors B",
+            "type": "DBL"
+          },
+          {
+            "name": "44 ACH44 b78 Mes position Ecran 2",
+            "type": "DBL"
+          },
+          {
+            "name": "45 ACH45 b80 Mes I obcs Faraday 1",
+            "type": "DBL"
+          },
+          {
+            "name": "46 ACH46 b82 Mes I obcs Faraday 3",
+            "type": "DBL"
+          },
+          {
+            "name": "47 ACH47 b84 Mes position Miroir X",
+            "type": "DBL"
+          },
+          {
+            "name": "48 ACH48 b85 Mes position Miroir Y",
+            "type": "DBL"
+          },
+          {
+            "name": "49 ACH49 b87 Signal laser 2",
+            "type": "DBL"
+          },
+          {
+            "name": "50 ACH50 b89 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "51 ACH51 b91 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "52 ACH52 b93 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "53 ACH53 b95 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "54 ACH54 b97 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "55 ACH55 b99 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "56 ACH56 b86 Signal laser 1",
+            "type": "DBL"
+          },
+          {
+            "name": "57 ACH57 b88 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "58 ACH58 b90 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "59 ACH59 b92 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "60 ACH60 b94 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "61 ACH61 b96 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "62 ACH62 b98 Libre ?",
+            "type": "DBL"
+          },
+          {
+            "name": "63 ACH63 b100 Libre ?",
+            "type": "DBL"
+          }
+        ],
+        "name": "C2NI6071E",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C3_IN_DIO96": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 APA0 b47 Reffroidissement Canon marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "01 APA1 b45 Reffroidissement Canon d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "02 APA2 b43 Vanne Reffroidissement Canon ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "03 APA3 b41 Vanne Reffroidissement Canon ouverte",
+            "type": "Boolean"
+          },
+          {
+            "name": "04 APA4 b39 D\u00e9bit Reffroidissement Canon d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "05 APA5 b37 Local / Distance Canon (local=0V)",
+            "type": "Boolean"
+          },
+          {
+            "name": "06 APA6 b35 Reffroidissement Section marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "07 APA7 b33 Reffroidissement Section d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "08 APB0 b31 Vanne Reffroidissement Section ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "09 APB1 b29 Vanne Reffroidissement Section ouverte",
+            "type": "Boolean"
+          },
+          {
+            "name": "10 APB2 b27 D\u00e9bit eau Reffroidissement Section",
+            "type": "Boolean"
+          },
+          {
+            "name": "11 APB3 b25 Local / distance Reffroidissement Section (local=0V)",
+            "type": "Boolean"
+          },
+          {
+            "name": "12 APB4 b23 Triplet 1-1 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "13 APB5 b21 Triplet 1-1 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "14 APB6 b19 Triplet 1-2 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "15 APB7 b17 Triplet 1-2 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "16 APC0 b15 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "17 APC1 b13 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "18 APC2 b11 Triplet 2-1 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "19 APC3 b09 Triplet 2-1 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "20 APC4 b07 Triplet 2-2 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "21 APC5 b05 Triplet 2-2 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "22 APC6 b03 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "23 APC7 b01 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "24 BPA0 b48 Quadrip\u00f4ple 1 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "25 BPA1 b46 Quadrip\u00f4ple 1 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "26 BPA2 b44 Quadrip\u00f4ple 2 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "27 BPA3 b42 Quadrip\u00f4ple 2 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "28 BPA4 b40 Focale injection en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "29 BPA5 b38 Focale injection en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "30 BPA6 b36 eau focale injection en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "31 BPA7 b34 Dip\u00f4le 1 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "32 BPB0 b32 Dip\u00f4le 1 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "33 BPB1 b30 Dip\u00f4le 2 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "34 BPB2 b28 Dip\u00f4le 2 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "35 BPB3 b26 Guidage H 1 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "36 BPB4 b24 Guidage H 1 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "37 BPB5 b22 Guidage V 1 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "38 BPB6 b20 Guidage V 1 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "39 BPB7 b18 Guidage H 2 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "40 BPC0 b16 Guidage H 2 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "41 BPC1 b14 Guidage V 2 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "42 BPC2 b12 Guidage V 2 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "43 BPC3 b10 Guidage H 3 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "44 BPC4 b08 Guidage H 3 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "45 BPC5 b06 Guidage V 3 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "46 BPC6 b04 Guidage V 3 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "47 BPC7 b02 Guidage H 4 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "48 CPA0 b97 Guidage H 4 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "49 CPA1 b95 Guidage V 4 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "50 CPA2 b93 Guidage V 4 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "51 CPA3 b91 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "52 CPA4 b89 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "53 CPA5 b87 Guidage V 5 en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "54 CPA6 b85 Guidage V 5 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "55 CPA7 b83 R\u00e9serve",
+            "type": "Boolean"
+          }
+        ],
+        "name": "C3_IN_DIO96",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C3_OUT_DIO96": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 CPB0 b81 Marche Reffroidissement Canon",
+            "type": "Boolean"
+          },
+          {
+            "name": "01 CPB1 b79 Arr\u00eat Reffroidissement Canon",
+            "type": "Boolean"
+          },
+          {
+            "name": "02 CPB2 b77 RAZ Reffroidissement Canon",
+            "type": "Boolean"
+          },
+          {
+            "name": "03 CPB3 b75 Marche Reffroidissement Section",
+            "type": "Boolean"
+          },
+          {
+            "name": "04 CPB4 b73 Arr\u00eat Reffroidissement Section",
+            "type": "Boolean"
+          },
+          {
+            "name": "05 CPB5 b71 RAZ Reffroidissement Section",
+            "type": "Boolean"
+          },
+          {
+            "name": "06 CPB6 b69 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "07 CPB7 b67 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "08 CPC0 b65 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "09 CPC1 b63 Marche Triplet 1-1",
+            "type": "Boolean"
+          },
+          {
+            "name": "10 CPC2 b61 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "11 CPC3 b59 Marche Triplet 1-2",
+            "type": "Boolean"
+          },
+          {
+            "name": "12 CPC4 b57 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "13 CPC5 b55 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "14 CPC6 b53 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "15 CPC7 b51 Marche Triplet 2-1",
+            "type": "Boolean"
+          },
+          {
+            "name": "16 DPA0 b98 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "17 DPA1 b96 Marche Triplet 2-2",
+            "type": "Boolean"
+          },
+          {
+            "name": "18 DPA2 b94 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "19 DPA3 b92 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "20 DPA4 b90 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "21 DPA5 b88 M/A Quadrip\u00f4ple 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "22 DPA6 b86 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "23 DPA7 b84 M/A Quadrip\u00f4ple 2",
+            "type": "Boolean"
+          },
+          {
+            "name": "24 DPB0 b82 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "25 DPB1 b80 M/A Focale Injection",
+            "type": "Boolean"
+          },
+          {
+            "name": "26 DPB2 b78 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "27 DPB3 b76 M/A Dip\u00f4le 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "28 DPB4 b74 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "29 DPB5 b72 M/A Dip\u00f4le 2",
+            "type": "Boolean"
+          },
+          {
+            "name": "30 DPB6 b70 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "31 DPB7 b68 M/A Guidage H1",
+            "type": "Boolean"
+          },
+          {
+            "name": "32 DPC0 b66 M/A Guidage V1",
+            "type": "Boolean"
+          },
+          {
+            "name": "33 DPC1 b64 M/A Guidage H2",
+            "type": "Boolean"
+          },
+          {
+            "name": "34 DPC2 b62 M/A Guidage V2",
+            "type": "Boolean"
+          },
+          {
+            "name": "35 DPC3 b60 M/A Guidage H3",
+            "type": "Boolean"
+          },
+          {
+            "name": "36 DPC4 b58 M/A Guidage V3",
+            "type": "Boolean"
+          },
+          {
+            "name": "37 DPC5 b56 M/A Guidage H4",
+            "type": "Boolean"
+          },
+          {
+            "name": "38 DPC6 b54 M/A Guidage V4",
+            "type": "Boolean"
+          },
+          {
+            "name": "39 DPC7 b52 M/A Guidage V5",
+            "type": "Boolean"
+          }
+        ],
+        "name": "C3_OUT_DIO96",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C4_IN_DIO96": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 APA0 b47 Eau corps Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "01 APA1 b45 Eau collecteur Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "02 APA2 b43 Eau cuve Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "03 APA3 b41 Vide Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "04 APA4 b39 Ventilation Thyratron",
+            "type": "Boolean"
+          },
+          {
+            "name": "05 APA5 b37 Niveau d'huile cuve Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "06 APA6 b35 V chauffage Thyratron",
+            "type": "Boolean"
+          },
+          {
+            "name": "07 APA7 b33 I chauffage Thyratron",
+            "type": "Boolean"
+          },
+          {
+            "name": "08 APB0 b31 V chauffage Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "09 APB1 b29 I chauffage Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "10 APB2 b27 I De QING",
+            "type": "Boolean"
+          },
+          {
+            "name": "11 APB3 b25 I r\u00e9servoir Thyratron",
+            "type": "Boolean"
+          },
+          {
+            "name": "12 APB4 b23 S\u00e9curit\u00e9 Thyratron",
+            "type": "Boolean"
+          },
+          {
+            "name": "13 APB5 b21 Pression SF6",
+            "type": "Boolean"
+          },
+          {
+            "name": "14 APB6 b19 I pr\u00e9magn\u00e9tisation",
+            "type": "Boolean"
+          },
+          {
+            "name": "15 APB7 b17 Contact porte",
+            "type": "Boolean"
+          },
+          {
+            "name": "16 APC0 b15 Contact perche",
+            "type": "Boolean"
+          },
+          {
+            "name": "17 APC1 b13 Contact capot cuve",
+            "type": "Boolean"
+          },
+          {
+            "name": "18 APC2 b11 Fin Tempo",
+            "type": "Boolean"
+          },
+          {
+            "name": "19 APC3 b09 D\u00e9bit EAU CANON",
+            "type": "Boolean"
+          },
+          {
+            "name": "20 APC4 b07 Eau focale Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "21 APC5 b05 I Focale 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "22 APC6 b03 I Focale 2",
+            "type": "Boolean"
+          },
+          {
+            "name": "23 APC7 b01 I Focale 3",
+            "type": "Boolean"
+          },
+          {
+            "name": "24 BPA0 b48 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "25 BPA1 b46 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "26 BPA2 b44 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "27 BPA3 b42 D\u00e9phaseur but\u00e9e MIN",
+            "type": "Boolean"
+          },
+          {
+            "name": "28 BPA4 b40 D\u00e9phaseur but\u00e9e MAX",
+            "type": "Boolean"
+          },
+          {
+            "name": "29 BPA5 b38 Att\u00e9nuateur but\u00e9e MIN",
+            "type": "Boolean"
+          },
+          {
+            "name": "30 BPA6 b36 Att\u00e9nuateur but\u00e9e MAX",
+            "type": "Boolean"
+          },
+          {
+            "name": "31 BPA7 b34 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "32 BPB0 b32 Relais 2 ouvert",
+            "type": "Boolean"
+          },
+          {
+            "name": "33 BPB1 b30 HF incident Canon",
+            "type": "Boolean"
+          },
+          {
+            "name": "34 BPB2 b28 HF incident Section",
+            "type": "Boolean"
+          },
+          {
+            "name": "35 BPB3 b26 V alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "36 BPB4 b24 I alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "37 BPB5 b22 Relais 1 ouvert",
+            "type": "Boolean"
+          },
+          {
+            "name": "38 BPB6 b20 D\u00e9bit EAU SECTION",
+            "type": "Boolean"
+          },
+          {
+            "name": "39 BPB7 b18 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "40 BPC0 b16 Vide Injection",
+            "type": "Boolean"
+          },
+          {
+            "name": "41 BPC1 b14 I Thyratron",
+            "type": "Boolean"
+          },
+          {
+            "name": "42 BPC2 b12 I fin de ligne",
+            "type": "Boolean"
+          },
+          {
+            "name": "43 BPC3 b10 V LAR",
+            "type": "Boolean"
+          },
+          {
+            "name": "44 BPC4 b08 V Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "45 BPC5 b06 I Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "46 BPC6 b04 Radioprotection 1, coupure HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "47 BPC7 b02 Radioprotection 2, coupure HF",
+            "type": "Boolean"
+          },
+          {
+            "name": "48 CPA0 b97 Alimentation HT en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "49 CPA1 b95 Alimentation HT en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "50 CPA2 b93 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "51 CPA3 b91 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "52 CPA4 b89 Contact porte lourde ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "53 CPA5 b87 Contact porte l\u00e9g\u00e8re ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "54 CPA6 b85 Contact porte secours ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "55 CPA7 b83 Contact porte laser ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "56 CPB0 b81 Totalisation des AU",
+            "type": "Boolean"
+          },
+          {
+            "name": "57 CPB1 b79 Rondier 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "58 CPB2 b77 Rondier 2",
+            "type": "Boolean"
+          },
+          {
+            "name": "59 CPB3 b75 Rondier 3",
+            "type": "Boolean"
+          },
+          {
+            "name": "60 CPB4 b73 Totalisation des rondiers",
+            "type": "Boolean"
+          },
+          {
+            "name": "61 CPB5 b71 Position BACO PA / MOD",
+            "type": "Boolean"
+          },
+          {
+            "name": "62 CPB6 b69 Position BACO de TIR",
+            "type": "Boolean"
+          },
+          {
+            "name": "63 CPB7 b67 Position occulteur LASER",
+            "type": "Boolean"
+          }
+        ],
+        "name": "C4_IN_DIO96",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C4_OUT_DIO96": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 CPC0 b65 Marche modulateur Bas Niveau",
+            "type": "Boolean"
+          },
+          {
+            "name": "01 CPC1 b63 Arr\u00eat modulateur Bas Niveau",
+            "type": "Boolean"
+          },
+          {
+            "name": "02 CPC2 b61 RAZ modulateur Bas Niveau",
+            "type": "Boolean"
+          },
+          {
+            "name": "03 CPC3 b59 Marche Chauffage",
+            "type": "Boolean"
+          },
+          {
+            "name": "04 CPC4 b57 Arr\u00eat Chauffage",
+            "type": "Boolean"
+          },
+          {
+            "name": "05 CPC5 b55 Marche pr\u00e9magn\u00e9tisation",
+            "type": "Boolean"
+          },
+          {
+            "name": "06 CPC6 b53 Arr\u00eat pr\u00e9magn\u00e9tisation",
+            "type": "Boolean"
+          },
+          {
+            "name": "07 CPC7 b51 Marche focale Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "08 DPA0 b98 Arr\u00eat focale Klystron",
+            "type": "Boolean"
+          },
+          {
+            "name": "09 DPA1 b96 Marche miroir LASER",
+            "type": "Boolean"
+          },
+          {
+            "name": "10 DPA2 b94 Arr\u00eat miroir LASER",
+            "type": "Boolean"
+          },
+          {
+            "name": "11 DPA3 b92 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "12 DPA4 b90 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "13 DPA5 b88 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "14 DPA6 b86 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "15 DPA7 b84 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "16 DPB0 b82 Marche relais HT 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "17 DPB1 b80 Arr\u00eat relais HT 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "18 DPB2 b78 Marche alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "19 DPB3 b76 Arr\u00eat alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "20 DPB4 b74 RAZ alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "21 DPB5 b72 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "22 DPB6 b70 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "23 DPB7 b68 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "24 DPC0 b66 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "25 DPC1 b64 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "26 DPC2 b62 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "27 DPC3 b60 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "28 DPC4 b58 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "29 DPC5 b56 M/A alimentation Att. et Deph.",
+            "type": "Boolean"
+          },
+          {
+            "name": "30 DPC6 b54 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "31 DPC7 b52 R\u00e9serve",
+            "type": "Boolean"
+          }
+        ],
+        "name": "C4_OUT_DIO96",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C5_IN_DIO96": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 APA0 b47 Vide chambre pr\u00e9paratoire en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "01 APA1 b45 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "02 APA2 b43 Vide sas guide HF en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "03 APA3 b41 Vide sas guide HF en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "04 APA4 b39 Vide Canon (PIQ 12) en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "05 APA5 b37 Vide Canon (PIQ 12) en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "06 APA6 b35 Vide Section (PIQ 16) en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "07 APA7 b33 Vide Section (PIQ 16) en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "08 APB0 b31 Vide Miroir (PIQ 21) en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "09 APB1 b29 Vide Miroir (PIQ 21) en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "10 APB2 b27 Vide Dip\u00f4le 1 (PIQ 27+33) en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "11 APB3 b25 Vide Dip\u00f4le 1 (PIQ 27+33) en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "12 APB4 b23 Vide Ecran 1 (PIQ 53+63) en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "13 APB5 b21 Vide Ecran 1 (PIQ 53+63) en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "14 APB6 b19 Vanne Cathode (VIC 01) ouverte",
+            "type": "Boolean"
+          },
+          {
+            "name": "15 APB7 b17 Vanne Cathode (VIC 01) ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "16 APC0 b15 Vanne Injection (VSC 17) ouverte",
+            "type": "Boolean"
+          },
+          {
+            "name": "17 APC1 b13 Vanne Injection (VSC 17) ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "18 APC2 b11 Vanne directe ouverte",
+            "type": "Boolean"
+          },
+          {
+            "name": "19 APC3 b09 Vanne directe ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "20 APC4 b07 Vanne D\u00e9viation 1 ouverte",
+            "type": "Boolean"
+          },
+          {
+            "name": "21 APC5 b05 Vanne D\u00e9viation 1 ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "22 APC6 b03 Vanne D\u00e9viation 2 ouverte",
+            "type": "Boolean"
+          },
+          {
+            "name": "23 APC7 b01 Vanne D\u00e9viation 2 ferm\u00e9e",
+            "type": "Boolean"
+          },
+          {
+            "name": "24 BPA0 b48 LASER en marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "25 BPA1 b46 LASER eb d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "26 BPA2 b44 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "27 BPA3 b42 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "28 BPA4 b40 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "29 BPA5 b38 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "30 BPA6 b36 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "31 BPA7 b34 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "32 BPB0 b32 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "33 BPB1 b30 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "34 BPB2 b28 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "35 BPB3 b26 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "36 BPB4 b24 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "37 BPB5 b22 Faraday 1 EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "38 BPB6 b20 Faraday 1 HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "39 BPB7 b18 Faraday 2 EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "40 BPC0 b16 Faraday 2 HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "41 BPC1 b14 Faraday 3 EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "42 BPC2 b12 Faraday 3 HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "43 BPC3 b10 Position Miroir LASER EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "44 BPC4 b08 Position Miroir LASER HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "45 BPC5 b06 Fente H but\u00e9e MIN",
+            "type": "Boolean"
+          },
+          {
+            "name": "46 BPC6 b04 Mors HG but\u00e9e HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "47 BPC7 b02 Mors HD but\u00e9e HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "48 CPA0 b97 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "49 CPA1 b95 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "50 CPA2 b93 Translateur \u00e9cran 1 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "51 CPA3 b91 Translateur \u00e9cran 2 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "52 CPA4 b89 Translateur \u00e9cran 3 en d\u00e9faut",
+            "type": "Boolean"
+          },
+          {
+            "name": "53 CPA5 b87 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "54 CPA6 b85 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "55 CPA7 b83 R\u00e9serve",
+            "type": "Boolean"
+          }
+        ],
+        "name": "C5_IN_DIO96",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C5_OUT_DIO96": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 CPB0 b81 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "01 CPB1 b79 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "02 CPB2 b77 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "03 CPB3 b75 M/A Cam\u00e9ra chambre de pr\u00e9paration",
+            "type": "Boolean"
+          },
+          {
+            "name": "04 CPB4 b73 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "05 CPB5 b71 M/A Cam\u00e9ra Miroir",
+            "type": "Boolean"
+          },
+          {
+            "name": "06 CPB6 b69 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "07 CPB7 b67 M/A Eclairage Ecran 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "08 CPC0 b65 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "09 CPC1 b63 M/A Cam\u00e9ra Ecran 1",
+            "type": "Boolean"
+          },
+          {
+            "name": "10 CPC2 b61 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "11 CPC3 b59 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "12 CPC4 b57 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "13 CPC5 b55 M/A Eclairage Ecran 2",
+            "type": "Boolean"
+          },
+          {
+            "name": "14 CPC6 b53 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "15 CPC7 b51 M/A Cam\u00e9ra Ecran 2",
+            "type": "Boolean"
+          },
+          {
+            "name": "16 DPA0 b98 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "17 DPA1 b96 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "18 DPA2 b94 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "19 DPA3 b92 M/A Eclairage Ecran 3",
+            "type": "Boolean"
+          },
+          {
+            "name": "20 DPA4 b90 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "21 DPA5 b88 M/A Cam\u00e9ra Ecran 3",
+            "type": "Boolean"
+          },
+          {
+            "name": "22 DPA6 b86 Cmd Miroir LASER EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "23 DPA7 b84 Cmd Faraday 1 EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "24 DPB0 b82 Cmd Faraday 2 EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "25 DPB1 b80 Cmd Faraday 3 EN",
+            "type": "Boolean"
+          },
+          {
+            "name": "26 DPB2 b78 Cmd Miroir LASER HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "27 DPB3 b76 M/A alimentation Fente H",
+            "type": "Boolean"
+          },
+          {
+            "name": "28 DPB4 b74 Cmd Faraday 1 HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "29 DPB5 b72 Cmd Faraday 2 HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "30 DPB6 b70 Cmd Faraday 3 HORS",
+            "type": "Boolean"
+          },
+          {
+            "name": "31 DPB7 b68 M/A Alimentation Ecrans",
+            "type": "Boolean"
+          },
+          {
+            "name": "32 DPC0 b66 LASER Marche",
+            "type": "Boolean"
+          },
+          {
+            "name": "33 DPC1 b64 LASER Arr\u00eat",
+            "type": "Boolean"
+          },
+          {
+            "name": "34 DPC2 b62 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "35 DPC3 b60 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "36 DPC4 b58 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "37 DPC5 b56 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "38 DPC6 b54 R\u00e9serve",
+            "type": "Boolean"
+          },
+          {
+            "name": "39 DPC7 b52 R\u00e9serve",
+            "type": "Boolean"
+          }
+        ],
+        "name": "C5_OUT_DIO96",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C6NI6703": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 OUT00 b01 Cmd Guidage H1",
+            "type": "DBL"
+          },
+          {
+            "name": "01 OUT01 b05 Cmd Guidage V1",
+            "type": "DBL"
+          },
+          {
+            "name": "02 OUT02 b09 Cmd Guidage H2",
+            "type": "DBL"
+          },
+          {
+            "name": "03 OUT03 b13 Cmd Guidage V2",
+            "type": "DBL"
+          },
+          {
+            "name": "04 OUT04 b17 Cmd Guidage H3",
+            "type": "DBL"
+          },
+          {
+            "name": "05 OUT05 b21 Cmd Guidage V3",
+            "type": "DBL"
+          },
+          {
+            "name": "06 OUT06 b25 Cmd Guidage H4",
+            "type": "DBL"
+          },
+          {
+            "name": "07 OUT07 b29 Cmd Guidage V4",
+            "type": "DBL"
+          },
+          {
+            "name": "08 OUT08 b33 R\u00e9serve",
+            "type": "DBL"
+          },
+          {
+            "name": "09 OUT09 b37 Cmd Guidage V5",
+            "type": "DBL"
+          }
+        ],
+        "name": "C6NI6703",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C7NI6703": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 OUT00 b01 Cmd I Triplet 1-1",
+            "type": "DBL"
+          },
+          {
+            "name": "01 OUT01 b05 Cmd I Triplet 1-2",
+            "type": "DBL"
+          },
+          {
+            "name": "02 OUT02 b09 R\u00e9serve",
+            "type": "DBL"
+          },
+          {
+            "name": "03 OUT03 b13 Cmd I Triplet 2-1",
+            "type": "DBL"
+          },
+          {
+            "name": "04 OUT04 b17 Cmd I Triplet 2-2",
+            "type": "DBL"
+          },
+          {
+            "name": "05 OUT05 b21 Cmd I Sol\u00e9no\u00efde",
+            "type": "DBL"
+          },
+          {
+            "name": "06 OUT06 b25 Cmd I Quad 1",
+            "type": "DBL"
+          },
+          {
+            "name": "07 OUT07 b29 Cmd I Quad 2",
+            "type": "DBL"
+          },
+          {
+            "name": "08 OUT08 b33 Cmd I Dip\u00f4le 1",
+            "type": "DBL"
+          },
+          {
+            "name": "09 OUT09 b37 Cmd I Dip\u00f4le 2",
+            "type": "DBL"
+          }
+        ],
+        "name": "C7NI6703",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C8NI6703": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 OUT00 b01 R\u00e9serve",
+            "type": "DBL"
+          },
+          {
+            "name": "01 OUT01 b05 Cmd Temp. Canon",
+            "type": "DBL"
+          },
+          {
+            "name": "02 OUT02 b09 Cmd Temp. Section",
+            "type": "DBL"
+          },
+          {
+            "name": "03 OUT03 b13 Cmd Pos. D\u00e9phaseur",
+            "type": "DBL"
+          },
+          {
+            "name": "04 OUT04 b17 Cmd Pos. Att\u00e9nuateur",
+            "type": "DBL"
+          },
+          {
+            "name": "05 OUT05 b21 Cmd d\u00e9phasage HF/LASER",
+            "type": "DBL"
+          },
+          {
+            "name": "06 OUT06 b25 Cmd amplitude HF pr\u00e9ampli",
+            "type": "DBL"
+          },
+          {
+            "name": "07 OUT07 b29 R\u00e9serve",
+            "type": "DBL"
+          },
+          {
+            "name": "08 OUT08 b33 Cmd position Miroir X",
+            "type": "DBL"
+          },
+          {
+            "name": "09 OUT09 b37 Cmd position Miroir Y",
+            "type": "DBL"
+          }
+        ],
+        "name": "C8NI6703",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C9NI6703": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 OUT00 b01 Cmd alimentation HT",
+            "type": "DBL"
+          },
+          {
+            "name": "01 OUT01 b05 Cmd DeQing",
+            "type": "DBL"
+          },
+          {
+            "name": "02 OUT02 b09 Cmd position fente HG",
+            "type": "DBL"
+          },
+          {
+            "name": "03 OUT03 b13 Cmd position fente HD",
+            "type": "DBL"
+          },
+          {
+            "name": "04 OUT04 b17 Cmd position translateur Ecran 1",
+            "type": "DBL"
+          },
+          {
+            "name": "05 OUT05 b21 Cmd position translateur Ecran 2",
+            "type": "DBL"
+          },
+          {
+            "name": "06 OUT06 b25 Cmd position translateur Ecran 3",
+            "type": "DBL"
+          },
+          {
+            "name": "07 OUT07 b29 R\u00e9serve",
+            "type": "DBL"
+          },
+          {
+            "name": "08 OUT08 b33 R\u00e9serve",
+            "type": "DBL"
+          },
+          {
+            "name": "09 OUT09 b37 R\u00e9serve",
+            "type": "DBL"
+          }
+        ],
+        "name": "C9NI6703",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C1011NI6602": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 OUT00 b05 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "01 OUT00 b05 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "02 OUT01 b09 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "03 OUT01 b09 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "04 OUT02 b32 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "05 OUT02 b32 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "06 OUT03 b29 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "07 OUT03 b29 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "08 OUT04 b26 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "09 OUT04 b26 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "10 OUT05 b23 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "11 OUT05 b23 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "12 OUT06 b53 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "13 OUT06 b53 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "14 OUT07 b16 C10 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "15 OUT07 b16 C10 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "16 OUT00 b05 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "17 OUT00 b05 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "18 OUT01 b09 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "19 OUT01 b09 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "20 OUT02 b32 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "21 OUT02 b32 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "22 OUT03 b29 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "23 OUT03 b29 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "24 OUT04 b26 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "25 OUT04 b26 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "26 OUT05 b23 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "27 OUT05 b23 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "28 OUT06 b53 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "29 OUT06 b53 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "30 OUT07 b16 C11 D\u00e9lais",
+            "type": "DBL"
+          },
+          {
+            "name": "31 OUT07 b16 C11 Largeur",
+            "type": "DBL"
+          },
+          {
+            "name": "N\u00b0 du compteur",
+            "type": "DBL"
+          }
+        ],
+        "name": "C10-11 NI6602",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "DPS": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "Marche refroidissement X",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret refroidissement X",
+            "type": "Boolean"
+          },
+          {
+            "name": " X Marche GENERAL Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arr\u00eat GENERAL Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Marche CHAUFFAGE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arr\u00eat CHAUFFAGE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Marche PREMA Mod. ",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arr\u00eat PREMA Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": " X Marche RELAIS HT Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arr\u00eat RELAIS HT Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Marche FOCALE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arr\u00eat FOCALE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X RESET Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Marche Att D\u00e9ph",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arret Att D\u00e9ph",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Marche alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Reset alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arr\u00eat alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Marche impulsion mod",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arret impulsion mod",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Marche alimentation aimant",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Alimentation aimant = 0V",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Alimentation aimant = PT",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Arr\u00eat alimentation aimant",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Tempo 1s",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Tempo 5s",
+            "type": "Boolean"
+          },
+          {
+            "name": "X Tempo 30s",
+            "type": "Boolean"
+          },
+          {
+            "name": "X FREQ. ELYSE",
+            "type": "Boolean"
+          },
+          {
+            "name": "Libre X",
+            "type": "Boolean"
+          }
+        ],
+        "name": "DPS",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "DPC": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "TIR X",
+            "type": "Boolean"
+          },
+          {
+            "name": "PRETIR X",
+            "type": "Boolean"
+          },
+          {
+            "name": "VEILLE X",
+            "type": "Boolean"
+          },
+          {
+            "name": "ARRET X",
+            "type": "Boolean"
+          },
+          {
+            "name": "QUIT X",
+            "type": "Boolean"
+          }
+        ],
+        "name": "DPC",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "EPS": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "Marche refroidissement",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche refroidissement ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche refroidissement OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat refroidissement",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret refroidissement ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret refroidissement OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche GENERAL Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche GENERAL Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche GENERAL Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat GENERAL Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat GENERAL Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat GENERAL Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche CHAUFFAGE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche CHAUFFAGE Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche CHAUFFAGE Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat CHAUFFAGE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat CHAUFFAGE Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat CHAUFFAGE Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche PREMA Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche PREMA Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche PREMA Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat PREMA Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat PREMA Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat PREMA Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche RELAIS HT Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche RELAIS HT Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche RELAIS HT Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat RELAIS HT Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat RELAIS HT Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat RELAIS HT Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche FOCALE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche FOCALE Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche FOCALE Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat FOCALE Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat FOCALE Mod. ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat FOCALE Mod. OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "RESET Mod.",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche Att et D\u00e9ph HF",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche Att D\u00e9ph ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche Att D\u00e9ph OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat Att et D\u00e9ph HF",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret Att D\u00e9ph ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret Att D\u00e9ph OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche alimentation HT ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche alimentation HT OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Reset alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat alimentation HT",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret alimentation HT ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret alimentation HT OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche impulsion modulateur",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche impulsion mod ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche impulsion mod OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat impulsion modulateur",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret impulsion mod ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret impulsion mod OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche alimentation aimants",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche alimentation aimant ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Marche alimentation aimant OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Alimentation aimant = 0V",
+            "type": "Boolean"
+          },
+          {
+            "name": "Alimentation aimant = 0V ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Alimentation aimant = 0V OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Alimentation aimant = PT",
+            "type": "Boolean"
+          },
+          {
+            "name": "Alimentation aimant = PT ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Alimentation aimant = PT OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arr\u00eat alimentation aimants",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret alimentation aimant ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Arret alimentation aimant OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Tempo 1s",
+            "type": "Boolean"
+          },
+          {
+            "name": "Tempo 5s",
+            "type": "Boolean"
+          },
+          {
+            "name": "Tempo 30s",
+            "type": "Boolean"
+          },
+          {
+            "name": "FREQ. ELYSE",
+            "type": "Boolean"
+          },
+          {
+            "name": "FREQ. ELYSE ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "FREQ. ELYSE OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "Libre",
+            "type": "Boolean"
+          },
+          {
+            "name": "Libre ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "Libre OK",
+            "type": "Boolean"
+          }
+        ],
+        "name": "EPS",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "EPC": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "TIR OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "PRETIR OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "VEILLE OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "ARRET OK",
+            "type": "Boolean"
+          },
+          {
+            "name": "ARRET <> VEILLE",
+            "type": "Boolean"
+          },
+          {
+            "name": "TIR ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "PRETIR ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "VEILLE ED",
+            "type": "Boolean"
+          },
+          {
+            "name": "VEILLE ED 2",
+            "type": "Boolean"
+          },
+          {
+            "name": "PRETIR <> VEILLE",
+            "type": "Boolean"
+          },
+          {
+            "name": "TIR <> PRETIR",
+            "type": "Boolean"
+          },
+          {
+            "name": "Proc\u00e9dure combin\u00e9 EC",
+            "type": "Boolean"
+          }
+        ],
+        "name": "EPC",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "C12NI1409": {
+      "contained_type": {
+        "name": "C12NI1409",
+        "type": "String"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VDM-A": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "Pilote pr\u00e9sent ?",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          }
+        ],
+        "name": "VDM-A",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VDM-S": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          }
+        ],
+        "name": "VDM-S",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VDD": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          },
+          {
+            "name": "-",
+            "type": "Boolean"
+          }
+        ],
+        "name": "VDD",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VAM-A": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 ACQ Auxiliare",
+            "type": "DBL"
+          },
+          {
+            "name": "01 ACQ Variables",
+            "type": "DBL"
+          },
+          {
+            "name": "02 ACQ Ev\u00e9nement",
+            "type": "DBL"
+          },
+          {
+            "name": "03 ",
+            "type": "DBL"
+          },
+          {
+            "name": "04",
+            "type": "DBL"
+          },
+          {
+            "name": "05",
+            "type": "DBL"
+          },
+          {
+            "name": "06",
+            "type": "DBL"
+          },
+          {
+            "name": "07",
+            "type": "DBL"
+          },
+          {
+            "name": "08",
+            "type": "DBL"
+          },
+          {
+            "name": "09",
+            "type": "DBL"
+          },
+          {
+            "name": "10 ACQ Vide Section",
+            "type": "DBL"
+          },
+          {
+            "name": "11 ACQ Vide Chambre",
+            "type": "DBL"
+          },
+          {
+            "name": "12 ACQ Vide PI Guide HF",
+            "type": "DBL"
+          },
+          {
+            "name": "13 ACQ Vide Canon PIQ12",
+            "type": "DBL"
+          },
+          {
+            "name": "14 ACQ Vide Section PIQ16",
+            "type": "DBL"
+          },
+          {
+            "name": "15 ACQ Vide Miroir PI21",
+            "type": "DBL"
+          },
+          {
+            "name": "16 ACQ Vide DIP PIQ27/33",
+            "type": "DBL"
+          },
+          {
+            "name": "17 ACQ Vide Ecran PIQ53/63",
+            "type": "DBL"
+          },
+          {
+            "name": "18 ACQ Libre",
+            "type": "DBL"
+          },
+          {
+            "name": "19 ACQ Libre",
+            "type": "DBL"
+          },
+          {
+            "name": "20 ACQ Vide TPG300 PIQ63",
+            "type": "DBL"
+          },
+          {
+            "name": "21",
+            "type": "DBL"
+          },
+          {
+            "name": "22",
+            "type": "DBL"
+          },
+          {
+            "name": "23",
+            "type": "DBL"
+          },
+          {
+            "name": "24",
+            "type": "DBL"
+          },
+          {
+            "name": "25",
+            "type": "DBL"
+          },
+          {
+            "name": "26",
+            "type": "DBL"
+          },
+          {
+            "name": "27",
+            "type": "DBL"
+          },
+          {
+            "name": "28",
+            "type": "DBL"
+          },
+          {
+            "name": "29",
+            "type": "DBL"
+          },
+          {
+            "name": "30",
+            "type": "DBL"
+          },
+          {
+            "name": "31",
+            "type": "DBL"
+          },
+          {
+            "name": "32 WCM2HMax",
+            "type": "DBL"
+          },
+          {
+            "name": "33 WCM2BMax",
+            "type": "DBL"
+          },
+          {
+            "name": "34 WCM2GMax",
+            "type": "DBL"
+          },
+          {
+            "name": "35 WCM2DMax",
+            "type": "DBL"
+          },
+          {
+            "name": "36 WCM2HMin",
+            "type": "DBL"
+          },
+          {
+            "name": "37 WCM2BMin",
+            "type": "DBL"
+          },
+          {
+            "name": "38 WCM2GMin",
+            "type": "DBL"
+          },
+          {
+            "name": "39 WCM2DMin",
+            "type": "DBL"
+          },
+          {
+            "name": "40",
+            "type": "DBL"
+          },
+          {
+            "name": "41",
+            "type": "DBL"
+          },
+          {
+            "name": "42",
+            "type": "DBL"
+          },
+          {
+            "name": "43",
+            "type": "DBL"
+          },
+          {
+            "name": "44",
+            "type": "DBL"
+          },
+          {
+            "name": "45",
+            "type": "DBL"
+          },
+          {
+            "name": "46",
+            "type": "DBL"
+          },
+          {
+            "name": "47",
+            "type": "DBL"
+          },
+          {
+            "name": "48",
+            "type": "DBL"
+          },
+          {
+            "name": "49",
+            "type": "DBL"
+          },
+          {
+            "name": "50",
+            "type": "DBL"
+          },
+          {
+            "name": "51",
+            "type": "DBL"
+          },
+          {
+            "name": "52",
+            "type": "DBL"
+          },
+          {
+            "name": "53",
+            "type": "DBL"
+          },
+          {
+            "name": "54",
+            "type": "DBL"
+          },
+          {
+            "name": "55",
+            "type": "DBL"
+          },
+          {
+            "name": "56",
+            "type": "DBL"
+          },
+          {
+            "name": "57",
+            "type": "DBL"
+          },
+          {
+            "name": "58",
+            "type": "DBL"
+          },
+          {
+            "name": "59",
+            "type": "DBL"
+          },
+          {
+            "name": "60",
+            "type": "DBL"
+          },
+          {
+            "name": "61",
+            "type": "DBL"
+          },
+          {
+            "name": "62",
+            "type": "DBL"
+          },
+          {
+            "name": "63 B_NI6220",
+            "type": "DBL"
+          }
+        ],
+        "name": "VAM-A",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VAM-S": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00 SUP Vid\u00e9o",
+            "type": "DBL"
+          },
+          {
+            "name": "01 SUP Variables",
+            "type": "DBL"
+          },
+          {
+            "name": "02 SUP Evenement",
+            "type": "DBL"
+          },
+          {
+            "name": "03",
+            "type": "DBL"
+          },
+          {
+            "name": "04",
+            "type": "DBL"
+          },
+          {
+            "name": "05",
+            "type": "DBL"
+          },
+          {
+            "name": "06",
+            "type": "DBL"
+          },
+          {
+            "name": "07",
+            "type": "DBL"
+          },
+          {
+            "name": "08",
+            "type": "DBL"
+          },
+          {
+            "name": "09",
+            "type": "DBL"
+          },
+          {
+            "name": "10",
+            "type": "DBL"
+          },
+          {
+            "name": "11",
+            "type": "DBL"
+          },
+          {
+            "name": "12",
+            "type": "DBL"
+          },
+          {
+            "name": "13",
+            "type": "DBL"
+          },
+          {
+            "name": "14",
+            "type": "DBL"
+          },
+          {
+            "name": "15",
+            "type": "DBL"
+          },
+          {
+            "name": "16",
+            "type": "DBL"
+          },
+          {
+            "name": "17",
+            "type": "DBL"
+          },
+          {
+            "name": "18",
+            "type": "DBL"
+          },
+          {
+            "name": "19",
+            "type": "DBL"
+          },
+          {
+            "name": "20",
+            "type": "DBL"
+          },
+          {
+            "name": "21",
+            "type": "DBL"
+          },
+          {
+            "name": "22",
+            "type": "DBL"
+          },
+          {
+            "name": "23",
+            "type": "DBL"
+          },
+          {
+            "name": "24",
+            "type": "DBL"
+          },
+          {
+            "name": "25",
+            "type": "DBL"
+          },
+          {
+            "name": "26",
+            "type": "DBL"
+          },
+          {
+            "name": "27",
+            "type": "DBL"
+          },
+          {
+            "name": "28",
+            "type": "DBL"
+          },
+          {
+            "name": "29",
+            "type": "DBL"
+          },
+          {
+            "name": "30",
+            "type": "DBL"
+          },
+          {
+            "name": "31",
+            "type": "DBL"
+          },
+          {
+            "name": "32",
+            "type": "DBL"
+          },
+          {
+            "name": "33",
+            "type": "DBL"
+          },
+          {
+            "name": "34",
+            "type": "DBL"
+          },
+          {
+            "name": "35",
+            "type": "DBL"
+          },
+          {
+            "name": "36",
+            "type": "DBL"
+          },
+          {
+            "name": "37",
+            "type": "DBL"
+          },
+          {
+            "name": "38",
+            "type": "DBL"
+          },
+          {
+            "name": "39",
+            "type": "DBL"
+          },
+          {
+            "name": "40",
+            "type": "DBL"
+          },
+          {
+            "name": "41",
+            "type": "DBL"
+          },
+          {
+            "name": "42",
+            "type": "DBL"
+          },
+          {
+            "name": "43",
+            "type": "DBL"
+          },
+          {
+            "name": "44",
+            "type": "DBL"
+          },
+          {
+            "name": "45",
+            "type": "DBL"
+          },
+          {
+            "name": "46",
+            "type": "DBL"
+          },
+          {
+            "name": "47",
+            "type": "DBL"
+          },
+          {
+            "name": "48",
+            "type": "DBL"
+          },
+          {
+            "name": "49",
+            "type": "DBL"
+          },
+          {
+            "name": "50",
+            "type": "DBL"
+          },
+          {
+            "name": "51",
+            "type": "DBL"
+          },
+          {
+            "name": "52",
+            "type": "DBL"
+          },
+          {
+            "name": "53",
+            "type": "DBL"
+          },
+          {
+            "name": "54",
+            "type": "DBL"
+          },
+          {
+            "name": "55",
+            "type": "DBL"
+          },
+          {
+            "name": "56",
+            "type": "DBL"
+          },
+          {
+            "name": "57",
+            "type": "DBL"
+          },
+          {
+            "name": "58",
+            "type": "DBL"
+          },
+          {
+            "name": "59",
+            "type": "DBL"
+          },
+          {
+            "name": "60",
+            "type": "DBL"
+          },
+          {
+            "name": "61",
+            "type": "DBL"
+          },
+          {
+            "name": "62",
+            "type": "DBL"
+          },
+          {
+            "name": "63",
+            "type": "DBL"
+          }
+        ],
+        "name": "VAM-S",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VAD": {
+      "contained_type": {
+        "fields": [
+          {
+            "name": "00",
+            "type": "DBL"
+          },
+          {
+            "name": "01",
+            "type": "DBL"
+          },
+          {
+            "name": "02",
+            "type": "DBL"
+          },
+          {
+            "name": "03",
+            "type": "DBL"
+          },
+          {
+            "name": "04",
+            "type": "DBL"
+          },
+          {
+            "name": "05",
+            "type": "DBL"
+          },
+          {
+            "name": "06",
+            "type": "DBL"
+          },
+          {
+            "name": "07",
+            "type": "DBL"
+          },
+          {
+            "name": "08",
+            "type": "DBL"
+          },
+          {
+            "name": "09",
+            "type": "DBL"
+          },
+          {
+            "name": "10",
+            "type": "DBL"
+          },
+          {
+            "name": "11",
+            "type": "DBL"
+          },
+          {
+            "name": "12",
+            "type": "DBL"
+          },
+          {
+            "name": "13",
+            "type": "DBL"
+          },
+          {
+            "name": "14",
+            "type": "DBL"
+          },
+          {
+            "name": "15",
+            "type": "DBL"
+          },
+          {
+            "name": "16",
+            "type": "DBL"
+          },
+          {
+            "name": "17",
+            "type": "DBL"
+          },
+          {
+            "name": "18",
+            "type": "DBL"
+          },
+          {
+            "name": "19",
+            "type": "DBL"
+          },
+          {
+            "name": "20",
+            "type": "DBL"
+          },
+          {
+            "name": "21",
+            "type": "DBL"
+          },
+          {
+            "name": "22",
+            "type": "DBL"
+          },
+          {
+            "name": "23",
+            "type": "DBL"
+          },
+          {
+            "name": "24",
+            "type": "DBL"
+          },
+          {
+            "name": "25",
+            "type": "DBL"
+          },
+          {
+            "name": "26",
+            "type": "DBL"
+          },
+          {
+            "name": "27",
+            "type": "DBL"
+          },
+          {
+            "name": "28",
+            "type": "DBL"
+          },
+          {
+            "name": "29",
+            "type": "DBL"
+          },
+          {
+            "name": "30",
+            "type": "DBL"
+          },
+          {
+            "name": "31",
+            "type": "DBL"
+          },
+          {
+            "name": "32",
+            "type": "DBL"
+          },
+          {
+            "name": "33",
+            "type": "DBL"
+          },
+          {
+            "name": "34",
+            "type": "DBL"
+          },
+          {
+            "name": "35",
+            "type": "DBL"
+          },
+          {
+            "name": "36",
+            "type": "DBL"
+          },
+          {
+            "name": "37",
+            "type": "DBL"
+          },
+          {
+            "name": "38",
+            "type": "DBL"
+          },
+          {
+            "name": "39",
+            "type": "DBL"
+          },
+          {
+            "name": "40",
+            "type": "DBL"
+          },
+          {
+            "name": "41",
+            "type": "DBL"
+          },
+          {
+            "name": "42",
+            "type": "DBL"
+          },
+          {
+            "name": "43",
+            "type": "DBL"
+          },
+          {
+            "name": "44",
+            "type": "DBL"
+          },
+          {
+            "name": "45",
+            "type": "DBL"
+          },
+          {
+            "name": "46",
+            "type": "DBL"
+          },
+          {
+            "name": "47",
+            "type": "DBL"
+          },
+          {
+            "name": "48",
+            "type": "DBL"
+          },
+          {
+            "name": "49",
+            "type": "DBL"
+          },
+          {
+            "name": "50",
+            "type": "DBL"
+          },
+          {
+            "name": "51",
+            "type": "DBL"
+          },
+          {
+            "name": "52",
+            "type": "DBL"
+          },
+          {
+            "name": "53",
+            "type": "DBL"
+          },
+          {
+            "name": "54",
+            "type": "DBL"
+          },
+          {
+            "name": "55",
+            "type": "DBL"
+          },
+          {
+            "name": "56",
+            "type": "DBL"
+          },
+          {
+            "name": "57",
+            "type": "DBL"
+          },
+          {
+            "name": "58",
+            "type": "DBL"
+          },
+          {
+            "name": "59",
+            "type": "DBL"
+          },
+          {
+            "name": "60",
+            "type": "DBL"
+          },
+          {
+            "name": "61",
+            "type": "DBL"
+          },
+          {
+            "name": "62",
+            "type": "DBL"
+          },
+          {
+            "name": "63",
+            "type": "DBL"
+          }
+        ],
+        "name": "VAD",
+        "type": "Cluster"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VTA": {
+      "contained_type": {
+        "dimensions": [
+          0
+        ],
+        "element_type": {
+          "name": "Cha\u00eene",
+          "type": "String"
+        },
+        "name": "VTA",
+        "type": "Array"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VTS": {
+      "contained_type": {
+        "dimensions": [
+          0
+        ],
+        "element_type": {
+          "name": "Cha\u00eene",
+          "type": "String"
+        },
+        "name": "VTS",
+        "type": "Array"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    },
+    "VTL": {
+      "contained_type": {
+        "dimensions": [
+          0
+        ],
+        "element_type": {
+          "name": "Cha\u00eene",
+          "type": "String"
+        },
+        "name": "VTL",
+        "type": "Array"
+      },
+      "name": "Get Control Value Variant",
+      "type": "LvVariant"
+    }
+  }
+}
