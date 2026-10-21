@@ -1,0 +1,8 @@
+.acq-command-status { display: flex; gap: 4px 12px; flex-wrap: wrap; padding: 3px 8px; background: #e5ebf1; color: #19334b; font-size: 10px; }
+.acq-command-status > span { overflow-wrap: anywhere; }
+.acq-command-modal { position: fixed; inset: 0; z-index: 2000; background: #00102499; display: grid; place-items: center; padding: 16px; }
+.acq-command-modal > section { max-width: 490px; background: #eef3f7; border: 2px solid #315779; padding: 18px; color: #112b43; }
+.acq-command-modal h2 { font-size: 18px; margin: 0 0 12px; }
+.acq-command-modal p { font-size: 13px; }
+.acq-command-modal button { margin-right: 12px; padding: 6px 14px; }
+.sup-control__command:not(:disabled), .modulator-panel__command:not(:disabled), .fluides-panel__command:not(:disabled) { cursor: pointer; color: #092446; border-color: #254e78; }

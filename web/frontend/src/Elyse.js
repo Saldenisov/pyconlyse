@@ -1,5 +1,7 @@
 // src/Elyse.js
 import React, { useState } from 'react';
+import AcqTelemetry from './AcqTelemetry';
+import { acqTelemetryClient } from './api/acqTelemetryClient';
 import Synchronization from './tabs/Synchronization';
 import Modulator from './tabs/Modulator';
 import HT from "./tabs/HT";
@@ -18,7 +20,8 @@ const tabs = [
   "Monitoring",
   "Cameras",
   "Magnets",
-  "Experiment"
+  "Experiment",
+  "Acquisition Telemetry"
 ];
 
 const TEST_ONLY_MESSAGE =
@@ -33,6 +36,7 @@ const Elyse = () => {
   };
 
   const handleTestOnlyAction = (event) => {
+    if (activeTab === 'Acquisition Telemetry') return; // Read-only navigation and refresh.
     const button = event.target.closest('button');
     if (!button) {
       return;
@@ -49,6 +53,8 @@ const Elyse = () => {
   // For "Modulator" and "Synchronization", render their dedicated components.
   const renderTabContent = (tab) => {
     switch (tab) {
+      case "Acquisition Telemetry":
+        return <AcqTelemetry client={acqTelemetryClient} />;
       case "Modulator":
         return <Modulator />;
       case "Synchronization":
