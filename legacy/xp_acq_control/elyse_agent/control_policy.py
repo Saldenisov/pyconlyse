@@ -7,7 +7,7 @@ import math
 
 
 def command_capabilities(value):
-    from .acquisition_remote import OPERATIONS
+    from .command_protocol import OPERATIONS
     stage = value.get("stage_execution", {})
     state = value.get("state")
     recovery = value.get("recovery", {})

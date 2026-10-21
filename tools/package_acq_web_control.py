@@ -21,6 +21,8 @@ def package(destination, everest=False):
                      "engine.py", "plans.py", "contracts.py", "simulator.py"):
             files.append((BRIDGE / name, "DeviceServers/control/elyse_acq/" + name))
         for name in ("__init__.py", "acquisition_remote.py", "acquisition_http.py", "runtime_identity.py", "native_telemetry.py",
+                     "command_protocol.py", "command_broker.py", "command_http.py", "command_dispatch.py",
+                     "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py",
                      "shared_state.py", "labview_telemetry.py", "telemetry_relay.py", "protocol.py", "supervision_wire.py", "errors.py"):
             files.append((XP / "elyse_agent" / name, "legacy/xp_acq_control/elyse_agent/" + name))
         for name in ("__init__.py", "shared_state.py", "labview_telemetry.py", "telemetry_relay.py",
@@ -36,7 +38,7 @@ def package(destination, everest=False):
                  and "__pycache__" not in path.parts]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="acq-unified-telemetry-20261021-v6", default_xp_port=8772,
+                    release="acq-unified-telemetry-20261021-v7", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",

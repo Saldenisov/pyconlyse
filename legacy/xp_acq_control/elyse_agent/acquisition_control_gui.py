@@ -8,7 +8,7 @@ from .acquisition_gui import AcquisitionWindow, load_configuration
 from .acquisition_backend import CardBackend, DemoBackend
 from .acquisition_control_runtime import AcquisitionControlRuntime, control_identity
 from .acquisition_recovery import OwnershipMarker
-from .acquisition_remote import ControlHTTPServer
+from .command_http import ControlHTTPServer
 from .chroma_focal_command import ChromaFocalCommand
 from .chroma_focal_stop import DEFAULT_DLL
 from .cooling_safety import CoolingSafety
@@ -112,7 +112,12 @@ class ControlWindow(AcquisitionWindow):
                     self.root.after(1000, self.refresh)
                     return
             self.server.shutdown()
-            self.server.server_close()
+            try:
+                self.server.server_close()
+            except Exception as error:
+                self.alarm.set(str(error))
+                self.root.after(1000, self.refresh)
+                return
             self.root.destroy()
             return
         if self.closing and state["state"] == "FAULT":

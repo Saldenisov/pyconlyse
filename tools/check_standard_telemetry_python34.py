@@ -21,6 +21,7 @@ def main():
     from elyse_agent.protocol import recv_message, send_message
     from elyse_agent.dual_mode_telemetry import DualModeTelemetryPublisher
     from elyse_agent.shared_state import BANKS, validate_snapshot_packet
+    from elyse_agent.command_dispatch import CommandDispatcher
     import time
     factory_calls = []
     cold = AcquisitionControlRuntime(lambda: factory_calls.append(True))
@@ -59,7 +60,7 @@ def main():
     thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=.02))
     thread.daemon = True; thread.start()
     publisher = StandardTelemetryPublisher(FakeRuntime(), server.server_address, key)
-    dual = None
+    dual = dispatcher = None
     try:
         assert publisher.publish_once() and publisher.relay.send_once()
         packet = received[0]["packet"]
@@ -91,15 +92,46 @@ def main():
         else:
             raise AssertionError("Recent VI traffic must block Initialize")
         assert not factory_calls and cold.snapshot()["resource_count"] == 0
+        # Telemetry must not enter full metadata, command ledger or journal.
+        def refuse_metadata():
+            raise AssertionError("Telemetry entered full metadata snapshot")
+        cold.snapshot = refuse_metadata
+        entered, release = threading.Event(), threading.Event()
+        def hold_owner():
+            with cold._lock:
+                entered.set()
+                assert release.wait(3)
+        holder = threading.Thread(target=hold_owner)
+        holder.start()
+        try:
+            assert entered.wait(3)
+            started = time.monotonic()
+            assert dual.publish_once() and time.monotonic() - started < .5
+            assert dual.relay.send_once()
+            assert not dual.status()["owner_state_current"]
+            assert all(row["data"] is None for row in received[-1]["packet"]["data"]["banks"])
+        finally:
+            release.set(); holder.join(3)
+        class AdmissionFixture(object):
+            def submit(self, request, lease):
+                assert threading.current_thread().name == "ACQ-command-admission"
+                return dict(outcome="REJECTED", hardware_acknowledged=False)
+        dispatcher = CommandDispatcher(AdmissionFixture())
+        dispatcher.start()
+        receipt = dispatcher.submit(dict(command_id="b" * 32, session_id="a" * 32,
+            expected_revision=0, operation="chauffage.stop", operator_confirmed=True, value=None), None)
+        assert receipt["outcome"] == "REJECTED" and not factory_calls
         hashes_ok = all(hashlib.sha256(open(os.path.join(root, item["path"]), "rb").read()).hexdigest()
             == item["sha256"] for item in json.load(open(os.path.join(root, "manifest.json")))["files"])
         assert hashes_ok
         print(json.dumps(dict(result="PASS", python=sys.version.split()[0],
             bank_count=27, signed_loopback_ack=True, dual_mode_bridge_and_initialize_fence=True,
+            independent_command_admission=True, non_waiting_telemetry_projection=True,
             build_id=control_identity(root)["build_id"],
             manifest_hashes_verified=hashes_ok,
             cards_initialized=False, hardware_commands_sent=False, live_everest_contacted=False)))
     finally:
+        if dispatcher is not None: dispatcher.close()
         if dual is not None: dual.close()
         publisher.close(); server.shutdown(); server.server_close(); thread.join(3)
 

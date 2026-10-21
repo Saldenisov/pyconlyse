@@ -12,7 +12,7 @@ import copy
 import datetime
 
 from .acquisition_runtime import AcquisitionRuntime
-from .acquisition_remote import CommandBroker
+from .command_broker import CommandBroker
 from .cooling_safety import CoolingSafety, decode_publications, runtime_publications
 from .chroma_focal_stop import BRANCHES
 from .runtime_identity import SOURCE_PATHS
@@ -25,6 +25,8 @@ CONTROL_MODULES = ("acquisition_remote.py", "acquisition_control_runtime.py",
 CONTROL_MODULES += ("native_telemetry.py", "shared_state.py", "labview_telemetry.py",
                     "telemetry_relay.py", "protocol.py", "supervision_wire.py", "errors.py",
                     "dual_mode_telemetry.py", "shared_state_receiver.py")
+CONTROL_MODULES += ("command_protocol.py", "command_broker.py", "command_http.py", "command_dispatch.py",
+                    "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py")
 
 
 def control_identity(root=None):
@@ -119,6 +121,25 @@ class _ObservedBackend(object):
 
 
 class AcquisitionControlRuntime(AcquisitionRuntime):
+    def try_telemetry_snapshot(self):
+        """RAM-only projection. Never wait for command admission or a journal."""
+        if not self._lock.acquire(False):
+            return None
+        try:
+            age = None if self._received_at is None else max(0, self._clock() - self._received_at)
+            recovery = self._recovery_latched or self._marker_cleanup_uncertain or self._state == 'RECOVERY_REQUIRED'
+            return dict(self._identity, state=self._state, sequence=self._sequence,
+                        state_revision=self._state_revision, error=self._error,
+                        resource_count=0 if self._backend is None else self._backend.resource_count,
+                        latest=copy.deepcopy(self._latest), age_seconds=age,
+                        stale=self._state != 'RUNNING' or bool(recovery) or age is None or age >= 2,
+                        telemetry_view_current=True,
+                        telemetry_bridge_mode=(self._state == 'IDLE' and self._backend is None
+                            and self._pending is None and not self._shutdown_requested
+                            and not self._error and not recovery))
+        finally:
+            self._lock.release()
+
     def initialize(self, startup_confirmed=False):
         with self._lock:
             publisher = getattr(self, "telemetry_publisher", None)
