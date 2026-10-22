@@ -1,5 +1,6 @@
 """Import only confirmed closed HDF5 archives. Never repair or modify originals."""
 import argparse
+import datetime
 import json
 import os
 from pathlib import Path
@@ -10,10 +11,7 @@ sys.path.insert(0, str(ROOT))
 from DeviceServers.control.elyse_acq.telemetry_archive import PostgresStore, utc
 
 
-def require_closed(folder):
-    status = json.loads((folder / 'status.json').read_text(encoding='utf-8'))
-    if status.get('state') not in ('STOPPED', 'FAILED'):
-        raise RuntimeError('Live or unconfirmed archive: refusing to open HDF5')
+def verify_recorder_absent(status):
     # A reused PID is not the recorder. An inaccessible process is ambiguous.
     if os.name == 'nt' and status.get('pid'):
         import psutil
@@ -25,16 +23,31 @@ def require_closed(folder):
             raise RuntimeError('Recorder PID cannot be verified; refusing HDF5 access') from error
         if any(Path(arg).name == 'record_acq_telemetry_hdf5.py' for arg in argv):
             raise RuntimeError('Recorder PID still exists; refusing HDF5 access')
+
+
+def require_closed(folder, *, allow_orphaned=False):
+    status = json.loads((folder / 'status.json').read_text(encoding='utf-8'))
+    orphaned = status.get('state') not in ('STOPPED', 'FAILED')
+    if orphaned:
+        if not allow_orphaned or os.name != 'nt' or status.get('state') != 'RUNNING' or not status.get('pid'):
+            raise RuntimeError('Live or unconfirmed archive: refusing to open HDF5')
+        updated = datetime.datetime.fromisoformat(status['updated_utc'].replace('Z', '+00:00'))
+        if updated.tzinfo is None or (datetime.datetime.now(datetime.timezone.utc) - updated).total_seconds() < 60:
+            raise RuntimeError('Orphan status is recent or unqualified; refusing HDF5 access')
+        if Path(status['file']).resolve() != (folder / 'telemetry.h5').resolve():
+            raise RuntimeError('Orphan file identity differs; refusing HDF5 access')
+    verify_recorder_absent(status)
     return status
 
 
-def import_folder(store, folder, *, batch_size=64, priority_since=None):
+def import_folder(store, folder, *, batch_size=64, priority_since=None, allow_orphaned=False):
     folder = Path(folder).resolve()
-    status = require_closed(folder)
+    status = require_closed(folder, allow_orphaned=allow_orphaned)
     archive_id = status['recorder_id']
     import h5py
-    # Only reached after closure checks. swmr=True is deliberately unnecessary.
-    with h5py.File(folder / 'telemetry.h5', 'r') as archive:
+    # Orphan SWMR format may retain a writer flag. Read it without clearing flags,
+    # and only after the explicit dead-recorder checks; never repair the source.
+    with h5py.File(folder / 'telemetry.h5', 'r', swmr=status.get('state') == 'RUNNING') as archive:
         index_data, payload_data = archive['index'], archive['payload_utf8']
         committed = int(archive['committed_rows'][()])
         if committed > len(index_data):
@@ -52,9 +65,12 @@ def import_folder(store, folder, *, batch_size=64, priority_since=None):
         for key, value in archive.attrs.items():
             value = value.tolist() if hasattr(value, 'tolist') else value
             attributes[str(key)] = value.decode('utf-8') if isinstance(value, bytes) else value
+        metadata = dict(file_attributes=attributes, final_status=status, source_path=str(folder))
+        if status.get('state') == 'RUNNING':
+            metadata['closure_qualification'] = 'explicit_orphan_import_original_recorder_absent_status_unchanged'
         store.write_records([dict(uid='hdf5meta:' + archive_id, kind='archive_metadata',
              provenance='hdf5_metadata', observed_utc=attributes.get('created_utc') or status['started_utc'],
-             metadata=dict(file_attributes=attributes, final_status=status, source_path=str(folder)))])
+             metadata=metadata)])
         if priority_since:
             import datetime
             import numpy as np
@@ -104,6 +120,8 @@ if __name__ == '__main__':
     parser.add_argument('--config', required=True)
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--priority-since')
+    parser.add_argument('--allow-orphaned', action='store_true',
+                        help='Explicitly allow old RUNNING status only after original Windows recorder PID is absent; never repair HDF5')
     parser.add_argument('folders', nargs='+', type=Path)
     args = parser.parse_args()
     store = PostgresStore(args.config)
@@ -112,4 +130,4 @@ if __name__ == '__main__':
         if not 1 <= args.batch_size <= 512:
             raise ValueError('Batch size must be 1..512')
         print(json.dumps(import_folder(store, folder, batch_size=args.batch_size,
-                                     priority_since=args.priority_since)), flush=True)
+                                     priority_since=args.priority_since, allow_orphaned=args.allow_orphaned)), flush=True)

@@ -183,6 +183,12 @@ def deploy_web(args):
         raise RuntimeError('Web listener identity not unique')
     web = psutil.Process(next(iter(listeners)))
     argv, cwd, environment = web.cmdline(), web.cwd(), web.environ()
+    if args.config:
+        config = Path(args.config).resolve()
+        if config.drive.upper() != 'F:':
+            raise ValueError('Web archive configuration must remain on F:')
+        PostgresStore(config).summary()
+        environment['ELYSE_TELEMETRY_ARCHIVE_CONFIG'] = str(config)
     if Path(cwd).resolve() != Path('C:/dev/pyconlyse/web') or argv[-1] != 'start_local.py':
         raise RuntimeError('Unexpected web process')
     shutil.copy2(target, revision / 'acq_telemetry_api.before.py')
@@ -194,6 +200,11 @@ def deploy_web(args):
         raise RuntimeError('Web work changed during preparation')
     for name in ('acq_telemetry_api.py', 'telemetry_history.html'):
         shutil.copy2(ROOT / 'web/backend' / name, live / name)
+    if args.config:
+        archive_module = Path('C:/dev/pyconlyse/DeviceServers/control/elyse_acq/telemetry_archive.py')
+        if archive_module.exists():
+            shutil.copy2(archive_module, revision / 'telemetry_archive.before.py')
+        shutil.copy2(ROOT / 'DeviceServers/control/elyse_acq/telemetry_archive.py', archive_module)
     web.terminate()
     web.wait(timeout=15)
     with (revision / 'web-stdout.log').open('xb') as stdout, (revision / 'web-stderr.log').open('xb') as stderr:

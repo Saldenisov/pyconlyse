@@ -1,6 +1,7 @@
 """Read only the fixed Everest telemetry receiver. No XP, NI or PSP access."""
 
 import json
+import os
 import math
 from datetime import datetime, timezone
 
@@ -36,6 +37,16 @@ def browser_data(value):
     if isinstance(value, dict):
         return {key: browser_data(item) for key, item in value.items()}
     return value
+
+
+def local_history_store():
+    # Explicit local deployment configuration, never a request-supplied path.
+    # History disk I/O must not hold Tango's live-device request serialization.
+    config = current_app.config.get('ELYSE_TELEMETRY_ARCHIVE_CONFIG') or os.environ.get('ELYSE_TELEMETRY_ARCHIVE_CONFIG')
+    if not config:
+        return None
+    from DeviceServers.control.elyse_acq.telemetry_archive import PostgresStore
+    return PostgresStore(config, read_timeout_ms=10000)
 
 
 def present_snapshot(raw, server_state):
@@ -151,7 +162,8 @@ def get_archive_status():
         value = json.loads(attr.value)
         if request.args.get('include_imports') == '1':
             try:
-                summary = json.loads(proxy.command_inout('ArchiveSummary'))
+                reader = local_history_store()
+                summary = reader.summary() if reader else json.loads(proxy.command_inout('ArchiveSummary'))
                 value['imports'] = summary['imports']
                 value['frames'] = summary['frames']
             except Exception:
@@ -185,11 +197,15 @@ def get_history():
     except (ValueError, KeyError):
         return jsonify(error='Known bank, index, timezone-qualified start/end and limit 1..5000 required'), 400
     try:
+        reader = local_history_store()
+        if reader is not None:
+            return jsonify(browser_data(reader.read_history(query)))
         proxy = tango_gateway.create_device_proxy(DEVICE)
         proxy.set_timeout_millis(4000)
         raw = proxy.command_inout('ReadHistory', json.dumps(query))
         return jsonify(browser_data(json.loads(raw)))
-    except Exception:
+    except Exception as error:
+        current_app.logger.warning('ACQ PostgreSQL history unavailable: %s', type(error).__name__, exc_info=True)
         return jsonify(error='PostgreSQL history unavailable; live telemetry is separate'), 503
 
 

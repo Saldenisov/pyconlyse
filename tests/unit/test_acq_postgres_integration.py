@@ -106,6 +106,36 @@ def test_live_archive_is_refused_before_hdf5_open():
             module.require_closed(Path(folder))
 
 
+def test_orphan_import_requires_explicit_old_matching_identity_and_absent_pid(tmp_path):
+    if os.name != 'nt':
+        pytest.skip('Orphan recorder inspection is Windows-specific')
+    from unittest.mock import patch
+    import psutil
+    path = Path(__file__).resolve().parents[2] / 'tools/import_acq_hdf5_postgres.py'
+    spec = importlib.util.spec_from_file_location('orphan_import_fixture', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    status = dict(state='RUNNING', pid=12345, updated_utc='2020-01-01T00:00:00+00:00',
+                  file=str(tmp_path / 'telemetry.h5'))
+    (tmp_path / 'status.json').write_text(json.dumps(status))
+    with pytest.raises(RuntimeError, match='refusing to open'):
+        module.require_closed(tmp_path)
+    with patch('psutil.Process', side_effect=psutil.NoSuchProcess(12345)):
+        assert module.require_closed(tmp_path, allow_orphaned=True) == status
+    with patch('psutil.Process', side_effect=psutil.AccessDenied(12345)):
+        with pytest.raises(RuntimeError, match='cannot be verified'):
+            module.require_closed(tmp_path, allow_orphaned=True)
+    with patch('psutil.Process') as process:
+        process.return_value.cmdline.return_value = ['python.exe', 'record_acq_telemetry_hdf5.py']
+        with pytest.raises(RuntimeError, match='still exists'):
+            module.require_closed(tmp_path, allow_orphaned=True)
+    import datetime
+    status['updated_utc'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    (tmp_path / 'status.json').write_text(json.dumps(status))
+    with pytest.raises(RuntimeError, match='recent'):
+        module.require_closed(tmp_path, allow_orphaned=True)
+
+
 def test_closed_archive_imports_only_committed_rows_and_resumes(store):
     import h5py
     base = Path(__file__).resolve().parents[2]
@@ -130,6 +160,10 @@ def test_closed_archive_imports_only_committed_rows_and_resumes(store):
             result = module.import_folder(store, path)
             assert result['committed_rows'] == 1
             module.import_folder(store, path)
+            from tools.audit_acq_postgres_import import audit
+            verified = audit(store, path)
+            assert verified['committed_rows'] == 1 and verified['verified_banks'] == 1
+            assert verified['source_changed_during_audit'] is False
             with store.connect() as conn:
                 assert conn.execute('SELECT count(*) FROM acq_archive_frames WHERE provenance=%s',
                                     ('hdf5:' + archive_id,)).fetchone()[0] == 1

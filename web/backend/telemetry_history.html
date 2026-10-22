@@ -65,7 +65,7 @@ el('form').addEventListener('submit',async e=>{
  e.preventDefault();el('load').disabled=true;el('csv').disabled=true;el('error').textContent='';points=[];el('rows').replaceChildren();
  try{const [bank,index]=el('signal').value.split(':');let cursor=null,complete=false;
  const start=new Date(el('start').value).toISOString(),end=new Date(el('end').value).toISOString();
- do{const q=new URLSearchParams({bank,index,start,end,limit:'5000',...(cursor||{})});const r=await fetch(api+'/history?'+q,{cache:'no-store'});
+ do{const q=new URLSearchParams({bank,index,start,end,limit:'128',...(cursor||{})});const r=await fetch(api+'/history?'+q,{cache:'no-store'});
  const body=await r.json();if(!r.ok)throw Error(body.error||r.status);points.push(...body.points);cursor=body.next_cursor;complete=body.complete;
  el('result').textContent=points.length+' points chargés…';}while(cursor&&points.length<25000);
  el('result').textContent=points.length+' points · '+(complete?'requête terminée sur les données actuellement importées':'limite de 25 000 points : réduire l’intervalle pour une vue complète')+' · absence de points ≠ équipement arrêté';

@@ -85,9 +85,17 @@ The device exposes archive_status_json, read-only ReadHistory and ArchiveSummary
 History queries require a known bank, index 0..8191, timezone-qualified interval
 and limit 1..5000, with a time/UID cursor. Non-scalar fields are explicitly marked
 unavailable in the scalar-series response; their original values remain stored.
-SQL uses bound parameters. Queries have bounded database timeouts and do not hold
-the ingress/store lock, although synchronous Tango history calls can occupy that
-device's request serialization until their bounded query completes.
+SQL uses bound parameters. Ordinary Tango history reads retain a two-second
+statement timeout. Synchronous Tango history calls can occupy device request
+serialization until that bounded query completes. Cold historical reads under
+backfill load did hit this limit; it was not concealed as an empty result.
+
+The deployed web history reader therefore uses a separate, explicitly configured
+local PostgreSQL connection with transaction_read_only and a ten-second statement
+timeout. It does not acquire the Tango request queue. Its configuration path is
+in the ignored local web .env file; credentials remain on F:. History pages fetch
+128-point cursor pages to bound individual disk reads. Live telemetry continues
+to read the same Tango device; historical data never becomes a live fallback.
 
 Web endpoints are::
 
@@ -122,8 +130,13 @@ The observed archive gap is 22.407685 seconds. It must not be presented as a
 continuous recording or as an exact physical transition interval.
 
 Imports preserve only rows below each file's committed_rows marker. They require
-a final STOPPED/FAILED status and no surviving recorder process, retain original
-records, and use recorder_id/row identities with resumable monotonic progress.
+a final STOPPED/FAILED status and no surviving recorder process by default, retain
+original records, and use recorder_id/row identities with resumable monotonic progress.
+The earliest baseline retained an old RUNNING status after its recorder died.
+An explicit --allow-orphaned option additionally requires a Windows recorder PID
+absence check, an old timezone-qualified status and matching file identity. It
+never changes that original status or clears HDF5 flags; orphan SWMR files are
+opened read-only. A surviving/inaccessible recorder or recent status is refused.
 The current acquisition interval from 13:35 Europe/Paris was prefetched first;
 the remainder is being backfilled. Known earlier recording/receiver outages
 remain outages. Parallel backfill initially caused a lock timeout; the affected
@@ -135,11 +148,23 @@ Verification and completion status
 ----------------------------------
 
 Before handover, 75 driver-free/unit/web/PostgreSQL tests passed. A later expanded
-suite passed 88 tests; PostgreSQL integration fixtures now use unique isolated
+suite passed 90 tests; PostgreSQL integration fixtures now use unique isolated
 schemas and private temporary configuration files. Coverage includes precise
 numeric round trips, duplicate/conflicting identity handling, spool failure and
 recovery, nonblocking RAM views, bulk copy, pagination/read-only queries, and
 closed-HDF5 committed-row/resume checks. No test invokes hardware.
+
+The import audit checks every committed frame identity and kind, its completed
+ledger and preserved status metadata. Deterministically spread original records
+and typed bank values are compared against the source, including first/last
+occurrences of each event kind. This is sampled payload verification, not a claim
+that every payload was independently compared. Source files are hashed and their
+size/modification time is checked before and after the read-only audit.
+
+The backup tool refuses a final backup while an import ledger is incomplete. It
+creates a new compressed custom pg_dump on F: without stopping PostgreSQL and
+checks both its table of contents and complete decompression through pg_restore
+without executing SQL. A same-F: backup is not protection against F: disk loss.
 
 Initial live acceptance observed temporary archive lock retry and recovered with
 the disk queue retained. Another window included two unclassified quality/archive

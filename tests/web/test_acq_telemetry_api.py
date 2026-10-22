@@ -42,6 +42,7 @@ def snapshot():
 
 @pytest.fixture
 def setup_api(monkeypatch):
+    monkeypatch.delenv('ELYSE_TELEMETRY_ARCHIVE_CONFIG', raising=False)
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "false")
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "false")
     app = Flask(__name__)
@@ -102,6 +103,29 @@ def test_history_is_bounded_read_only_tango_command(setup_api, monkeypatch):
     assert response.json['points'][0]['value'] == {'integer_decimal': str(2**63 + 17)}
     assert calls[-1][0] == 'ReadHistory'
     assert calls[-1][1]['index'] == 7
+
+
+def test_explicit_local_history_does_not_hold_tango_requests_and_failure_has_no_fallback(setup_api, monkeypatch):
+    app, _, calls = setup_api
+    import DeviceServers.control.elyse_acq.telemetry_archive as archive
+    app.config['ELYSE_TELEMETRY_ARCHIVE_CONFIG'] = 'fixture-private-config'
+    queries = []
+    class Reader:
+        def __init__(self, path, *, read_timeout_ms):
+            assert path == 'fixture-private-config' and read_timeout_ms == 10000
+        def read_history(self, query):
+            queries.append(query)
+            return dict(points=[dict(value=42)], complete=True)
+    monkeypatch.setattr(archive, 'PostgresStore', Reader)
+    query = dict(bank='EPS', index=8, start='2026-10-22T13:45:00+02:00', end='2026-10-22T14:30:00+02:00')
+    response = app.test_client().get(URL + '/history', query_string=query)
+    assert response.status_code == 200 and response.json['points'][0]['value'] == 42
+    assert len(queries) == 1 and calls == []
+    def fail(self, query):
+        raise TimeoutError('fixture disk busy')
+    monkeypatch.setattr(Reader, 'read_history', fail)
+    assert app.test_client().get(URL + '/history', query_string=query).status_code == 503
+    assert calls == []
 
 
 @pytest.mark.parametrize('query', [dict(bank='unsafe', index=7), dict(bank='EPS', index=-1),

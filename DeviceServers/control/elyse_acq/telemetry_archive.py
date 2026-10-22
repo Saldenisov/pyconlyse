@@ -63,7 +63,10 @@ def ingress_record(body, receiver_session, receiver_count, observed_utc):
 
 
 class PostgresStore:
-    def __init__(self, config_path):
+    def __init__(self, config_path, *, read_timeout_ms=2000):
+        if type(read_timeout_ms) is not int or not 100 <= read_timeout_ms <= 15000:
+            raise ValueError('Read timeout must be 100..15000 ms')
+        self.read_timeout_ms = read_timeout_ms
         self.config = json.loads(Path(config_path).read_text(encoding='utf-8'))
         if self.config['host'] not in ('127.0.0.1', 'localhost', '::1'):
             raise ValueError('Archive database must be local to Everest')
@@ -81,7 +84,7 @@ class PostgresStore:
     def connect(self, *, writer=False):
         c = self.config
         options = ('-c statement_timeout=10000 -c lock_timeout=1000' if writer
-                   else '-c statement_timeout=2000 -c lock_timeout=100 -c default_transaction_read_only=on')
+                   else f'-c statement_timeout={self.read_timeout_ms} -c lock_timeout=100 -c default_transaction_read_only=on')
         if c.get('schema'):
             options += ' -c search_path=' + c['schema']
         return self.driver.connect(host=c['host'], port=c['port'], dbname=c['dbname'],
