@@ -53,10 +53,15 @@ def query(index=0, **kw):
 
 def test_actual_postgres_exact_roundtrip_and_idempotency(store):
     row = record()
+    row['snapshot']['publications']['C1NI6071E']['source_seconds_1904'] = 3875499601.810625
     store.write_records([row])
     store.write_records([row])
     assert [store.read_history(query(i))['points'][0]['value'] for i in range(4)] == row['snapshot']['publications']['C1NI6071E']['data']
     assert len(store.read_history(query())['points']) == 1
+    from decimal import Decimal
+    with store.connect() as conn:
+        assert conn.execute('SELECT source_seconds_1904 FROM acq_archive_banks WHERE frame_uid=%s',
+                            (row['uid'],)).fetchone()[0] == Decimal('3875499601.810625')
     changed = copy.deepcopy(row)
     changed['snapshot']['publications']['C1NI6071E']['data'][0] = 123
     with pytest.raises(ValueError, match='identity reused'):

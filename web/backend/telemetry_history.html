@@ -5,6 +5,7 @@
 body{font:16px system-ui;background:#101c29;color:#e4edf5;max-width:1200px;margin:24px auto;padding:0 18px}
 a{color:#8cd4ff}label{display:inline-grid;gap:6px;margin:8px}input,select,button{font:inherit;padding:8px;border-radius:5px}
 button{cursor:pointer}svg{background:#172b3d;border:1px solid #557184;width:100%;height:340px}
+form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}form label{margin:0}form label:first-child{flex:1;min-width:220px}input,select{box-sizing:border-box;width:100%}
 table{width:100%;border-collapse:collapse;font:13px monospace}th,td{padding:7px;text-align:left;border-bottom:1px solid #395064}
 #error{color:#ffb89d}#result,#archive{color:#a8dfb0}.muted{color:#aabcc9}pre{white-space:pre-wrap}
 </style></head><body>
@@ -60,18 +61,21 @@ function draw(){
  node('path',{d:path,fill:'none',stroke:'#66d2ff','stroke-width':1.5});
 }
 let polls=0;
+function renderLoaded(){
+ el('rows').replaceChildren();points.slice(-100).forEach(p=>{const tr=document.createElement('tr');[p.observed_utc,text(p.value),String(p.stale),String(p.error?.code??''),p.source_session??''].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td);});el('rows').append(tr);});
+ draw();el('csv').disabled=!points.length;
+}
 async function archive(){try{const r=await fetch(api+'/archive'+(polls++%6===0?'?include_imports=1':''),{cache:'no-store'});if(!r.ok)throw Error(r.status);const s=await r.json();el('archive').textContent='Archive : '+s.state+' · en attente : '+s.pending+' · écrits depuis démarrage : '+s.committed_this_process+(s.last_error?' · erreur : '+s.last_error:'');if(s.imports){const unfinished=s.imports.filter(i=>i.state!=='COMPLETE');el('imports').textContent=unfinished.length?'IMPORT HDF5 EN COURS : des intervalles historiques restent incomplets. Préfixe importé : '+unfinished.map(i=>i.imported_rows+'/'+i.committed_rows).join(', '):'Imports HDF5 terminés : '+s.imports.length+'. Les interruptions de la source restent des interruptions.';}if(s.imports_status==='UNKNOWN')el('imports').textContent='État de l’import non vérifiable : ne pas supposer l’historique complet.';}catch(e){el('archive').textContent='État archive indisponible : '+e.message;}}
 el('form').addEventListener('submit',async e=>{
  e.preventDefault();el('load').disabled=true;el('csv').disabled=true;el('error').textContent='';points=[];el('rows').replaceChildren();
  try{const [bank,index]=el('signal').value.split(':');let cursor=null,complete=false;
  const start=new Date(el('start').value).toISOString(),end=new Date(el('end').value).toISOString();
  do{const q=new URLSearchParams({bank,index,start,end,limit:'128',...(cursor||{})});const r=await fetch(api+'/history?'+q,{cache:'no-store'});
- const body=await r.json();if(!r.ok)throw Error(body.error||r.status);points.push(...body.points);cursor=body.next_cursor;complete=body.complete;
- el('result').textContent=points.length+' points chargés…';}while(cursor&&points.length<25000);
+ const body=await r.json();if(!r.ok)throw Error(body.error||r.status);const room=25000-points.length;points.push(...body.points.slice(0,room));cursor=body.next_cursor;complete=body.complete&&body.points.length<=room;
+ el('result').textContent=points.length+' points chargés · requête en cours, données encore partielles';if(points.length===128||points.length%1024===0)renderLoaded();}while(cursor&&points.length<25000);
  el('result').textContent=points.length+' points · '+(complete?'requête terminée sur les données actuellement importées':'limite de 25 000 points : réduire l’intervalle pour une vue complète')+' · absence de points ≠ équipement arrêté';
- points.slice(-100).forEach(p=>{const tr=document.createElement('tr');[p.observed_utc,text(p.value),String(p.stale),String(p.error?.code??''),p.source_session??''].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td);});el('rows').append(tr);});
- draw();el('csv').disabled=!points.length;
- }catch(err){el('error').textContent=err.message;}finally{el('load').disabled=false;}
+ renderLoaded();
+ }catch(err){el('error').textContent=err.message;if(points.length){el('result').textContent=points.length+' points PARTIELS · requête interrompue : ne pas supposer l’intervalle complet';renderLoaded();}}finally{el('load').disabled=false;}
 });
 el('csv').addEventListener('click',()=>{const quote=v=>{let s=String(v??'');if(/^[=+@-]/.test(s)&&!/^[-+]?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
  const rows=[['observed_utc','value','stale','error_status','error_code','source_session','source_sequence','frame_uid'],...points.map(p=>[p.observed_utc,text(p.value),p.stale,p.error?.status,p.error?.code,p.source_session,p.source_sequence,p.uid])];

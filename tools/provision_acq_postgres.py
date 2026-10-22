@@ -17,6 +17,9 @@ def main():
         raise RuntimeError('Existing cluster/configuration: refusing to overwrite')
     if not PRIVATE.is_dir():
         raise RuntimeError('Create and restrict the private directory before provisioning')
+    subprocess.run(['powershell.exe', '-NoProfile', '-File',
+                    str(Path(__file__).with_name('secure_acq_postgres_storage.ps1'))], check=True,
+                   creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     sys.path.insert(0, str(BASE / 'python-packages'))
     import psycopg
     from psycopg import sql

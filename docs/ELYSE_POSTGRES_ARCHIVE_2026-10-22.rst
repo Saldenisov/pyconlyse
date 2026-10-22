@@ -25,6 +25,11 @@ The installed driver is psycopg 3.3.6. Installation paths are::
     F:\ELYSE_PostgreSQL\secrets           ACL-restricted local credentials
     F:\ELYSE_PostgreSQL\python-packages   dedicated archive driver
 
+The entire new PostgreSQL storage root has a protected inheritable Windows ACL
+for EVEREST\elyse and SYSTEM only; data, logs, spool and backups were checked.
+The previous root ACL is retained in secrets\storage_acl_before.sddl. This does
+not change permissions on the original HDF5 archive directories or other F: data.
+
 The cluster listens only on 127.0.0.1:5432 and uses SCRAM authentication. No
 database credentials are in Git, telemetry, URLs or command-line arguments.
 The application role owns only elyse_telemetry; ordinary history connections
@@ -74,9 +79,18 @@ original VI publication or to recover source packets replaced before Everest.
 PostgreSQL retains losslessly compressed complete records, source/receiver
 identities, timestamps, original quality/error flags, and JSONB bank values.
 LabVIEW type definitions are content-addressed rather than repeated in each bank
-row. Wide integers, booleans, nulls and double values are not downsampled or
-rounded. Frame/bank writes are one transaction; source bank capture itself is
-not made atomic by database storage.
+row. Engineering data, wide integers, booleans and nulls are not downsampled or
+rounded. The compressed original record also preserves the original source
+timestamp. An audit identified float8-to-numeric rounding in the auxiliary
+source_seconds_1904 column of the initial receiver/import release: a sampled
+3875499601.810625 became 3875499601.81063, a 5-microsecond difference. Updated
+writer source adapts this value through Decimal(str(value)); an integration test
+covers that case. Already imported auxiliary copies and the frozen running v3
+receiver can retain this rounding; original payloads remain exact. The audit
+reports this qualification separately rather than relabeling it exact equality.
+History uses Everest observed_utc, not this unqualified source-clock column.
+Frame/bank writes are one transaction; source bank capture itself is not made
+atomic by database storage.
 
 History and user interface
 --------------------------
@@ -171,7 +185,61 @@ the disk queue retained. Another window included two unclassified quality/archiv
 observations; it is not counted as a clean acceptance. Reports are retained under
 the deployment directory rather than relabeled as successful.
 
-Migration is still in progress at the time of this source checkpoint. Required
-remaining work: finish and audit all selected closed archives, persist their file
-metadata, rerun clean live acceptance, verify a database backup and update this
-completion section. Do not stop or restart XP/Acquisition or initialize NI cards.
+A subsequent 120-observation window, 2026-10-22 16:02:19--16:04:19 Europe/Paris,
+passed without issues: 118 distinct observed receipts, maximum bank age 1.36 s,
+and twelve complete 27-bank value/error comparisons against PostgreSQL. Ingress
+counter advanced 9726 to 10021; the disk queue peaked at 15 and ended at one.
+This finite window is not a guarantee against later upstream stale data.
+
+All three selected import ledgers reached COMPLETE at 2026-10-22 16:20:15
+Europe/Paris. File attributes and original status documents were also imported.
+The closed HDF5 inputs remain on F:, unchanged by the read-only audit.
+
+=================================== ============== ================
+Archive folder                      Committed rows Snapshot records
+=================================== ============== ================
+baseline_20261021T063029Z                       5708             5706
+resumed_20261021T093441Z                       78937            78926
+unified_v6_20261021T1615Z                      99329            91950
+Total                                       183974           176582
+=================================== ============== ================
+
+Every committed frame identity and kind matched. Across the three files,
+78 selected original records and 1674 bank instances were checked. The only
+sampled typed-column qualification was the auxiliary source-clock rounding
+described above (54 bank instances in the main file; maximum 5 microseconds).
+Original source timestamps and engineering values in those records matched.
+
+Original file SHA256 values, in the same order as the table, are::
+
+    6d88aeaf56d6feec387a0d7039aa8c5877fc14d1ab01fdd447a0d61f4e218cc0
+    27a348bd7fd08bca298d1b75c2904c6ec6f29393337f4f61eb05f4a7db05fa80
+    de9296eec4f9e6b2a1ebd130144c680a4333b45597988c2236ebb514b07a4e9c
+
+Audit reports are main-import-audit.json and earlier-import-audit.json in
+F:\ELYSE_PostgreSQL\deployment_20261022. A separate production audit found zero
+test-fixture frames. The final regression run passed 90 tests in 12.35 seconds
+with four warnings.
+
+During backup, another 120-observation acceptance window passed, 16:24:52--16:26:53
+Europe/Paris: 120 distinct observations, receiver counter 13242--13638, twelve
+complete 27-bank database comparisons, maximum bank age 0.735 seconds, no issues
+and no archive errors. Queue peak was four, ending at one. The verified history
+page loaded 2128 HT points for 13:35--13:45 Europe/Paris, with CSV available.
+
+The compressed backup completed and passed full archive traversal/decompression
+at 2026-10-22 16:44:00 Europe/Paris::
+
+    F:\ELYSE_PostgreSQL\backups\elyse_telemetry_20261022.dump
+    3327890471 bytes
+    SHA256 adb881b02c8cc4698edba45c040b2370e34f874093dbcfd6e5dfb4771c72bc95
+
+Its adjacent .dump.json records the consistent pg_dump operation and verification.
+This check did not execute a restore into another database. Backup began at
+16:24:42; later live arrivals remain in the running database, not retroactively in
+that backup. A same-disk copy does not protect against failure of F:.
+
+Live PostgreSQL recording continues. No automatic history deletion, recurring
+backup schedule or HDF5 recorder restart is configured. Original recording gaps
+remain gaps. The Windows startup helper starts the cluster at user logon only;
+it is not a Windows service or a machine-sleep continuity guarantee.

@@ -43,6 +43,9 @@ def audit(store, folder, allow_orphaned=False):
             occurrences = [i for i, row in enumerate(index) if bytes(row['kind']).decode('ascii').rstrip('\0') == kind]
             selected.update((occurrences[0], occurrences[-1]))
         verified_banks = 0
+        rounded_timestamps = 0
+        maximum_timestamp_delta = Decimal(0)
+        timestamp_casts = {}
         for i in sorted(selected):
             row = index[i]
             offset, length = int(row['offset']), int(row['length'])
@@ -65,7 +68,16 @@ def audit(store, folder, allow_orphaned=False):
                 expected_sequence = source.get('sequence')
                 expected_seconds = source.get('source_seconds_1904')
                 assert sequence == (Decimal(str(expected_sequence)) if expected_sequence is not None else None)
-                assert seconds == (Decimal(str(expected_seconds)) if expected_seconds is not None else None)
+                exact_seconds = Decimal(str(expected_seconds)) if expected_seconds is not None else None
+                if seconds != exact_seconds:
+                    # Older psycopg float8 -> PostgreSQL numeric adaptation rounds
+                    # this auxiliary copy. Original payload equality above remains
+                    # mandatory; do not hide unexpected or unrecoverable differences.
+                    if expected_seconds not in timestamp_casts:
+                        timestamp_casts[expected_seconds] = conn.execute('SELECT %s::numeric', (expected_seconds,)).fetchone()[0]
+                    assert seconds == timestamp_casts[expected_seconds], (uid, name, 'Unexpected timestamp difference')
+                    rounded_timestamps += 1
+                    maximum_timestamp_delta = max(maximum_timestamp_delta, abs(seconds - exact_seconds))
                 verified_banks += 1
     with path.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -74,7 +86,10 @@ def audit(store, folder, allow_orphaned=False):
     return dict(archive_id=archive_id, path=str(path), committed_rows=committed,
                 kinds=dict(kinds), verified_records=len(selected), verified_banks=verified_banks,
                 file_bytes=after.st_size, file_sha256=digest, original_status=status['state'],
-                verification='complete frame identity/kind coverage; sampled original and typed bank equality',
+                verification='complete frame identity/kind coverage; sampled original payload and engineering data/error/type equality',
+                sampled_source_timestamp_metadata_roundings=rounded_timestamps,
+                max_sampled_source_timestamp_delta_seconds=str(maximum_timestamp_delta),
+                original_source_timestamps_exact_in_payload=True,
                 source_changed_during_audit=False)
 
 
@@ -93,6 +108,8 @@ if __name__ == '__main__':
         print(json.dumps(result), flush=True)
     with store.connect() as conn:
         assert conn.execute('SELECT count(*) FROM acq_archive_frames WHERE provenance=%s', ('test_fixture',)).fetchone()[0] == 0
-    report = dict(result='PASS', utc=utc(), archives=results, hardware_commands_sent=False,
+    qualified = any(row['sampled_source_timestamp_metadata_roundings'] for row in results)
+    report = dict(result='PASS_WITH_SOURCE_TIMESTAMP_METADATA_ROUNDING' if qualified else 'PASS',
+                  utc=utc(), archives=results, hardware_commands_sent=False,
                   production_test_fixture_frames=0)
     Path(args.output).write_text(json.dumps(report, indent=2), encoding='utf-8')

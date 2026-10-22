@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+from decimal import Decimal
 import hashlib
 import json
 import re
@@ -141,7 +142,8 @@ class PostgresStore:
                 banks.append((record['uid'], name, record['observed_utc'], self.Jsonb(bank.get('data')),
                               self.Jsonb(bank.get('error', {})), bank.get('stale') is not False,
                               bank.get('age_seconds'), bank.get('session_id'), bank.get('sequence'),
-                              bank.get('source_seconds_1904'), bank.get('producer_kind'), type_id))
+                              Decimal(str(bank['source_seconds_1904'])) if bank.get('source_seconds_1904') is not None else None,
+                              bank.get('producer_kind'), type_id))
         if not frames:
             return
         if definitions:
