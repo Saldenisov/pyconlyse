@@ -129,11 +129,70 @@ are included. The staged configuration and manifest agree on SHA256::
 
     0164249BC89956C99441CE4F34143FEAB9E9F8C4B0886BECDF7C0361D50B110D
 
-XP rollout has not yet been performed by this document. Action-time approval
-was requested for replacing only the cold v7-r3 window with v8 in IDLE.
-Before replacement, signed status must again confirm IDLE, zero NI resources,
-disabled commands and no native initialization. Acquisition VI and its passive
-transport must remain running. Everest servers, recorder and Windows startup
-must remain unchanged. After replacement, a finite read-only acceptance must
-prove all 27 VI banks advance through Tango and the web, inspect recorder status
-without opening its archive, and record the actual handover gap.
+Authorized IDLE rollout and read-only acceptance
+----------------------------------------------
+
+The user resumed the rollout after reopening the XP RDP connection. The staged
+folder was copied to ``C:\ACQ_Python_Control_20261022_v8`` without overwriting
+v7-r3. Signed preflight at 2026-10-22 11:45:14.530947 UTC confirmed v7-r3 in
+IDLE, zero NI resources, state revision 0, sequence 0, disabled commands and
+``auto_initialize=false``. Only its Stop server button was used. Its window
+closed; the control endpoint was unreachable at 11:45:33.507774 UTC.
+
+The new ``acquisition_control_server.pyw`` was opened from the copied folder.
+Signed status at 11:46:04.347976 UTC confirmed the expected v8 build, IDLE,
+zero NI resources, disabled commands and no automatic initialization::
+
+    session_id c0e33287cfbd47088267ffca9fdf78b4
+    relay_id   bd0edee00e6b4740acc16a50daac0181
+    build_id   65daa410237c6ef9a974c6645671e07639e68c3f27373de89b73e39f96ca796a
+
+The three-button window remains open. Acquisition VI and its passive transport
+were not stopped, edited or restarted. No Initialize, Deinitialize, remote
+control request or device command was issued. Everest services, recorder and
+Windows startup configuration were not changed. Old installation folders remain.
+
+Finite acceptance ran from 11:47:03.354165 to 11:49:03.408612 UTC
+(13:47:03--13:49:03 Europe/Paris), using signed GET /snapshot, Tango attribute
+reads and GET /api/elyse/acquisition/telemetry only:
+
+* 120 observations per side; all 27 banks had non-null data, the new XP session,
+  ``stale=false`` and error status false in every observation.
+* Every bank advanced through 119 distinct sequences on each side. Receiver
+  count advanced from 74272 to 74625; receiver session stayed unchanged.
+* Web quality was FRESH in 120/120 observations. Maximum bank age was 0.624 s
+  through Tango and 0.812 s through the web. Read errors and invalid-bank
+  observations were both zero.
+* Tango and web observed the same sequence in 82/120 independently timed pairs;
+  the remaining pairs are not an atomic cross-interface comparison.
+* Signed owner state remained IDLE with zero NI resources, state revision 0,
+  sequence 0, remote initialization false and commands disabled.
+* The rendered web page showed Acquisition Python IDLE, a connected watchdog
+  and changing CANON/SECTION temperatures. All-bank coverage was checked through
+  the same web telemetry endpoint, not inferred from these two displayed values.
+
+The existing recorder kept PID 11412, its exact command line and recorder_id
+``b5806d3c63ea43aa95c61c0d3e4f7829``. During acceptance, recorded snapshots
+advanced 74265 to 74622 and committed rows 81632 to 81989. Storage errors and
+write retries stayed zero; last_write_error remained empty. Read errors stayed
+12, missed receiver receipts 6, receiver session changes 1 and stale reads
+1089135; these are cumulative counters, not new acceptance failures.
+
+The handover is not continuous coverage. Between the last preflight and the
+acceptance baseline, stale_reads increased from 1088646 to 1089135. The active
+HDF5 file was never opened; exact last-old/first-new archive timestamps and the
+precise recording gap have therefore not been measured. Pre-existing source
+staleness at 11:42 UTC occurred before closing v7-r3 and is not attributed to v8.
+
+Latest-only forwarding also remains lossy: during acceptance pending packet
+replacements increased 591 to 1653 and rejected VI ingress attempts 122 to 299.
+These counters do not contradict fresh delivery of the sampled 27-bank snapshots,
+but the acceptance does not establish capture of every VI publication, atomic
+bank sampling, hardware qualification or indefinite future availability.
+
+At the next read-only check, 11:50:33 UTC, v8 remained IDLE with zero resources;
+web quality was FRESH with no missing, stale, error or unavailable banks.
+Recorder snapshots had reached 74913 and committed rows 82280, without new
+storage errors. The user reported that experiments were starting shortly before
+this check. This message is a timing reference only, not an independently
+measured physical start time. Recording was left running.
