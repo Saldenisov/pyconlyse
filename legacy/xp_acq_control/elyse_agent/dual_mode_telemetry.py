@@ -163,5 +163,7 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
                           vi_accepted=self.vi_accepted, vi_rejected=self.rejected, vi_ingress_error=self.last_error,
                           vi_age_seconds=None if self.last_vi_receipt is None else max(0, self.clock() - self.last_vi_receipt),
                           ingress_endpoint="{0}:{1}".format(*self.ingress_address),
+                          ingress_handler_limit_rejections=(0 if self.server is None
+                              else self.server.handler_limit_rejections),
                           vi_state_not_proof_of_card_release=True)
         return result

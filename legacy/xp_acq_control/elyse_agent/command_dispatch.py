@@ -17,7 +17,7 @@ class CommandDispatcher(object):
             raise ValueError('Bounded command queue and reply deadline required')
         self.broker, self.capacity, self.reply_timeout = broker, capacity, reply_timeout
         self._condition = threading.Condition()
-        self._pending, self._active = deque(), None
+        self._pending, self._urgent, self._active = deque(), deque(), None
         self._closing, self._worker = False, None
 
     def start(self):
@@ -41,15 +41,19 @@ class CommandDispatcher(object):
         with self._condition:
             if self._closing or self._worker is None or not self._worker.is_alive():
                 raise RuntimeError('COMMAND_ADMISSION_CLOSED')
-            if len(self._pending) >= self.capacity:
+            # Reserved intent channel, not a bypass of broker/session/policy.
+            # An in-flight admission is not forcibly interrupted or replaced.
+            queue = self._urgent if value['operation'] == 'modulator.general.stop' else self._pending
+            capacity = 1 if queue is self._urgent else self.capacity
+            if len(queue) >= capacity:
                 raise RuntimeError('COMMAND_ADMISSION_BUSY_NOT_SUBMITTED')
-            self._pending.append(job)
+            queue.append(job)
             self._condition.notify_all()
         job['done'].wait(self.reply_timeout)
         with self._condition:
             if not job['done'].is_set():
                 if not job['started']:
-                    self._pending.remove(job)
+                    queue.remove(job)
                     raise RuntimeError('COMMAND_ADMISSION_EXPIRED_NOT_SUBMITTED')
                 raise RuntimeError('COMMAND_ADMISSION_REPLY_TIMEOUT_OUTCOME_UNKNOWN_NO_AUTOMATIC_RETRY')
             if job['error'] is not None:
@@ -59,11 +63,11 @@ class CommandDispatcher(object):
     def _run(self):
         while True:
             with self._condition:
-                while not self._pending and not self._closing:
+                while not self._pending and not self._urgent and not self._closing:
                     self._condition.wait()
                 if self._closing:
                     return
-                job = self._pending.popleft()
+                job = (self._urgent if self._urgent else self._pending).popleft()
                 if time.monotonic() >= job['deadline']:
                     job['error'] = RuntimeError('COMMAND_ADMISSION_EXPIRED_NOT_SUBMITTED')
                     job['done'].set()
@@ -82,8 +86,8 @@ class CommandDispatcher(object):
     def close(self, timeout=3):
         with self._condition:
             self._closing = True
-            while self._pending:
-                job = self._pending.popleft()
+            while self._pending or self._urgent:
+                job = (self._urgent if self._urgent else self._pending).popleft()
                 job['error'] = RuntimeError('COMMAND_ADMISSION_CLOSED_NOT_SUBMITTED')
                 job['done'].set()
             self._condition.notify_all()
@@ -95,7 +99,8 @@ class CommandDispatcher(object):
 
     def status(self):
         with self._condition:
-            return dict(pending=len(self._pending), capacity=self.capacity,
+            return dict(pending=len(self._pending) + len(self._urgent), capacity=self.capacity,
+                        urgent_pending=len(self._urgent), urgent_capacity=1,
                         active=self._active is not None, closing=self._closing,
                         worker_alive=self._worker is not None and self._worker.is_alive(),
                         automatic_retry=False)

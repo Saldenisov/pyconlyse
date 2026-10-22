@@ -38,12 +38,14 @@ def package(destination, everest=False):
                  and "__pycache__" not in path.parts]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="acq-unified-telemetry-20261021-v7", default_xp_port=8772,
+                    release="acq-isolated-telemetry-20261022-v8", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
                     reused_release="acq-control-candidate-20261021-v1 / everest-v2",
                     commands_default_enabled=False, auto_initialize=False, hardware_activated=False,
+                    ni_execution="one_retained_child_owner_process",
+                    native_wait_sampling="disabled_until_aggregate_read_budget_qualified",
                     default_live_source_changed=False, files=[])
     for source, relative in sorted(files, key=lambda item: item[1]):
         target = destination / relative
