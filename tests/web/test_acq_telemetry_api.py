@@ -83,6 +83,35 @@ def test_fixed_receiver_read_no_write_or_device_selection(setup_api):
     assert data["quality"] == "FRESH"
     assert len(data["snapshot"]["publications"]) == 27
     assert data["execution_allowed"] is False and data["hardware_writes"] is False
+
+
+def test_history_is_bounded_read_only_tango_command(setup_api, monkeypatch):
+    app, _, calls = setup_api
+    class HistoryProxy:
+        def set_timeout_millis(self, value):
+            calls.append(('timeout', value))
+        def command_inout(self, name, raw):
+            query = json.loads(raw)
+            calls.append((name, query))
+            return json.dumps(dict(points=[dict(value=2**63 + 17)], complete=True))
+    monkeypatch.setattr(api.tango_gateway, 'create_device_proxy', lambda name: HistoryProxy())
+    response = app.test_client().get(URL + '/history', query_string=dict(
+        bank='C2NI6071E', index=7, start='2026-10-22T13:45:00+02:00',
+        end='2026-10-22T14:30:00+02:00', limit=500))
+    assert response.status_code == 200
+    assert response.json['points'][0]['value'] == {'integer_decimal': str(2**63 + 17)}
+    assert calls[-1][0] == 'ReadHistory'
+    assert calls[-1][1]['index'] == 7
+
+
+@pytest.mark.parametrize('query', [dict(bank='unsafe', index=7), dict(bank='EPS', index=-1),
+                                  dict(bank='EPS', index=1, limit=99999)])
+def test_history_invalid_query_never_contacts_tango(setup_api, query):
+    app, _, calls = setup_api
+    response = app.test_client().get(URL + '/history', query_string=dict(
+        start='2026-10-22T13:45:00+02:00', end='2026-10-22T14:30:00+02:00', **query))
+    assert response.status_code == 400
+    assert calls == []
     assert response.headers["Cache-Control"] == "no-store"
 
 

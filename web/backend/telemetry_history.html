@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ELYSE · Historique PostgreSQL</title>
+<style>
+body{font:16px system-ui;background:#101c29;color:#e4edf5;max-width:1200px;margin:24px auto;padding:0 18px}
+a{color:#8cd4ff}label{display:inline-grid;gap:6px;margin:8px}input,select,button{font:inherit;padding:8px;border-radius:5px}
+button{cursor:pointer}svg{background:#172b3d;border:1px solid #557184;width:100%;height:340px}
+table{width:100%;border-collapse:collapse;font:13px monospace}th,td{padding:7px;text-align:left;border-bottom:1px solid #395064}
+#error{color:#ffb89d}#result,#archive{color:#a8dfb0}.muted{color:#aabcc9}pre{white-space:pre-wrap}
+</style></head><body>
+<a href="/elyse">← Supervision ELYSE</a><h1>Historique de télémétrie · PostgreSQL</h1>
+<p class="muted">Lecture seule. Horodatage de réception Everest, pas instant physique garanti. Les erreurs et interruptions ne sont pas interpolées.</p>
+<p id="archive">État de l’archive…</p><p id="imports" class="muted">État de l’import historique non encore vérifié.</p>
+<form id="form">
+<label>Signal<select id="signal">
+<option value="C2NI6071E:7">HT mesurée · kV</option><option value="C9NI6703:0">Consigne HT · kV</option>
+<option value="C2NI6071E:15">Courant HT · A</option><option value="C1NI6071E:0">Température Canon · °C</option>
+<option value="C1NI6071E:8">Température Section · °C</option><option value="EPS:8">General · OK logiciel</option>
+<option value="EPS:14">Chauffage · OK logiciel</option><option value="EPS:20">PREMA · OK logiciel</option>
+<option value="EPS:32">Focales · OK logiciel</option><option value="EPS:26">Relais HT · OK logiciel</option>
+<option value="EPS:45">Alimentation HT · OK logiciel</option><option value="EPS:52">Impulsions modulateur · OK logiciel</option>
+<option value="C3_IN_DIO96:8">Vanne Section · entrée brute 8</option>
+<option value="C3_IN_DIO96:9">Vanne Section · entrée brute 9</option>
+<option value="C4_IN_DIO96:38">Débit Section · entrée brute, polarité non qualifiée</option>
+</select></label>
+<label>Début · heure du navigateur<input id="start" type="datetime-local" required step="1"></label>
+<label>Fin<input id="end" type="datetime-local" required step="1"></label>
+<button id="load" type="submit">Lire PostgreSQL</button><button id="csv" type="button" disabled>Exporter CSV</button>
+</form><p id="zone" class="muted"></p><p id="error" role="alert"></p><p id="result" role="status"></p>
+<svg id="plot" viewBox="0 0 1100 340" role="img" aria-label="Courbe historique du signal sélectionné"></svg>
+<p class="muted">Table : 100 derniers points chargés. CSV : tous les points chargés. TRUE/FALSE ne constitue pas une autorisation de sécurité.</p>
+<table><thead><tr><th>Réception Everest</th><th>Valeur</th><th>Périmé</th><th>Erreur</th><th>Session source</th></tr></thead><tbody id="rows"></tbody></table>
+<script>
+'use strict';
+const api='/api/elyse/acquisition/telemetry', el=id=>document.getElementById(id);
+let points=[];
+const local=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,19);
+el('end').value=local(new Date());el('start').value=local(new Date(Date.now()-90*60000));
+const initial=new URLSearchParams(location.search);
+for(const name of ['start','end']){const v=initial.get(name);if(v&&!Number.isNaN(Date.parse(v)))el(name).value=local(new Date(v));}
+const channel=initial.get('signal');if(channel&&Array.from(el('signal').options).some(o=>o.value===channel))el('signal').value=channel;
+el('zone').textContent='Fuseau du navigateur : '+Intl.DateTimeFormat().resolvedOptions().timeZone;
+const text=v=>v&&typeof v==='object'?(v.integer_decimal??JSON.stringify(v)):String(v??'—');
+function node(tag,attrs,content){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));if(content!==undefined)n.textContent=content;el('plot').append(n);return n;}
+function draw(){
+ el('plot').replaceChildren();
+ const valid=p=>!p.stale&&!p.error?.status&&!p.error?.code&&(typeof p.value==='number'||typeof p.value==='boolean');
+ const usable=points.filter(valid);if(!usable.length){node('text',{x:30,y:45,fill:'white'},'Aucun point numérique/boolean valide dans cet intervalle.');return;}
+ const times=points.map(p=>Date.parse(p.observed_utc)), values=usable.map(p=>Number(p.value));
+ const lo=Math.min(...values),hi=Math.max(...values),xmin=times[0],xmax=times[times.length-1];
+ const x=t=>65+1000*(t-xmin)/Math.max(1,xmax-xmin), y=v=>295-245*(v-lo)/Math.max(1e-9,hi-lo);
+ node('path',{d:'M65 35 V295 H1065',fill:'none',stroke:'#7893aa'});
+ node('text',{x:8,y:48,fill:'white'},hi.toPrecision(6));node('text',{x:8,y:296,fill:'white'},lo.toPrecision(6));
+ node('text',{x:65,y:325,fill:'white'},new Date(xmin).toLocaleString());node('text',{x:780,y:325,fill:'white'},new Date(xmax).toLocaleString());
+ let path='',previous=null;
+ points.forEach((p,i)=>{const t=times[i];if(!valid(p)){previous=null;return;}const v=Number(p.value);
+ if(previous===null||t-previous.t>2000||p.source_session!==previous.session)path+='M'+x(t)+' '+y(v)+' ';
+ else path+=(typeof p.value==='boolean'?'H'+x(t)+' V'+y(v):'L'+x(t)+' '+y(v))+' ';
+ previous={t,session:p.source_session};});
+ node('path',{d:path,fill:'none',stroke:'#66d2ff','stroke-width':1.5});
+}
+let polls=0;
+async function archive(){try{const r=await fetch(api+'/archive'+(polls++%6===0?'?include_imports=1':''),{cache:'no-store'});if(!r.ok)throw Error(r.status);const s=await r.json();el('archive').textContent='Archive : '+s.state+' · en attente : '+s.pending+' · écrits depuis démarrage : '+s.committed_this_process+(s.last_error?' · erreur : '+s.last_error:'');if(s.imports){const unfinished=s.imports.filter(i=>i.state!=='COMPLETE');el('imports').textContent=unfinished.length?'IMPORT HDF5 EN COURS : des intervalles historiques restent incomplets. Préfixe importé : '+unfinished.map(i=>i.imported_rows+'/'+i.committed_rows).join(', '):'Imports HDF5 terminés : '+s.imports.length+'. Les interruptions de la source restent des interruptions.';}if(s.imports_status==='UNKNOWN')el('imports').textContent='État de l’import non vérifiable : ne pas supposer l’historique complet.';}catch(e){el('archive').textContent='État archive indisponible : '+e.message;}}
+el('form').addEventListener('submit',async e=>{
+ e.preventDefault();el('load').disabled=true;el('csv').disabled=true;el('error').textContent='';points=[];el('rows').replaceChildren();
+ try{const [bank,index]=el('signal').value.split(':');let cursor=null,complete=false;
+ const start=new Date(el('start').value).toISOString(),end=new Date(el('end').value).toISOString();
+ do{const q=new URLSearchParams({bank,index,start,end,limit:'5000',...(cursor||{})});const r=await fetch(api+'/history?'+q,{cache:'no-store'});
+ const body=await r.json();if(!r.ok)throw Error(body.error||r.status);points.push(...body.points);cursor=body.next_cursor;complete=body.complete;
+ el('result').textContent=points.length+' points chargés…';}while(cursor&&points.length<25000);
+ el('result').textContent=points.length+' points · '+(complete?'requête terminée sur les données actuellement importées':'limite de 25 000 points : réduire l’intervalle pour une vue complète')+' · absence de points ≠ équipement arrêté';
+ points.slice(-100).forEach(p=>{const tr=document.createElement('tr');[p.observed_utc,text(p.value),String(p.stale),String(p.error?.code??''),p.source_session??''].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td);});el('rows').append(tr);});
+ draw();el('csv').disabled=!points.length;
+ }catch(err){el('error').textContent=err.message;}finally{el('load').disabled=false;}
+});
+el('csv').addEventListener('click',()=>{const quote=v=>{let s=String(v??'');if(/^[=+@-]/.test(s)&&!/^[-+]?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
+ const rows=[['observed_utc','value','stale','error_status','error_code','source_session','source_sequence','frame_uid'],...points.map(p=>[p.observed_utc,text(p.value),p.stale,p.error?.status,p.error?.code,p.source_session,p.source_sequence,p.uid])];
+ const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='ELYSE_'+el('signal').value.replace(':','_')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+archive();setInterval(archive,5000);
+</script></body></html>

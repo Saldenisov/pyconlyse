@@ -30,15 +30,17 @@ class DS_AcqTelemetry(Device):
     xp_control_port = device_property(dtype=int, default_value=8772)
     command_key_file = device_property(dtype=str, default_value="")
     commands_enabled = device_property(dtype=bool, default_value=False)
+    archive_config_file = device_property(dtype=str, default_value="")
 
     def init_device(self):
         self._closing = True
-        if getattr(self, '_server', None) is not None or getattr(self, '_bridge', None) is not None:
+        if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive')):
             self.delete_device()
-            if self._server is not None or getattr(self, '_bridge', None) is not None:
+            if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive')):
                 raise RuntimeError("Previous telemetry owner did not exit; replacement refused")
         self._server = self._store = self._thread = None
         self._bridge = self._client = None
+        self._archive = None
         super().init_device()
         self._python_source = self.producer_kind_filter in ("python_acquisition", "unified_acquisition")
         if not self.key_file:
@@ -55,8 +57,12 @@ class DS_AcqTelemetry(Device):
                 str(ROOT / "logs" / "elyse_cooling_alarms.sqlite3") if self.listen_host != "127.0.0.1" else "")
             cooling = (CoolingSafety.with_journal(journal_path, "labview_receiver")
                        if journal_path else CoolingSafety())
+            if self.archive_config_file:
+                from DeviceServers.control.elyse_acq.telemetry_archive import DurableArchive
+                self._archive = DurableArchive(self.archive_config_file)
+                self._archive.start()
             self._store = TelemetrySinkStore(key, permitted_producer_kind=self.producer_kind_filter or None,
-                                             cooling=cooling)
+                                             cooling=cooling, archive=self._archive)
             self._server = TelemetrySinkServer((self.listen_host, self.listen_port), self._store,
                                               permitted_peers=(self.permitted_xp_host,))
             self._thread = threading.Thread(target=self._server.serve_forever,
@@ -98,6 +104,27 @@ class DS_AcqTelemetry(Device):
     @attribute(dtype=int)
     def received_messages(self):
         return 0 if self._store is None else self._store.snapshot()["received_this_process"]
+
+    @attribute(dtype=str)
+    def archive_status_json(self):
+        archive = getattr(self, '_archive', None)
+        return json.dumps(archive.status() if archive else dict(enabled=False), allow_nan=False)
+
+    @command(dtype_in=str, dtype_out=str)
+    def ReadHistory(self, request):
+        archive = getattr(self, '_archive', None)
+        if archive is None:
+            raise RuntimeError('ARCHIVE_NOT_CONFIGURED')
+        if len(request.encode('utf-8')) > 4096:
+            raise ValueError('History request too large')
+        return json.dumps(archive.store.read_history(json.loads(request)), allow_nan=False)
+
+    @command(dtype_out=str)
+    def ArchiveSummary(self):
+        archive = getattr(self, '_archive', None)
+        if archive is None:
+            raise RuntimeError('ARCHIVE_NOT_CONFIGURED')
+        return json.dumps(archive.store.summary(), allow_nan=False)
 
     def _control_view(self):
         bridge = getattr(self, "_bridge", None)
@@ -167,6 +194,12 @@ class DS_AcqTelemetry(Device):
         if self._store is not None:
             self._store.close()
             self._store = None
+        archive = getattr(self, '_archive', None)
+        if archive is not None:
+            if not archive.close(15):
+                self.warn_stream('Archive worker still owned; replacement refused')
+                return
+            self._archive = None
         self._thread = None
 
 

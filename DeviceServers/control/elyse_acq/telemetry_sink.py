@@ -1,8 +1,8 @@
-"""Authenticated, RAM-only Everest telemetry sink; no control or archive adapter.
+"""Authenticated Everest telemetry sink with optional durable archive adapter.
 
 Keep one latest value per publication and one receipt digest per relay. ACK means
 accepted into this process's RAM, not durable storage. A receiver restart loses
-values and deduplication state; the first signed message establishes a new FIFO
+live values and RAM deduplication state; the first signed message establishes a new FIFO
 baseline, which may be greater than one when XP has already delivered messages.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ from legacy.xp_acq_control.elyse_agent.native_telemetry import validate_standard
 
 class TelemetrySinkStore:
     def __init__(self, key, clock=time.monotonic, max_relays=64, permitted_producer_kind=None,
-                 cooling=None):
+                 cooling=None, archive=None):
         if type(max_relays) is not int or not 1 <= max_relays <= 1024:
             raise ValueError("relay session limit must be an integer from 1 to 1024")
         self.key = validate_key(key)
@@ -42,6 +42,8 @@ class TelemetrySinkStore:
         self.permitted_producer_kind = permitted_producer_kind
         self.clock = clock
         self.lock = threading.RLock()
+        self.ingress_lock = threading.Lock()
+        self.archive = archive
         self.max_relays = max_relays
         self.receiver_session = uuid.uuid4().hex
         self.relays = {}
@@ -105,7 +107,9 @@ class TelemetrySinkStore:
         identity = dict(body)
         identity.pop("age_seconds_on_xp")  # Age increases on a legitimate retransmission.
         digest = hashlib.sha256(canonical(identity)).hexdigest()
-        with self.lock:
+        # Serialize ingress and close, but release the RAM/view lock during
+        # durable spool I/O. A slow disk cannot hold snapshot/control readers.
+        with self.ingress_lock:
             if self.closed:
                 raise RuntimeError("telemetry store is closed")
             tracked = is_python or unified
@@ -127,36 +131,46 @@ class TelemetrySinkStore:
                     raise ValueError("telemetry relay session capacity reached")
                 if tracked and packet["session_id"] == self.python_session and packet["sequence"] <= self.python_sequence:
                     raise ValueError("Python snapshot sequence regressed across relay sessions")
-                if tracked and packet["session_id"] != self.python_session:
-                    if self.python_session is not None:
-                        self.retired_python_sessions.add(self.python_session)
-                    self.python_session = packet["session_id"]
-                if tracked:
-                    self.python_sequence = packet["sequence"]
-                if unified:
-                    self.unified_relay = relay_id
-                self.active_kind = packet['producer_kind']
                 received_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                entry = dict(body=copy.deepcopy(body), received_at=self.clock(), received_utc=received_utc)
-                if is_snapshot:
-                    expanded = expand_python_snapshot(packet) if is_python else expand_snapshot(packet)
-                    for name, bank_packet in expanded.items():
-                        bank_body = copy.deepcopy(body)
-                        bank_body['packet'] = bank_packet
-                        self.latest[name] = dict(body=bank_body, received_at=entry['received_at'],
-                                                 received_utc=received_utc)
-                    self.shared_snapshot_seen = True
-                else:
-                    self.latest[packet["publication"]] = entry
-                self.relays[relay_id] = dict(message_id=message_id, digest=digest)
-                self.received += 1
-                # Alarm transitions are evaluated on ingress, even with no
-                # browser open. This receiver NEVER has shutdown authority.
-                self.snapshot()
+                received_at = self.clock()
+                if self.archive is not None:
+                    self.archive.append_ingress(body, digest, self.receiver_session,
+                                                self.received + 1, received_utc)
+                self._commit_packet(body, packet, is_snapshot, is_python, tracked, unified,
+                                    relay_id, message_id, digest, received_utc, received_at)
         ack_body = dict(accepted=True, duplicate=duplicate, relay_id=relay_id, message_id=message_id,
                         storage_mode="ram_latest", durable=False)
         signed_ack = dict(body=ack_body, nonce=nonce)
         return dict(signed_ack, signature=sign(self.key, "ACQ-TELEMETRY-ACK-1", signed_ack))
+
+    def _commit_packet(self, body, packet, is_snapshot, is_python, tracked, unified,
+                       relay_id, message_id, digest, received_utc, received_at):
+        with self.lock:
+            if tracked and packet["session_id"] != self.python_session:
+                if self.python_session is not None:
+                    self.retired_python_sessions.add(self.python_session)
+                self.python_session = packet["session_id"]
+            if tracked:
+                self.python_sequence = packet["sequence"]
+            if unified:
+                self.unified_relay = relay_id
+            self.active_kind = packet['producer_kind']
+            entry = dict(body=copy.deepcopy(body), received_at=received_at, received_utc=received_utc)
+            if is_snapshot:
+                expanded = expand_python_snapshot(packet) if is_python else expand_snapshot(packet)
+                for name, bank_packet in expanded.items():
+                    bank_body = copy.deepcopy(body)
+                    bank_body['packet'] = bank_packet
+                    self.latest[name] = dict(body=bank_body, received_at=entry['received_at'],
+                                             received_utc=received_utc)
+                self.shared_snapshot_seen = True
+            else:
+                self.latest[packet["publication"]] = entry
+            self.relays[relay_id] = dict(message_id=message_id, digest=digest)
+            self.received += 1
+            # Alarm transitions are evaluated on ingress, even with no
+            # browser open. This receiver NEVER has shutdown authority.
+            self.snapshot()
 
     def snapshot(self):
         with self.lock:
@@ -181,8 +195,9 @@ class TelemetrySinkStore:
                         hardware_writes_interpretation="Telemetry publication only, not authority of the XP card owner",
                         active_producer_kind=self.active_kind,
                         producer_session=self.python_session,
-                        storage_mode="ram_latest", durable=False, history_available=False,
+                        storage_mode="ram_latest", durable=False, history_available=self.archive is not None,
                         reset_on_restart=True, receiver_session=self.receiver_session,
+                        archive=self.archive.status() if self.archive is not None else None,
                         relay_sessions=len(self.relays), max_relay_sessions=self.max_relays,
                         physical_measurements_verified=False, atomic_across_publications=False,
                         permitted_producer_kind=self.permitted_producer_kind,
@@ -193,7 +208,7 @@ class TelemetrySinkStore:
                         missing_publications=sorted(set(BANKS if self.shared_snapshot_seen else ALL_PUBLICATIONS) - set(publications)))
 
     def close(self):
-        with self.lock:
+        with self.ingress_lock, self.lock:
             if not self.closed:
                 self.latest.clear()
                 self.relays.clear()

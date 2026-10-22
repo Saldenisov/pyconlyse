@@ -5,7 +5,8 @@ import math
 from datetime import datetime, timezone
 
 import tango_gateway
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, current_app, jsonify, request, Response
+from pathlib import Path
 from legacy.xp_acq_agent.elyse_agent.shared_state import BANKS
 from mutation_auth import install_mutation_auth
 
@@ -15,7 +16,8 @@ STALE_SECONDS = 2
 acq_telemetry_api = Blueprint(
     "acq_telemetry_api", __name__, url_prefix="/api/elyse/acquisition/telemetry"
 )
-install_mutation_auth(acq_telemetry_api, protected_get_endpoints=("get_telemetry", "get_cooling_safety"))
+install_mutation_auth(acq_telemetry_api, protected_get_endpoints=(
+    "get_telemetry", "get_cooling_safety", "get_history", "get_archive_status", "get_history_view"))
 
 
 @acq_telemetry_api.after_request
@@ -136,6 +138,59 @@ def get_telemetry():
             quality="UNAVAILABLE",
             error="Récepteur de télémétrie Tango indisponible.",
         ), 503
+
+
+@acq_telemetry_api.get("/archive")
+def get_archive_status():
+    try:
+        proxy = tango_gateway.create_device_proxy(DEVICE)
+        proxy.set_timeout_millis(2000)
+        attr = proxy.read_attribute('archive_status_json')
+        if attr.has_failed:
+            raise ValueError('Archive status unavailable')
+        value = json.loads(attr.value)
+        if request.args.get('include_imports') == '1':
+            try:
+                summary = json.loads(proxy.command_inout('ArchiveSummary'))
+                value['imports'] = summary['imports']
+                value['frames'] = summary['frames']
+            except Exception:
+                value['imports_status'] = 'UNKNOWN'
+        return jsonify(value)
+    except Exception:
+        return jsonify(available=False, error='Archive status unavailable'), 503
+
+
+@acq_telemetry_api.get('/history-view')
+def get_history_view():
+    return Response(Path(__file__).with_name('telemetry_history.html').read_text(encoding='utf-8'),
+                    mimetype='text/html')
+
+
+@acq_telemetry_api.get("/history")
+def get_history():
+    allowed = {'bank', 'index', 'start', 'end', 'limit', 'cursor_time', 'cursor_uid'}
+    try:
+        if set(request.args) - allowed or any(len(request.args.getlist(k)) != 1 for k in request.args):
+            raise ValueError('Invalid history query')
+        query = dict(request.args)
+        query['index'] = int(query['index'])
+        query['limit'] = int(query.get('limit', 1000))
+        if query.get('bank') not in BANKS or not 0 <= query['index'] <= 8191 or not 1 <= query['limit'] <= 5000:
+            raise ValueError('Invalid history channel or limit')
+        for key in ('start', 'end'):
+            parsed = datetime.fromisoformat(query[key].replace('Z', '+00:00'))
+            if parsed.tzinfo is None:
+                raise ValueError('History timestamps require timezone')
+    except (ValueError, KeyError):
+        return jsonify(error='Known bank, index, timezone-qualified start/end and limit 1..5000 required'), 400
+    try:
+        proxy = tango_gateway.create_device_proxy(DEVICE)
+        proxy.set_timeout_millis(4000)
+        raw = proxy.command_inout('ReadHistory', json.dumps(query))
+        return jsonify(browser_data(json.loads(raw)))
+    except Exception:
+        return jsonify(error='PostgreSQL history unavailable; live telemetry is separate'), 503
 
 
 @acq_telemetry_api.get("/cooling")

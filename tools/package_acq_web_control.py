@@ -17,7 +17,7 @@ def package(destination, everest=False):
         raise ValueError("New output directory and zip required; existing release preserved")
     files = []
     if everest:
-        for name in ("DS_AcqTelemetry.py", "telemetry_sink.py", "control_client.py", "control_runtime_client.py", "control_runtime_health.py",
+        for name in ("DS_AcqTelemetry.py", "telemetry_sink.py", "telemetry_archive.py", "telemetry_archive.sql", "control_client.py", "control_runtime_client.py", "control_runtime_health.py",
                      "engine.py", "plans.py", "contracts.py", "simulator.py"):
             files.append((BRIDGE / name, "DeviceServers/control/elyse_acq/" + name))
         for name in ("__init__.py", "acquisition_remote.py", "acquisition_http.py", "runtime_identity.py", "native_telemetry.py",
@@ -38,7 +38,7 @@ def package(destination, everest=False):
                  and "__pycache__" not in path.parts]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="acq-isolated-telemetry-20261022-v8", default_xp_port=8772,
+                    release="everest-postgres-20261022-v1" if everest else "acq-isolated-telemetry-20261022-v8", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
