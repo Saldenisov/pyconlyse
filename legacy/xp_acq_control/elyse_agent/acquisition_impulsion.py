@@ -49,7 +49,7 @@ def _snapshot(bank, values):
 
 def execute_impulsion(operation, start_counter, pulse_done, stop_counter,
                       read_local, write_local, publish, wait_seconds, cancelled,
-                      observer=None, new_value=True):
+                      observer=None, new_value=True, execution_wait=None):
     """Execute qualified frames with callbacks; no admission gate is implied.
 
     read_local(bank)->tuple, write_local(bank, ((index,bool),...)),
@@ -72,6 +72,8 @@ def execute_impulsion(operation, start_counter, pulse_done, stop_counter,
         raise TypeError("All impulsion callbacks must be callable")
     if observer is not None and not callable(observer):
         raise TypeError("Observer must be callable or None")
+    if execution_wait is not None and not callable(execution_wait):
+        raise TypeError("Execution wait must be callable or None")
     frames = FRAME_UIDS[operation]
     report = {
         "operation": operation, "status": "NOOP" if not new_value else "EXECUTING",
@@ -192,6 +194,15 @@ def execute_impulsion(operation, start_counter, pulse_done, stop_counter,
                 uncertain_stops.discard(number)
                 possibly_running.discard(number)
 
+    def final_wait(seconds):
+        # The source counter chain has finished. Never sample between polling,
+        # stop, configuration or restart calls; uncertain stops remain unsafe.
+        if execution_wait is None:
+            return wait_seconds(seconds)
+        return execution_wait(seconds, not uncertain_stops and not report["failures"],
+                              dict(operation=operation, phase="final_status_wait",
+                                   source_uid=current[0]))
+
     aborted = None
     try:
         for index, uid in enumerate(frames):
@@ -216,7 +227,7 @@ def execute_impulsion(operation, start_counter, pulse_done, stop_counter,
                 elif index == 2:
                     publish_status()
                 else:
-                    attempt("wait_seconds", wait_seconds, (0.1,))
+                    attempt("wait_seconds", final_wait, (0.1,))
             else:
                 if index == 0:
                     attempt("local_write", write_local, (35, ((-1, True),)))
@@ -230,7 +241,7 @@ def execute_impulsion(operation, start_counter, pulse_done, stop_counter,
                 elif index == 3:
                     publish_status()
                 else:
-                    attempt("wait_seconds", wait_seconds, (0.1,))
+                    attempt("wait_seconds", final_wait, (0.1,))
             report["completed_frames"].append(uid)
             report["remaining_frames"] = list(frames[index + 1:])
     except Exception as exc:

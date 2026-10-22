@@ -71,7 +71,8 @@ class GeneralStopError(Exception):
 
 
 def execute_general_only_stop(commit_c4, assign_status, wait_seconds,
-                              frame_observer=None, operator_confirmed=False):
+                              frame_observer=None, operator_confirmed=False,
+                              execution_wait=None):
     """General-only test: event-6 frames 13..16, restricted status subset.
 
     Other stages must already be OFF. This function does not stop them, cannot
@@ -82,6 +83,8 @@ def execute_general_only_stop(commit_c4, assign_status, wait_seconds,
     """
     if operator_confirmed is not True:
         raise ValueError("Explicit General-only Arret operator confirmation required")
+    if execution_wait is not None and not callable(execution_wait):
+        raise ValueError("Execution wait must be callable or None")
     failures, uncertain = [], False
 
     def attempt(label, callback, *args):
@@ -105,7 +108,13 @@ def execute_general_only_stop(commit_c4, assign_status, wait_seconds,
                 attempt("General-only EPS/DPS assignments", assign_status,
                         GENERAL_ONLY_STOP_EPS, GENERAL_ONLY_STOP_DPS)
             if milliseconds:
-                attempt("frame {0} wait".format(index), wait_seconds, milliseconds / 1000.0)
+                if execution_wait is None:
+                    attempt("frame {0} wait".format(index), wait_seconds, milliseconds / 1000.0)
+                else:
+                    attempt("frame {0} wait".format(index), execution_wait,
+                            milliseconds / 1000.0, not uncertain,
+                            dict(operation="modulator.general.stop", phase="source_wait",
+                                 frame=index, source_uid=source_uid))
     finally:
         if uncertain:
             attempt("restore C4[1]=True", commit_c4, 1, True)
@@ -114,7 +123,8 @@ def execute_general_only_stop(commit_c4, assign_status, wait_seconds,
 
 
 def execute_general_stop(commit_c4, focal_off, assign_status, wait_seconds,
-                         frame_observer=None, operator_confirmed=False, clock=None):
+                         frame_observer=None, operator_confirmed=False, clock=None,
+                         execution_wait=None):
     """Best-effort event-6 stop on the existing card owner, never task release.
 
     Unlike start, this sequence is not cancellable by a GUI close/deinit. Focal
@@ -124,6 +134,8 @@ def execute_general_stop(commit_c4, focal_off, assign_status, wait_seconds,
     """
     if operator_confirmed is not True:
         raise ValueError("Explicit General Arret operator confirmation required")
+    if execution_wait is not None and not callable(execution_wait):
+        raise ValueError("Execution wait must be callable or None")
     clock = clock or time.monotonic
     failures, uncertain = [], set()
 
@@ -135,18 +147,26 @@ def execute_general_stop(commit_c4, focal_off, assign_status, wait_seconds,
             failures.append(label + ": " + type(error).__name__ + ": " + str(error))
             return False
 
+    def wait(seconds, index, source_uid, safe):
+        if execution_wait is None:
+            return wait_seconds(seconds)
+        return execution_wait(seconds, safe,
+                              dict(operation="modulator.general.stop", phase="source_wait",
+                                   frame=index, source_uid=source_uid))
+
     try:
         for index, source_uid, assignments, milliseconds in GENERAL_STOP_FRAMES:
             if frame_observer is not None:
                 attempt("frame observer", frame_observer, index, source_uid)
             if index == 0:
                 started = clock()
-                attempt("Focales OFF", focal_off)
-                attempt("post-focal wait", wait_seconds, .5)
+                focal_completed = attempt("Focales OFF", focal_off)
+                attempt("post-focal wait", wait, .5, index, source_uid, focal_completed)
                 # 150 ms is a parallel branch, not an additional 150 ms wait.
                 remaining = .15 - (clock() - started)
                 if remaining > 0:
-                    attempt("frame-0 parallel wait", wait_seconds, remaining)
+                    attempt("frame-0 parallel wait", wait, remaining, index,
+                            source_uid, focal_completed)
                 continue
             for line, value in assignments:
                 if not value:
@@ -156,7 +176,8 @@ def execute_general_stop(commit_c4, focal_off, assign_status, wait_seconds,
             if index == 15:
                 attempt("source EPS/DPS assignments", assign_status, GENERAL_STOP_EPS, GENERAL_STOP_DPS)
             if milliseconds:
-                attempt("frame {0} wait".format(index), wait_seconds, milliseconds / 1000.0)
+                attempt("frame {0} wait".format(index), wait,
+                        milliseconds / 1000.0, index, source_uid, not uncertain)
     finally:
         # Explicit Python failure cleanup: retry a failed pulse release, and
         # continue restoring other lines even if one restoration also fails.
@@ -167,7 +188,8 @@ def execute_general_stop(commit_c4, focal_off, assign_status, wait_seconds,
 
 
 def execute_general_start(commit_c4, assign_status, wait_seconds, cancelled,
-                          frame_observer=None, operator_confirmed=False):
+                          frame_observer=None, operator_confirmed=False,
+                          execution_wait=None):
     """Synchronous single-owner procedure; only injected callbacks actuate.
 
     Cancellation/exception restores any asserted pulse before returning. This
@@ -177,6 +199,8 @@ def execute_general_start(commit_c4, assign_status, wait_seconds, cancelled,
     """
     if operator_confirmed is not True:
         raise ValueError("Explicit General Marche operator confirmation required")
+    if execution_wait is not None and not callable(execution_wait):
+        raise ValueError("Execution wait must be callable or None")
     active_pulse = None
     try:
         for index, source_uid, assignments, milliseconds in GENERAL_START_FRAMES:
@@ -195,7 +219,12 @@ def execute_general_start(commit_c4, assign_status, wait_seconds, cancelled,
             if index == 8:
                 assign_status(GENERAL_START_EPS, GENERAL_START_DPS)
             if milliseconds:
-                wait_seconds(milliseconds / 1000.0)
+                if execution_wait is None:
+                    wait_seconds(milliseconds / 1000.0)
+                else:
+                    execution_wait(milliseconds / 1000.0, active_pulse is None,
+                                   dict(operation="modulator.general.start", phase="source_wait",
+                                        frame=index, source_uid=source_uid))
                 if cancelled():
                     raise ProcedureCancelled()
     finally:

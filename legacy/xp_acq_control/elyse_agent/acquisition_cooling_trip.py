@@ -70,7 +70,7 @@ def _source_intent():
 
 def execute_cooling_trip(c4_snapshot, c3_snapshot, read_local, write_local,
                          publish, wait_seconds, cancelled,
-                         frame_observer=None, enabled_arm=False):
+                         frame_observer=None, enabled_arm=False, execution_wait=None):
     """Execute the qualified True arm synchronously using injected callbacks.
 
     read_local(bank) returns a full immutable Boolean tuple. write_local(bank,
@@ -94,6 +94,8 @@ def execute_cooling_trip(c4_snapshot, c3_snapshot, read_local, write_local,
             raise TypeError(name + " callback required")
     if frame_observer is not None and not callable(frame_observer):
         raise TypeError("frame_observer requires a callable or None")
+    if execution_wait is not None and not callable(execution_wait):
+        raise TypeError("execution_wait requires a callable or None")
 
     result = {
         "enabled_arm": enabled_arm,
@@ -156,7 +158,12 @@ def execute_cooling_trip(c4_snapshot, c3_snapshot, read_local, write_local,
             pending.pop(index, None)
 
     def wait(milliseconds):
-        call(wait_seconds, milliseconds / 1000.0)
+        if execution_wait is None:
+            call(wait_seconds, milliseconds / 1000.0)
+        else:
+            call(execution_wait, milliseconds / 1000.0, not pending,
+                 dict(operation="cooling.trip", phase="source_wait",
+                      frame=current_frame[0], source_uid=FRAME_UIDS[current_frame[0]]))
         result["completed_callback_intents"].append(("wait_ms", milliseconds))
 
     def cleanup():

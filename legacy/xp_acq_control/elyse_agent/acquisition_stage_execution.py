@@ -157,7 +157,7 @@ def _validate_plan(frames, operation):
 
 def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                   cancelled, frame_observer=None, operator_confirmed=False,
-                  new_value=True, focal_helper=None):
+                  new_value=True, focal_helper=None, execution_wait=None):
     """Execute one source path through injected local callbacks.
 
     read_local(bank) -> complete tuple of bool, or scalar bool for bank 35.
@@ -181,6 +181,8 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
         raise ValueError("All stage callbacks must be callable")
     if frame_observer is not None and not callable(frame_observer):
         raise ValueError("Frame observer must be callable or None")
+    if execution_wait is not None and not callable(execution_wait):
+        raise ValueError("Execution wait must be callable or None")
     model = load_model()
     # Validate the True source plan even if this event is a False no-op.
     frames = model.plan(operation, True)
@@ -317,7 +319,15 @@ def execute_stage(operation, read_local, write_local, publish, wait_seconds,
                                     raise ValueError("Publication frame-entry read unavailable")
                                 publish(name, bank, entry[bank])
                         else:
-                            wait_seconds(effect[1] / 1000.0)
+                            if execution_wait is None:
+                                wait_seconds(effect[1] / 1000.0)
+                            else:
+                                # Any asserted/uncertain output is protected
+                                # until its source release succeeds. A stable
+                                # latched final assignment is not a pulse.
+                                execution_wait(effect[1] / 1000.0, not pending,
+                                               dict(operation=operation, phase="source_wait",
+                                                    frame=frame_index, source_uid=uid))
                     except StageExecutionCancelled:
                         raise
                     except Exception as error:

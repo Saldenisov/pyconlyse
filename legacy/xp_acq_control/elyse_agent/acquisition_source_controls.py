@@ -62,6 +62,9 @@ class SourceControls(object):
             raise GeneralStopError(failures)
 
     def _source_preflight(self, flag, confirmed, retry_counters=True):
+        guard = getattr(self, "_ensure_execution_not_reentrant", None)
+        if guard is not None:
+            guard()
         if confirmed is not True:
             raise ValueError("Explicit local source-control confirmation required")
         if (self.stage_controls_verified is not True or getattr(self, flag) is not True
@@ -234,7 +237,9 @@ class SourceControls(object):
                 self._source_counter_stop, self._source_read_local, self._source_write_local,
                 self._stage_publish, self.stop_wait if operation.endswith(".stop") else cancel.wait,
                 (lambda: False) if operation.endswith(".stop") else cancel.is_set,
-                lambda frame, uid: self.procedure.update(frame=frame, source_uid=uid))
+                lambda frame, uid: self.procedure.update(frame=frame, source_uid=uid),
+                execution_wait=self._execution_waiter(
+                    self.stop_wait if operation.endswith(".stop") else cancel.wait))
         except Exception as error:
             self._retain_control_failure(error)
             self.last_impulsion = copy.deepcopy(self.procedure.get("report"))
@@ -273,7 +278,8 @@ class SourceControls(object):
             result = execute_outer_stop(
                 self._source_read_local, self._source_write_local, self.owner.read_counter_pulse_done,
                 self._source_counter_stop, self.stop_wait, lambda: False,
-                lambda frame, uid: self.procedure.update(frame=frame, source_uid=uid))
+                lambda frame, uid: self.procedure.update(frame=frame, source_uid=uid),
+                execution_wait=self._execution_waiter(self.stop_wait))
         except Exception as error:
             self._retain_control_failure(error)
             self.last_outer_stop = copy.deepcopy(self.procedure.get("report"))

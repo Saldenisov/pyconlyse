@@ -88,6 +88,40 @@ class _OwnedFocalOff(object):
 class _StageState(object):
     """Local command memory is not hardware readback or a PSP delivery ACK."""
 
+    def set_execution_observer(self, observer, interval_seconds=.2):
+        """Install optional checkpoints; observer runs on the existing NI owner.
+
+        event includes operation/frame/source_uid, safe_to_sample,
+        remaining_seconds and minimum_next_action_deadline (monotonic). The
+        observer may obtain a same-owner snapshot only with sufficient dwell
+        budget; it must not dispatch another output procedure. No observer is
+        invoked during an asserted or uncertain source pulse. Native sampling
+        can overrun a budget and is not forcibly interruptible.
+        """
+        from .cooperative_execution import CooperativeExecution
+        self._execution_scheduler = CooperativeExecution(observer, interval_seconds)
+
+    def _execution_waiter(self, wait_seconds):
+        def wait(seconds, safe_to_sample=False, phase=None):
+            scheduler = getattr(self, "_execution_scheduler", None)
+            if scheduler is None or scheduler.observer is None:
+                return wait_seconds(seconds)
+            if self.procedure is not None:
+                self.procedure["execution_phase"] = dict(phase or {},
+                    safe_to_sample=bool(safe_to_sample), nominal_wait_seconds=seconds,
+                    hardware_acknowledged=False)
+            try:
+                return scheduler.wait(seconds, wait_seconds, safe_to_sample, phase)
+            finally:
+                if self.procedure is not None:
+                    self.procedure["execution_checkpoints"] = scheduler.snapshot()
+        return wait
+
+    def _ensure_execution_not_reentrant(self):
+        scheduler = getattr(self, "_execution_scheduler", None)
+        if scheduler is not None and scheduler.active:
+            raise RuntimeError("Execution observer may sample, not reenter NI procedures or cleanup")
+
     def _reset_stage_state(self):
         # Saved root frame 33052 resets local refs 44/36 to these literals.
         # C3/C4 images come from the reviewed startup commands, not DI values.
@@ -292,6 +326,7 @@ class _StageState(object):
             last_cooling_guard=copy.deepcopy(self.last_cooling_guard))
 
     def _stage_preflight(self, operator_confirmed, operation=None):
+        self._ensure_execution_not_reentrant()
         if operator_confirmed is not True:
             raise ValueError("Explicit local stage confirmation required")
         if self.stage_controls_verified is not True:
@@ -349,7 +384,8 @@ class _StageState(object):
             result = execute_stage(
                 operation, self._stage_read_local, self._stage_write_local,
                 self._stage_publish, cancel.wait, cancel.is_set, observe,
-                operator_confirmed=True, new_value=new_value, focal_helper=focal_helper)
+                operator_confirmed=True, new_value=new_value, focal_helper=focal_helper,
+                execution_wait=self._execution_waiter(cancel.wait))
         except Exception as error:
             self._remember_stage_restorations(error)
             self.procedure.update(state="INTERRUPTED_OR_FAILED",
@@ -361,6 +397,7 @@ class _StageState(object):
 
     def execute_cooling_guard(self, snapshot, cancel):
         """Saved raw cooling predicate only; not a klystron safety permit."""
+        self._ensure_execution_not_reentrant()
         if (self.stage_controls_verified is not True or self.cooling_trip_verified is not True
                 or self.control_profile == "general_only_test"):
             self.last_cooling_guard = dict(
@@ -389,7 +426,7 @@ class _StageState(object):
             result = execute_cooling_trip(
                 c4, c3, self._stage_read_local, self._stage_write_local,
                 self._stage_publish, cancel.wait, cancel.is_set, observe,
-                enabled_arm=True)
+                enabled_arm=True, execution_wait=self._execution_waiter(cancel.wait))
         except Exception as error:
             self._remember_stage_restorations(error, cooling=True)
             report = getattr(error, "result", None)
@@ -487,6 +524,7 @@ class CardBackend(SourceControls, _StageState):
         return len(self.owner.tasks) if self.owner is not None else 0
 
     def initialize(self, cancel, startup_confirmed=False):
+        self._ensure_execution_not_reentrant()
         if startup_confirmed is not True:
             raise ValueError("Explicit local confirmation of legacy startup effects required")
         if self.owner is not None:
@@ -537,6 +575,7 @@ class CardBackend(SourceControls, _StageState):
             raise AcquisitionCancelled()
 
     def general_start(self, cancel, operator_confirmed=False):
+        self._ensure_execution_not_reentrant()
         if self.owner is None or not self.commanded_digital:
             raise RuntimeError("General Marche requires initialized card ownership")
         if operator_confirmed is not True:
@@ -580,13 +619,15 @@ class CardBackend(SourceControls, _StageState):
         try:
             self._retry_stage_restorations()
             execute_general_start(commit, assign, cancel.wait, cancel.is_set,
-                                  observe, operator_confirmed=True)
+                                  observe, operator_confirmed=True,
+                                  execution_wait=self._execution_waiter(cancel.wait))
         except Exception:
             self.procedure["state"] = "INTERRUPTED_OR_FAILED"
             raise
         self.procedure["state"] = "SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK"
 
     def general_stop(self, operator_confirmed=False):
+        self._ensure_execution_not_reentrant()
         if self.owner is None or not self.commanded_digital:
             raise RuntimeError("General Arret requires existing card ownership")
         if operator_confirmed is not True:
@@ -654,7 +695,8 @@ class CardBackend(SourceControls, _StageState):
 
                 try:
                     execute_general_only_stop(commit, assign_if_restored, self.stop_wait,
-                                              observe, operator_confirmed=True)
+                                              observe, operator_confirmed=True,
+                                              execution_wait=self._execution_waiter(self.stop_wait))
                 except GeneralStopError as error:
                     raise GeneralStopError(restore_failures + list(error.failures))
             else:
@@ -662,11 +704,16 @@ class CardBackend(SourceControls, _StageState):
                     def preamble_observer(stage):
                         self.procedure["ht_preamble_phase"] = stage
                     try:
+                        def ht_wait(seconds):
+                            return self._execution_waiter(self.stop_wait)(
+                                seconds, True,
+                                dict(operation="modulator.general.stop", phase="ht_preamble_wait",
+                                     ht_preamble_phase=self.procedure.get("ht_preamble_phase")))
                         self.procedure["ht_preamble_result"] = execute_ht_shutdown(
                             self.commanded_analog["C9NI6703"][0], self._read_ht_shutdown_sample,
                             self._lower_ht_shutdown_command,
                             lambda: execute_ht_supply_stop(commit, assign, self.stop_wait),
-                            lambda: self._stop_modulator_pulses(assign), self.stop_wait,
+                            lambda: self._stop_modulator_pulses(assign), ht_wait,
                             feedback_verified=self.ht_feedback_verified,
                             zero_tolerance_kv=self.ht_zero_tolerance_kv,
                             timeout_seconds=self.ht_zero_timeout, observer=preamble_observer)
@@ -674,7 +721,8 @@ class CardBackend(SourceControls, _StageState):
                         raise GeneralStopError(restore_failures + list(error.failures))
                 try:
                     execute_general_stop(commit, focal_off, assign, self.stop_wait,
-                                         observe, operator_confirmed=True)
+                                         observe, operator_confirmed=True,
+                                         execution_wait=self._execution_waiter(self.stop_wait))
                 except GeneralStopError as error:
                     raise GeneralStopError(restore_failures + list(error.failures))
             if restore_failures:
@@ -798,6 +846,7 @@ class CardBackend(SourceControls, _StageState):
         )
 
     def close(self):
+        self._ensure_execution_not_reentrant()
         self._ensure_focal_quiescent()
         if self.owner is not None:
             self.owner.close()
@@ -858,6 +907,7 @@ class DemoBackend(_StageState):
         return 0
 
     def initialize(self, cancel, startup_confirmed=False):
+        self._ensure_execution_not_reentrant()
         if cancel.is_set():
             raise AcquisitionCancelled()
         self._ensure_focal_quiescent()
@@ -878,15 +928,19 @@ class DemoBackend(_StageState):
                     stage_state=self._stage_snapshot(), procedure=copy.deepcopy(self.procedure))
 
     def general_start(self, cancel, operator_confirmed=False):
+        self._ensure_execution_not_reentrant()
         self._ensure_focal_quiescent()
         execute_general_start(lambda *_args: None, lambda *_args: None,
-                              cancel.wait, cancel.is_set, operator_confirmed=operator_confirmed)
+                              cancel.wait, cancel.is_set, operator_confirmed=operator_confirmed,
+                              execution_wait=self._execution_waiter(cancel.wait))
 
     def general_stop(self, operator_confirmed=False):
+        self._ensure_execution_not_reentrant()
         self._ensure_focal_quiescent()
         if self.control_profile == "general_only_test":
             execute_general_only_stop(lambda *_args: None, lambda *_args: None,
-                                      time.sleep, operator_confirmed=operator_confirmed)
+                                      time.sleep, operator_confirmed=operator_confirmed,
+                                      execution_wait=self._execution_waiter(time.sleep))
         else:
             if self.control_profile == "extended_ht_stop":
                 # Explicit demo callbacks only, never an NI-backed fallback.
@@ -894,9 +948,11 @@ class DemoBackend(_StageState):
                                     lambda _value: None, lambda: None, lambda: None, time.sleep,
                                     feedback_verified=True)
             execute_general_stop(lambda *_args: None, lambda: None, lambda *_args: None,
-                                 time.sleep, operator_confirmed=operator_confirmed)
+                                 time.sleep, operator_confirmed=operator_confirmed,
+                                 execution_wait=self._execution_waiter(time.sleep))
 
     def close(self):
+        self._ensure_execution_not_reentrant()
         self._ensure_focal_quiescent()
         self.active = False
         self.commanded_digital = {}

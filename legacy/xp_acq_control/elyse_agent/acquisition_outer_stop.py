@@ -116,7 +116,7 @@ def _snapshot(bank, value):
 
 def execute_outer_stop(read_local, write_local, pulse_done, stop_counter,
                        wait_seconds, cancelled, observer=None,
-                       max_ramp_steps=200):
+                       max_ramp_steps=200, execution_wait=None):
     """Execute one original outer sequence under the single NI/local owner.
 
     read_local(bank) -> fresh complete immutable tuple. write_local(bank,
@@ -135,6 +135,8 @@ def execute_outer_stop(read_local, write_local, pulse_done, stop_counter,
         raise TypeError("All outer-stop callbacks must be callable")
     if observer is not None and not callable(observer):
         raise TypeError("observer must be callable or None")
+    if execution_wait is not None and not callable(execution_wait):
+        raise TypeError("execution_wait must be callable or None")
     if type(max_ramp_steps) is not int or not 1 <= max_ramp_steps <= 100000:
         raise ValueError("Positive bounded max_ramp_steps required")
     report = dict(operation="outer.controlled_stop", status="EXECUTING",
@@ -191,6 +193,14 @@ def execute_outer_stop(read_local, write_local, pulse_done, stop_counter,
         value = fn(*args)
         check_cancel()
         return value
+
+    def wait(seconds, phase="source_wait", safe=True):
+        if execution_wait is None:
+            return call(wait_seconds, seconds)
+        return call(execution_wait, seconds, safe and not pending,
+                    dict(operation="outer.controlled_stop", phase=phase,
+                         phase_uid=report["phase_uid"], source_uid=report["current_uid"],
+                         frame=frame_index[0] - 1))
 
     def read(bank, cleanup=False):
         value = _snapshot(bank, read_local(bank) if cleanup else call(read_local, bank))
@@ -262,7 +272,7 @@ def execute_outer_stop(read_local, write_local, pulse_done, stop_counter,
             read(12)
             write(12, ((0, checked - 0.1),), already_read=True)
             report["ramp_decrements"] += 1
-            call(wait_seconds, 0.5)
+            wait(0.5, "ht_ramp_wait")
 
     def counter(number):
         for iteration in range(42):
@@ -302,7 +312,7 @@ def execute_outer_stop(read_local, write_local, pulse_done, stop_counter,
                         frames(effect[1])
                         report["current_uid"] = uid
                     else:
-                        call(wait_seconds, effect[1] / 1000.0)
+                        wait(effect[1] / 1000.0)
                         if uid == "49114":
                             report["ht_supply_dwell_completed"] = True
                             sync_ht_stop()
