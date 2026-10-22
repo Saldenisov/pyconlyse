@@ -212,6 +212,52 @@ class TelemetryIsolationTests(unittest.TestCase):
             self.assertFalse(self.publisher.status()['owner_state_current'])
         self.assertEqual(self.runtime.try_telemetry_snapshot()['state'], 'IDLE')
 
+    def test_recent_vi_is_not_erased_or_retimestamped_by_a_contended_idle_poll(self):
+        self.publisher.outbox._clock = lambda: self.clock[0]
+        self.publisher.ingest(vi_xml(), '127.0.0.1')
+        before = copy.deepcopy(self.publisher.outbox.peek())
+        before_age = before.pop('age_seconds_on_xp')
+        with PausedOwner(self.runtime):
+            self.clock[0] += .2
+            started = time.monotonic()
+            self.assertFalse(self.publisher.publish_once())
+            self.assertLess(time.monotonic() - started, .5)
+            self.assertFalse(self.publisher.status()['owner_state_current'])
+            retained = self.publisher.outbox.peek()
+            self.assertGreater(retained.pop('age_seconds_on_xp'), before_age)
+            self.assertEqual(retained, before)
+        self.assertFalse(self.publisher.publish_once())
+        retained = self.publisher.outbox.peek()
+        self.assertGreater(retained.pop('age_seconds_on_xp'), before_age)
+        self.assertEqual(retained, before)
+        self.assertTrue(self.publisher.status()['owner_state_current'])
+        self.assertEqual(self.publisher.vi_accepted, 1)
+        with self.assertRaisesRegex(RuntimeError, 'LabVIEW telemetry is still arriving'):
+            self.runtime.initialize(startup_confirmed=True)
+
+    def test_bridge_contention_suppression_expires_at_the_initialize_quiet_boundary(self):
+        self.publisher.ingest(vi_xml(), '127.0.0.1'); self.take_packet()
+        with PausedOwner(self.runtime):
+            self.clock[0] += 2
+            self.assertTrue(self.publisher.publish_once())
+            rows = self.take_packet()['data']['banks']
+            self.assertTrue(all(row['data'] is None for row in rows))
+            self.assertTrue(all(row['error']['source'] == 'OWNER_STATE_BUSY' for row in rows))
+        self.assertTrue(self.publisher.publish_once())
+        rows = self.take_packet()['data']['banks']
+        self.assertTrue(all(row['data'] is None for row in rows))
+        self.assertIsNone(self.publisher.last_vi_receipt)
+        self.assertFalse(self.publisher.publish_once())
+
+    def test_confirmed_non_idle_epoch_is_not_hidden_by_recent_vi_receipt(self):
+        self.publisher.ingest(vi_xml(), '127.0.0.1'); self.take_packet()
+        self.native_memory()
+        self.assertTrue(self.publisher.publish_once())
+        self.assertEqual(self.take_packet()['producer_kind'], 'python_acquisition')
+        with PausedOwner(self.runtime):
+            self.assertTrue(self.publisher.publish_once())
+            self.assertTrue(all(row['data'] is None for row in self.take_packet()['data']['banks']))
+
     def test_out_of_order_capture_cannot_roll_back_cached_source_epoch(self):
         old = self.runtime.try_telemetry_snapshot()
         new = dict(old, state_revision=2, sequence=5, telemetry_bridge_mode=False)

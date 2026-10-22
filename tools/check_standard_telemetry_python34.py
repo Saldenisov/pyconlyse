@@ -68,7 +68,9 @@ def main():
         assert publisher.status()["everest_acknowledged"] == 1
         assert not publisher.publish_once()
         assert not factory_calls and "nidaqmx" not in sys.modules
-        dual = DualModeTelemetryPublisher(cold, server.server_address, key, ingress_address=("127.0.0.1", 0))
+        bridge_clock = [time.monotonic()]
+        dual = DualModeTelemetryPublisher(cold, server.server_address, key,
+            ingress_address=("127.0.0.1", 0), clock=lambda: bridge_clock[0])
         cold.telemetry_publisher = dual
         rows = []
         for name in BANKS:
@@ -106,6 +108,13 @@ def main():
         try:
             assert entered.wait(3)
             started = time.monotonic()
+            vi_sequence, vi_receipt = dual.sequence, dual.last_vi_receipt
+            assert not dual.publish_once() and time.monotonic() - started < .5
+            assert dual.sequence == vi_sequence and dual.last_vi_receipt == vi_receipt
+            assert dual.outbox.status()["pending"] == 0  # No replay/freshness extension.
+            assert not dual.status()["owner_state_current"]
+            bridge_clock[0] += 2  # Existing Initialize quiet boundary, not a new permit.
+            started = time.monotonic()
             assert dual.publish_once() and time.monotonic() - started < .5
             assert dual.relay.send_once()
             assert not dual.status()["owner_state_current"]
@@ -127,6 +136,7 @@ def main():
         print(json.dumps(dict(result="PASS", python=sys.version.split()[0],
             bank_count=27, signed_loopback_ack=True, dual_mode_bridge_and_initialize_fence=True,
             independent_command_admission=True, non_waiting_telemetry_projection=True,
+            recent_vi_contention_does_not_erase_or_replay=True,
             build_id=control_identity(root)["build_id"],
             manifest_hashes_verified=hashes_ok,
             cards_initialized=False, hardware_commands_sent=False, live_everest_contacted=False)))

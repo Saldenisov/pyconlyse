@@ -15,6 +15,7 @@ from .shared_state_receiver import SharedStateServer
 
 BRIDGE_SITE = "xp_unified_labview_bridge_27_banks"
 NATIVE_SITE = "xp_unified_python_owner_27_banks"
+VI_QUIET_SECONDS = 2
 
 
 class DualModeTelemetryPublisher(StandardTelemetryPublisher):
@@ -35,7 +36,7 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
     def assert_initialize_allowed(self):
         # Called with the runtime lock BEFORE the NI owner is woken.
         with self.lock:
-            if self.last_vi_seen is not None and self.clock() - self.last_vi_seen < 2:
+            if self.last_vi_seen is not None and self.clock() - self.last_vi_seen < VI_QUIET_SECONDS:
                 raise RuntimeError("LabVIEW telemetry is still arriving; stop Acquisition VI and confirm card release locally")
 
     def _enqueue(self, packet, age=0):
@@ -90,11 +91,20 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
             # older poll, including captures spanning deinitialization.
             if generation != self.sequence:
                 return False
+            self.owner_state_current = value.get("telemetry_view_current", False)
             identity = self._identity(value)
             if identity == self.identity:
                 return False
             bridge = value.get("telemetry_bridge_mode", False)
-            self.owner_state_current = value.get("telemetry_view_current", False)
+            if (bridge and not self.owner_state_current and self.last_vi_receipt is not None
+                    and self.clock() - self.last_vi_receipt < VI_QUIET_SECONDS):
+                # Ingress itself briefly owns the lifecycle lock. A poll that
+                # collides with it must not erase a recently admitted VI image.
+                # Initialize is fenced for at least this same quiet interval.
+                # Send nothing: retained receiver data ages normally, with no
+                # replay, new sequence, timestamp or freshness extension. Once
+                # quiet expires, unavailable/native transition packets still win.
+                return False
             packet = standard_packet(value, self.sequence + 1)
             if bridge:
                 packet.update(producer_kind="copied_acquisition", source_site=BRIDGE_SITE)
