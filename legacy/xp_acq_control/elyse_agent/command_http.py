@@ -13,7 +13,17 @@ class _ControlHandler(_Handler):
         # The old reader uses its unchanged response-signature domain.
         if self.command != "POST":
             if code == 200 and self.path == "/snapshot" and "control" in body:
-                body["control"]["lease"] = self.server.runtime.broker.snapshot(issue_lease=True)["lease"]
+                issuer = getattr(self.server.runtime.broker, "issue_lease_nonblocking", None)
+                view_issuer = getattr(self.server.runtime, "issue_command_lease", None)
+                receipt = None
+                if (body.get("application_view_current", True) and not body.get("local_request_pending")
+                        and body["control"].get("enabled") is True):
+                    if view_issuer is not None:
+                        receipt = view_issuer(body)
+                    elif issuer is not None and "application_view_age_seconds" not in body:
+                        receipt = issuer(session_id=body.get("session_id"),
+                            expected_revision=body.get("state_revision"), return_details=True)
+                body["control"].update(receipt if receipt is not None else dict(lease=None, lease_seconds=0))
             return _Handler._reply(self, code, body)
         from .acquisition_http import response_signature
         encoded = json.dumps(body, allow_nan=False, separators=(",", ":")).encode("utf-8")

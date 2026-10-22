@@ -10,6 +10,7 @@ import threading
 import uuid
 import copy
 import datetime
+import time
 
 from .acquisition_runtime import AcquisitionRuntime
 from .command_broker import CommandBroker
@@ -26,7 +27,8 @@ CONTROL_MODULES += ("native_telemetry.py", "shared_state.py", "labview_telemetry
                     "telemetry_relay.py", "protocol.py", "supervision_wire.py", "errors.py",
                     "dual_mode_telemetry.py", "shared_state_receiver.py")
 CONTROL_MODULES += ("command_protocol.py", "command_broker.py", "command_http.py", "command_dispatch.py",
-                    "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py")
+                    "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py", "application_view.py",
+                    "journal_worker.py", "isolated_backend.py", "isolated_wire.py", "isolated_worker.py")
 
 
 def control_identity(root=None):
@@ -46,6 +48,9 @@ def control_identity(root=None):
 class _ObservedBackend(object):
     def __init__(self, backend, runtime):
         self.backend, self.runtime = backend, runtime
+        observer = getattr(backend, "set_execution_observer", None)
+        if observer is not None:
+            observer(runtime.observe_execution)
 
     def __getattr__(self, name):
         return getattr(self.backend, name)
@@ -163,6 +168,28 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         self._cooling_start_timeout = cooling_start_timeout
         self._general_cooling_ready = False
         self._startup_phase = "NOT_STARTED"
+        self._execution_progress = None
+
+    def observe_execution(self, event):
+        """Progress is not a measurement or proof that a driver is responsive.
+
+        An optional qualified sample comes from the same child NI owner. Do not
+        compare process-local monotonic epochs or refresh data on a heartbeat.
+        """
+        value = copy.deepcopy(event)
+        sample = value.pop("sample", None)
+        sample_age = value.get("sample_age_seconds")
+        with self._lock:
+            self._execution_progress = value
+            if (sample is not None and type(sample_age) in (int, float)
+                    and 0 <= sample_age < 2 and self._backend is not None
+                    and self._state == "EXECUTING" and not self._cancel.is_set()
+                    and sample.get("source") == "python_daqmx_acquisition"
+                    and sample.get("simulated") is False):
+                self._sequence += 1
+                self._latest = sample
+                self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                self._received_at = self._clock() - sample_age
 
     def _verify_cooling(self, backend, cancel):
         self._startup_phase = "WAIT_CANON_SECTION_CIRCULATION"
@@ -189,7 +216,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
 
     def _start_permit(self, general=False):
         alarm = self.cooling.snapshot()
-        if alarm["active"] or alarm["journal_error"]:
+        if (alarm["active"] or alarm["journal_error"]
+                or alarm.get("journal_required") and not alarm.get("journal_durable")):
             raise RuntimeError("Start blocked by unresolved cooling alarm or journal failure")
         if not self._stop_qualified():
             raise RuntimeError("Start blocked: full HT/Chroma/cooling shutdown not commissioned")
@@ -260,11 +288,14 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         self._watchdog.start()
 
     def join(self, timeout=None):
+        started = time.monotonic()
         stopped = AcquisitionRuntime.join(self, timeout)
         if stopped:
             self._watchdog_stop.set()
             if self._watchdog is not None:
-                self._watchdog.join(.5)
+                remaining = None if timeout is None else max(0, timeout - (time.monotonic() - started))
+                self._watchdog.join(remaining)
+                stopped = not self._watchdog.is_alive()
         return stopped
 
     def snapshot(self):
@@ -282,6 +313,12 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             result["full_stop_commissioned"] = self._stop_qualified()
             result["general_cooling_ready"] = self._general_cooling_ready
             result["startup_phase"] = self._startup_phase
+            result["execution_progress"] = copy.deepcopy(self._execution_progress)
+            isolated = getattr(self._backend, "isolation_snapshot", None)
+            result["native_isolation"] = isolated() if isolated is not None else dict(
+                worker_state="NOT_SPAWNED" if self._backend is None else "IN_PROCESS_TEST_BACKEND",
+                resource_count=0 if self._backend is None else self._backend.resource_count,
+                automatic_restart=False)
             result["cooling_permit_current"] = bool(
                 self._cooling_read_at is not None and 0 <= self._clock() - self._cooling_read_at < 2
                 and self._circuits and all(item.get("quality") == "FRESH"

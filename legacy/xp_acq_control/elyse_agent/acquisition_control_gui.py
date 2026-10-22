@@ -5,16 +5,31 @@ import os
 import threading
 
 from .acquisition_gui import AcquisitionWindow, load_configuration
-from .acquisition_backend import CardBackend, DemoBackend
+from .acquisition_backend import DemoBackend
 from .acquisition_control_runtime import AcquisitionControlRuntime, control_identity
 from .acquisition_recovery import OwnershipMarker
 from .command_http import ControlHTTPServer
-from .chroma_focal_command import ChromaFocalCommand
 from .chroma_focal_stop import DEFAULT_DLL
 from .cooling_safety import CoolingSafety
 from .dual_mode_telemetry import DualModeTelemetryPublisher
+from .application_view import ApplicationView, ApplicationShutdown, StartupCleanup
+from .isolated_backend import IsolatedCardBackend
 
 BUTTON_LABELS = ("Initialize", "Deinitialize", "Stop server")
+
+
+def application_alarm_text(state):
+    """A local lifecycle error must never hide a circulation countdown."""
+    alarm = state["cooling_safety"]
+    messages = []
+    if alarm["active"]:
+        messages.append("COOLING FAULT: " + ", ".join(item["circuit"] for item in alarm["circuits"]) +
+            " | countdown: {0:.0f}s | stop: {1}".format(alarm["remaining_seconds"], alarm["stop_state"]) +
+            (" | AUTOMATIC STOP UNAVAILABLE" if not alarm["automatic_stop_available"] else ""))
+    for error in (alarm["journal_error"], state.get("local_request_error"), state.get("application_view_error")):
+        if error and error not in messages:
+            messages.append(error)
+    return " | ".join(messages)
 
 
 def load_control_configuration(path):
@@ -60,6 +75,7 @@ class ControlWindow(AcquisitionWindow):
         self.root, self.runtime, self.server = root, runtime, server
         self.config_path, self.entrypoint, self.demo = config_path, entrypoint, demo
         self.closing = False
+        self.shutdown = ApplicationShutdown(getattr(runtime, "runtime", runtime), server, runtime)
         root.title("ELYSE Acquisition Control - Python 3.4" + (" - DEMO / NO HARDWARE" if demo else ""))
         root.geometry("1000x680")
         self.status, self.link, self.alarm = tk.StringVar(), tk.StringVar(), tk.StringVar()
@@ -92,35 +108,27 @@ class ControlWindow(AcquisitionWindow):
                       delivery.get("publisher_error") or delivery.get("last_error", "publisher disabled")) +
                       ("command channel not seen" if age is None else "last signed read {0:.1f}s ago".format(age)) +
                       " | Commands: " + ("enabled / commissioned gates still apply" if state["control"]["enabled"] else "DISABLED"))
-        alarm = state["cooling_safety"]
-        self.alarm.set(("COOLING FAULT: " + ", ".join(item["circuit"] for item in alarm["circuits"]) +
-                        " | countdown: {0:.0f}s | stop: {1}".format(alarm["remaining_seconds"], alarm["stop_state"]) +
-                        (" | AUTOMATIC STOP UNAVAILABLE" if not alarm["automatic_stop_available"] else ""))
-                       if alarm["active"] else alarm["journal_error"])
-        self.init_button.configure(state="normal" if state["state"] == "IDLE" and not self.closing else "disabled")
+        self.alarm.set(application_alarm_text(state))
+        metadata_current = state.get("application_view_current", True) and not state.get("local_request_pending")
+        self.init_button.configure(state="normal" if state["state"] == "IDLE" and not self.closing
+                                   and metadata_current else "disabled")
         self.deinit_button.configure(state="normal" if state["resource_count"] and not self.closing
+                                     and metadata_current
                                      and state["state"] not in ("DEINITIALIZING", "INITIALIZING", "EXECUTING") else "disabled")
         self.display.delete("1.0", "end")
         self.display.insert("end", json.dumps(state, sort_keys=True, indent=2))
         if self.closing and state["state"] == "STOPPED" and self.runtime.join(0):
-            publisher = getattr(self.runtime, "telemetry_publisher", None)
-            if publisher is not None:
-                try:
-                    publisher.close()
-                except Exception as error:
-                    self.alarm.set(str(error))
-                    self.root.after(1000, self.refresh)
-                    return
-            self.server.shutdown()
-            try:
-                self.server.server_close()
-            except Exception as error:
-                self.alarm.set(str(error))
-                self.root.after(1000, self.refresh)
+            self.shutdown.start()
+            if self.shutdown.completed:
+                self.root.destroy()
                 return
-            self.root.destroy()
+            if self.shutdown.error:
+                self.alarm.set(self.shutdown.error)
+            self.root.after(250, self.refresh)
             return
         if self.closing and state["state"] == "FAULT":
+            self.closing = False
+        if self.closing and state.get("local_request_error"):
             self.closing = False
         self.root.after(250, self.refresh)
 
@@ -133,7 +141,7 @@ def main(entrypoint, argv=None):
     parser.add_argument("--demo", action="store_true")
     args = parser.parse_args(argv)
     root = tk.Tk()
-    runtime = server = thread = publisher = None
+    runtime = server = thread = publisher = view = cooling = None
     try:
         base, read_key, command_key, control = load_control_configuration(args.config)
         flags = {name: base.get(name, False) for name in (
@@ -144,11 +152,16 @@ def main(entrypoint, argv=None):
         if args.demo:
             factory = lambda: DemoBackend(control_profile=profile, **flags)
         else:
-            focal_command = ChromaFocalCommand(focal.get("dll_path", DEFAULT_DLL),
-                                               focal.get("resources_verified", False), focal.get("timeout_seconds", 10))
-            factory = lambda: CardBackend(read_timeout=base["read_timeout_seconds"], control_profile=profile,
+            backend_options = dict(flags, read_timeout=base["read_timeout_seconds"], control_profile=profile,
                 ht_feedback_verified=ht.get("feedback_verified", False), ht_zero_tolerance_kv=ht.get("zero_tolerance_kv", 0),
-                ht_zero_timeout=ht.get("timeout_seconds", 10), focal_command=focal_command, **flags)
+                ht_zero_timeout=ht.get("timeout_seconds", 10))
+            focal_options = dict(dll_path=focal.get("dll_path", DEFAULT_DLL),
+                resources_verified=focal.get("resources_verified", False), timeout=focal.get("timeout_seconds", 10))
+            # Cold facade; the child/native backend is created only by an
+            # explicitly accepted Initialize on the existing runtime owner.
+            # Unqualified aggregate reads are not inserted into VI dwell times.
+            factory = lambda: IsolatedCardBackend(backend_options, focal_options,
+                                                   safe_sample_budget_seconds=None)
         identity = control_identity()
         guard = None if args.demo else OwnershipMarker(os.path.abspath(args.config) + ".ownership",
                                                        identity["session_id"], identity["build_id"])
@@ -157,7 +170,8 @@ def main(entrypoint, argv=None):
         runtime = AcquisitionControlRuntime(factory, period=base["period_seconds"], identity=identity,
             recovery_guard=guard, remote_enabled=control["remote_control_enabled"], cooling=cooling,
             cooling_polarity_verified=control["cooling_safety"]["polarity_verified"])
-        server = ControlHTTPServer((base["bind_host"], base["port"]), runtime, read_key, command_key)
+        view = ApplicationView(runtime)
+        server = ControlHTTPServer((base["bind_host"], base["port"]), view, read_key, command_key)
         runtime.start()
         if control["telemetry"]["enabled"]:
             publisher = DualModeTelemetryPublisher(runtime,
@@ -165,25 +179,35 @@ def main(entrypoint, argv=None):
                 period=control["telemetry"]["period_seconds"])
             runtime.telemetry_publisher = publisher
             publisher.start()
+        view.start()
         thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=.1))
         thread.daemon = True
         thread.start()
-        ControlWindow(root, runtime, server, args.config, entrypoint, args.demo)
+        ControlWindow(root, view, server, args.config, entrypoint, args.demo)
     except Exception as error:
-        if publisher is not None:
-            try:
-                publisher.close()
-            except Exception:
-                pass  # Preserve the original startup error; no hardware action here.
-        if runtime is not None:
-            runtime.request_shutdown()
-            runtime.join(3)
-        if server is not None:
-            if thread is not None and thread.is_alive():
-                server.shutdown()
-            server.server_close()
-        messagebox.showerror("Acquisition Control not started", str(error), parent=root)
-        root.destroy()
+        # Even a bind error may follow creation of a non-daemon alarm writer.
+        # Keep a visible three-button failure window until ALL joins finish.
+        failure = str(error)
+        for widget in root.winfo_children():
+            widget.destroy()
+        cleanup = StartupCleanup(runtime=runtime, server=server, view=view,
+                                 publisher=publisher, cooling=cooling, server_thread=thread)
+        root.title("ELYSE Acquisition Control - startup failed")
+        error_text = tk.StringVar(value=failure)
+        tk.Label(root, textvariable=error_text, wraplength=900, justify="left").pack(padx=12, pady=12)
+        for label in BUTTON_LABELS[:2]:
+            tk.Button(root, text=label, state="disabled").pack(side="left", padx=6)
+        tk.Button(root, text=BUTTON_LABELS[2], command=cleanup.start).pack(side="left", padx=6)
+        root.protocol("WM_DELETE_WINDOW", cleanup.start)
+        def finish_failed_start():
+            if cleanup.completed:
+                root.destroy()
+                return
+            error_text.set(failure + "\n" + "\n".join(cleanup.errors))
+            root.after(250, finish_failed_start)
+        cleanup.start()
+        root.after(250, finish_failed_start)
+        root.mainloop()
         return 1
     root.mainloop()
     return 0

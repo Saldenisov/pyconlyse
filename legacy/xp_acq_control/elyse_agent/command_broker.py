@@ -1,5 +1,7 @@
 """Bounded at-most-once command ledger and existing-owner admission."""
 import copy
+import math
+import threading
 import time
 import uuid
 
@@ -12,6 +14,57 @@ class CommandBroker(object):
         self.runtime, self.enabled = runtime, enabled
         self.clock, self.capacity = clock or time.monotonic, capacity
         self.records, self.leases = {}, {}
+        self._lifecycle_pending = threading.Event()
+        self._lifecycle_epoch = 0
+
+    def block_local_lifecycle(self):
+        # Local GUI intent never waits for runtime policy or disk I/O. One
+        # lifecycle dispatcher owns epoch changes; old leases stay revoked.
+        self._lifecycle_pending.set()
+        self._lifecycle_epoch += 1
+
+    def finish_local_lifecycle(self):
+        self._lifecycle_pending.clear()
+
+    def _lease_record(self, now, session_id=None, expected_revision=None, seconds=LEASE_SECONDS):
+        return dict(expires=now + seconds,
+                    lifecycle_epoch=self._lifecycle_epoch,
+                    session_id=self.runtime._identity["session_id"] if session_id is None else session_id,
+                    expected_revision=getattr(self.runtime, "_state_revision", None)
+                        if expected_revision is None else expected_revision)
+
+    def issue_lease_nonblocking(self, session_id=None, expected_revision=None, view_remaining_seconds=None,
+                              view_deadline=None, return_details=False):
+        """A read reply may offer a lease, but never wait behind policy/disk."""
+        if not self.runtime._lock.acquire(False):
+            return None
+        try:
+            now = self.clock()
+            self.leases = {key: record for key, record in self.leases.items() if record["expires"] > now}
+            if not self.enabled or self._lifecycle_pending.is_set() or len(self.leases) >= 64:
+                return None
+            if (session_id is not None and session_id != self.runtime._identity["session_id"]
+                    or expected_revision is not None
+                    and expected_revision != getattr(self.runtime, "_state_revision", None)):
+                return None
+            seconds = LEASE_SECONDS
+            if view_deadline is not None:
+                if type(view_deadline) not in (int, float) or not math.isfinite(view_deadline):
+                    return None
+                seconds = min(seconds, view_deadline - now)
+                if seconds <= 0:
+                    return None
+            if view_remaining_seconds is not None:
+                if (type(view_remaining_seconds) not in (int, float)
+                        or not math.isfinite(view_remaining_seconds) or view_remaining_seconds <= 0):
+                    return None
+                seconds = min(seconds, view_remaining_seconds)
+            lease = uuid.uuid4().hex
+            self.leases[lease] = self._lease_record(now, session_id, expected_revision, seconds)
+            return (dict(lease=lease, lease_seconds=max(0, self.leases[lease]["expires"] - self.clock()))
+                    if return_details else lease)
+        finally:
+            self.runtime._lock.release()
 
     def snapshot(self, issue_lease=False):
         # One lock order throughout: runtime -> broker (the runtime RLock).
@@ -24,10 +77,10 @@ class CommandBroker(object):
                     if item["result"]["outcome"] == "QUEUED":
                         item["result"].update(outcome="INTERRUPTED",
                             error="Owner left queued operation before an observed callback; effects not inferred")
-            self.leases = {key: end for key, end in self.leases.items() if end > now}
-            if issue_lease and self.enabled and len(self.leases) < 64:
+            self.leases = {key: record for key, record in self.leases.items() if record["expires"] > now}
+            if issue_lease and self.enabled and not self._lifecycle_pending.is_set() and len(self.leases) < 64:
                 lease = uuid.uuid4().hex
-                self.leases[lease] = now + LEASE_SECONDS
+                self.leases[lease] = self._lease_record(now)
             return dict(protocol_version=1, enabled=self.enabled, lease=lease,
                         lease_seconds=LEASE_SECONDS, operations=list(OPERATIONS),
                         initialization_local_only=True, automatic_command_retry=False,
@@ -48,9 +101,16 @@ class CommandBroker(object):
                 if previous["request"] != request:
                     raise ValueError("COMMAND_ID_REUSED_WITH_DIFFERENT_REQUEST")
                 return dict(copy.deepcopy(previous["result"]), duplicate=True)
-            expiry = self.leases.pop(lease, None) if isinstance(lease, str) else None
-            if expiry is None or self.clock() >= expiry:
+            if self._lifecycle_pending.is_set():
+                raise RuntimeError("LOCAL_LIFECYCLE_PENDING")
+            record = self.leases.pop(lease, None) if isinstance(lease, str) else None
+            if record is None or self.clock() >= record["expires"]:
                 raise RuntimeError("COMMAND_LEASE_EXPIRED_OR_CONSUMED")
+            if (record["session_id"] != request["session_id"]
+                    or record["lifecycle_epoch"] != self._lifecycle_epoch
+                    or record["expected_revision"] is not None
+                    and record["expected_revision"] != request["expected_revision"]):
+                raise RuntimeError("COMMAND_LEASE_CONTEXT_CHANGED")
             if len(self.records) >= self.capacity:
                 raise RuntimeError("COMMAND_LEDGER_FULL_LOCAL_CONTROL_REQUIRED")
             result = dict(command_id=key, session_id=request["session_id"],
@@ -58,9 +118,13 @@ class CommandBroker(object):
                           hardware_acknowledged=False)
             self.records[key] = dict(request=request, result=result)
             try:
+                def dispatch():
+                    if self._lifecycle_pending.is_set():
+                        raise RuntimeError("LOCAL_LIFECYCLE_PENDING")
+                    return self.runtime.dispatch_remote(request["operation"], request["value"])
                 self.runtime.fenced_local_request(
                     request["session_id"], request["expected_revision"],
-                    lambda: self.runtime.dispatch_remote(request["operation"], request["value"]))
+                    dispatch)
             except Exception as error:
                 result["error"] = str(error)[:300]
                 result["error_type"] = type(error).__name__
