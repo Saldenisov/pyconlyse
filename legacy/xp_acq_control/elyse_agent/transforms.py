@@ -3,6 +3,34 @@ from __future__ import division
 import math
 
 
+def channel_last_samples(samples_by_channel, expected_channels, expected_samples):
+    """Select the last raw value per finite channel block; never average.
+
+    The block shape and every raw value are checked before returning any
+    selected values. This changes only the Python projection, not acquisition
+    timing or trigger setup. It is an explicit policy, not the VI mean.
+    """
+    if (type(expected_channels) is not int or expected_channels <= 0
+            or type(expected_samples) is not int or expected_samples <= 0):
+        raise ValueError("Exact positive channel and sample counts required")
+    if (not isinstance(samples_by_channel, (list, tuple))
+            or len(samples_by_channel) != expected_channels):
+        raise ValueError("Complete analog channel block required")
+    result = []
+    for row in samples_by_channel:
+        if not isinstance(row, (list, tuple)) or len(row) != expected_samples:
+            raise ValueError("Complete finite samples required for every channel")
+        for value in row:
+            try:
+                valid = type(value) in (int, float) and math.isfinite(value)
+            except (OverflowError, ValueError):
+                valid = False
+            if not valid:
+                raise ValueError("Finite numeric raw analog samples required")
+        result.append(float(row[-1]))
+    return result
+
+
 def channel_means(samples_by_channel, expected_channels=None, expected_samples=None):
     rows = list(samples_by_channel)
     if expected_channels is not None and len(rows) != expected_channels:

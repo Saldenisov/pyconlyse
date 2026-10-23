@@ -17,6 +17,7 @@ import time
 
 from .hardware_plan import AI_BANKS, DI_BANKS
 from .hardware_tasks import create_legacy_card_tasks, PartialTaskCreationError
+from .input_tasks import AI_TIMING
 from .acquisition_procedures import (
     execute_general_start, execute_general_stop, execute_general_only_stop, GeneralStopError,
 )
@@ -768,7 +769,7 @@ class CardBackend(SourceControls, _StageState):
         task = self.owner.tasks["C2_NI6071E_AI"]
         task.start()
         try:
-            raw = self.owner.read_analog_means("C2_NI6071E_AI", timeout_seconds=self.read_timeout)
+            raw = self.owner.read_analog_latest("C2_NI6071E_AI", timeout_seconds=self.read_timeout)
         finally:
             task.stop()
         inputs = list(self.owner.tasks["C4_DIO96_DI"].read(timeout=self.read_timeout))
@@ -834,7 +835,7 @@ class CardBackend(SourceControls, _StageState):
             task = self.owner.tasks[name]
             task.start()
             try:
-                values = self.owner.read_analog_means(name, timeout_seconds=self.read_timeout)
+                values = self.owner.read_analog_latest(name, timeout_seconds=self.read_timeout)
             finally:
                 task.stop()
             if len(values) != count or any(not math.isfinite(value) for value in values):
@@ -844,9 +845,12 @@ class CardBackend(SourceControls, _StageState):
             if any(not math.isfinite(value) for value in scaled):
                 raise ValueError("Nonfinite calibrated analog bank: " + name)
             banks[name] = dict(kind="analog_input", device=device,
-                               values=values, unit="V", processing="mean_of_10_raw_samples",
+                               values=values, unit="V", processing="last_raw_sample_of_finite_block",
+                               software_averaging=False,
+                               samples_per_channel_acquired=AI_TIMING[name][2],
+                               selected_sample_index=AI_TIMING[name][2] - 1,
                                legacy_scaled_values=scaled,
-                               calibration="calibration_map.csv: mean*scale+offset")
+                               calibration="calibration_map.csv: selected_sample*scale+offset")
         for name, device, first, last, count in DI_BANKS:
             if cancel.is_set():
                 raise AcquisitionCancelled()

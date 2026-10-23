@@ -9,8 +9,10 @@ not the LabVIEW acquisition configuration.
 
 from __future__ import print_function
 
+import math
+
 from .errors import AgentError
-from .transforms import channel_means
+from .transforms import channel_last_samples
 
 
 class InputTaskCreationBlocked(AgentError):
@@ -63,15 +65,30 @@ class InputTaskSet(object):
         if first_error is not None:
             raise first_error
 
-    def read_analog_means(self, task_name, timeout_seconds=10.0):
+    def read_analog_latest(self, task_name, timeout_seconds=10.0):
+        """Legacy input-only probe: same unaveraged policy as the card owner.
+
+        Not the unified server's acquisition owner; retaining this adapter
+        must not leave an alternative averaging path in the packaged code.
+        """
+        if task_name not in AI_TIMING:
+            raise ValueError("unknown analog input bank")
+        if type(timeout_seconds) not in (int, float):
+            raise ValueError("timeout_seconds requires a finite positive number")
+        try:
+            timeout = float(timeout_seconds)
+        except (OverflowError, ValueError):
+            raise ValueError("timeout_seconds requires a finite positive number")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout_seconds requires a finite positive number")
         task = self.tasks[task_name]
         sample_count = AI_TIMING[task_name][2]
         samples = task.read(
             number_of_samples_per_channel=sample_count,
-            timeout=float(timeout_seconds),
+            timeout=timeout,
         )
         expected_channels = 16 if task_name == "C11_NI6220_AI" else 64
-        return channel_means(samples, expected_channels, sample_count)
+        return channel_last_samples(samples, expected_channels, sample_count)
 
 
 def create_legacy_input_tasks(authorized=False):

@@ -45,7 +45,7 @@ def package(destination, everest=False):
         files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-postgres-20261022-v1" if everest else "acq-unified-handover-journal-20261023-v8-r5", default_xp_port=8772,
+                    release="everest-postgres-20261022-v1" if everest else "acq-unified-unaveraged-inputs-20261023-v8-r6", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
@@ -60,7 +60,12 @@ def package(destination, everest=False):
             standalone_telemetry_application_included=False,
             application_exclusion="config-scoped OS lock plus fixed endpoints before journal writer",
             recovery="explicit local operator handover only; no automatic marker deletion",
-            historical_journal_ack="durable local acknowledgment; incidents/current storage errors preserved")
+            historical_journal_ack="durable local acknowledgment; incidents/current storage errors preserved",
+            native_analog_processing="last_raw_sample_of_finite_block",
+            native_software_averaging=False,
+            native_finite_samples_per_channel=10,
+            native_selected_sample_index=9,
+            vi_forwarded_processing_unchanged=True)
     for source, relative in sorted(files, key=lambda item: item[1]):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)

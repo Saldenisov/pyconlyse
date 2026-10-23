@@ -26,7 +26,7 @@ from .hardware_plan import (
     logical_ao_to_volts,
 )
 from .input_tasks import AI_CHANNEL_GROUPS, AI_TIMING
-from .transforms import channel_means, microseconds_to_20mhz_ticks
+from .transforms import channel_last_samples, microseconds_to_20mhz_ticks
 
 
 def prepare_driver_dependencies(observer=None):
@@ -158,12 +158,18 @@ class LegacyCardTasks(object):
                 started.append(spec["output"])
         return started
 
-    def read_analog_means(self, name, samples_per_channel=10, timeout_seconds=10.0):
+    def read_analog_latest(self, name, timeout_seconds=10.0):
+        """Last sample per channel from the unchanged configured finite block.
+
+        Read the whole block to preserve existing driver/trigger behavior.
+        Do not average, change finite acquisition size, or fall back to a
+        previous sample when the block/read is invalid.
+        """
         if name not in dict((entry[0], True) for entry in AI_BANKS):
             raise ValueError("unknown analog input bank")
-        count = samples_per_channel
-        if type(count) is not int or not 0 < count <= AI_TIMING[name][2]:
-            raise ValueError("samples_per_channel requires a positive exact integer within configured finite samples")
+        count = AI_TIMING[name][2]
+        if type(count) is not int or count <= 0:
+            raise ValueError("Configured finite sample count must be a positive exact integer")
         if type(timeout_seconds) not in (int, float):
             raise ValueError("timeout_seconds requires a finite positive number")
         try:
@@ -175,7 +181,7 @@ class LegacyCardTasks(object):
         raw = self._task(name).read(number_of_samples_per_channel=count,
                                     timeout=timeout)
         expected = dict((entry[0], entry[2]) for entry in AI_BANKS)[name]
-        return channel_means(raw, expected_channels=expected, expected_samples=count)
+        return channel_last_samples(raw, expected_channels=expected, expected_samples=count)
 
     def read_digital_bank(self, name):
         if name not in dict((entry[0], True) for entry in DI_BANKS):
