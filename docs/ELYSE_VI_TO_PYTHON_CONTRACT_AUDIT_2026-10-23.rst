@@ -1,6 +1,10 @@
 Acquisition / Supervision / Python contract audit
 ================================================
 
+This document retains the historical baseline findings. Subsequent EPS/DPS
+publication and qualified execution-telemetry changes are documented in
+``ELYSE_EPS_DPS_EXECUTION_TELEMETRY_2026-10-23.rst``; they are not deployed to XP.
+
 Decision and boundary
 ---------------------
 
