@@ -131,6 +131,7 @@ class IsolatedCardBackend(object):
         self._process = self._reader = self._writer = None
         self._owner_thread = None
         self._active_id = self._active_operation = self._response = self._progress = None
+        self._initialization_ready = False
         self._progress_version = 0
         self._serial = 0
         self._uncertain = self._may_own_resources = self._cleanup_confirmed = False
@@ -169,6 +170,10 @@ class IsolatedCardBackend(object):
                           cleanup_confirmed=self._cleanup_confirmed, error=self._worker_error,
                           active_request_id=self._active_id, automatic_restart=False,
                           progress_observer_error=self._observer_error,
+                          resource_count_interpretation=("UNKNOWN_RETAINED_OWNERSHIP_SENTINEL"
+                              if not self._cache.get("resource_count", 0)
+                              and (self._uncertain or self._may_own_resources)
+                              else "LAST_CHILD_REPORTED_COUNT_NOT_CONTINUOUS_NATIVE_INSPECTION"),
                           hardware_off_confirmed=False)
         result["resource_count"] = self.resource_count
         return result
@@ -226,7 +231,7 @@ class IsolatedCardBackend(object):
         try:
             while True:
                 message = read_frame(self._process.stdout)
-                if message.get("kind") not in ("result", "progress") or type(message.get("id")) is not int:
+                if message.get("kind") not in ("result", "progress", "initialize_ready") or type(message.get("id")) is not int:
                     raise IsolationProtocolError("Unexpected child message")
                 attributes = message.get("attributes", {})
                 if type(attributes) is not dict or any(name not in CACHED_ATTRIBUTES for name in attributes):
@@ -237,6 +242,14 @@ class IsolatedCardBackend(object):
                 with self._condition:
                     if message["id"] != self._active_id:
                         raise IsolationProtocolError("Unexpected child request ID")
+                    if message["kind"] == "initialize_ready":
+                        if (self._active_operation != "initialize" or self._initialization_ready
+                                or set(message) != {"kind", "id", "attributes"}
+                                or attributes != {"resource_count": 0}):
+                            raise IsolationProtocolError("Unexpected dependency-ready handshake")
+                        self._initialization_ready = True
+                        self._condition.notify_all()
+                        continue
                     self._cache.update(attributes)
                     if message["kind"] == "result":
                         self._response = message
@@ -310,7 +323,7 @@ class IsolatedCardBackend(object):
                 self._worker_state = "IDLE_OWNED"
             raise
         deadline = time.monotonic() + (self._rpc_timeout if timeout is None else timeout)
-        cancellation_sent = False
+        cancellation_sent = activation_sent = False
         while True:
             event, response = None, None
             with self._condition:
@@ -334,6 +347,13 @@ class IsolatedCardBackend(object):
             if expired:
                 self._mark_uncertain("RPC deadline exceeded for " + operation + "; outcome UNKNOWN")
                 raise IsolatedBackendUncertain("Child RPC timeout for " + operation + "; outcome UNKNOWN")
+            if operation == "initialize" and self._initialization_ready and not activation_sent:
+                # Dependencies are ready, but no Task call has been admitted.
+                # A cancellation queued during imports reaches the child on
+                # its main thread before it can begin native initialization.
+                self._queue(dict(kind="activate_initialize", id=request_id,
+                                 cancelled=bool(cancel is not None and cancel.is_set())))
+                activation_sent = True
             if cancel is not None and cancel.is_set() and not cancellation_sent:
                 self._queue(dict(kind="cancel", id=request_id))
                 cancellation_sent = True

@@ -523,6 +523,23 @@ class CardBackend(SourceControls, _StageState):
     def resource_count(self):
         return len(self.owner.tasks) if self.owner is not None else 0
 
+    def _initialization_notice(self, event):
+        scheduler = getattr(self, "_execution_scheduler", None)
+        if scheduler is not None and scheduler.observer is not None:
+            scheduler.observer(dict(event, kind="INITIALIZATION_CALL_BOUNDARY_NOT_MEASUREMENT",
+                                    operation="initialize", safe_to_sample=False,
+                                    hardware_acknowledged=False))
+
+    def prepare_isolated_dependencies(self):
+        """Import-only isolated-child bootstrap, before its stdin pump starts.
+
+        No calls on injected/offline factories. This is not a public operation
+        and cannot configure, start, read, write or release any card.
+        """
+        if self.factory is create_legacy_card_tasks:
+            from .hardware_tasks import prepare_driver_dependencies
+            prepare_driver_dependencies(self._initialization_notice)
+
     def initialize(self, cancel, startup_confirmed=False):
         self._ensure_execution_not_reentrant()
         if startup_confirmed is not True:
@@ -555,16 +572,25 @@ class CardBackend(SourceControls, _StageState):
             raise ValueError("All 144 AI calibration entries required")
         self._ao_control_calibration = load_ao_calibration()
         try:
-            self.owner = self.factory(authorized=True, outputs_commissioned=True)
+            self._initialization_notice(dict(phase="ENTER", call="create_legacy_card_tasks"))
+            options = dict(authorized=True, outputs_commissioned=True)
+            if self.factory is create_legacy_card_tasks:
+                options["observer"] = self._initialization_notice
+            self.owner = self.factory(**options)
+            self._initialization_notice(dict(phase="RETURNED", call="create_legacy_card_tasks"))
         except PartialTaskCreationError as error:
             self.owner = error.owner
             raise
         if cancel.is_set():
             raise AcquisitionCancelled()
+        self._initialization_notice(dict(phase="ENTER", call="start_legacy_counters"))
         self.started_counters = self.owner.start_legacy_counters()
+        self._initialization_notice(dict(phase="RETURNED", call="start_legacy_counters"))
         if cancel.is_set():
             raise AcquisitionCancelled()
+        self._initialization_notice(dict(phase="ENTER", call="write_initial_images"))
         self.initial_images = self.owner.write_initial_images()
+        self._initialization_notice(dict(phase="RETURNED", call="write_initial_images"))
         self.commanded_digital = copy.deepcopy(self.initial_images["digital"])
         self.commanded_analog = analog_startup_logical_image()
         self.software_status_assignments = {"EPS": {}, "DPS": {}}

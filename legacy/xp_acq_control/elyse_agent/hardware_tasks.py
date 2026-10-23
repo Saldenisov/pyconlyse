@@ -10,8 +10,8 @@ from __future__ import division
 
 import time
 import math
+import importlib
 from copy import deepcopy
-
 from .acquisition_driver_diagnostics import describe_driver_exception
 from .errors import HardwareWriteBlocked
 from .hardware_plan import (
@@ -27,6 +27,32 @@ from .hardware_plan import (
 )
 from .input_tasks import AI_CHANNEL_GROUPS, AI_TIMING
 from .transforms import channel_means, microseconds_to_20mhz_ticks
+
+
+def prepare_driver_dependencies(observer=None):
+    """Load dependencies only; never construct Task or call the NI driver.
+
+    The isolated child calls this on its main thread BEFORE starting a blocking
+    stdin reader. NumPy 1.15/Python 3.4 on Windows can otherwise hang loading
+    multiarray. Importing this module or opening the GUI remains cold.
+    """
+    def note(phase, name):
+        if observer is not None:
+            try:
+                observer(dict(phase=phase, call="import " + name,
+                              hardware_acknowledged=False))
+            except Exception:
+                pass
+    result = None
+    for name in ("numpy", "nidaqmx"):
+        note("ENTER", name)
+        try:
+            result = importlib.import_module(name)
+        except Exception:
+            note("RAISED", name)
+            raise
+        note("RETURNED", name)
+    return result
 
 
 class TaskCleanupError(RuntimeError):
@@ -61,6 +87,24 @@ class LegacyCardTasks(object):
         self.calibration = load_ao_calibration()
         self.closed = False
         self.last_counter_operation = None
+        self.initialization_observer = None
+
+    def _initialization_call(self, label, function, *args, **kwargs):
+        def note(phase):
+            if self.initialization_observer is not None:
+                try:
+                    self.initialization_observer(dict(phase=phase, call=label,
+                                                      hardware_acknowledged=False))
+                except Exception:
+                    pass  # Diagnostics never skip a native call or cleanup.
+        note("ENTER")
+        try:
+            result = function(*args, **kwargs)
+        except Exception:
+            note("RAISED")
+            raise
+        note("RETURNED")
+        return result
 
     def get_counter_operation_report(self):
         """Return the latest bounded diagnostic snapshot, without driver I/O."""
@@ -109,7 +153,8 @@ class LegacyCardTasks(object):
         started = []
         for spec in self.plan["counter_output"]:
             if spec["started_on_init"]:
-                self._task("C10_NI6602_CO_{0}".format(spec["output"])).start()
+                name = "C10_NI6602_CO_{0}".format(spec["output"])
+                self._initialization_call(name + ".start", self._task(name).start)
                 started.append(spec["output"])
         return started
 
@@ -166,9 +211,11 @@ class LegacyCardTasks(object):
         digital = digital_startup_image()
         analog = analog_startup_voltage_image()
         for name, _device, _first, _last, _size in DO_BANKS:
-            self.write_digital_bank(name, digital[name])
+            self._initialization_call(name + ".write_startup_image", self.write_digital_bank, name, digital[name])
         for group, _device in AO_BANKS:
-            self._task("{0}_AO".format(group)).write(list(analog[group]), auto_start=True)
+            name = "{0}_AO".format(group)
+            self._initialization_call(name + ".write_startup_image", self._task(name).write,
+                                      list(analog[group]), auto_start=True)
         return {"digital": digital, "analog_volts": analog}
 
     def _counter_task(self, number):
@@ -300,7 +347,8 @@ class LegacyCardTasks(object):
             raise TaskCleanupError(failures)
 
 
-def create_legacy_card_tasks(authorized=False, outputs_commissioned=False, daqmx=None):
+def create_legacy_card_tasks(authorized=False, outputs_commissioned=False, daqmx=None,
+                             selected_devices=None, observer=None):
     """Configure all 11 cards, but neither start counters nor write outputs.
 
     Task creation may reconfigure PCI-DIO-96 directions and cause transients.
@@ -311,9 +359,43 @@ def create_legacy_card_tasks(authorized=False, outputs_commissioned=False, daqmx
             "eleven-card task creation requires supervised commissioning; "
             "DIO-96 task creation can change output pin states"
         )
+    if selected_devices is not None and (type(selected_devices) is not tuple
+            or not selected_devices or any(type(item) is not int or item not in range(1, 12)
+                                          for item in selected_devices)
+            or len(set(selected_devices)) != len(selected_devices)):
+        raise ValueError("Explicit unique card numbers 1..11 required")
+    if observer is not None and not callable(observer):
+        raise TypeError("Initialization boundary observer must be callable")
+    selected = set(range(1, 12) if selected_devices is None else selected_devices)
+
+    def note(phase, label):
+        if observer is not None:
+            try:
+                observer(dict(phase=phase, call=label, hardware_acknowledged=False))
+            except Exception:
+                # Never lose a just-created handle, mask a native exception,
+                # or skip cleanup because diagnostics failed. The supervised
+                # probe separately refuses the next card on storage failure.
+                pass
+
+    def call(label, function, *args, **kwargs):
+        note("ENTER", label)
+        try:
+            result = function(*args, **kwargs)
+        except Exception:
+            note("RAISED", label)
+            raise
+        note("RETURNED", label)
+        return result
+
     plan = card_initialization_plan()
+    plan["device_numbers"] = tuple(sorted(selected))
+    if 10 not in selected:
+        plan["counter_output"] = []
     if daqmx is None:
+        note("ENTER", "import nidaqmx")
         import nidaqmx as daqmx
+        note("RETURNED", "import nidaqmx")
     from nidaqmx.constants import (
         AcquisitionType, Edge, Level, LineGrouping, ReadRelativeTo,
         TerminalConfiguration,
@@ -325,81 +407,92 @@ def create_legacy_card_tasks(authorized=False, outputs_commissioned=False, daqmx
         for spec in plan["counter_output"]:
             number = spec["output"]
             name = "C10_NI6602_CO_{0}".format(number)
-            task = daqmx.Task(new_task_name=name)
+            task = call(name + ".Task", daqmx.Task, new_task_name=name)
             tasks[name] = task
-            channel = task.co_channels.add_co_pulse_chan_ticks(
+            channel = call(name + ".add_co_pulse_chan_ticks", task.co_channels.add_co_pulse_chan_ticks,
                 spec["physical_channel"], spec["timebase"],
                 idle_state=Level.LOW,
                 initial_delay=spec["initial_delay_ticks"],
                 low_ticks=spec["low_ticks"], high_ticks=spec["high_ticks"],
             )
             counter_channels[number] = channel
-            channel.co_ctr_timebase_active_edge = Edge.RISING
-            task.triggers.start_trigger.cfg_dig_edge_start_trig(
+            call(name + ".co_ctr_timebase_active_edge", setattr, channel, "co_ctr_timebase_active_edge", Edge.RISING)
+            call(name + ".cfg_dig_edge_start_trig", task.triggers.start_trigger.cfg_dig_edge_start_trig,
                 spec["trigger"],
                 trigger_edge=Edge.RISING if spec["trigger_edge"] == "rising" else Edge.FALLING,
             )
-            task.triggers.start_trigger.retriggerable = True
-            task.timing.cfg_implicit_timing(
+            call(name + ".retriggerable", setattr, task.triggers.start_trigger, "retriggerable", True)
+            call(name + ".cfg_implicit_timing", task.timing.cfg_implicit_timing,
                 sample_mode=AcquisitionType.FINITE, samps_per_chan=1
             )
 
         for name, device, _count in AI_BANKS[:2]:
-            task = daqmx.Task(new_task_name=name)
+            if device not in selected:
+                continue
+            task = call(name + ".Task", daqmx.Task, new_task_name=name)
             tasks[name] = task
             for physical, minimum, maximum in AI_CHANNEL_GROUPS[name]:
-                task.ai_channels.add_ai_voltage_chan(
+                call(name + ".add_ai_voltage_chan:" + physical, task.ai_channels.add_ai_voltage_chan,
                     physical, terminal_config=TerminalConfiguration.RSE,
                     min_val=minimum, max_val=maximum,
                 )
             trigger, rate, samples = AI_TIMING[name]
-            task.timing.cfg_samp_clk_timing(
+            call(name + ".cfg_samp_clk_timing", task.timing.cfg_samp_clk_timing,
                 rate, source="OnboardClock", active_edge=Edge.RISING,
                 sample_mode=AcquisitionType.FINITE, samps_per_chan=samples,
             )
-            task.triggers.start_trigger.cfg_dig_edge_start_trig(trigger, trigger_edge=Edge.RISING)
+            call(name + ".cfg_dig_edge_start_trig", task.triggers.start_trigger.cfg_dig_edge_start_trig,
+                 trigger, trigger_edge=Edge.RISING)
             # Original NI6071E initializer property codes 6410/6182:
             # 0x28B9 == CURRENT_READ_POSITION, Read.AutoStart == True.
             # No equivalent C11 property assignment is inferred here.
-            task.in_stream.relative_to = ReadRelativeTo.CURRENT_READ_POSITION
-            task.in_stream.auto_start = True
+            call(name + ".read_relative_to", setattr, task.in_stream, "relative_to", ReadRelativeTo.CURRENT_READ_POSITION)
+            call(name + ".read_auto_start", setattr, task.in_stream, "auto_start", True)
 
         for name, device, first, last, _size in DI_BANKS + DO_BANKS:
-            task = daqmx.Task(new_task_name=name)
+            if device not in selected:
+                continue
+            task = call(name + ".Task", daqmx.Task, new_task_name=name)
             tasks[name] = task
             lines = _physical_lines(device, first, last)
             collection = task.di_channels if name.endswith("_DI") else task.do_channels
             method = collection.add_di_chan if name.endswith("_DI") else collection.add_do_chan
-            method(lines, line_grouping=LineGrouping.CHAN_PER_LINE)
+            call(name + ".add_digital_channels", method, lines, line_grouping=LineGrouping.CHAN_PER_LINE)
 
         for group, device in AO_BANKS:
+            if device not in selected:
+                continue
             name = "{0}_AO".format(group)
-            task = daqmx.Task(new_task_name=name)
+            task = call(name + ".Task", daqmx.Task, new_task_name=name)
             tasks[name] = task
             for index in range(10):
-                task.ao_channels.add_ao_voltage_chan(
+                call(name + ".add_ao_voltage_chan:" + str(index), task.ao_channels.add_ao_voltage_chan,
                     "/{0}/ao{1}".format(device, index), min_val=-10.0, max_val=10.0
                 )
 
-        name = "C11_NI6220_AI"
-        task = daqmx.Task(new_task_name=name)
-        tasks[name] = task
-        for physical, minimum, maximum in AI_CHANNEL_GROUPS[name]:
-            task.ai_channels.add_ai_voltage_chan(
-                physical, terminal_config=TerminalConfiguration.RSE,
-                min_val=minimum, max_val=maximum,
+        if 11 in selected:
+            name = "C11_NI6220_AI"
+            task = call(name + ".Task", daqmx.Task, new_task_name=name)
+            tasks[name] = task
+            for physical, minimum, maximum in AI_CHANNEL_GROUPS[name]:
+                call(name + ".add_ai_voltage_chan:" + physical, task.ai_channels.add_ai_voltage_chan,
+                    physical, terminal_config=TerminalConfiguration.RSE,
+                    min_val=minimum, max_val=maximum,
+                )
+            trigger, rate, samples = AI_TIMING[name]
+            call(name + ".cfg_samp_clk_timing", task.timing.cfg_samp_clk_timing,
+                rate, source="OnboardClock", active_edge=Edge.RISING,
+                sample_mode=AcquisitionType.FINITE, samps_per_chan=samples,
             )
-        trigger, rate, samples = AI_TIMING[name]
-        task.timing.cfg_samp_clk_timing(
-            rate, source="OnboardClock", active_edge=Edge.RISING,
-            sample_mode=AcquisitionType.FINITE, samps_per_chan=samples,
-        )
-        task.triggers.start_trigger.cfg_dig_edge_start_trig(trigger, trigger_edge=Edge.RISING)
-        return LegacyCardTasks(daqmx, plan, tasks, counter_channels)
+            call(name + ".cfg_dig_edge_start_trig", task.triggers.start_trigger.cfg_dig_edge_start_trig,
+                 trigger, trigger_edge=Edge.RISING)
+        owner = LegacyCardTasks(daqmx, plan, tasks, counter_channels)
+        owner.initialization_observer = observer
+        return owner
     except Exception as cause:
         for name, task in reversed(list(tasks.items())):
             try:
-                task.close()
+                call(name + ".close_after_failure", task.close)
             except Exception:
                 pass
             else:

@@ -18,6 +18,7 @@ from legacy.xp_acq_control.elyse_agent.isolated_wire import (
     encode_frame, read_frame, IsolationProtocolError,
 )
 from legacy.xp_acq_control.elyse_agent.acquisition_procedures import ProcedureCancelled
+from legacy.xp_acq_control.elyse_agent.acquisition_backend import AcquisitionCancelled
 from legacy.xp_acq_control.elyse_agent.acquisition_runtime import AcquisitionRuntime
 from legacy.xp_acq_control.elyse_agent.acquisition_recovery import OwnershipMarker
 
@@ -31,6 +32,7 @@ class FixtureBackend(object):
         self.stage_controls_verified = self.ht_feedback_verified = True
         self._observer, self.calls = None, []
         self._owner, self._close_count = threading.current_thread().ident, 0
+        self.prepared = False
 
     def _record(self, name, value=None):
         assert threading.current_thread().ident == self._owner
@@ -41,8 +43,25 @@ class FixtureBackend(object):
     def set_execution_observer(self, observer):
         self._observer = observer
 
+    def prepare_isolated_dependencies(self):
+        assert threading.current_thread().ident == self._owner
+        assert not any(t.name == "ACQ-NI-child-ingress" for t in threading.enumerate())
+        self.prepared = True
+        if self.mode in ("prepare_order", "prepare_failure"):
+            self._record("prepare")
+        if self.mode == "prepare_failure":
+            raise ImportError("Fixture dependency import failed; no native calls")
+        if self.mode == "slow_prepare":
+            time.sleep(self.delay)
+
     def initialize(self, cancel, startup_confirmed=False):
         assert startup_confirmed is True
+        assert self.prepared
+        assert any(t.name == "ACQ-NI-child-ingress" for t in threading.enumerate())
+        if cancel.is_set():
+            raise AcquisitionCancelled()
+        if self.mode == "slow_initialize":
+            time.sleep(self.delay)
         self.resource_count = 2
         return self._record("initialize")
 
@@ -150,6 +169,87 @@ class IsolatedWireTests(unittest.TestCase):
 class IsolatedBackendTests(unittest.TestCase):
     def make_backend(self, **kwargs):
         return IsolatedCardBackend(backend_factory=FixtureBackend, **kwargs)
+
+    def test_dependency_preparation_precedes_stdin_pump_and_native_initialize(self):
+        backend = self.make_backend(backend_options=dict(mode="prepare_order"))
+        try:
+            result = backend.initialize(threading.Event(), startup_confirmed=True)
+            self.assertEqual(result["calls"], ("prepare", "initialize"))
+            self.assertFalse(result["nidaqmx_loaded"])
+        finally:
+            backend.close()
+        self.assertTrue(backend.isolation_snapshot()["cleanup_confirmed"])
+
+    def test_import_failure_reports_error_and_admits_confirmed_zero_resource_close(self):
+        backend = self.make_backend(backend_options=dict(mode="prepare_failure"))
+        try:
+            with self.assertRaises(IsolatedBackendError) as caught:
+                backend.initialize(threading.Event(), startup_confirmed=True)
+            self.assertIn("Fixture dependency import failed", str(caught.exception))
+            self.assertEqual(backend._cache["resource_count"], 0)
+            self.assertIsNone(backend.isolation_snapshot()["active_request_id"])
+            self.assertFalse(backend.isolation_snapshot()["cleanup_confirmed"])
+        finally:
+            backend.close()
+        self.assertEqual(backend.resource_count, 0)
+        self.assertEqual(backend._process.returncode, 0)
+        self.assertTrue(backend.isolation_snapshot()["cleanup_confirmed"])
+
+    def test_cancellation_during_imports_precedes_native_activation(self):
+        cancel, observations = threading.Event(), []
+        def observe(event):
+            observations.append(event)
+            if event.get("phase") == "PREPARE_DEPENDENCIES":
+                cancel.set()
+        backend = self.make_backend(backend_options=dict(mode="slow_prepare", delay=1.3),
+                                    progress_observer=observe)
+        try:
+            with self.assertRaises(AcquisitionCancelled):
+                backend.initialize(cancel, startup_confirmed=True)
+            self.assertTrue(cancel.is_set())
+            self.assertTrue(any(e.get("phase") == "PREPARE_DEPENDENCIES" for e in observations))
+            self.assertEqual(backend._cache["resource_count"], 0)
+        finally:
+            backend.close()
+        self.assertTrue(backend.isolation_snapshot()["cleanup_confirmed"])
+
+    def test_runtime_import_failure_releases_marker_and_can_stop_without_reboot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            identity = dict(runtime_protocol_version=2, session_id="a" * 32, build_id="b" * 64)
+            marker = OwnershipMarker(os.path.join(directory, "ownership.json"),
+                                     identity["session_id"], identity["build_id"])
+            runtime = AcquisitionRuntime(
+                lambda: self.make_backend(backend_options=dict(mode="prepare_failure")),
+                identity=identity, recovery_guard=marker, period=.02)
+            runtime.start()
+            try:
+                runtime.initialize(startup_confirmed=True)
+                wait_until(lambda: runtime.snapshot()["state"] == "FAULT")
+                self.assertEqual(runtime.snapshot()["resource_count"], 0)
+                self.assertFalse(os.path.exists(marker.path))
+                self.assertIn("Fixture dependency import failed", runtime.snapshot()["error"])
+            finally:
+                runtime.request_shutdown()
+                self.assertTrue(runtime.join(3))
+
+    def test_initialization_stack_is_observable_without_sampling_or_new_ni_calls(self):
+        observations = []
+        backend = self.make_backend(backend_options=dict(mode="slow_initialize", delay=1.3),
+                                    progress_observer=observations.append)
+        try:
+            result = backend.initialize(threading.Event(), startup_confirmed=True)
+            self.assertEqual(result["calls"], ("initialize",))
+            notices = [item for item in observations
+                       if item.get("kind") == "INITIALIZATION_DIAGNOSTIC_NOT_MEASUREMENT"]
+            self.assertTrue(notices)
+            self.assertEqual(notices[-1]["phase"], "INITIALIZE_BACKEND")
+            self.assertTrue(any(row["function"] == "initialize" for row in notices[-1]["stack"]))
+            self.assertFalse(notices[-1]["safe_to_sample"])
+            self.assertNotIn("sample", notices[-1])
+            self.assertTrue(all(set(row) == {"filename", "line", "function"}
+                                for row in notices[-1]["stack"]))
+        finally:
+            backend.close()
 
     def test_constructor_and_attributes_are_cold_ram_only(self):
         backend = self.make_backend(focal_options=dict(resources_verified=True))
