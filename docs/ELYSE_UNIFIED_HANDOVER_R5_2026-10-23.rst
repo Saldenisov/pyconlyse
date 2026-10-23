@@ -10,10 +10,9 @@ it publishes its own input/command-memory banks and admits only commissioned
 named commands. VI silence never starts cards. The same application owns both
 sources; no standalone telemetry-only launcher is included in the release.
 
-All work described here was performed locally with synthetic process lists,
-temporary SQLite files, mocked GUI collaborators and loopback receivers. The
-running v8-r4, LabVIEW VI, NI cards and instrument states were not changed.
-v8-r5 installation requires separate action-time approval.
+Development used synthetic process lists, temporary SQLite files, mocked GUI
+collaborators and loopback receivers. The subsequent separately approved live
+rollout is recorded below. No VI, NI card or instrument operation was performed.
 
 Prepared package::
 
@@ -129,3 +128,47 @@ loopback delivery, VI exclusion before Initialize, independent command admission
 and non-waiting telemetry projection. Native-library loading was prohibited.
 These checks do not certify live NI initialization, calibration, cooling or HT
 safety. No hardware or live process inventory was used in the tests.
+
+Approved live rollout and acceptance
+-----------------------------------
+
+The operator explicitly approved installing r5, acknowledging the old journal
+notice durably and retiring the old bridge entrypoint with a backup, while
+leaving VI running and forbidding recovery/Initialize. Authenticated preflight
+confirmed r4 had zero local resources and native worker NOT_SPAWNED. It was
+closed normally before the hash-checked source update.
+
+The installer reported verified source backup, exact-hash legacy entrypoint
+retirement and migration of the existing marked current-user Startup file,
+with exact-byte backups. Configuration, read key and prior ownership marker
+were preserved. Arbitrary Windows shortcuts/tasks were not exhaustively audited.
+
+The canonical application was opened without Initialize. The old history
+notice was explicitly acknowledged through its new local review modal. At
+2026-10-23T13:01:17.606875+00:00 (15:01 Paris), SQLite committed acknowledgment
+c117d21adf3f4d0f8091bbb4892c8c4c. An authenticated runtime read confirmed:
+
+* Expected build 7ed69ea72b8dc263a295f078112c714e37c0494cbec790c8e8a9799cdd1d1f82;
+  session 4d7b3dd31aeb48aa8f160bf4e1605af2.
+* LABVIEW_BRIDGE, zero local NI resources, native worker NOT_SPAWNED and
+  commands disabled. No local handover, process verifier or Initialize ran.
+* journal_history_acknowledged=true, empty warning/current errors,
+  journal_durable=true, pending=0, committed=1. Missing events were not reconstructed.
+* RECOVERY_REQUIRED remains intentionally retained; local_handover_available
+  is true, but recent VI traffic still excludes Initialize.
+
+Acceptance from 13:01:52.480474 to 13:02:16.073196 UTC (15:01--15:02 Paris)
+passed 12/12 observations. All 27 populated banks advanced sequence at every
+interval through both Tango and web, with no error/missing/stale bank. Web
+remained FRESH. Receiver count advanced 7743 -> 7810 in the existing receiver
+session; no Tango receiver reinitialization was needed. Maximum bank ages were
+0.624 s through Tango and 0.640 s through web. C1NI6071E, C2NI6071E and VAM-A
+also changed values. PostgreSQL remained RUNNING with empty last_error;
+committed count advanced 7743 -> 7808, pending 0 -> 2.
+
+The local detailed record is outside the repository::
+
+    C:\dev\ELYSE-ACQ-telemetry\2026-10-23\unified_v8_r5_deployment.json
+
+This does not establish a lossless or uninterrupted archive across software
+replacement. Live NI startup and the local XP verifier remain unexecuted.
