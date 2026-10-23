@@ -190,4 +190,3 @@ The historical r5 installer is not an approved updater for this changed source
 closure. A later deployment requires a reviewed cold-state update and explicit
 operator authorization. It must not initialize cards or enable execution
 sampling merely because these software tests passed.
-
