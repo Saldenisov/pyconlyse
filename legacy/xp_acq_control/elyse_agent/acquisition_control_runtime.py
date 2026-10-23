@@ -29,6 +29,7 @@ CONTROL_MODULES += ("native_telemetry.py", "shared_state.py", "labview_telemetry
 CONTROL_MODULES += ("command_protocol.py", "command_broker.py", "command_http.py", "command_dispatch.py",
                     "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py", "application_view.py",
                     "journal_worker.py", "isolated_backend.py", "isolated_wire.py", "isolated_worker.py")
+CONTROL_MODULES += ("handover_recovery.py", "acquisition_supervisor.py")
 
 
 def control_identity(root=None):
@@ -139,9 +140,12 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                         latest=copy.deepcopy(self._latest), age_seconds=age,
                         stale=self._state != 'RUNNING' or bool(recovery) or age is None or age >= 2,
                         telemetry_view_current=True,
-                        telemetry_bridge_mode=(self._state == 'IDLE' and self._backend is None
+                        telemetry_bridge_mode=((self._state == 'IDLE' and not self._error and not recovery
+                            or self._cold_prior_recovery_bridge and self._state == 'RECOVERY_REQUIRED'
+                            and self._recovery_latched and not self._marker_cleanup_uncertain)
+                            and self._backend is None and self._operation is None
                             and self._pending is None and not self._shutdown_requested
-                            and not self._error and not recovery))
+                        ))
         finally:
             self._lock.release()
 
@@ -150,13 +154,23 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             publisher = getattr(self, "telemetry_publisher", None)
             if publisher is not None and hasattr(publisher, "assert_initialize_allowed"):
                 publisher.assert_initialize_allowed()
-            return AcquisitionRuntime.initialize(self, startup_confirmed)
+            result = AcquisitionRuntime.initialize(self, startup_confirmed)
+            # An accepted native ownership attempt permanently closes the cold
+            # prior-session exception. A native fault must never fall back to VI.
+            self._cold_prior_recovery_bridge = False
+            return result
 
-    def __init__(self, backend_factory, remote_enabled=False, cooling=None,
+    def __init__(self, backend_factory, remote_enabled=False, cooling=None, handover_verifier=None,
                  cooling_polarity_verified=False, cooling_start_timeout=30.0, **kwargs):
         if type(cooling_polarity_verified) is not bool:
             raise ValueError("Exact cooling polarity verification required")
         AcquisitionRuntime.__init__(self, lambda: _ObservedBackend(backend_factory(), self), **kwargs)
+        # A prior installation marker restricts NI ownership, not passive VI
+        # forwarding by a fresh process that has never constructed a backend.
+        # This is a boot-time RAM fact, not a PID/NI cleanup certificate. Keep
+        # RECOVERY_REQUIRED and its marker unchanged; all command gates remain.
+        self._cold_prior_recovery_bridge = self._state == 'RECOVERY_REQUIRED'
+        self._handover_verifier = handover_verifier
         self.broker = CommandBroker(self, enabled=remote_enabled, clock=self._clock)
         self.cooling = cooling if cooling is not None else CoolingSafety(clock=self._clock)
         self.cooling_polarity_verified = cooling_polarity_verified
@@ -169,6 +183,37 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         self._general_cooling_ready = False
         self._startup_phase = "NOT_STARTED"
         self._execution_progress = None
+
+    def initialize_after_handover(self, startup_confirmed=False, electrical_off_confirmed=False,
+                                  confirmation=None, operator=None):
+        """Explicit local handover only; never a remote or automatic action.
+
+        Process absence is checked by the verifier; release of external NI
+        tasks and electrical OFF are separately attested by the local operator.
+        An active/uncertain current native owner is never recoverable this way.
+        """
+        if startup_confirmed is not True or electrical_off_confirmed is not True:
+            raise ValueError("Explicit local startup and electrical OFF confirmations required")
+        with self._lock:
+            guard, verifier = self._recovery_guard, self._handover_verifier
+            if (self._state != "RECOVERY_REQUIRED" or not self._cold_prior_recovery_bridge
+                    or self._backend is not None or self._pending is not None or self._operation is not None
+                    or self._shutdown_requested or self._marker_cleanup_uncertain
+                    or guard is None or verifier is None or guard.quiescence_checker is not verifier):
+                raise RuntimeError("Local handover requires a cold prior-owner recovery state")
+            publisher = getattr(self, "telemetry_publisher", None)
+            if publisher is not None:
+                publisher.assert_initialize_allowed()
+            with verifier.local_confirmation(confirmation, operator):
+                self.recover_local(electrical_off_confirmed=True)
+            # Recheck the VI fence after process inventory and audit I/O. New
+            # VI traffic can never be followed by construction of our backend.
+            self.initialize(startup_confirmed=True)
+
+    def acknowledge_journal_history(self, operator=None, reason=None, expected_revision=None):
+        """Local metadata acknowledgment only; no lifecycle/NI side effects."""
+        return self.cooling.acknowledge_journal_history(qualified_local=True,
+            operator=operator, reason=reason, expected_revision=expected_revision)
 
     def observe_execution(self, event):
         """Progress is not a measurement or proof that a driver is responsive.
@@ -216,8 +261,12 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
 
     def _start_permit(self, general=False):
         alarm = self.cooling.snapshot()
-        if (alarm["active"] or alarm["journal_error"]
-                or alarm.get("journal_required") and not alarm.get("journal_durable")):
+        # An acknowledged-by-operator decision to proceed despite a historical
+        # gap is NOT a claim that missing records were recovered. Keep that
+        # warning and durable=false visible, but gate starts on CURRENT writer
+        # health/commit readiness and active incidents, not old history alone.
+        if (alarm["active"] or alarm.get("journal_storage_error", alarm["journal_error"])
+                or alarm.get("journal_required") and alarm.get("journal_write_ready") is not True):
             raise RuntimeError("Start blocked by unresolved cooling alarm or journal failure")
         if not self._stop_qualified():
             raise RuntimeError("Start blocked: full HT/Chroma/cooling shutdown not commissioned")
@@ -319,6 +368,13 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 worker_state="NOT_SPAWNED" if self._backend is None else "IN_PROCESS_TEST_BACKEND",
                 resource_count=0 if self._backend is None else self._backend.resource_count,
                 automatic_restart=False)
+            result["local_handover_available"] = bool(self._handover_verifier is not None
+                and self._recovery_guard is not None
+                and self._recovery_guard.quiescence_checker is self._handover_verifier
+                and self._cold_prior_recovery_bridge and self._state == "RECOVERY_REQUIRED"
+                and self._backend is None and self._pending is None and self._operation is None
+                and not self._shutdown_requested and not self._marker_cleanup_uncertain
+                and not result["recovery"].get("owns_current_marker"))
             result["cooling_permit_current"] = bool(
                 self._cooling_read_at is not None and 0 <= self._clock() - self._cooling_read_at < 2
                 and self._circuits and all(item.get("quality") == "FRESH"

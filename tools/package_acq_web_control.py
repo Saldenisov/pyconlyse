@@ -11,6 +11,15 @@ XP = ROOT / "legacy/xp_acq_control"
 BRIDGE = ROOT / "DeviceServers/control/elyse_acq"
 
 
+def xp_release_paths():
+    """Explicit cold application closure, never arbitrary runtime/repair files."""
+    from legacy.xp_acq_control.elyse_agent.runtime_identity import SOURCE_PATHS
+    from legacy.xp_acq_control.elyse_agent.acquisition_control_runtime import CONTROL_MODULES
+    return sorted(set(SOURCE_PATHS) | {"elyse_agent/" + name for name in CONTROL_MODULES}
+        | {"__init__.py", "acquisition_control_server.pyw", "config.acquisition.json",
+           "config.acquisition.control.json", "data/standard_telemetry_schema.json"})
+
+
 def package(destination, everest=False):
     destination = Path(destination).resolve()
     if destination.exists() or destination.with_suffix(".zip").exists():
@@ -33,12 +42,10 @@ def package(destination, everest=False):
             files.append((ROOT / name, name))
         files.append((XP / "data/standard_telemetry_schema.json", "legacy/xp_acq_control/data/standard_telemetry_schema.json"))
     else:
-        files = [(path, path.relative_to(XP).as_posix()) for path in XP.rglob("*")
-                 if path.is_file() and path.suffix in (".py", ".pyw", ".csv", ".json")
-                 and "__pycache__" not in path.parts]
+        files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-postgres-20261022-v1" if everest else "acq-isolated-telemetry-20261022-v8", default_xp_port=8772,
+                    release="everest-postgres-20261022-v1" if everest else "acq-unified-handover-journal-20261023-v8-r5", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
@@ -47,6 +54,13 @@ def package(destination, everest=False):
                     ni_execution="one_retained_child_owner_process",
                     native_wait_sampling="disabled_until_aggregate_read_budget_qualified",
                     default_live_source_changed=False, files=[])
+    if not everest:
+        manifest.update(canonical_entrypoint="acquisition_control_server.pyw",
+            compatibility_alias="acquisition_server.pyw (same unified application)",
+            standalone_telemetry_application_included=False,
+            application_exclusion="config-scoped OS lock plus fixed endpoints before journal writer",
+            recovery="explicit local operator handover only; no automatic marker deletion",
+            historical_journal_ack="durable local acknowledgment; incidents/current storage errors preserved")
     for source, relative in sorted(files, key=lambda item: item[1]):
         target = destination / relative
         target.parent.mkdir(parents=True, exist_ok=True)

@@ -83,6 +83,31 @@ class Storage(object):
 
 
 class AsyncAlarmJournalTests(unittest.TestCase):
+    def test_history_gap_warns_but_does_not_block_current_healthy_writer(self):
+        from legacy.xp_acq_control.elyse_agent.acquisition_control_runtime import AcquisitionControlRuntime
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "alarms.sqlite")
+            old = AlarmJournal(path, "test")
+            old.begin_session()
+            old.close()
+            alarm = CoolingSafety.with_journal(path, "test")
+            runtime = AcquisitionControlRuntime(lambda: None, cooling=alarm)
+            runtime._stop_qualified = lambda: True  # RAM-only independent permit seam.
+            try:
+                wait_until(lambda: alarm.snapshot()["journal_write_ready"])
+                state = alarm.snapshot()
+                self.assertTrue(state["journal_recovery_required"])
+                self.assertFalse(state["journal_durable"])
+                self.assertEqual(state["journal_storage_error"], "")
+                runtime._start_permit(general=True)
+                # Current failures and actual incidents still block starts.
+                with alarm.lock:
+                    alarm.incidents["test"] = dict(circuit="test", deadline_monotonic=time.monotonic()+30)
+                with self.assertRaises(RuntimeError):
+                    runtime._start_permit(general=True)
+            finally:
+                self.assertTrue(alarm.close(3))
+
     def make(self, storage, capacity=64, clock=None, wall=None):
         worker = JournalWorker(lambda: storage, validate_loaded=CoolingSafety._validate_saved,
                                capacity=capacity, retry_seconds=.01)

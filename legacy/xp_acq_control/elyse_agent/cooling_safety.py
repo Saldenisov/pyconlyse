@@ -153,7 +153,32 @@ class AlarmJournal(object):
         with self.lock, self.db:
             self._append(state, event)
             self._store_recovery(dict(required=False, reason="",
-                                      reconciled_event_id=event["journal_event_id"]))
+                reconciled_event_id=event["journal_event_id"],
+                acknowledgment=dict(event_id=event["journal_event_id"],
+                    observed_utc=event["observed_utc"], operator=event["operator"],
+                    reason=event["reason"], reviewed_revision=event["reviewed_revision"],
+                    missing_events_reconstructed=False)))
+
+    def history_acknowledgment(self):
+        """Read durable review metadata on the storage owner thread only."""
+        with self.lock:
+            row = self.db.execute("SELECT payload FROM cooling_journal_recovery WHERE name=?",
+                                  (self.namespace,)).fetchone()
+            if row is None:
+                return None
+            record = json.loads(row[0])
+            if record.get("required") is not False:
+                return None
+            acknowledgment = record.get("acknowledgment")
+            if acknowledgment is not None:
+                if (type(acknowledgment) is not dict
+                        or any(type(acknowledgment.get(name)) is not str
+                               or not acknowledgment[name] for name in
+                               ("event_id", "observed_utc", "operator", "reason"))
+                        or type(acknowledgment.get("reviewed_revision")) is not int
+                        or acknowledgment.get("missing_events_reconstructed") is not False):
+                    raise ValueError("Invalid persisted journal acknowledgment")
+            return copy.deepcopy(acknowledgment)
 
     def events(self):
         with self.lock:
@@ -175,12 +200,7 @@ class CoolingSafety(object):
         # Validate/construct the policy before starting an owned non-daemon
         # thread. A failed subclass constructor must not orphan a writer.
         result = cls(**kwargs)
-        journal = JournalWorker(lambda: AlarmJournal(path, namespace),
-                                validate_loaded=cls._validate_saved,
-                                capacity=capacity)
-        result.journal = journal
-        result.journal_error = "Alarm journal initial load pending"
-        return result
+        return result.attach_owned_journal(path, namespace, capacity=capacity)
 
     @staticmethod
     def _validate_saved(saved, events):
@@ -213,11 +233,32 @@ class CoolingSafety(object):
         self.journal_error = ""
         self._journal_loaded = False
         self._local_stop_changed = False
+        self._observation_started = False
         self._journal_revision = 0
         self.automatic_stop_available = False
         self.machine_active = None
         self.quality = "UNKNOWN"
         self._sync_journal()
+
+    def attach_owned_journal(self, path, namespace, capacity=64):
+        """Attach storage once, before this cold policy receives observations.
+
+        The composition root can bind its unique process/network guard first,
+        then start the journal owner without replacing the shared RAM policy.
+        No observed incidents or decisions may be overwritten by a late load.
+        """
+        with self.lock:
+            if (self.journal is not None or self._observation_started
+                    or self._journal_loaded or self._local_stop_changed
+                    or self._journal_revision or self.incidents or self.recovering
+                    or self.events or self.stop_state != "NONE" or self.stop_error
+                    or self.machine_active is not None or self.quality != "UNKNOWN"
+                    or self.automatic_stop_available):
+                raise RuntimeError("Alarm journal can attach only to a pristine cold policy")
+            self.journal = JournalWorker(lambda: AlarmJournal(path, namespace),
+                validate_loaded=self._validate_saved, capacity=capacity)
+            self.journal_error = "Alarm journal initial load pending"
+            return self
 
     def _state_image(self):
         return dict(incidents=self.incidents, stop_state=self.stop_state,
@@ -264,6 +305,7 @@ class CoolingSafety(object):
 
     def observe(self, circuits, machine_active, observation_id=None):
         with self.lock:
+            self._observation_started = True
             self._sync_journal()
             self.machine_active = machine_active
             self.quality = "FRESH" if all(c.get("quality") == "FRESH" for c in circuits.values()) else "UNKNOWN"
@@ -337,6 +379,8 @@ class CoolingSafety(object):
                         journal_required=self.journal is not None,
                         journal_durable=bool(journal and journal["durable"]),
                         journal_ready=bool(journal and self._journal_loaded),
+                        journal_write_ready=bool(journal and journal["write_ready"]),
+                        journal_storage_error=journal["storage_error"] if journal else "",
                         journal_pending=journal["pending"] if journal else 0,
                         journal_submitted=journal["submitted"] if journal else 0,
                         journal_committed=journal["committed"] if journal else 0,
@@ -344,12 +388,19 @@ class CoolingSafety(object):
                         journal_revision=self._journal_revision,
                         journal_recovery_required=bool(journal and journal["recovery_error"]),
                         journal_reconciliation_pending=bool(journal and journal["reconciling"]),
+                        journal_history_warning=journal["recovery_error"] if journal else "",
+                        journal_history_acknowledge_available=bool(journal and self._journal_loaded
+                            and journal["recovery_error"] and journal["write_ready"]),
+                        journal_history_acknowledgment_pending=bool(journal and journal["reconciling"]),
+                        journal_history_acknowledged=bool(journal and journal["history_acknowledgment"]),
+                        journal_history_acknowledgment=copy.deepcopy(journal["history_acknowledgment"])
+                            if journal else None,
                         journal_error=self.journal_error, journal=copy.deepcopy(self.events),
                         interpretation="Saved Fluides software indications; physical polarity needs commissioning")
 
     def reconcile_journal(self, confirmation, qualified_local=False,
                           operator=None, reason=None, expected_revision=None):
-        """Qualified local maintenance only, not a GUI/HTTP/hardware command.
+        """Qualified local review only, never an HTTP/hardware command.
 
         Acknowledge reviewed historical uncertainty without clearing incidents
         or changing deadlines. Success returns an admission receipt, not a
@@ -367,12 +418,28 @@ class CoolingSafety(object):
             event = dict(kind="JOURNAL_HISTORY_RECONCILED", circuit=None,
                          observed_utc=utc(self.wall()), operator=operator.strip(),
                          reason=reason.strip(), confirmation=confirmation,
-                         qualified_local=True, reviewed_revision=expected_revision)
+                         qualified_local=True, reviewed_revision=expected_revision,
+                         prior_history_warning=self.journal.status()["recovery_error"],
+                         missing_events_reconstructed=False)
             receipt = self.journal.reconcile(self._state_image(), event)
             self.events = (self.events + [event])[-100:]
             self._journal_revision += 1
             self._sync_journal()
             return receipt
+
+    def acknowledge_journal_history(self, qualified_local=False, operator=None,
+                                    reason=None, expected_revision=None):
+        """Admit explicit LOCAL historical-warning review; never repair history.
+
+        A local UI must show the current warning/incident state before asking
+        for acknowledgment, then pass that snapshot's journal_revision. The
+        returned receipt is admission only. Poll journal_history_warning and
+        journal_history_acknowledgment_pending for the durable result. Current
+        storage failures remain errors; active incidents/deadlines are retained.
+        """
+        return self.reconcile_journal(JOURNAL_RECONCILIATION_CONFIRMATION,
+            qualified_local=qualified_local, operator=operator, reason=reason,
+            expected_revision=expected_revision)
 
     def close(self, timeout=0):
         """Drain/join outside runtime locks; False retains writer ownership."""

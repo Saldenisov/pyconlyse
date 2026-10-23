@@ -1,0 +1,42 @@
+"""Modern-host packager tests; payload itself is cold-checked on Python3.4."""
+import hashlib
+import json
+import shutil
+from pathlib import Path
+
+from tools import package_acq_web_control as packager
+
+
+def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_path, monkeypatch):
+    source = tmp_path / 'source'
+    for name in packager.xp_release_paths():
+        target = source / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(packager.XP / name, target)
+    for name in ('recover_after_reboot.pyw', 'shared_state_receiver.pyw',
+                 'elyse_agent/reboot_recovery.py', 'runtime/old.json', 'runtime/cooling-alarms.sqlite3'):
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('UNREVIEWED RUNTIME FILE', encoding='utf-8')
+    monkeypatch.setattr(packager, 'XP', source)
+    release = tmp_path / 'release'
+    result = packager.package(release)
+    included = {item['path'] for item in result['files']}
+    assert included == set(packager.xp_release_paths())
+    assert 'handover_recovery.py' not in included  # Correct module-relative path only.
+    assert 'elyse_agent/handover_recovery.py' in included
+    assert not any(name.startswith('runtime/') or name.endswith('recover_after_reboot.pyw') for name in included)
+    assert not (release / 'shared_state_receiver.pyw').exists()
+    assert result['standalone_telemetry_application_included'] is False
+    assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
+    assert all(hashlib.sha256((release / row['path']).read_bytes()).hexdigest() == row['sha256']
+               for row in result['files'])
+    assert json.loads((release / 'manifest.json').read_text())['auto_initialize'] is False
+
+
+def test_both_compatibility_entrypoints_launch_same_unified_main():
+    sources = [(packager.XP / name).read_text(encoding='utf-8')
+               for name in ('acquisition_control_server.pyw', 'acquisition_server.pyw')]
+    assert sources[0] == sources[1]
+    assert 'from elyse_agent.acquisition_control_gui import main' in sources[0]
+    assert 'shared_state_receiver' not in sources[0]

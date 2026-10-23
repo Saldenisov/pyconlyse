@@ -21,6 +21,7 @@ class JournalWorker(object):
         self._initial, self._ready, self._adopted = None, False, False
         self._submitted = self._committed = self._overflow = 0
         self._load_error = self._write_error = self._recovery_error = ""
+        self._history_acknowledgment = None
         self._reconciling = 0
         self._closing = self._stopped = False
         self._thread = threading.Thread(target=self._run, name="ACQ-alarm-journal")
@@ -93,10 +94,21 @@ class JournalWorker(object):
             if self._overflow:
                 errors.append("Alarm journal event admission failed: {0}".format(self._overflow))
             return dict(ready=self._ready, pending=pending,
+                        storage_error="; ".join(item for item in (
+                            self._load_error or ("Alarm journal initial load pending"
+                                if not self._ready or not self._adopted else ""),
+                            self._write_error,
+                            "Alarm journal event admission failed: {0}".format(self._overflow)
+                                if self._overflow else "") if item),
+                        write_ready=bool(self._ready and self._adopted
+                            and not self._load_error and not self._write_error
+                            and not self._overflow and not pending and not self._reconciling
+                            and not self._closing and not self._stopped),
                         submitted=self._submitted, committed=self._committed,
                         overflow=self._overflow, load_error=self._load_error,
                         write_error=self._write_error,
                         recovery_error=self._recovery_error,
+                        history_acknowledgment=copy.deepcopy(self._history_acknowledgment),
                         reconciling=bool(self._reconciling),
                         error="; ".join(errors), closing=self._closing,
                         stopped=self._stopped,
@@ -125,9 +137,12 @@ class JournalWorker(object):
                 if self._validate is not None:
                     self._validate(saved, events)
                 warning = storage.begin_session() if hasattr(storage, "begin_session") else ""
+                acknowledgment = (storage.history_acknowledgment()
+                    if hasattr(storage, "history_acknowledgment") else None)
                 with self._condition:
                     self._initial, self._ready = (saved, events), True
                     self._load_error, self._recovery_error = "", warning
+                    self._history_acknowledgment = acknowledgment
                     self._condition.notify_all()
                 break
             except Exception as error:
@@ -192,6 +207,12 @@ class JournalWorker(object):
                     if item[3] == "reconcile":
                         self._recovery_error = ""
                         self._reconciling = 0
+                        event = item[2]
+                        self._history_acknowledgment = dict(
+                            event_id=event["journal_event_id"],
+                            observed_utc=event["observed_utc"], operator=event["operator"],
+                            reason=event["reason"], reviewed_revision=event["reviewed_revision"],
+                            missing_events_reconstructed=False)
                     self._condition.notify_all()
             except Exception as error:
                 with self._condition:

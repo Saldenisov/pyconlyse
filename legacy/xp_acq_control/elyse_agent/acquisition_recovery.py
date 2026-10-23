@@ -10,6 +10,8 @@ import json
 import os
 import threading
 import uuid
+import datetime
+import hashlib
 
 from .runtime_identity import valid_hex
 
@@ -39,6 +41,7 @@ class OwnershipMarker(object):
         self._owned_bytes = None
         self._lock = threading.RLock()
         self._recovered = False
+        self._recovery_audit = None
 
     def _read(self):
         try:
@@ -88,6 +91,7 @@ class OwnershipMarker(object):
                         scope="installation_config_path_only_not_machine_wide_NI_exclusion",
                         owns_current_marker=self._owned_bytes is not None,
                         recovery_checker_available=self.quiescence_checker is not None,
+                        recovery_audit=self._recovery_audit,
                         orphan_absence_verified=False)
 
     def acquire(self):
@@ -157,7 +161,36 @@ class OwnershipMarker(object):
                 raise RecoveryRequired("Quiescence proof incomplete; parent PID absence alone is insufficient")
             if self._read() != raw:
                 raise RecoveryRequired("Marker changed during recovery verification; preserved")
+            # Preserve the exact historical bytes and qualification BEFORE
+            # removing the active barrier. Failure cannot authorize Initialize.
+            # This record approves software-marker recovery; it is not a driver
+            # cleanup certificate or a claim that the installation is safe.
+            stamp = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+            audit_path = self.path + ".recovery_" + stamp + "_" + uuid.uuid4().hex[:8] + ".json"
+            audit = dict(kind="LOCAL_OWNERSHIP_RECOVERY_REVIEW_PREPARED", original_marker=record,
+                original_marker_utf8=raw.decode("utf-8"), original_sha256=hashlib.sha256(raw).hexdigest(),
+                session_id=self.session_id, build_id=self.build_id, proof=result,
+                electrical_off_operator_confirmed=True, hardware_commands_sent=False,
+                missing_history_reconstructed=False,
+                barrier_removal_completed=False,
+                action="Historical marker preserved; removal still requires a second proof and unchanged bytes",
+                interpretation="Pre-removal review record, NOT a completed recovery receipt or NI cleanup certificate")
+            try:
+                with open(audit_path, "x", encoding="utf-8") as target:
+                    json.dump(audit, target, sort_keys=True, indent=2, allow_nan=False)
+                    target.flush()
+                    os.fsync(target.fileno())
+            except Exception as error:
+                raise RecoveryRequired("Recovery audit persistence failed; marker retained: " + str(error))
+            # The process inventory is point-in-time. Recheck after audit I/O,
+            # and reject any marker replacement rather than deleting new data.
+            checked = self.quiescence_checker(dict(record))
+            if (not isinstance(checked, dict) or any(checked.get(name) is not True for name in facts)
+                    or not isinstance(checked.get("method"), str) or not checked["method"].strip()
+                    or self._read() != raw):
+                raise RecoveryRequired("Recovery proof or marker changed during audit; marker retained")
             os.unlink(self.path)
             self._recovered = True
+            self._recovery_audit = audit_path
             return dict(required=False, reason="EXPLICIT_RECOVERY_VERIFIED_CARDS_STILL_UNINITIALIZED",
-                        protection_active=True)
+                        protection_active=True, recovery_audit=audit_path)

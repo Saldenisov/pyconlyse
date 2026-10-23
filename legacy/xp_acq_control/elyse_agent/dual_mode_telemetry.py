@@ -162,6 +162,9 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
             result.update(source_mode=self.mode, owner_state_current=self.owner_state_current,
                           vi_accepted=self.vi_accepted, vi_rejected=self.rejected, vi_ingress_error=self.last_error,
                           vi_age_seconds=None if self.last_vi_receipt is None else max(0, self.clock() - self.last_vi_receipt),
+                          vi_seen_age_seconds=None if self.last_vi_seen is None else max(0, self.clock() - self.last_vi_seen),
+                          vi_initialize_exclusion_active=(self.last_vi_seen is not None
+                              and self.clock() - self.last_vi_seen < VI_QUIET_SECONDS),
                           ingress_endpoint="{0}:{1}".format(*self.ingress_address),
                           ingress_handler_limit_rejections=(0 if self.server is None
                               else self.server.handler_limit_rejections),

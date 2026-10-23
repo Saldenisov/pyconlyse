@@ -142,6 +142,15 @@ class ApplicationView(object):
     def initialize(self, startup_confirmed=False):
         self._submit("initialize", startup_confirmed=startup_confirmed)
 
+    def initialize_after_handover(self, startup_confirmed=False, electrical_off_confirmed=False,
+                                  confirmation=None, operator=None):
+        self._submit("initialize_after_handover", startup_confirmed=startup_confirmed,
+            electrical_off_confirmed=electrical_off_confirmed, confirmation=confirmation, operator=operator)
+
+    def acknowledge_journal_history(self, operator=None, reason=None, expected_revision=None):
+        self._submit("acknowledge_journal_history", operator=operator, reason=reason,
+                     expected_revision=expected_revision)
+
     def deinitialize(self, electrical_off_confirmed=False):
         self._submit("deinitialize", electrical_off_confirmed=electrical_off_confirmed)
 
@@ -187,8 +196,9 @@ class ApplicationView(object):
 
 class ApplicationShutdown(object):
     """Resource joins run off Tk; the window stays open until confirmed exit."""
-    def __init__(self, runtime, server, view):
+    def __init__(self, runtime, server, view, application_guard=None):
         self.runtime, self.server, self.view = runtime, server, view
+        self.application_guard = application_guard
         self.worker, self.error, self.completed = None, "", False
 
     def start(self):
@@ -208,6 +218,8 @@ class ApplicationShutdown(object):
                 if cooling is not None and hasattr(cooling, "close") and cooling.close(timeout=1) is False:
                     raise RuntimeError("Alarm journal worker still owned; shutdown unfinished")
                 self.view.close()
+                if self.application_guard is not None:
+                    self.application_guard.release()
                 self.completed = True
             except Exception as error:
                 self.error = type(error).__name__ + ": " + str(error)[:300]
@@ -217,7 +229,7 @@ class ApplicationShutdown(object):
 
 
 def cleanup_failed_start(runtime=None, server=None, view=None, publisher=None,
-                         cooling=None, server_thread=None, timeout=1):
+                         cooling=None, server_thread=None, application_guard=None, timeout=1):
     """Background-only cleanup; return errors and retain unfinished ownership."""
     errors = []
     def attempt(label, callback):
@@ -246,6 +258,8 @@ def cleanup_failed_start(runtime=None, server=None, view=None, publisher=None,
             attempt("alarm metadata", cooling.snapshot)
             if attempt("alarm writer", lambda: cooling.close(timeout=timeout)) is False:
                 errors.append("Alarm writer still owned; startup cleanup unfinished")
+        if not errors and application_guard is not None:
+            attempt("application guard", application_guard.release)
     return errors
 
 
