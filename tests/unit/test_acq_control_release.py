@@ -160,6 +160,8 @@ class CoolingStartupTests(unittest.TestCase):
                     return sample
             runtime = AcquisitionControlRuntime(Backend, clock=clock, cooling_start_timeout=3)
             wrapper = _ObservedBackend(Backend(), runtime)
+            runtime._backend, runtime._state = wrapper, "EXECUTING"
+            runtime._operation = "modulator.general.start"
             if fault:
                 self.assertRaises(RuntimeError, wrapper.general_start, clock, operator_confirmed=True)
                 self.assertFalse(runtime._general_cooling_ready)

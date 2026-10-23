@@ -33,11 +33,15 @@ class TelemetryView(object):
                 value = dict(self.runtime._identity, state='UNKNOWN', sequence=0,
                              state_revision=-1, latest=None, age_seconds=None,
                              resource_count=0, telemetry_bridge_mode=False)
-            elif value.get('age_seconds') is not None:
-                value['age_seconds'] += max(0, now - self._captured_at)
+            else:
+                elapsed = max(0, now - self._captured_at)
+                for field in ('age_seconds', 'software_state_age_seconds'):
+                    if type(value.get(field)) in (int, float):
+                        value[field] += elapsed
             # A contended command/lifecycle lock cannot turn cached values into
             # a current image. Native packets become null/unavailable instead.
-            value.update(stale=True, error='OWNER_STATE_BUSY', telemetry_view_current=False)
+            value.update(stale=True, error='OWNER_STATE_BUSY', telemetry_view_current=False,
+                         measurement_current=False, software_state_current=False)
             return value
 
     def status(self):

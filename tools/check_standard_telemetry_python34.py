@@ -48,14 +48,25 @@ def main():
             response["signature"] = sign(key, "ACQ-TELEMETRY-ACK-1", response)
             send_message(connection, response, MAX_RELAY_FRAME)
     class FakeRuntime(object):
+        status_only = False
         def snapshot(self):
             banks = {}
             for name, (source, kind, device, count, field, scalar) in INPUTS.items():
                 record = dict(kind=kind, device=device, values=[False if scalar == "Boolean" else 1.] * count)
                 if scalar == "DBL": record[field] = [123.] * count
                 banks[source] = record
-            return dict(session_id="a" * 32, sequence=1, state_revision=2, state="RUNNING", stale=False,
+            result = dict(session_id="a" * 32, sequence=1, state_revision=2, state="RUNNING", stale=False,
                 age_seconds=.2, error="", latest=dict(source="python_daqmx_acquisition", simulated=False, banks=banks))
+            if self.status_only:
+                eps, dps = [False] * 77, [False] * 29
+                eps[8], dps[2] = True, True
+                result.update(state="EXECUTING", stale=True, age_seconds=3., measurement_current=False,
+                    software_state_current=True, software_state_sequence=1, software_state_age_seconds=.1,
+                    software_state=dict(source="python_acquisition_software_memory", simulated=False,
+                        session_id=result["session_id"], sequence=1, source_revision=1,
+                        local_banks=dict(EPS=eps, DPS=dps), hardware_acknowledged=False,
+                        psp_delivery_acknowledged=False))
+            return result
     server = socketserver.TCPServer(("127.0.0.1", 0), Sink)
     thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=.02))
     thread.daemon = True; thread.start()
@@ -67,6 +78,12 @@ def main():
         assert len(packet["data"]["banks"]) == 27
         assert publisher.status()["everest_acknowledged"] == 1
         assert not publisher.publish_once()
+        publisher.runtime.status_only = True
+        assert publisher.publish_once() and publisher.relay.send_once()
+        software_banks = {row["publication"]: row for row in received[-1]["packet"]["data"]["banks"]}
+        assert software_banks["EPS"]["data"][8] is True and len(software_banks["EPS"]["data"]) == 77
+        assert software_banks["DPS"]["data"][2] is True and len(software_banks["DPS"]["data"]) == 29
+        assert software_banks["C1NI6071E"]["data"] is None
         assert not factory_calls and "nidaqmx" not in sys.modules
         bridge_clock = [time.monotonic()]
         dual = DualModeTelemetryPublisher(cold, server.server_address, key,
@@ -136,6 +153,7 @@ def main():
         print(json.dumps(dict(result="PASS", python=sys.version.split()[0],
             bank_count=27, signed_loopback_ack=True, dual_mode_bridge_and_initialize_fence=True,
             independent_command_admission=True, non_waiting_telemetry_projection=True,
+            eps_dps_during_commands_without_measurement_refresh=True,
             recent_vi_contention_does_not_erase_or_replay=True,
             build_id=control_identity(root)["build_id"],
             manifest_hashes_verified=hashes_ok,

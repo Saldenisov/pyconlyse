@@ -263,8 +263,12 @@ class ProcedureCheckpointTests(unittest.TestCase):
         clock, events, samples = Clock(), [], []
         backend = DemoBackend(stage_controls_verified=True)
         backend.initialize(clock)
-        backend.set_execution_observer(lambda event: (
-            events.append(event), samples.append(backend.read_snapshot(clock))))
+        def observe(event):
+            if event.get('kind') == 'SOFTWARE_STATE_NOT_MEASUREMENT':
+                return
+            events.append(event)
+            samples.append(backend.read_snapshot(clock))
+        backend.set_execution_observer(observe)
         backend._execution_scheduler.clock = clock.now
         report = backend.execute_stage('chauffage.start', clock, operator_confirmed=True)
         self.assertEqual(report['status'], 'COMPLETED')
@@ -321,6 +325,8 @@ class ProcedureCheckpointTests(unittest.TestCase):
             from legacy.xp_acq_control.elyse_agent.acquisition_cooling_trip import cooling_trip_predicate
             self.assertTrue(cooling_trip_predicate(tuple(c4), tuple(c3)))
             def observe(event):
+                if event.get('kind') == 'SOFTWARE_STATE_NOT_MEASUREMENT':
+                    return
                 attempts.append(event)
                 before = list(trace)
                 try:

@@ -11,6 +11,8 @@ import uuid
 import copy
 import datetime
 import time
+import math
+from functools import wraps
 
 from .acquisition_runtime import AcquisitionRuntime
 from .command_broker import CommandBroker
@@ -19,6 +21,16 @@ from .chroma_focal_stop import BRANCHES
 from .runtime_identity import SOURCE_PATHS
 from .control_policy import require_command, command_capabilities
 from .cooling_startup import wait_for_cooling
+from .hardware_plan import AI_BANKS, DI_BANKS
+from .acquisition_procedures import ProcedureCancelled
+from .acquisition_backend import AcquisitionCancelled
+
+
+def _finite_number(value):
+    try:
+        return type(value) in (int, float) and math.isfinite(value)
+    except (OverflowError, ValueError):
+        return False
 
 CONTROL_MODULES = ("acquisition_remote.py", "acquisition_control_runtime.py",
                    "acquisition_control_gui.py", "cooling_safety.py",
@@ -46,16 +58,67 @@ def control_identity(root=None):
     return dict(runtime_protocol_version=2, session_id=uuid.uuid4().hex, build_id=digest.hexdigest())
 
 
+def _execution_context(method):
+    """Bind observations to the operation actually entered by the NI owner.
+
+    A later accepted stop/close changes runtime revision. Samples emitted by
+    the superseded call must not become fresh data for that newer operation.
+    """
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        previous = self._context
+        if previous is None:
+            with self.runtime._lock:
+                self._context = dict(session_id=self.runtime._identity["session_id"],
+                    state_revision=self.runtime._state_revision, operation=self.runtime._operation,
+                    backend_identity=id(self.backend))
+        try:
+            if previous is None and method.__name__ != "close":
+                expected = {"general_start": "modulator.general.start", "general_stop": "modulator.general.stop",
+                    "configure_counter_timing": "acq.stage.counter_timing.configure",
+                    "outer_controlled_stop": "acq.outer.controlled_stop",
+                    "execute_cooling_guard": "acq.timeout.cooling_trip"}.get(method.__name__)
+                if method.__name__ == "execute_stage" and args:
+                    expected = "acq.stage." + args[0]
+                if method.__name__ == "_call" and args:
+                    expected = "acq.stage." + args[0]
+                if expected is not None and self._context["operation"] != expected:
+                    raise ProcedureCancelled("Superseded procedure cannot enter another operation's context")
+                self._assert_active_context(AcquisitionCancelled if method.__name__
+                    in ("initialize", "read_snapshot") else ProcedureCancelled)
+            return method(self, *args, **kwargs)
+        finally:
+            self._context = previous
+    return call
+
+
 class _ObservedBackend(object):
     def __init__(self, backend, runtime):
         self.backend, self.runtime = backend, runtime
+        self._context = None
         observer = getattr(backend, "set_execution_observer", None)
         if observer is not None:
-            observer(runtime.observe_execution)
+            observer(self._observe)
+
+    def _observe(self, event):
+        if type(event) is not dict or self._context is None:
+            return
+        value = dict(event, runtime_operation_context=copy.deepcopy(self._context))
+        self.runtime.observe_execution(value)
+
+    def _assert_active_context(self, error_type=ProcedureCancelled):
+        value = dict(runtime_operation_context=self._context)
+        isolated = getattr(self.backend, "isolation_snapshot", None)
+        if isolated is not None:
+            value["worker_generation"] = isolated().get("worker_generation")
+        with self.runtime._lock:
+            if not self.runtime._observation_context_current(value):
+                raise error_type("Procedure superseded by a newer lifecycle request")
 
     def __getattr__(self, name):
         return getattr(self.backend, name)
 
+    @_execution_context
     def _call(self, operation, method, *args, **kwargs):
         token = self.runtime.broker.begin(operation)
         error = None
@@ -69,6 +132,7 @@ class _ObservedBackend(object):
             if operation == "modulator.general.stop" and self.runtime.cooling.snapshot()["active"]:
                 self.runtime.cooling.stop_result("" if error is None else str(error))
 
+    @_execution_context
     def general_start(self, *args, **kwargs):
         token = self.runtime.broker.begin("modulator.general.start")
         error = None
@@ -76,9 +140,12 @@ class _ObservedBackend(object):
         try:
             self.runtime._startup_phase = "GENERAL_POWER"
             result = self.backend.general_start(*args, **kwargs)
+            self._assert_active_context()
             self.runtime._startup_phase = "COOLING_START"
             self.backend.execute_stage("cooling.start", args[0], operator_confirmed=True)
+            self._assert_active_context()
             self.runtime._verify_cooling(self.backend, args[0])
+            self._assert_active_context()
             self.runtime._general_cooling_ready = True
             return result
         except Exception as caught:
@@ -88,6 +155,7 @@ class _ObservedBackend(object):
         finally:
             self.runtime.broker.finish(token, error)
 
+    @_execution_context
     def general_stop(self, *args, **kwargs):
         self.runtime._general_cooling_ready = False
         self.runtime._startup_phase = "STOPPING"
@@ -99,11 +167,13 @@ class _ObservedBackend(object):
         self.runtime._startup_phase = "GENERAL_STOP_SEQUENCE_COMPLETED"
         return result
 
+    @_execution_context
     def execute_stage(self, operation, *args, **kwargs):
         if operation == "cooling.start":
             token, error = self.runtime.broker.begin(operation), None
             try:
                 result = self.backend.execute_stage(operation, *args, **kwargs)
+                self._assert_active_context()
                 self.runtime._verify_cooling(self.backend, args[0])
                 return result
             except Exception as caught:
@@ -120,6 +190,27 @@ class _ObservedBackend(object):
     def set_ht_voltage(self, *args, **kwargs):
         return self._call("ht_voltage.set", "set_ht_voltage", *args, **kwargs)
 
+    @_execution_context
+    def initialize(self, *args, **kwargs):
+        return self.backend.initialize(*args, **kwargs)
+
+    @_execution_context
+    def read_snapshot(self, *args, **kwargs):
+        return self.backend.read_snapshot(*args, **kwargs)
+
+    @_execution_context
+    def configure_counter_timing(self, *args, **kwargs):
+        return self.backend.configure_counter_timing(*args, **kwargs)
+
+    @_execution_context
+    def outer_controlled_stop(self, *args, **kwargs):
+        return self.backend.outer_controlled_stop(*args, **kwargs)
+
+    @_execution_context
+    def execute_cooling_guard(self, *args, **kwargs):
+        return self.backend.execute_cooling_guard(*args, **kwargs)
+
+    @_execution_context
     def close(self):
         self.runtime.broker.interrupt_queued()
         self.runtime._general_cooling_ready = False
@@ -127,18 +218,41 @@ class _ObservedBackend(object):
 
 
 class AcquisitionControlRuntime(AcquisitionRuntime):
+    def _owner_telemetry_current(self):
+        if (self._backend is None or not self._backend.resource_count or self._error
+                or self._state not in ("RUNNING", "EXECUTING") or self._pending is not None
+                or self._shutdown_requested or self._cancel.is_set()
+                or self._recovery_latched or self._marker_cleanup_uncertain):
+            return False
+        isolated = getattr(self._backend, "isolation_snapshot", None)
+        return isolated is None or isolated().get("ownership_uncertain") is False
+
+    def _measurement_current(self, age):
+        return bool(self._owner_telemetry_current() and self._latest is not None
+                    and type(age) in (int, float) and math.isfinite(age) and 0 <= age < 2)
+
+    def _software_telemetry(self, now):
+        age = None if self._software_received_at is None else max(0., now - self._software_received_at)
+        return dict(software_state=copy.deepcopy(self._software_state),
+                    software_state_age_seconds=age, software_state_sequence=self._software_sequence,
+                    software_state_current=bool(self._software_state is not None
+                        and self._owner_telemetry_current() and not self._software_error),
+                    software_state_error=self._software_error)
+
     def try_telemetry_snapshot(self):
         """RAM-only projection. Never wait for command admission or a journal."""
         if not self._lock.acquire(False):
             return None
         try:
-            age = None if self._received_at is None else max(0, self._clock() - self._received_at)
+            now = self._clock()
+            age = None if self._received_at is None else max(0, now - self._received_at)
             recovery = self._recovery_latched or self._marker_cleanup_uncertain or self._state == 'RECOVERY_REQUIRED'
-            return dict(self._identity, state=self._state, sequence=self._sequence,
+            current = self._measurement_current(age)
+            result = dict(self._identity, state=self._state, sequence=self._sequence,
                         state_revision=self._state_revision, error=self._error,
                         resource_count=0 if self._backend is None else self._backend.resource_count,
                         latest=copy.deepcopy(self._latest), age_seconds=age,
-                        stale=self._state != 'RUNNING' or bool(recovery) or age is None or age >= 2,
+                        stale=not current, measurement_current=current,
                         telemetry_view_current=True,
                         telemetry_bridge_mode=((self._state == 'IDLE' and not self._error and not recovery
                             or self._cold_prior_recovery_bridge and self._state == 'RECOVERY_REQUIRED'
@@ -146,6 +260,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                             and self._backend is None and self._operation is None
                             and self._pending is None and not self._shutdown_requested
                         ))
+            result.update(self._software_telemetry(now))
+            return result
         finally:
             self._lock.release()
 
@@ -155,6 +271,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             if publisher is not None and hasattr(publisher, "assert_initialize_allowed"):
                 publisher.assert_initialize_allowed()
             result = AcquisitionRuntime.initialize(self, startup_confirmed)
+            self._software_state, self._software_received_at = None, None
+            self._software_sequence, self._software_error = 0, ""
             # An accepted native ownership attempt permanently closes the cold
             # prior-session exception. A native fault must never fall back to VI.
             self._cold_prior_recovery_bridge = False
@@ -183,6 +301,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         self._general_cooling_ready = False
         self._startup_phase = "NOT_STARTED"
         self._execution_progress = None
+        self._software_state, self._software_received_at = None, None
+        self._software_sequence, self._software_error = 0, ""
 
     def initialize_after_handover(self, startup_confirmed=False, electrical_off_confirmed=False,
                                   confirmation=None, operator=None):
@@ -215,22 +335,107 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         return self.cooling.acknowledge_journal_history(qualified_local=True,
             operator=operator, reason=reason, expected_revision=expected_revision)
 
+    def _observation_context_current(self, value):
+        context = value.get("runtime_operation_context")
+        if (type(context) is not dict or self._backend is None
+                or context.get("session_id") != self._identity["session_id"]
+                or context.get("state_revision") != self._state_revision
+                or context.get("operation") != self._operation
+                or context.get("backend_identity") != id(getattr(self._backend, "backend", self._backend))
+                or self._pending is not None or self._shutdown_requested or self._cancel.is_set()
+                or self._recovery_latched or self._marker_cleanup_uncertain
+                or self._state not in ("INITIALIZING", "RUNNING", "EXECUTING")):
+            return False
+        isolation = getattr(self._backend, "isolation_snapshot", None)
+        if isolation is not None:
+            owner = isolation()
+            if (owner.get("ownership_uncertain") is not False
+                    or value.get("worker_generation") != owner.get("worker_generation")):
+                return False
+        return True
+
+    @staticmethod
+    def _valid_execution_sample(sample):
+        if (type(sample) is not dict or sample.get("source") != "python_daqmx_acquisition"
+                or sample.get("simulated") is not False or type(sample.get("banks")) is not dict):
+            return False
+        def finite_vector(value, count):
+            return (type(value) in (list, tuple) and len(value) == count and all(
+                _finite_number(item) for item in value))
+        for name, device, count in AI_BANKS:
+            bank = sample["banks"].get(name, {})
+            if (type(bank) is not dict or bank.get("kind") != "analog_input" or bank.get("device") != device
+                    or not finite_vector(bank.get("values"), count)
+                    or not finite_vector(bank.get("legacy_scaled_values"), count)):
+                return False
+        for name, device, unused_first, unused_last, count in DI_BANKS:
+            bank = sample["banks"].get(name, {})
+            if type(bank) is not dict:
+                return False
+            values = bank.get("values")
+            if (bank.get("kind") != "digital_input" or bank.get("device") != device
+                    or type(values) not in (list, tuple) or len(values) != count
+                    or any(type(item) is not bool for item in values)):
+                return False
+        return True
+
+    def _observe_software_state(self, value):
+        state, previous = value.get("software_state"), self._software_state
+        age = value.get("software_state_age_seconds", 0.)
+        if (type(state) is not dict or set(state) != {"revision", "EPS", "DPS"}
+                or type(state.get("revision")) is not int or state["revision"] <= 0
+                or value.get("simulated") is not False
+                or value.get("hardware_acknowledged") is not False
+                or not _finite_number(age) or age < 0
+                or any(type(state.get(name)) not in (list, tuple) or len(state[name]) != count
+                    or any(type(item) is not bool for item in state[name])
+                    for name, count in (("EPS", 77), ("DPS", 29)))):
+            self._software_error = "INVALID_SOFTWARE_STATE_NOT_MEASUREMENT"
+            return
+        local = dict(EPS=list(state["EPS"]), DPS=list(state["DPS"]))
+        if previous is not None:
+            if state["revision"] < previous["source_revision"]:
+                self._software_error = "SOFTWARE_STATE_REVISION_REGRESSED"
+                return
+            if state["revision"] == previous["source_revision"] and local != previous["local_banks"]:
+                self._software_error = "SOFTWARE_REVISION_CHANGED_WITHOUT_NEW_REVISION"
+                return
+        self._software_sequence += 1
+        self._software_state = dict(source="python_acquisition_software_memory", simulated=False,
+            session_id=self._identity["session_id"], sequence=self._software_sequence,
+            source_revision=state["revision"], local_banks=local,
+            hardware_acknowledged=False, psp_delivery_acknowledged=False,
+            source_effect=value.get("source_effect", "OWNER_OBSERVATION"))
+        if type(value.get("publication")) is dict:
+            self._software_state["source_publication"] = copy.deepcopy(value["publication"])
+        self._software_received_at, self._software_error = self._clock() - age, ""
+
     def observe_execution(self, event):
         """Progress is not a measurement or proof that a driver is responsive.
 
         An optional qualified sample comes from the same child NI owner. Do not
         compare process-local monotonic epochs or refresh data on a heartbeat.
         """
+        if type(event) is not dict:
+            return
         value = copy.deepcopy(event)
         sample = value.pop("sample", None)
         sample_age = value.get("sample_age_seconds")
         with self._lock:
-            self._execution_progress = value
-            if (sample is not None and type(sample_age) in (int, float)
-                    and 0 <= sample_age < 2 and self._backend is not None
-                    and self._state == "EXECUTING" and not self._cancel.is_set()
-                    and sample.get("source") == "python_daqmx_acquisition"
-                    and sample.get("simulated") is False):
+            current = self._observation_context_current(value)
+            self._execution_progress = dict(value, observation_current=current)
+            if not current:
+                return
+            if value.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT":
+                self._observe_software_state(value)
+                return  # A software observation never refreshes measurement time.
+            if sample is not None or value.get("sample_error") is not None:
+                valid = (self._state == "EXECUTING" and value.get("safe_to_sample") is True
+                    and value.get("sample_error") is None and self._valid_execution_sample(sample)
+                    and _finite_number(sample_age) and 0 <= sample_age < 2)
+                if not valid:
+                    self._received_at = None
+                    return
                 self._sequence += 1
                 self._latest = sample
                 self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -238,8 +443,16 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
 
     def _verify_cooling(self, backend, cancel):
         self._startup_phase = "WAIT_CANON_SECTION_CIRCULATION"
+        context = copy.deepcopy(getattr(self._backend, "_context", None))
         def observe(sample, circuits):
             with self._lock:
+                if context is not None:
+                    observation = dict(runtime_operation_context=context)
+                    isolated = getattr(backend, "isolation_snapshot", None)
+                    if isolated is not None:
+                        observation["worker_generation"] = isolated().get("worker_generation")
+                    if not self._observation_context_current(observation):
+                        return
                 self._sequence += 1
                 self._latest = copy.deepcopy(sample)
                 self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -350,6 +563,9 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
     def snapshot(self):
         with self._lock:
             result = AcquisitionRuntime.snapshot(self)
+            current = self._measurement_current(result["age_seconds"])
+            result.update(stale=not current, measurement_current=current)
+            result.update(self._software_telemetry(self._clock()))
             result["server_variant"] = "acquisition_control_vnext"
             result["control_policy_version"] = 2
             publisher = getattr(self, "telemetry_publisher", None)

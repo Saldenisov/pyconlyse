@@ -12,6 +12,7 @@ import threading
 import time
 import unittest
 import urllib.request
+from types import SimpleNamespace
 from uuid import uuid4
 
 from legacy.xp_acq_control.elyse_agent.acquisition_control_runtime import AcquisitionControlRuntime
@@ -169,6 +170,8 @@ class TelemetryIsolationTests(unittest.TestCase):
         return packet
 
     def native_memory(self):
+        # A RUNNING label alone is not evidence of a current NI owner.
+        self.runtime._backend = SimpleNamespace(resource_count=21)
         self.runtime._state, self.runtime._state_revision = 'RUNNING', 1
         self.runtime._latest, self.runtime._received_at = sample(), self.clock[0]
 
@@ -298,6 +301,7 @@ class TelemetryIsolationTests(unittest.TestCase):
             self.assertTrue(entered.wait(3))
             with self.runtime._lock:
                 self.runtime._state, self.runtime._state_revision = 'IDLE', 2
+                self.runtime._backend = None
             self.publisher.ingest(vi_xml(), '127.0.0.1')
         finally:
             release.set(); worker.join(3)

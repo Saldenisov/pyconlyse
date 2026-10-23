@@ -29,6 +29,12 @@ COMMANDS = {
     "C8NI6703": ("commanded_analog_logical", "C8NI6703", 10, "DBL"),
     "C9NI6703": ("commanded_analog_logical", "C9NI6703", 10, "DBL"),
 }
+# These are Acquisition local-ref software images, not DI readback, permits,
+# or a statement that an external supply acknowledged a command. The source
+# root frame resets complete EPS/DPS images; reviewed event handlers mutate
+# individual fields in those remembered images.
+SOFTWARE_STATUSES = {"EPS": (77, "Boolean"), "DPS": (29, "Boolean")}
+SOFTWARE_STATUS_SOURCE = "python_acquisition_software_memory"
 _SCHEMA = None
 
 
@@ -46,7 +52,12 @@ def schemas():
 
 
 def _finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except (OverflowError, ValueError):
+        return False
 
 
 def _values(value, count, kind):
@@ -54,20 +65,81 @@ def _values(value, count, kind):
             all(type(item) is bool if kind == "Boolean" else _finite(item) for item in value))
 
 
+def _native_values(value, count, kind):
+    # Owner IPC deliberately preserves tuples. Normalize only after the exact
+    # native image has been checked; the public wire validator stays list-only.
+    return isinstance(value, (list, tuple)) and _values(list(value), count, kind)
+
+
 def _record(bank, values=None, kind=None, reason="PYTHON_BANK_NOT_YET_MIGRATED"):
-    return dict(publication=bank, data=copy.deepcopy(values),
+    return dict(publication=bank, data=copy.deepcopy(list(values)) if values is not None else None,
         lv_type=copy.deepcopy(schemas()[bank]),
         error=dict(status=values is None, code=UNAVAILABLE if values is None else 0,
                    source=reason if values is None else ""))
 
 
+def _measurement_current(runtime):
+    """Only a genuine fresh owner sample, never an execution heartbeat."""
+    latest = runtime.get("latest") or {}
+    age = runtime.get("age_seconds")
+    return (runtime.get("state") in ("RUNNING", "EXECUTING")
+            and (runtime.get("state") != "EXECUTING"
+                 or runtime.get("measurement_current") is True)
+            and ("measurement_current" not in runtime
+                 or runtime.get("measurement_current") is True)
+            and runtime.get("stale") is False and not runtime.get("error")
+            and runtime.get("telemetry_view_current") is not False
+            and _finite(age) and 0 <= age < 2
+            and latest.get("source") == "python_daqmx_acquisition"
+            and latest.get("simulated") is False)
+
+
+def _software_status_image(runtime, measured_current):
+    """Select independently attested current-owner memory or fresh sample.
+
+    Literal software assignments persist until another assignment. Their
+    change age is therefore not a two-second hardware-sample freshness test.
+    The runtime must attest current owner/session validity on every projection;
+    a fault, lifecycle transition, cancellation or missing attestation cannot
+    revive status merely because its Boolean values are still in RAM.
+    """
+    if "software_state" in runtime:
+        value = runtime.get("software_state")
+        age = runtime.get("software_state_age_seconds")
+        if (runtime.get("state") not in ("RUNNING", "EXECUTING")
+                or runtime.get("error")
+                or runtime.get("telemetry_view_current") is False
+                or runtime.get("software_state_current") is not True
+                or not _finite(age) or age < 0 or not isinstance(value, dict)
+                or value.get("source") != SOFTWARE_STATUS_SOURCE
+                or value.get("simulated") is not False
+                or value.get("session_id") != runtime.get("session_id")
+                or type(value.get("sequence")) is not int or value["sequence"] < 0
+                or type(runtime.get("software_state_sequence")) is not int
+                or value.get("sequence") != runtime.get("software_state_sequence")
+                or type(value.get("source_revision")) is not int or value["source_revision"] < 0
+                or value.get("hardware_acknowledged") is not False
+                or value.get("psp_delivery_acknowledged") is not False):
+            return {}
+        image = value.get("local_banks")
+        return image if isinstance(image, dict) else {}
+    if measured_current:
+        # Compatibility with a full genuine read_snapshot, which includes the
+        # owner's local software image at that sample. Never use cached latest
+        # for a status-only progress message or after a measurement expires.
+        stage = (runtime.get("latest") or {}).get("stage_state") or {}
+        if stage.get("software_status_valid") is not True:
+            return {}
+        image = stage.get("local_banks")
+        return image if isinstance(image, dict) else {}
+    return {}
+
+
 def standard_packet(runtime, publication_sequence, now=None):
     """Same bank order/envelope as LabVIEW; honest source and per-bank errors."""
     latest = runtime.get("latest") or {}
-    age = runtime.get("age_seconds")
-    current = (runtime.get("state") == "RUNNING" and runtime.get("stale") is False
-               and not runtime.get("error") and _finite(age) and 0 <= age < 2
-               and latest.get("source") == "python_daqmx_acquisition" and latest.get("simulated") is False)
+    current = _measurement_current(runtime)
+    software = _software_status_image(runtime, current)
     records = []
     for bank in BANKS:
         value, kind = None, None
@@ -76,17 +148,24 @@ def standard_packet(runtime, publication_sequence, now=None):
             source, native_kind, device, count, field, kind = INPUTS[bank]
             record = latest.get("banks", {}).get(source, {})
             candidate = record.get(field)
-            if record.get("kind") == native_kind and record.get("device") == device and _values(candidate, count, kind):
+            if record.get("kind") == native_kind and record.get("device") == device and _native_values(candidate, count, kind):
                 value = candidate
             else:
                 reason = "PYTHON_INPUT_BANK_INVALID_OR_CALIBRATION_MISSING"
         elif current and bank in COMMANDS:
             section, source, count, kind = COMMANDS[bank]
             candidate = latest.get(section, {}).get(source)
-            if _values(candidate, count, kind):
+            if _native_values(candidate, count, kind):
                 value = candidate
             else:
                 reason = "PYTHON_LAST_SUCCESSFUL_COMMAND_UNKNOWN"
+        elif bank in SOFTWARE_STATUSES:
+            count, kind = SOFTWARE_STATUSES[bank]
+            candidate = software.get(bank)
+            if _native_values(candidate, count, kind):
+                value = candidate
+            else:
+                reason = "PYTHON_SOFTWARE_STATUS_UNKNOWN_OR_NOT_CURRENT"
         records.append(_record(bank, value, kind, reason))
     stamp = now or datetime.datetime.now(datetime.timezone.utc)
     packet = dict(session_id=runtime["session_id"], publication=SNAPSHOT_PUBLICATION,
@@ -97,6 +176,29 @@ def standard_packet(runtime, publication_sequence, now=None):
                   timestamp_origin="xp_runtime_snapshot_not_atomic", banks=records))
     validate_snapshot_packet(packet)
     return packet
+
+
+def packet_age_seconds(runtime, packet):
+    """Conservative age of populated categories in the fixed 27-bank frame.
+
+    The unchanged wire envelope has one age, not independent per-bank clocks.
+    Use the oldest populated source category: status progress cannot freshen
+    an older AI/DI sample, and null/unknown hardware does not make a fresh
+    software-memory observation look like a fresh hardware measurement.
+    """
+    ages = []
+    records = packet.get("data", {}).get("banks", ())
+    populated = set(record.get("publication") for record in records
+                    if record.get("data") is not None
+                    and record.get("error") == dict(status=False, code=0, source=""))
+    if populated.intersection(set(INPUTS) | set(COMMANDS)):
+        ages.append(runtime.get("age_seconds"))
+    if populated.intersection(SOFTWARE_STATUSES):
+        ages.append(runtime.get("software_state_age_seconds")
+                    if "software_state" in runtime else runtime.get("age_seconds"))
+    if any(not _finite(age) or age < 0 for age in ages):
+        raise ValueError("Populated native telemetry requires finite nonnegative source ages")
+    return max(ages) if ages else 0.
 
 
 def validate_standard_packet(packet):
@@ -115,6 +217,8 @@ def validate_standard_packet(packet):
             unused, unused_kind, unused_device, count, unused_field, kind = INPUTS[name]
         elif name in COMMANDS:
             unused_section, unused_source, count, kind = COMMANDS[name]
+        elif name in SOFTWARE_STATUSES:
+            count, kind = SOFTWARE_STATUSES[name]
         else:
             raise ValueError("Unmigrated Python bank cannot claim valid values")
         shape = record["lv_type"].get("contained_type") or {}

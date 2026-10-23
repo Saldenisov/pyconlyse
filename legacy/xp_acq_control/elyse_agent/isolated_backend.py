@@ -133,7 +133,9 @@ class IsolatedCardBackend(object):
         self._active_id = self._active_operation = self._response = self._progress = None
         self._initialization_ready = False
         self._progress_version = 0
+        self._software_progress, self._software_version = None, 0
         self._serial = 0
+        self._request_started = None
         self._uncertain = self._may_own_resources = self._cleanup_confirmed = False
         self._worker_state, self._worker_error = "COLD", ""
         self._observer_error = ""
@@ -254,10 +256,18 @@ class IsolatedCardBackend(object):
                     if message["kind"] == "result":
                         self._response = message
                     else:
-                        self._progress = message.get("event")
-                        if type(self._progress) is dict:
-                            self._progress["parent_received_monotonic"] = time.monotonic()
-                        self._progress_version += 1
+                        event = message.get("event")
+                        if type(event) is dict:
+                            event.update(parent_received_monotonic=time.monotonic(),
+                                worker_generation=self._generation, rpc_request_id=message["id"],
+                                rpc_operation=self._active_operation,
+                                parent_request_started_monotonic=self._request_started)
+                        if type(event) is dict and event.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT":
+                            self._software_progress = event
+                            self._software_version += 1
+                        else:
+                            self._progress = event
+                            self._progress_version += 1
                     self._condition.notify_all()
         except Exception as error:
             self._mark_uncertain("Child pipe closed or invalid: " + str(error))
@@ -284,6 +294,41 @@ class IsolatedCardBackend(object):
                 if (type(age) in (int, float) and math.isfinite(age) and age >= 0
                         and type(received) in (int, float) and math.isfinite(received)):
                     notice["sample_age_seconds"] = age + max(0., time.monotonic() - received)
+            if type(notice) is dict and notice.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT":
+                age, received = notice.get("software_state_age_seconds", 0.), notice.get("parent_received_monotonic")
+                if (type(age) in (int, float) and math.isfinite(age) and age >= 0
+                        and type(received) in (int, float) and math.isfinite(received)):
+                    notice["software_state_age_seconds"] = age + max(0., time.monotonic() - received)
+            if type(notice) is dict:
+                # Request-relative child durations are comparable to parent
+                # durations; absolute process-local monotonic epochs are not.
+                # Parent send precedes child entry, so this is conservative
+                # even under pipe backpressure or delayed IPC decoding.
+                start = notice.get("parent_request_started_monotonic")
+                is_sample = "sample" in notice
+                is_software = notice.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT"
+                offset_field = ("sample_started_after_request_seconds" if is_sample
+                                else "software_observed_after_request_seconds")
+                offset = notice.get(offset_field)
+                age_field = "sample_age_seconds" if is_sample else "software_state_age_seconds"
+                if (is_sample or is_software) and (self._active_id is not None
+                        or "parent_request_started_monotonic" in notice):
+                    observation = notice.get("observation_after_request_seconds")
+                    age = notice.get(age_field)
+                    def finite(value):
+                        return type(value) in (int, float) and math.isfinite(value)
+                    elapsed = time.monotonic() - start if finite(start) else None
+                    valid = (finite(elapsed) and elapsed >= 0 and finite(offset)
+                             and 0 <= offset <= elapsed and finite(observation)
+                             and offset <= observation <= elapsed and finite(age) and age >= 0)
+                    if valid:
+                        notice[age_field] = max(age, max(0., elapsed - offset))
+                    elif is_sample:
+                        notice.pop("sample", None)
+                        notice["sample_error"] = dict(type="InvalidSamplingProvenance",
+                            message="Missing or invalid request-relative age proof; sample unavailable")
+                    else:
+                        notice[age_field] = None
             self._observer(notice)  # NI caller only, never the IPC reader.
         except Exception as error:
             # Observability must not abandon an in-flight native call or turn
@@ -305,9 +350,11 @@ class IsolatedCardBackend(object):
             if self._cleanup_confirmed:
                 raise RuntimeError("Released NI owner cannot execute another operation")
             self._serial += 1
+            self._request_started = time.monotonic()
             request_id = self._active_id = self._serial
             self._active_operation = operation
             seen_progress = self._progress_version
+            seen_software = self._software_version
             self._worker_state = "EXECUTING_" + operation.upper()
         message = dict(kind="call", id=request_id, operation=operation,
                        arguments=tuple(arguments), keywords=dict(keywords or {}))
@@ -325,7 +372,7 @@ class IsolatedCardBackend(object):
         deadline = time.monotonic() + (self._rpc_timeout if timeout is None else timeout)
         cancellation_sent = activation_sent = False
         while True:
-            event, response = None, None
+            event, software_event, response = None, None, None
             with self._condition:
                 response = self._response
                 expired = time.monotonic() >= deadline
@@ -335,6 +382,9 @@ class IsolatedCardBackend(object):
                 expired = time.monotonic() >= deadline
                 if self._progress_version != seen_progress:
                     event, seen_progress = self._progress, self._progress_version
+                if self._software_version != seen_software:
+                    software_event, seen_software = self._software_progress, self._software_version
+            self._observe_progress(software_event)
             self._observe_progress(event)
             if response is not None:
                 with self._condition:

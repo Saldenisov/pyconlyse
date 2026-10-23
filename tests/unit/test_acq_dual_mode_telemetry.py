@@ -3,6 +3,7 @@ import copy
 import socket
 import struct
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -89,6 +90,7 @@ def test_deinitialization_waits_for_new_vi_image_never_revives_cached_data(pair)
     runtime, publisher, clock, calls = pair
     publisher.ingest(xml(), '127.0.0.1'); ack(publisher)
     runtime._state, runtime._state_revision = 'RUNNING', 1
+    runtime._backend = SimpleNamespace(resource_count=21)
     runtime._latest = state()['latest']
     runtime._received_at = runtime._clock()
     assert publisher.publish_once()
@@ -96,6 +98,7 @@ def test_deinitialization_waits_for_new_vi_image_never_revives_cached_data(pair)
     assert packet(publisher)['data']['banks'][0]['data'] == [123.] * 64
     ack(publisher)
     runtime._state, runtime._state_revision = 'IDLE', 2
+    runtime._backend = None
     assert publisher.publish_once()
     waiting = packet(publisher)
     assert waiting['producer_kind'] == 'copied_acquisition'
@@ -116,6 +119,7 @@ def test_receiver_changes_source_atomically_inside_one_boot_and_relay(pair):
     assert store.snapshot()['source'] == 'copied_labview_telemetry'
     ack(publisher)
     runtime._state, runtime._state_revision = 'RUNNING', 1
+    runtime._backend = SimpleNamespace(resource_count=21)
     runtime._latest, runtime._received_at = state()['latest'], runtime._clock()
     publisher.publish_once()
     second = publisher.outbox.peek()
@@ -229,12 +233,14 @@ def test_recorder_journals_both_source_switches_without_pooling_values(pair):
         return result
     publisher.ingest(xml(), '127.0.0.1'); deliver()
     runtime._state, runtime._state_revision = 'RUNNING', 1
+    runtime._backend = SimpleNamespace(resource_count=21)
     runtime._latest, runtime._received_at = state()['latest'], runtime._clock()
     publisher.publish_once()
     unused, events = deliver()
     assert events[0]['event'] == 'telemetry_producer_changed'
     assert observer.summary()['numeric_statistics']['C1NI6071E/0']['mean'] == 123.
     runtime._state, runtime._state_revision = 'IDLE', 2
+    runtime._backend = None
     publisher.publish_once(); deliver()
     assert observer.producer_changes == 2
     assert not observer.numeric  # Null VI-waiting boundary is not a zero measurement.

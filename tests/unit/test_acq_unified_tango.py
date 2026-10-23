@@ -86,3 +86,47 @@ def test_unified_bridge_and_transition_have_no_equipment_command_authority(facad
     with pytest.raises(RuntimeError, match='TANGO_COMMANDS_DISABLED'):
         device.ExecuteCommand(intent('modulator.general.stop'))
     assert not calls
+
+
+def test_status_only_snapshot_reaches_receiver_tango_and_web_without_start_permit(facade, monkeypatch):
+    """Actual receiver expansion + facade + browser projection, no live Tango."""
+    from pathlib import Path
+    from uuid import uuid4
+    from DeviceServers.control.elyse_acq.telemetry_sink import TelemetrySinkStore
+    from legacy.xp_acq_control.elyse_agent.telemetry_relay import sign
+    from tests.unit.test_acq_command_telemetry_pipeline import Runtime, image, KEY
+    from legacy.xp_acq_control.elyse_agent.dual_mode_telemetry import DualModeTelemetryPublisher
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / 'web/backend'))
+    web = importlib.import_module('acq_telemetry_api')
+    device, view, unused, calls = facade
+    store = TelemetrySinkStore(KEY, permitted_producer_kind='unified_acquisition')
+    runtime = Runtime(image())
+    publisher = DualModeTelemetryPublisher(runtime, ('127.0.0.1', 1), KEY)
+    device._store = store
+    view['runtime']['telemetry_delivery'] = dict(source_mode='PYTHON_NATIVE')
+    try:
+        runtime.value['software_state']['local_banks']['DPS'][2] = True
+        for completed in (False, True):
+            if completed:
+                runtime.update_status(eps=((8, True),), dps=((2, False),))
+            assert publisher.publish_once()
+            body = publisher.outbox.peek()
+            request = dict(body=body, nonce=uuid4().hex)
+            request['signature'] = sign(KEY, 'ACQ-TELEMETRY-REQUEST-1', request)
+            store.accept(request)
+            publisher.outbox.acknowledge(body['relay_id'], body['message_id'])
+            browser = web.present_snapshot(device.telemetry_json(), 'ON')
+            banks = browser['snapshot']['publications']
+            assert len(banks) == 27
+            assert banks['DPS']['data'][2] is not completed
+            assert banks['EPS']['data'][8] is completed
+            assert banks['C2NI6071E']['data'] is None
+            assert browser['quality'] == 'INCOMPLETE'
+            assert browser['execution_allowed'] is False
+            assert not device._control_view()['telemetry_source_current']
+            with pytest.raises(RuntimeError, match='TANGO_COMMANDS_DISABLED'):
+                device.ExecuteCommand(intent())
+        assert calls == []
+    finally:
+        publisher.close()
+        store.close()

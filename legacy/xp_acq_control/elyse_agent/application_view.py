@@ -78,7 +78,7 @@ class ApplicationView(object):
         age = None if at is None else max(0, self.clock() - at)
         current = age is not None and age < 2 and not capture_error
         if age is not None:
-            for field in ("age_seconds", "everest_read_age_seconds"):
+            for field in ("age_seconds", "everest_read_age_seconds", "software_state_age_seconds"):
                 if type(value.get(field)) in (int, float):
                     value[field] += age
             alarm = value.get("cooling_safety", {})
@@ -98,6 +98,8 @@ class ApplicationView(object):
             value.setdefault("control", {})["lease"] = None
             value["control"]["enabled"] = False
         if not current:
+            value["software_state_current"] = False
+            value["measurement_current"] = False
             value["control"]["enabled"] = False
             for capability in value["control"].get("capabilities", {}).values():
                 capability.update(enabled=False, reason="APPLICATION_METADATA_NOT_CURRENT")

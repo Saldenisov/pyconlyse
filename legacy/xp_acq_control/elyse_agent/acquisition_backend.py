@@ -34,6 +34,20 @@ CONTROL_PROFILES = ("legacy_full", "general_only_test", "extended_ht_stop")
 HT_STAGE_OPERATIONS = ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset")
 FOCAL_STAGE_OPERATIONS = ("focales.start", "focales.stop")
 _LEGACY_CHROMA_STOP_TYPE = ChromaFocalStop
+# Source root Timeout dispatcher + named event reset tails. This maps request
+# intent only, never a physical permit or acknowledgement. Outer stop and AO
+# setpoints have no equivalent DPS request field in this qualified subset.
+PROCEDURE_DPS_REQUESTS = {
+    "cooling.start": 0, "cooling.stop": 1,
+    "modulator.general.start": 2, "modulator.general.stop": 3,
+    "chauffage.start": 4, "chauffage.stop": 5,
+    "prema.start": 6, "prema.stop": 7,
+    "relays_ht.start": 8, "relays_ht.stop": 9,
+    "focales.start": 10, "focales.stop": 11, "modulator.reset": 12,
+    "alimentation_ht.start": 15, "alimentation_ht.reset": 16,
+    "alimentation_ht.stop": 17,
+    "modulator_impulse.start": 18, "modulator_impulse.stop": 19,
+}
 
 
 class AcquisitionCancelled(Exception):
@@ -95,9 +109,11 @@ class _StageState(object):
         event includes operation/frame/source_uid, safe_to_sample,
         remaining_seconds and minimum_next_action_deadline (monotonic). The
         observer may obtain a same-owner snapshot only with sufficient dwell
-        budget; it must not dispatch another output procedure. No observer is
-        invoked during an asserted or uncertain source pulse. Native sampling
-        can overrun a budget and is not forcibly interruptible.
+        budget; it must not dispatch another output procedure. Sampling
+        checkpoints never occur during an asserted/uncertain source pulse.
+        Separate SOFTWARE_STATE_NOT_MEASUREMENT events are RAM-only and never
+        authorize NI reads. Native sampling can overrun a budget and is not
+        forcibly interruptible.
         """
         from .cooperative_execution import CooperativeExecution
         self._execution_scheduler = CooperativeExecution(observer, interval_seconds)
@@ -120,13 +136,90 @@ class _StageState(object):
 
     def _ensure_execution_not_reentrant(self):
         scheduler = getattr(self, "_execution_scheduler", None)
-        if scheduler is not None and scheduler.active:
+        if ((scheduler is not None and scheduler.active)
+                or getattr(self, "_software_state_observer_active", False)):
             raise RuntimeError("Execution observer may sample, not reenter NI procedures or cleanup")
+
+    def get_software_state(self):
+        """Complete source EPS/DPS software memory; no NI read or health test.
+
+        Invalid before successful initialization or after resources release.
+        Each result is detached; immutable vectors cannot mutate local memory.
+        Revision is independent of acquisition sample sequence and age.
+        """
+        self._stage_require_initialized()
+        if self._software_state_valid is not True:
+            raise RuntimeError("Complete initialized software status is unavailable")
+        return dict(revision=self._software_state_revision,
+                    EPS=tuple(self._stage_status[44]), DPS=tuple(self._stage_status[36]))
+
+    def record_procedure_request(self, operation):
+        """Record admitted source request intent, not execution success.
+
+        Caller must have admitted the named command before invoking this RAM
+        update. This method never clears a pending request on rejection, fault
+        or cancellation. Only the reached source tail may clear its own bit.
+        Other pending fields are preserved, not replaced or dispatched here.
+        """
+        self._ensure_execution_not_reentrant()
+        self._stage_require_initialized()
+        if type(operation) is not str:
+            raise ValueError("Explicit source operation name required")
+        field = PROCEDURE_DPS_REQUESTS.get(operation)
+        if field is None:
+            return False
+        self.get_software_state()
+        self._software_request_operation = operation
+        try:
+            self._stage_write_local(36, ((field, True),))
+        finally:
+            self._software_request_operation = None
+        return True
+
+    def _emit_software_state(self, source_effect, publication=None, source_uid=None):
+        """Bounded RAM-only observer event; never enter the NI sampling path."""
+        scheduler = getattr(self, "_execution_scheduler", None)
+        if scheduler is None or scheduler.observer is None:
+            return
+        observed = time.monotonic()
+        event = dict(kind="SOFTWARE_STATE_NOT_MEASUREMENT",
+                     software_state_observed_monotonic=observed,
+                     software_state=self.get_software_state(),
+                     source_effect=source_effect, simulated=self._stage_simulated,
+                     safe_to_sample=False, hardware_acknowledged=False)
+        if self.procedure is not None:
+            event.update(operation=self.procedure.get("name"),
+                         frame=self.procedure.get("frame"),
+                         source_uid=self.procedure.get("source_uid"))
+        if getattr(self, "_software_request_operation", None) is not None:
+            event["operation"] = self._software_request_operation
+            event["frame"] = None
+            event["source_uid"] = None
+            event["request_intent_only"] = True
+        if source_uid is not None:
+            event["source_uid"] = source_uid
+        if publication is not None:
+            event["publication"] = dict(name=publication["name"],
+                                        values=tuple(publication["values"]),
+                                        sequence=publication["sequence"])
+        self._software_state_observer_active = True
+        try:
+            scheduler.observer(event)
+        except Exception as error:
+            # Status reporting must not skip a source pulse release or stop.
+            self._software_state_observer_error_count += 1
+            self._software_state_observer_error = (type(error).__name__ + ": " + str(error))[:2048]
+        finally:
+            self._software_state_observer_active = False
 
     def _reset_stage_state(self):
         # Saved root frame 33052 resets local refs 44/36 to these literals.
         # C3/C4 images come from the reviewed startup commands, not DI values.
         self._stage_status = {44: (False,) * 77, 36: (False,) * 29}
+        self._software_state_revision = getattr(self, "_software_state_revision", 0) + 1
+        self._software_state_valid = False
+        self._software_state_observer_error_count = 0
+        self._software_state_observer_error = None
         self.stage_update_indicator = None  # No qualified startup assignment.
         self.stage_publications = {}
         self.stage_publication_count = 0
@@ -281,6 +374,8 @@ class _StageState(object):
             self._stage_status[bank] = tuple(changed)
             name = "EPS" if bank == 44 else "DPS"
             self.software_status_assignments[name].update(dict(changes))
+            self._software_state_revision += 1
+            self._emit_software_state("LOCAL_ASSIGNMENT")
 
     def _stage_publish(self, name, bank, snapshot):
         qualified = {"DPS": (36, 29), "EPS": (44, 77), "C4_OUT_DIO96": (15, 32)}
@@ -297,6 +392,9 @@ class _StageState(object):
             transport="LOCAL_RAM_REPLACEMENT_NOT_PSP",
             psp_delivered=False, hardware_acknowledged=False,
             snapshot_interpretation="Supplied source-frame read snapshot; not a physical output readback")
+        if name in ("EPS", "DPS"):
+            self._software_state_revision += 1
+            self._emit_software_state("SOURCE_PUBLICATION", self.stage_publications[name])
 
     def _stage_snapshot(self):
         return dict(
@@ -309,6 +407,11 @@ class _StageState(object):
             interpretation="DO banks are last successful commands; EPS/DPS are software memory, not readback or permits",
             publications=copy.deepcopy(self.stage_publications),
             publication_count=self.stage_publication_count,
+            software_state_revision=self._software_state_revision,
+            software_status_valid=self._software_state_valid,
+            software_state_interpretation="Complete EPS/DPS source software memory; not NI input measurements or permits",
+            software_state_observer_error_count=self._software_state_observer_error_count,
+            software_state_observer_error=self._software_state_observer_error,
             publication_storage="bounded_latest_per_name_in_RAM",
             psp_delivery_acknowledged=False, hardware_acknowledged=False,
             stage_controls_verified=self.stage_controls_verified,
@@ -382,6 +485,7 @@ class _StageState(object):
                 self._ensure_focal_ready()
             self._ensure_focal_quiescent()
             self._retry_stage_restorations()
+            self.record_procedure_request(operation)
             result = execute_stage(
                 operation, self._stage_read_local, self._stage_write_local,
                 self._stage_publish, cancel.wait, cancel.is_set, observe,
@@ -601,6 +705,9 @@ class CardBackend(SourceControls, _StageState):
         if cancel.is_set():
             raise AcquisitionCancelled()
 
+        self._software_state_valid = True
+        self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
+
     def general_start(self, cancel, operator_confirmed=False):
         self._ensure_execution_not_reentrant()
         if self.owner is None or not self.commanded_digital:
@@ -642,9 +749,14 @@ class CardBackend(SourceControls, _StageState):
 
         def observe(frame, source_uid):
             self.procedure.update(frame=frame, source_uid=source_uid)
+            if frame == 9:
+                # Source frame35570 independently reads local36 (35614) and
+                # publishes DPS (35620) after frame35413's request reset.
+                self._stage_publish("DPS", 36, self._stage_read_local(36))
 
         try:
             self._retry_stage_restorations()
+            self.record_procedure_request("modulator.general.start")
             execute_general_start(commit, assign, cancel.wait, cancel.is_set,
                                   observe, operator_confirmed=True,
                                   execution_wait=self._execution_waiter(cancel.wait))
@@ -694,6 +806,9 @@ class CardBackend(SourceControls, _StageState):
         def observe(frame, source_uid):
             self.procedure.update(frame=frame, source_uid=source_uid)
             self.procedure["source_frames_attempted"].append(frame)
+            if frame == 16:
+                # Source frame35146: fresh DPS local37688 -> writer37694.
+                self._stage_publish("DPS", 36, self._stage_read_local(36))
 
         def focal_off():
             self._ensure_focal_quiescent()
@@ -714,6 +829,7 @@ class CardBackend(SourceControls, _StageState):
                     except Exception as error:
                         restore_failures.append("restore C4[{0}]=False: {1}: {2}".format(
                             line, type(error).__name__, error))
+            self.record_procedure_request("modulator.general.stop")
             if self.control_profile == "general_only_test":
                 self.procedure.update(other_stages_stopped=False, full_event_6_executed=False)
                 def assign_if_restored(eps, dps):
@@ -826,18 +942,52 @@ class CardBackend(SourceControls, _StageState):
             raise GeneralStopError(failures)
 
     def read_snapshot(self, cancel):
+        return self._read_snapshot(cancel, None)
+
+    def execution_sample_budget_seconds(self):
+        """Conservative opt-in budget; not a bound on native start/stop calls."""
+        return (len(AI_BANKS) + len(DI_BANKS)) * self.read_timeout + .05
+
+    def read_snapshot_for_execution(self, cancel, deadline_monotonic):
+        """Read on the current NI owner only; reject partial or late results.
+
+        Remaining dwell is divided among remaining reads. Native start/stop
+        calls may still overrun and cannot be preempted; every started AI is
+        stopped in finally. This optional method never enables sampling by
+        itself and does not publish or change a procedure/output.
+        """
+        if (type(deadline_monotonic) not in (int, float)
+                or not math.isfinite(deadline_monotonic)):
+            raise ValueError("Finite child-local monotonic sample deadline required")
+        return self._read_snapshot(cancel, deadline_monotonic)
+
+    def _read_snapshot(self, cancel, deadline_monotonic):
+        if getattr(self, "_software_state_observer_active", False):
+            raise RuntimeError("Software-state observer cannot read NI inputs")
         if self.owner is None:
             raise RuntimeError("Cards not initialized")
+        remaining_reads = [len(AI_BANKS) + len(DI_BANKS)]
+
+        def read_timeout():
+            if deadline_monotonic is None:
+                return self.read_timeout
+            remaining = deadline_monotonic - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Safe execution sample deadline exhausted; sample discarded")
+            return min(self.read_timeout, remaining / max(1, remaining_reads[0]))
+
         banks = {}
         for name, device, count in AI_BANKS:
             if cancel.is_set():
                 raise AcquisitionCancelled()
+            read_timeout()  # Do not start another AI after dwell expired.
             task = self.owner.tasks[name]
             task.start()
             try:
-                values = self.owner.read_analog_latest(name, timeout_seconds=self.read_timeout)
+                values = self.owner.read_analog_latest(name, timeout_seconds=read_timeout())
             finally:
                 task.stop()
+            remaining_reads[0] -= 1
             if len(values) != count or any(not math.isfinite(value) for value in values):
                 raise ValueError("Invalid/nonfinite analog bank: " + name)
             scaled = [value * self.calibration[(name, index)][0] + self.calibration[(name, index)][1]
@@ -854,10 +1004,15 @@ class CardBackend(SourceControls, _StageState):
         for name, device, first, last, count in DI_BANKS:
             if cancel.is_set():
                 raise AcquisitionCancelled()
-            values = list(self.owner.tasks[name].read(timeout=self.read_timeout))
+            values = list(self.owner.tasks[name].read(timeout=read_timeout()))
+            remaining_reads[0] -= 1
             if len(values) != count or any(type(value) is not bool for value in values):
                 raise ValueError("Invalid Boolean bank shape: " + name)
             banks[name] = dict(kind="digital_input", device=device, values=values)
+        if deadline_monotonic is not None:
+            if cancel.is_set():
+                raise AcquisitionCancelled()
+            read_timeout()  # A late final native call is never a fresh sample.
         return dict(
             source="python_daqmx_acquisition", simulated=False,
             control_profile=self.control_profile,
@@ -946,6 +1101,8 @@ class DemoBackend(_StageState):
         self.procedure = None
         self._reset_stage_state()
         self.active = True
+        self._software_state_valid = True
+        self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
 
     def read_snapshot(self, cancel):
         if cancel.is_set():
@@ -960,26 +1117,58 @@ class DemoBackend(_StageState):
     def general_start(self, cancel, operator_confirmed=False):
         self._ensure_execution_not_reentrant()
         self._ensure_focal_quiescent()
-        execute_general_start(lambda *_args: None, lambda *_args: None,
-                              cancel.wait, cancel.is_set, operator_confirmed=operator_confirmed,
-                              execution_wait=self._execution_waiter(cancel.wait))
+        self._stage_require_initialized()
+        if operator_confirmed is not True:
+            raise ValueError("General Marche confirmation required")
+        self.procedure = dict(name="modulator.general.start", state="EXECUTING", frame=None,
+                              control_profile=self.control_profile, hardware_acknowledged=False)
+        def observe(frame, source_uid):
+            self.procedure.update(frame=frame, source_uid=source_uid)
+            if frame == 9:
+                self._stage_publish("DPS", 36, self._stage_read_local(36))
+        self.record_procedure_request("modulator.general.start")
+        try:
+            execute_general_start(lambda index, value: self._stage_write_local(15, ((index, value),)),
+                                  self._stage_assign_status, cancel.wait, cancel.is_set,
+                                  observe, operator_confirmed=True,
+                                  execution_wait=self._execution_waiter(cancel.wait))
+        except Exception:
+            self.procedure["state"] = "INTERRUPTED_OR_FAILED"
+            raise
+        self.procedure["state"] = "SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK"
 
     def general_stop(self, operator_confirmed=False):
         self._ensure_execution_not_reentrant()
         self._ensure_focal_quiescent()
-        if self.control_profile == "general_only_test":
-            execute_general_only_stop(lambda *_args: None, lambda *_args: None,
-                                      time.sleep, operator_confirmed=operator_confirmed,
-                                      execution_wait=self._execution_waiter(time.sleep))
-        else:
-            if self.control_profile == "extended_ht_stop":
-                # Explicit demo callbacks only, never an NI-backed fallback.
-                execute_ht_shutdown(6.5, lambda: dict(voltage_kv=0.0, supply_on=False, age_seconds=0.0),
-                                    lambda _value: None, lambda: None, lambda: None, time.sleep,
-                                    feedback_verified=True)
-            execute_general_stop(lambda *_args: None, lambda: None, lambda *_args: None,
-                                 time.sleep, operator_confirmed=operator_confirmed,
-                                 execution_wait=self._execution_waiter(time.sleep))
+        self._stage_require_initialized()
+        if operator_confirmed is not True:
+            raise ValueError("General Arret confirmation required")
+        self.procedure = dict(name="modulator.general.stop", state="EXECUTING", frame=None,
+                              control_profile=self.control_profile, hardware_acknowledged=False)
+        def observe(frame, source_uid):
+            self.procedure.update(frame=frame, source_uid=source_uid)
+            if frame == 16:
+                self._stage_publish("DPS", 36, self._stage_read_local(36))
+        commit = lambda index, value: self._stage_write_local(15, ((index, value),))
+        self.record_procedure_request("modulator.general.stop")
+        try:
+            if self.control_profile == "general_only_test":
+                execute_general_only_stop(commit, self._stage_assign_status,
+                                          time.sleep, observe, operator_confirmed=True,
+                                          execution_wait=self._execution_waiter(time.sleep))
+            else:
+                if self.control_profile == "extended_ht_stop":
+                    # Explicit demo callbacks only, never an NI-backed fallback.
+                    execute_ht_shutdown(6.5, lambda: dict(voltage_kv=0.0, supply_on=False, age_seconds=0.0),
+                                        lambda _value: None, lambda: None, lambda: None, time.sleep,
+                                        feedback_verified=True)
+                execute_general_stop(commit, lambda: None, self._stage_assign_status,
+                                     time.sleep, observe, operator_confirmed=True,
+                                     execution_wait=self._execution_waiter(time.sleep))
+        except Exception:
+            self.procedure["state"] = "INTERRUPTED_OR_FAILED"
+            raise
+        self.procedure["state"] = "SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK"
 
     def close(self):
         self._ensure_execution_not_reentrant()

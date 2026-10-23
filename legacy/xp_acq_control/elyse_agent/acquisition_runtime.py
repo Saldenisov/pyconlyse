@@ -267,6 +267,7 @@ class AcquisitionRuntime(object):
                 raise RuntimeError("General Marche requires RUNNING and no pending procedure")
             self._state = "EXECUTING"
             self._operation = "modulator.general.start"
+            self._received_at = None
             self._general_stop_required = True
             self._pending = "general_start"
             self._wake.set()
@@ -291,6 +292,7 @@ class AcquisitionRuntime(object):
             self._general_stop_required = True
             self._state = "EXECUTING"
             self._operation = "modulator.general.stop"
+            self._received_at = None
             self._pending = "general_stop"
             self._stage_command = None
             self._ht_command = None
@@ -558,6 +560,12 @@ class AcquisitionRuntime(object):
                 try:
                     with self._lock:
                         self._require_recovery_clear()
+                        if (self._pending is not None or self._shutdown_requested
+                                or self._operation != "modulator.general.stop"):
+                            continue
+                        # Prior cancellation belonged to a preceding call that
+                        # has now returned on this same NI owner.
+                        self._cancel.clear()
                     self._backend.general_stop(operator_confirmed=True)
                     with self._lock:
                         if (getattr(self._backend, "control_profile", None) == "extended_ht_stop"
@@ -649,6 +657,10 @@ class AcquisitionRuntime(object):
                 try:
                     with self._lock:
                         self._require_recovery_clear()
+                        if (self._pending is not None or self._shutdown_requested
+                                or self._operation != "acq.outer.controlled_stop"):
+                            continue
+                        self._cancel.clear()
                     self._backend.outer_controlled_stop(operator_confirmed=True)
                     with self._lock:
                         self._pulse_stop_required = False  # Both StopTask calls returned, not physical HT zero.

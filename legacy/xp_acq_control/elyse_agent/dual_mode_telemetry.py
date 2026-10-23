@@ -8,8 +8,8 @@ import datetime
 import threading
 import time
 
-from .telemetry_publisher import StandardTelemetryPublisher
-from .standard_banks import standard_packet, validate_standard_packet
+from .telemetry_publisher import StandardTelemetryPublisher, telemetry_identity
+from .standard_banks import standard_packet, validate_standard_packet, packet_age_seconds
 from .shared_state import decode_snapshot_xml, validate_snapshot_packet
 from .shared_state_receiver import SharedStateServer
 
@@ -80,7 +80,7 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
 
     @staticmethod
     def _identity(value):
-        return tuple(value.get(k) for k in ("session_id", "sequence", "state_revision", "state", "stale", "error", "telemetry_view_current"))
+        return telemetry_identity(value)
 
     def publish_once(self):
         with self.lock:
@@ -123,8 +123,7 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
                 if self.owner_state_current:
                     self.mode = "PYTHON_NATIVE" if (value["state"] in ("RUNNING", "EXECUTING")
                         or (value["state"] == "FAULT" and value.get("resource_count", 0) > 0)) else "TRANSITION_OR_FAULT"
-            age = value.get("age_seconds")
-            self._enqueue(packet, age if type(age) in (int, float) and age >= 0 and not bridge else 0)
+            self._enqueue(packet, packet_age_seconds(value, packet) if not bridge else 0)
             self.identity = identity
             return True
 

@@ -2,10 +2,19 @@
 import datetime
 import threading
 
-from .standard_banks import standard_packet, validate_standard_packet, _finite
+from .standard_banks import standard_packet, validate_standard_packet, packet_age_seconds
 from .shared_state import LatestSnapshotOutbox
 from .telemetry_relay import TelemetryRelay
 from .telemetry_view import TelemetryView
+
+
+def telemetry_identity(value):
+    """Measurement and software observations advance independently."""
+    return tuple(value.get(k) for k in (
+        "session_id", "sequence", "state_revision", "state", "stale", "error",
+        "telemetry_view_current", "measurement_current", "software_state_sequence",
+        "software_state_current"))
+
 
 class StandardTelemetryPublisher(object):
     """Bounded latest-only forwarding, authenticated ACK and read-only retry."""
@@ -21,13 +30,14 @@ class StandardTelemetryPublisher(object):
 
     def publish_once(self):
         value = self.view.snapshot()
-        identity = tuple(value.get(k) for k in ("session_id", "sequence", "state_revision", "state", "stale", "error", "telemetry_view_current"))
+        identity = telemetry_identity(value)
         if identity == self.identity:
             return False
         packet = standard_packet(value, self.sequence + 1)
         encoded = validate_standard_packet(packet)
-        age = value.get("age_seconds")
-        age = age if _finite(age) and age >= 0 else 0
+        # One wire age covers all populated banks. Conservatively retain the
+        # oldest included source; a new software event cannot freshen old AI.
+        age = packet_age_seconds(value, packet)
         self.outbox.enqueue(encoded, datetime.datetime.now(datetime.timezone.utc).isoformat(), age_seconds=age)
         self.sequence += 1
         self.identity, self.error = identity, ""
@@ -65,4 +75,5 @@ class StandardTelemetryPublisher(object):
     def status(self):
         return dict(self.relay.status(), standard_bank_count=27, publication_sequence=self.sequence,
                     telemetry_view=self.view.status(),
-                    publisher_error=self.error, semantics="AI/DI measurements; AO/DO last successful commands; other banks explicitly unavailable")
+                    publisher_error=self.error,
+                    semantics="AI/DI measurements; AO/DO last successful commands; EPS/DPS software memory, not readiness or hardware readback; remaining banks explicitly unavailable")

@@ -29,12 +29,15 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'acq-unified-unaveraged-inputs-20261023-v8-r6'
+    assert result['release'] == 'acq-unified-stage-telemetry-20261023-v8-r7'
     assert result['native_analog_processing'] == 'last_raw_sample_of_finite_block'
     assert result['native_software_averaging'] is False
     assert result['native_finite_samples_per_channel'] == 10
     assert result['native_selected_sample_index'] == 9
     assert result['vi_forwarded_processing_unchanged'] is True
+    assert result['native_software_status_banks'] == ['EPS', 'DPS']
+    assert result['execution_sampling_default'] is None
+    assert 'not hardware readback' in result['native_software_status_semantics']
     assert all(hashlib.sha256((release / row['path']).read_bytes()).hexdigest() == row['sha256']
                for row in result['files'])
     assert json.loads((release / 'manifest.json').read_text())['auto_initialize'] is False

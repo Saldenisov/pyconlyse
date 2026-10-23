@@ -14,6 +14,7 @@ import time
 import datetime
 import json
 import uuid
+import math
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -95,6 +96,9 @@ class Worker(object):
             "initialize_{0}_{1}.jsonl".format(os.getpid(), uuid.uuid4().hex[:8]))
         self.initialization_trace_error = ""
         self.ingress_worker = None
+        self.software_pending = None
+        self.software_lock = threading.Lock()
+        self.request_started = None
 
     def _trace_initialization(self, event):
         """Explicit startup diagnostics only; no measurements or native I/O.
@@ -155,10 +159,28 @@ class Worker(object):
                         self._emit(notice)
 
     def _emit(self, message, reliable=False):
+        event = message.get("event")
+        if (type(event) is dict and self.request_started is not None
+                and ("sample" in event or event.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT")):
+            now = time.monotonic()
+            event["observation_after_request_seconds"] = now - self.request_started
+            if event.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT":
+                observed = event.pop("software_state_observed_monotonic", now)
+                if type(observed) in (int, float) and math.isfinite(observed):
+                    event["software_observed_after_request_seconds"] = observed - self.request_started
+                    event["software_state_age_seconds"] = max(0., now - observed)
         encode_frame(message)  # Reject oversized diagnostics before enqueue.
+        if (not reliable and message.get("kind") == "progress" and type(event) is dict
+                and event.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT"):
+            # Software state has a separate latest-only slot. Diagnostic or
+            # sample traffic must not erase the last EPS/DPS observation.
+            event.setdefault("software_state_age_seconds", 0.)
+            with self.software_lock:
+                self.software_pending = (copy.deepcopy(message), time.monotonic())
+            return True
         done = threading.Event() if reliable else None
         try:
-            self.outgoing.put((message, done), timeout=1 if reliable else 0)
+            self.outgoing.put((message, done, time.monotonic()), timeout=1 if reliable else 0)
         except queue.Full:
             if reliable:
                 raise RuntimeError("Bounded child result pipe queue exhausted")
@@ -173,7 +195,22 @@ class Worker(object):
     def _writer(self):
         try:
             while True:
-                message, done = self.outgoing.get()
+                try:
+                    entry = self.outgoing.get(timeout=.02)
+                except queue.Empty:
+                    entry = None
+                with self.software_lock:
+                    pending, self.software_pending = self.software_pending, None
+                if pending is not None:
+                    software, created = pending
+                    software["event"]["software_state_age_seconds"] += max(0., time.monotonic() - created)
+                    write_frame(self.sink, software)
+                if entry is None:
+                    continue
+                message, done, created = entry
+                event = message.get("event")
+                if type(event) is dict and "sample" in event:
+                    event["sample_age_seconds"] += max(0., time.monotonic() - created)
                 write_frame(self.sink, message)
                 if done is not None:
                     done.set()
@@ -239,15 +276,38 @@ class Worker(object):
             self._trace_initialization(notice)
             notice.update(trace_path=self.initialization_trace_path,
                           trace_error=self.initialization_trace_error)
+        if notice.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT":
+            self._emit(dict(kind="progress", id=self.active_id, event=notice,
+                            attributes=_attributes(self.backend)))
+            return  # No input reads on a software-only assignment callback.
+        self._publish_software_observation()
         remaining = notice.get("remaining_seconds", 0)
         budget = self.configuration["safe_sample_budget_seconds"]
+        derived = getattr(self.backend, "execution_sample_budget_seconds", None)
+        sample_reader = getattr(self.backend, "read_snapshot_for_execution", None)
+        if budget is not None and callable(derived) and callable(sample_reader):
+            derived_budget = derived()
+            if type(derived_budget) not in (int, float) or not math.isfinite(derived_budget) or derived_budget <= 0:
+                budget = None
+            else:
+                budget = max(budget, derived_budget)
+        else:
+            budget = None
         if (budget is not None and notice.get("safe_to_sample") is True and type(remaining) in (int, float)
-                and remaining >= budget + .05 and not self.cancel.is_set()):
+                and math.isfinite(remaining) and remaining >= budget + .05 and not self.cancel.is_set()):
             # Best effort on THIS NI main thread only. A driver overrun cannot
             # be preempted; never claim a hard deadline or pulse-width parity.
             started = time.monotonic()
+            deadline = started + remaining - .05
+            source_deadline = notice.get("minimum_next_action_deadline")
+            if type(source_deadline) in (int, float) and math.isfinite(source_deadline):
+                deadline = min(deadline, source_deadline - .05)
             try:
-                sample = self.backend.read_snapshot(self.cancel)
+                sample = sample_reader(self.cancel, deadline)
+                if self.cancel.is_set():
+                    raise RuntimeError("Execution sample cancelled; no fresh measurement")
+                if time.monotonic() > deadline:
+                    raise RuntimeError("Execution sample exceeded source wait budget")
             except Exception as error:
                 notice["sample_error"] = _error(error)
             else:
@@ -255,11 +315,29 @@ class Worker(object):
                 notice["sample_started_monotonic"] = started
                 notice["sample_completed_monotonic"] = time.monotonic()
                 notice["sample_age_seconds"] = time.monotonic() - started
+                if self.request_started is not None:
+                    notice["sample_started_after_request_seconds"] = max(0., started - self.request_started)
                 notice["sample_duration_seconds"] = notice["sample_completed_monotonic"] - started
                 notice["sample_time_interpretation"] = "Child-local duration; absolute monotonic origin not shared"
-            notice["sampling_policy"] = "best_effort_same_owner_not_hard_realtime"
+            notice["sampling_policy"] = "explicit_opt_in_deadline_same_owner_not_hard_realtime"
+            notice["configured_aggregate_sample_budget_seconds"] = budget
         self._emit(dict(kind="progress", id=self.active_id, event=notice,
                         attributes=_attributes(self.backend)))
+
+    def _publish_software_observation(self):
+        getter = getattr(self.backend, "get_software_state", None)
+        if not callable(getter):
+            return
+        try:
+            observed = time.monotonic()
+            state = getter()  # Same owner RAM only; cold/post-close raises.
+        except Exception:
+            return
+        self._emit(dict(kind="progress", id=self.active_id, attributes={}, event=dict(
+            kind="SOFTWARE_STATE_NOT_MEASUREMENT", software_state=state,
+            software_state_observed_monotonic=observed,
+            source_effect="OWNER_OBSERVATION", simulated=getattr(self.backend, "_stage_simulated", False),
+            safe_to_sample=False, hardware_acknowledged=False)))
 
     def _call(self, operation, arguments, keywords):
         if operation not in OPERATIONS or type(arguments) is not tuple or type(keywords) is not dict:
@@ -278,11 +356,16 @@ class Worker(object):
             raise RuntimeError("No constructed child backend; release cannot be certified")
         method = getattr(self.backend, operation)
         if operation in ("initialize", "read_snapshot", "general_start"):
-            return method(self.cancel, **keywords)
+            result = method(self.cancel, **keywords)
+            self._publish_software_observation()
+            return result
         if operation in ("execute_stage", "execute_impulsion", "set_ht_voltage",
                          "configure_counter_timing", "execute_cooling_guard"):
-            return method(arguments[0], self.cancel, **keywords)
-        return method(**keywords)
+            result = method(arguments[0], self.cancel, **keywords)
+        else:
+            result = method(**keywords)
+        self._publish_software_observation()
+        return result
 
     def _retain_owner(self):
         if self.backend is None:
@@ -327,6 +410,7 @@ class Worker(object):
             operation, request_id = message.get("operation"), message["id"]
             with self.state_lock:
                 self.active_id = request_id
+                self.request_started = time.monotonic()
                 self.cancel.clear()
                 if self.cancelled_id == request_id:
                     self.cancel.set()

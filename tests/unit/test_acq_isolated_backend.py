@@ -87,6 +87,15 @@ class FixtureBackend(object):
             time.sleep(self.delay)
         return self._record("read_snapshot", {39: (1.25, False), "banks": {"fixture": (True, False)}})
 
+    def execution_sample_budget_seconds(self):
+        return 2.
+
+    def read_snapshot_for_execution(self, cancel, deadline_monotonic):
+        value = self.read_snapshot(cancel)
+        if time.monotonic() > deadline_monotonic:
+            raise RuntimeError("Fixture execution read exceeded deadline")
+        return value
+
     def general_start(self, cancel, operator_confirmed=False):
         assert operator_confirmed is True
         self.procedure = dict(name="general_start", state="EXECUTING")

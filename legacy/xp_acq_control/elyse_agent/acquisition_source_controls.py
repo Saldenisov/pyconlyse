@@ -231,6 +231,7 @@ class SourceControls(object):
         self._source_preflight("counter_controls_verified", True,
                                retry_counters=not operation.endswith(".stop"))
         self.procedure = dict(name=operation, state="EXECUTING", hardware_acknowledged=False)
+        self.record_procedure_request(operation)
         try:
             result = execute_impulsion(
                 operation, self._source_counter_start, self.owner.read_counter_pulse_done,
