@@ -8,14 +8,15 @@ const BANKS = ['C1NI6071E', 'C2NI6071E', 'C3_IN_DIO96', 'C3_OUT_DIO96', 'C4_IN_D
   'C5_IN_DIO96', 'C5_OUT_DIO96', 'C6NI6703', 'C7NI6703', 'C8NI6703', 'C9NI6703', 'C1011NI6602',
   'DPS', 'DPC', 'EPS', 'EPC', 'C12NI1409', 'VDM-A', 'VDM-S', 'VDD', 'VAM-A', 'VAM-S', 'VAD', 'VTA', 'VTS', 'VTL'];
 const commandView = (selected = true) => ({ schema_version: 1, mode: selected ? 'XP_CONTROL' : 'LABVIEW_READ_ONLY',
+  source_mode: selected ? 'PYTHON_NATIVE' : 'LABVIEW_BRIDGE',
   source_selected: selected, session_id: 'a'.repeat(32), revision: 7, state: 'RUNNING', commands: [],
   capabilities: selected ? { 'modulator.general.start': { enabled: true, reason: '' },
     'modulator.general.stop': { enabled: true, reason: '' },
     'ht_voltage.set': { enabled: true, reason: '' } } : {} });
 
-function telemetry() {
+function telemetry(selected = false) {
   return { schema_version: 1, server_state: 'ON', quality: 'FRESH', expected_banks: BANKS,
-    stale_after_seconds: 2, error_banks: [], snapshot: { source: 'copied_labview_telemetry',
+    stale_after_seconds: 2, error_banks: [], snapshot: { source: selected ? 'python_daqmx_acquisition' : 'copied_labview_telemetry',
       receiver_session: 'offline-test', received_this_process: 27, publications: Object.fromEntries(BANKS.map((bank) => [bank,
         { data: [1.25], age_seconds: .1, stale: false, sequence: 7,
           error: { status: false, code: 0, source: '' }, lv_type: { type: 'Array', element_type: { type: 'DBL' } } }])) } };
@@ -37,7 +38,7 @@ afterEach(() => { delete global.fetch; jest.useRealTimers(); });
 function mount(selected = true) {
   global.fetch = jest.fn(async (url, options) => {
     if (url === '/api/elyse/acquisition/control') return { ok: true, json: async () => commandView(selected) };
-    if (url === '/api/elyse/acquisition/telemetry') return { ok: true, json: async () => telemetry() };
+    if (url === '/api/elyse/acquisition/telemetry') return { ok: true, json: async () => telemetry(selected) };
     if (url === '/api/elyse/acquisition/control/commands') {
       const command = JSON.parse(options.body);
       return { ok: true, json: async () => ({ schema_version: 1, receipt: {
@@ -73,6 +74,61 @@ test('production Elyse route mounts provider and reachable controls, sends only 
   expect(JSON.parse(commands[0][1].body)).toEqual(expect.objectContaining({ operation: 'modulator.general.start',
     expected_revision: 7, session_id: 'a'.repeat(32), value: null, operator_confirmed: true }));
   expect(await screen.findByText(/General : QUEUED/)).toBeInTheDocument();
+});
+
+test('one persistent telemetry poller feeds connection status and raw banks across tabs', async () => {
+  jest.useFakeTimers();
+  mount();
+  const connection = screen.getByRole('region', { name: 'Connexion unique Acquisition' });
+  await waitFor(() => expect(connection).toHaveTextContent('27 / 27 banques'));
+  expect(connection).toHaveTextContent('10.20.30.10');
+  expect(connection).toHaveTextContent('elyse/acquisition/telemetry');
+  expect(connection).toHaveTextContent('NI → acquisition native dans le même serveur XP');
+  const reads = () => fetch.mock.calls.filter(([url]) => url === '/api/elyse/acquisition/telemetry').length;
+  expect(reads()).toBe(1);
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition Telemetry' }));
+  await act(async () => { jest.advanceTimersByTime(0); });
+  expect(reads()).toBe(1); // No extra raw-view reader.
+  fireEvent.click(screen.getByRole('tab', { name: 'Experiment' }));
+  await act(async () => { jest.advanceTimersByTime(1000); });
+  expect(reads()).toBe(2);
+  expect(fetch.mock.calls.every(([url]) => url.startsWith('/api/elyse/acquisition/'))).toBe(true);
+  expect(fetch.mock.calls.every(([, options]) => options.method === 'GET')).toBe(true);
+});
+
+test('the same server changing to VI mode invalidates confirmation without issuing a command', async () => {
+  jest.useFakeTimers();
+  mount();
+  const original = fetch.getMockImplementation();
+  let native = true;
+  fetch.mockImplementation((url, options) => url === '/api/elyse/acquisition/control'
+    ? Promise.resolve({ ok: true, json: async () => commandView(native) }) : original(url, options));
+  fireEvent.click(screen.getByRole('tab', { name: 'Experiment' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Marche General' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Marche General' }));
+  native = false;
+  await act(async () => { jest.advanceTimersByTime(1000); });
+  expect(screen.getByRole('button', { name: 'Confirmer' })).toBeDisabled();
+  expect(screen.getByRole('region', { name: 'Connexion unique Acquisition' })).toHaveTextContent('VI LabVIEW → relais dans le serveur XP');
+  expect(fetch.mock.calls.some(([, options]) => options.method === 'POST')).toBe(false);
+});
+
+test('metadata failure and read recovery never restart XP or replay an operation', async () => {
+  jest.useFakeTimers();
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: 'Experiment' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Marche General' })).toBeEnabled());
+  const original = fetch.getMockImplementation();
+  let online = false;
+  fetch.mockImplementation((url, options) => url === '/api/elyse/acquisition/control' && !online
+    ? Promise.resolve({ ok: false, json: async () => ({ error: 'fake DS unavailable' }) }) : original(url, options));
+  await act(async () => { jest.advanceTimersByTime(1000); });
+  expect(screen.getByRole('button', { name: 'Marche General' })).toBeDisabled();
+  expect(screen.getByRole('region', { name: 'Connexion unique Acquisition' })).toHaveTextContent('UNAVAILABLE');
+  online = true;
+  await act(async () => { jest.advanceTimersByTime(1000); });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Marche General' })).toBeEnabled());
+  expect(fetch.mock.calls.every(([, options]) => options.method === 'GET')).toBe(true);
 });
 
 test('legacy Modulator controls remain non-actuating even when native commands are permitted', async () => {

@@ -4,6 +4,8 @@ import AcqTelemetry from './AcqTelemetry';
 import { acqTelemetryClient } from './api/acqTelemetryClient';
 import AcquisitionCommands from './AcquisitionCommands';
 import AcquisitionExperimentControls from './AcquisitionExperimentControls';
+import AcquisitionConnection from './AcquisitionConnection';
+import useAcquisitionTelemetry from './useAcquisitionTelemetry';
 import Synchronization from './tabs/Synchronization';
 import Modulator from './tabs/Modulator';
 import HT from "./tabs/HT";
@@ -32,6 +34,8 @@ const TEST_ONLY_MESSAGE =
 const Elyse = () => {
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [actionMessage, setActionMessage] = useState(TEST_ONLY_MESSAGE);
+  const [telemetryRevision, setTelemetryRevision] = useState(0);
+  const telemetry = useAcquisitionTelemetry(acqTelemetryClient, true, telemetryRevision);
 
   const handleTabClick = (tab) => {
     setActiveTab(tab);
@@ -56,7 +60,8 @@ const Elyse = () => {
   const renderTabContent = (tab) => {
     switch (tab) {
       case "Acquisition Telemetry":
-        return <AcqTelemetry client={acqTelemetryClient} />;
+        return <AcqTelemetry client={acqTelemetryClient} telemetry={telemetry}
+          onRefresh={() => setTelemetryRevision((value) => value + 1)} />;
       case "Experiment":
         return <AcquisitionExperimentControls />;
       case "Modulator":
@@ -76,6 +81,7 @@ const Elyse = () => {
   return (
     <AcquisitionCommands client={acqTelemetryClient}><div>
       <h1>ELYSE Control Panel</h1>
+      <AcquisitionConnection telemetry={telemetry} />
       <div
         style={{
           margin: '12px 0 16px',

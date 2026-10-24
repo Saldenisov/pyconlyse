@@ -64,7 +64,10 @@ def test_web_tango_http_owner_general_water_next_stage_and_stop(tmp_path, monkey
         def set_timeout_millis(self, value): pass
         def read_attribute(self, name):
             bridge.poll_once()
-            return SimpleNamespace(has_failed=False, value=json.dumps(bridge.snapshot()))
+            value = bridge.snapshot()
+            # Fake the dual-mode publisher metadata, not an additional owner.
+            value['runtime']['telemetry_delivery'] = dict(source_mode='PYTHON_NATIVE')
+            return SimpleNamespace(has_failed=False, value=json.dumps(value))
         def command_inout(self, name, encoded):
             assert name == "ExecuteCommand"
             return json.dumps(bridge.client.submit(json.loads(encoded)))

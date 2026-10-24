@@ -170,28 +170,11 @@ def test_missing_cooling_service_and_unknown_source_are_explicit_not_healthy(set
     assert calls == []
 
 
-def test_xp_runtime_source_never_falls_back_to_labview(setup_api, monkeypatch):
-    from legacy.xp_acq_agent.elyse_agent.cooling_safety import CoolingSafety
-    app, _, _ = setup_api
+def test_retired_xp_runtime_source_cannot_contact_another_device(setup_api):
+    app, _, calls = setup_api
     app.config["ELYSE_COOLING_SOURCE"] = "xp_runtime"
-    calls = []
-    bridge = dict(source="xp_python_acquisition_runtime", bridge_stale=False,
-                  runtime=dict(auto_initialize=False, remote_initialization_enabled=False,
-                               remote_setpoints_enabled=False, cooling_safety=CoolingSafety().snapshot()))
-    class RuntimeProxy:
-        def set_timeout_millis(self, timeout):
-            pass
-        def read_attribute(self, name):
-            calls.append(name)
-            return SimpleNamespace(has_failed=False, value=json.dumps(bridge))
-    def factory(name):
-        calls.append(name)
-        return RuntimeProxy()
-    monkeypatch.setattr(api.tango_gateway, "create_device_proxy", factory)
-    assert app.test_client().get(URL + "/cooling").status_code == 200
-    bridge["bridge_stale"] = True
     assert app.test_client().get(URL + "/cooling").status_code == 503
-    assert calls == ["tango://10.20.30.202:10000/elyse/acquisition/runtime", "runtime_json"] * 2
+    assert calls == []
 
 
 @pytest.mark.parametrize("method", ["post", "put", "delete", "patch"])

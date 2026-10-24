@@ -18,8 +18,8 @@ from legacy.xp_acq_control.elyse_agent.acquisition_remote import OPERATIONS, val
 from legacy.xp_acq_control.elyse_agent.runtime_identity import valid_hex
 from mutation_auth import install_mutation_auth
 from hardware_authorization import AuthorizationError, Operation, authorize_runtime_operation
+from acq_contract import DEVICE, SOURCE_MODES, topology
 
-DEVICE = "tango://10.20.30.202:10000/elyse/acquisition/telemetry"
 MAX_BYTES = 2 * 1024 * 1024
 api = Blueprint("acq_control_api", __name__, url_prefix="/api/elyse/acquisition/control")
 install_mutation_auth(api, protected_get_endpoints=("get_control",))
@@ -127,10 +127,14 @@ def _history(results=(), session=None):
 
 def public_view(view):
     runtime = view["runtime"]
+    source_mode = runtime.get("telemetry_delivery", {}).get("source_mode")
+    if source_mode not in SOURCE_MODES:
+        source_mode = "UNKNOWN"
     history = _history(runtime["control"].get("results", []), runtime["session_id"])
     unknown = any(item["session_id"] == runtime["session_id"] and item["outcome"] == "INDETERMINATE" for item in history)
     enabled = (view.get("commands_enabled") is True
-               and runtime["control"]["enabled"] is True and runtime.get("remote_setpoints_enabled") is True)
+               and runtime["control"]["enabled"] is True and runtime.get("remote_setpoints_enabled") is True
+               and source_mode == "PYTHON_NATIVE")
     capabilities = {name: dict(enabled=enabled and item["enabled"],
                               reason=item["reason"] or ("" if enabled else "PYTHON_CONTROL_SOURCE_NOT_ACTIVE"))
                     for name, item in runtime["control"]["capabilities"].items()}
@@ -138,7 +142,9 @@ def public_view(view):
         for name, capability in capabilities.items():
             if name != "modulator.general.stop":
                 capability.update(enabled=False, reason="UNRESOLVED_DISPATCH_DO_NOT_RESEND")
-    return dict(schema_version=1, mode="XP_CONTROL", device=DEVICE, source_selected=True,
+    return dict(schema_version=1, mode="XP_CONTROL", device=DEVICE,
+                source_selected=source_mode == "PYTHON_NATIVE", source_mode=source_mode,
+                topology=topology(),
                 execution_allowed=any(item["enabled"] for item in capabilities.values()),
                 session_id=runtime["session_id"], revision=runtime["state_revision"], build_id=runtime["build_id"],
                 state=runtime["state"], quality=view.get("quality"), capabilities=capabilities,
@@ -161,12 +167,14 @@ def get_control():
         unused, view = read_view(allow_labview=True)
         if view.get("source") == "labview_receive_only":
             return jsonify(schema_version=1, mode="LABVIEW_READ_ONLY", execution_allowed=False,
-                           source_selected=False, state="DISABLED", capabilities={}, commands=_history())
+                           source_selected=False, source_mode="LABVIEW_BRIDGE", topology=topology(),
+                           state="DISABLED", capabilities={}, commands=_history())
         return jsonify(public_view(view))
     except Exception as error:
         current_app.logger.warning("ACQ control read unavailable: %s", type(error).__name__)
         return jsonify(schema_version=1, mode="XP_CONTROL", execution_allowed=False,
                        source_selected=False, state="UNAVAILABLE", capabilities={},
+                       source_mode="UNKNOWN", topology=topology(),
                        commands=_history(), error="Device Server Python Acquisition indisponible."), 503
 
 
@@ -217,11 +225,18 @@ def post_command():
                 raise ValueError("Observed XP session/revision changed; refresh and confirm again")
             if (view.get("commands_enabled") is not True
                     or runtime["control"]["enabled"] is not True or runtime.get("remote_setpoints_enabled") is not True
+                    or runtime.get("telemetry_delivery", {}).get("source_mode") != "PYTHON_NATIVE"
                     or runtime["control"]["capabilities"][command["operation"]]["enabled"] is not True):
                 raise ValueError(runtime["control"]["capabilities"][command["operation"]]["reason"] or "COMMANDS_DISABLED")
         except Exception as error:
             db.execute("ROLLBACK")
-            return jsonify(error=str(error)[:300]), 409
+            # Fresh first-attempt ID, no reservation/ExecuteCommand yet.
+            # A source/boot/capability change is a refusal, not an unknown
+            # actuation result. Existing-ID branches above never use this.
+            message = str(error)[:300]
+            return jsonify(schema_version=1, error=message,
+                code="acquisition_pre_dispatch_rejected", automatic_retry=False,
+                receipt=_receipt(command, "REJECTED", dispatch_attempted=False, error=message)), 409
         receipt = _receipt(command, "INDETERMINATE", error="Dispatch reserved; check XP receipt, never retry automatically")
         db.execute("INSERT INTO commands VALUES (?,?,?)", (command["command_id"], encoded, json.dumps(receipt)))
         db.execute("COMMIT")

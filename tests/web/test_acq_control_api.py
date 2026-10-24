@@ -30,6 +30,7 @@ def view_fixture():
                     auto_initialize=False, remote_initialization_enabled=False, remote_setpoints_enabled=True,
                     state="RUNNING", session_id="a" * 32, build_id="d" * 64, state_revision=7,
                     startup_phase="NOT_STARTED", age_seconds=.1,
+                    telemetry_delivery=dict(source_mode="PYTHON_NATIVE"),
                     control=dict(protocol_version=1, enabled=True, lease="do-not-disclose",
                         capabilities={name: dict(enabled=name != "cooling.stop", reason="" if name != "cooling.stop" else "COOLDOWN")
                                       for name in api.OPERATIONS}, results=[]),

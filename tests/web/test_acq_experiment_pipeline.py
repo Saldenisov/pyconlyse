@@ -118,7 +118,17 @@ def experiment(tmp_path, monkeypatch):
         identity=identity, recovery_guard=guard, period=.02)
     # Routing/serialization test: virtual lease clock avoids wall-time load
     # flakiness. Separate tests exercise real/deterministic lease expiry.
-    runtime.broker.clock = lambda: 1000.
+    lease_clock = [1000.]
+    runtime.broker.clock = lambda: lease_clock[0]
+    issue_lease = runtime.broker.issue_lease_nonblocking
+    def route_fixture_lease(**kwargs):
+        # This fixture verifies routing, not the intentional no-lease result
+        # when a concurrent owner holds the lock. Pin that scheduling point;
+        # expiry, lifecycle, identity and capacity checks still run unchanged.
+        # Production non-waiting admission is covered by its dedicated suites.
+        with runtime._lock:
+            return issue_lease(**kwargs)
+    monkeypatch.setattr(runtime.broker, 'issue_lease_nonblocking', route_fixture_lease)
     server = ControlHTTPServer(('127.0.0.1', 0), runtime, b'r' * 32, b'w' * 32)
     thread = threading.Thread(target=lambda: server.serve_forever(poll_interval=.02), daemon=True)
     bridge = ControlBridge(ControlClient(b'r' * 32, b'w' * 32, enabled=True,
@@ -129,7 +139,10 @@ def experiment(tmp_path, monkeypatch):
             pass
         def read_attribute(self, name):
             bridge.poll_once()
-            return SimpleNamespace(has_failed=False, value=json.dumps(bridge.snapshot()))
+            value = bridge.snapshot()
+            # This transport fixture has no real dual-mode publisher.
+            value['runtime']['telemetry_delivery'] = dict(source_mode='PYTHON_NATIVE')
+            return SimpleNamespace(has_failed=False, value=json.dumps(value))
         def command_inout(self, name, encoded):
             assert name == 'ExecuteCommand'
             return json.dumps(bridge.client.submit(json.loads(encoded)))
@@ -162,6 +175,9 @@ def experiment(tmp_path, monkeypatch):
         until(lambda: runtime.snapshot()['state'] == 'RUNNING' and not runtime.snapshot()['stale'])
 
     def submit(operation, value=None, command_id=None):
+        # Advance between fake operator decisions so unused observation leases
+        # expire rather than filling the bounded pool under a frozen clock.
+        lease_clock[0] += 3.
         view = client.get(ROOT).json
         assert view['source_selected'], view
         return client.post(ROOT + '/commands', headers=headers, json=dict(command_id=command_id or uuid4().hex,

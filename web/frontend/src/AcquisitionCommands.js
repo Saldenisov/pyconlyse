@@ -7,6 +7,7 @@ const changedMessage = 'État Acquisition modifié ou périmé. Relire et confir
 const capabilityKey = (value) => JSON.stringify(Object.keys(value?.capabilities || {}).sort()
   .map((name) => [name, value.capabilities[name]?.enabled, value.capabilities[name]?.reason || '']));
 const currentNative = (value) => value?.source_selected === true
+  && (value.source_mode === undefined || value.source_mode === 'PYTHON_NATIVE')
   && /^[0-9a-f]{32}$/.test(value.session_id || '') && Number.isSafeInteger(value.revision) && value.revision >= 0;
 const validValue = (operation, value) => operation === 'ht_voltage.set'
   ? typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 20 : value === null;
@@ -32,6 +33,11 @@ function readLedger() {
 export function useAcquisitionPanelName(name) {
   const control = useContext(Context);
   return `${name} · ${control?.view?.source_selected && control?.fresh ? 'commandes supervisées' : 'lecture seule'}`;
+}
+
+export function useAcquisitionConnection() {
+  const control = useContext(Context);
+  return { view: control?.view, fresh: control?.fresh === true };
 }
 
 export function AcquisitionCommand({ operation, name, value = null, className, children }) {
@@ -169,7 +175,10 @@ export default function AcquisitionCommands({ client, children }) {
   const last = view?.commands?.[0];
   return <Context.Provider value={{ view, fresh, pending, choose, invalidateValue, permitted }}>
     {supported && <div className="acq-command-status" aria-label="État commandes Acquisition">
-      <span>{failure || (view?.source_selected ? `Acquisition Python : ${view.state}` : 'LabVIEW : lecture seule · commandes Python non activées')}
+      <span>{failure || (view?.source_selected ? `Acquisition Python : ${view.state}`
+        : view?.source_mode === 'LABVIEW_BRIDGE' || view?.mode === 'LABVIEW_READ_ONLY'
+          ? 'Serveur XP : relais VI · lecture seule · commandes Python non activées'
+          : `Serveur XP : ${view?.state || 'en attente'} · commandes non disponibles`)}
         {view?.startup_phase && view.startup_phase !== 'NOT_STARTED' ? ` · ${view.startup_phase}` : ''}</span>
       {last && <span>{last.operation} : {last.outcome}{last.error ? ` · ${last.error}` : ''}
         {['QUEUED', 'EXECUTING', 'INDETERMINATE'].includes(last.outcome) ? ' · Ne pas renvoyer la commande.' : ''}</span>}

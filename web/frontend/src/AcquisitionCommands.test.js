@@ -79,8 +79,8 @@ test('runtime revision changing while dialog is open requires fresh confirmation
 });
 
 test('read-only LabVIEW source never enables commands even if an erroneous capability says enabled', async () => {
-  const { client } = setup(state({ source_selected: false }));
-  expect(await screen.findByText(/LabVIEW : lecture seule/)).toBeInTheDocument();
+  const { client } = setup(state({ source_selected: false, source_mode: 'LABVIEW_BRIDGE' }));
+  expect(await screen.findByText(/Serveur XP : relais VI/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Marche GENERAL/ })).toBeDisabled();
   expect(client.command).not.toHaveBeenCalled();
 });

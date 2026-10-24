@@ -10,8 +10,8 @@ from flask import Blueprint, current_app, jsonify, request, Response
 from pathlib import Path
 from legacy.xp_acq_agent.elyse_agent.shared_state import BANKS
 from mutation_auth import install_mutation_auth
+from acq_contract import DEVICE, XP_HOST, TANGO_DEVICE, topology
 
-DEVICE = "tango://10.20.30.202:10000/elyse/acquisition/telemetry"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 STALE_SECONDS = 2
 acq_telemetry_api = Blueprint(
@@ -111,8 +111,9 @@ def present_snapshot(raw, server_state):
         schema_version=1,
         execution_allowed=False,
         hardware_writes=False,
-        source_host="10.20.30.10",
-        device="elyse/acquisition/telemetry",
+        source_host=XP_HOST,
+        device=TANGO_DEVICE,
+        topology=topology(),
         server_state=server_state,
         observed_utc=datetime.now(timezone.utc).isoformat(),
         stale_after_seconds=STALE_SECONDS,
@@ -211,37 +212,23 @@ def get_history():
 
 @acq_telemetry_api.get("/cooling")
 def get_cooling_safety():
-    """Explicit source, never a fallback from Python control to LabVIEW data."""
-    source = current_app.config.get("ELYSE_COOLING_SOURCE", "labview")
+    """Observe the selected producer through the one telemetry/control DS.
+
+    Legacy labview/xp_control labels are configuration aliases, not alternate
+    transports. The retired xp_runtime DS is never contacted or substituted.
+    """
+    source = current_app.config.get("ELYSE_COOLING_SOURCE", "unified")
     try:
-        if source == "labview":
-            proxy = tango_gateway.create_device_proxy(DEVICE)
-            proxy.set_timeout_millis(1500)
-            state, attr = proxy.read_attributes(["State", "telemetry_json"])
-            if state.has_failed or attr.has_failed or str(state.value) != "ON":
-                raise ValueError("Telemetry receiver not ready")
-            body = present_snapshot(attr.value, str(state.value))
-            safety = body["cooling_safety"]
-            if body["source"] == "python_daqmx_acquisition":
-                source = "xp_control"
-        elif source == "xp_runtime":
-            proxy = tango_gateway.create_device_proxy(
-                "tango://10.20.30.202:10000/elyse/acquisition/runtime")
-            proxy.set_timeout_millis(1500)
-            attr = proxy.read_attribute("runtime_json")
-            if attr.has_failed or not isinstance(attr.value, str) or len(attr.value) > MAX_JSON_BYTES:
-                raise ValueError("Runtime attribute unavailable")
-            bridge = json.loads(attr.value)
-            if bridge.get("source") != "xp_python_acquisition_runtime" or bridge.get("bridge_stale") is not False:
-                raise ValueError("Authenticated runtime bridge is stale")
-            runtime = bridge.get("runtime", {})
-            if (runtime.get("auto_initialize") is not False
-                    or runtime.get("remote_initialization_enabled") is not False
-                    or runtime.get("remote_setpoints_enabled") is not False):
-                raise ValueError("Runtime contract incompatible")
-            safety = runtime.get("cooling_safety")
-        else:
-            raise ValueError("Unknown cooling source")
+        if source not in ("unified", "labview", "xp_control"):
+            raise ValueError("Retired or unknown cooling source; select unified telemetry DS")
+        proxy = tango_gateway.create_device_proxy(DEVICE)
+        proxy.set_timeout_millis(1500)
+        state, attr = proxy.read_attributes(["State", "telemetry_json"])
+        if state.has_failed or attr.has_failed or str(state.value) != "ON":
+            raise ValueError("Telemetry receiver not ready")
+        body = present_snapshot(attr.value, str(state.value))
+        safety = body["cooling_safety"]
+        source = "xp_control" if body["source"] == "python_daqmx_acquisition" else "labview"
         if not isinstance(safety, dict) or safety.get("schema_version") != 1:
             raise ValueError("Cooling alarm service not installed on selected source")
         if source == "labview" and safety.get("automatic_stop_available") is not False:
@@ -270,7 +257,7 @@ def get_cooling_safety():
         # This route is observation-only even when XP independently owns a
         # locally commissioned stop policy. It never submits that stop.
         return jsonify(schema_version=1, execution_allowed=False, hardware_writes=False,
-                       source=source, cooling_safety=safety)
+                       source=source, topology=topology(), cooling_safety=safety)
     except Exception as error:
         current_app.logger.warning("Cooling alarm source unavailable: %s", type(error).__name__)
         return jsonify(schema_version=1, execution_allowed=False, hardware_writes=False,
