@@ -247,3 +247,11 @@ performed by this audit or the unaveraged change.
 The historical Everest deployment CLI also needs an enforced approval/change
 identifier, dry-run preflight and a tested restore path before future use.
 Its docstring alone is not an execution gate. No deployment CLI was run here.
+
+Subsequent offline work is recorded in
+``ELYSE_EPS_DPS_EXECUTION_TELEMETRY_2026-10-23.rst`` and
+``ELYSE_EXPERIMENT_COMMANDS_2026-10-24.rst``. These candidates add EPS/DPS
+software observations, qualified execution-sample handling, mounted named
+operator controls, an HT software-order gate and four source-pinned C5 pulses.
+They do not retroactively qualify the physical limits identified above or
+establish Faraday EN as a verified opening/retraction command.
