@@ -139,7 +139,7 @@ def get_telemetry():
             raise ValueError("Tango telemetry attribute unavailable")
         return jsonify(present_snapshot(attribute.value, str(state.value)))
     except Exception as error:
-        # No fallback to PSP, card reads or a command-capable device.
+        # No fallback to PSP, card reads or another Tango device.
         current_app.logger.warning(
             "ACQ telemetry read unavailable: %s", type(error).__name__
         )
