@@ -19,7 +19,7 @@ from .command_broker import CommandBroker
 from .cooling_safety import CoolingSafety, decode_publications, runtime_publications
 from .chroma_focal_stop import BRANCHES
 from .runtime_identity import SOURCE_PATHS
-from .control_policy import require_command, command_capabilities
+from .control_policy import require_command, command_capabilities, BEAMLINE_OPERATIONS
 from .cooling_startup import wait_for_cooling
 from .hardware_plan import AI_BANKS, DI_BANKS
 from .acquisition_procedures import ProcedureCancelled
@@ -169,6 +169,10 @@ class _ObservedBackend(object):
 
     @_execution_context
     def execute_stage(self, operation, *args, **kwargs):
+        if operation in BEAMLINE_OPERATIONS:
+            if self.runtime._general_cooling_ready is not True:
+                raise RuntimeError("GENERAL_AND_CONFIRMED_COOLING_REQUIRED")
+            self.runtime._start_permit()
         if operation == "cooling.start":
             token, error = self.runtime.broker.begin(operation), None
             try:
@@ -491,7 +495,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             raise RuntimeError("Start blocked: fresh normal Canon and Section cooling indications required")
 
     def dispatch_remote(self, operation, value):
-        require_command(self.snapshot(), operation)
+        require_command(self.snapshot(), operation, value)
         if operation == "modulator.general.start":
             return self.general_start(operator_confirmed=True)
         if operation == "modulator.general.stop":
@@ -504,7 +508,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         if operation == "cooling.start":
             if not self._stop_qualified():
                 raise RuntimeError("Cooling recovery requires commissioned shutdown")
-        elif operation.endswith(".start") or operation.endswith(".reset"):
+        elif (operation.endswith(".start") or operation.endswith(".reset")
+              or operation in BEAMLINE_OPERATIONS):
             self._start_permit()
         return self.stage_request(operation, operator_confirmed=True)
 

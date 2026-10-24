@@ -29,7 +29,7 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'acq-unified-stage-telemetry-20261023-v8-r7'
+    assert result['release'] == 'acq-unified-experiment-commands-20261024-v8-r8'
     assert result['native_analog_processing'] == 'last_raw_sample_of_finite_block'
     assert result['native_software_averaging'] is False
     assert result['native_finite_samples_per_channel'] == 10
@@ -38,6 +38,14 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert result['native_software_status_banks'] == ['EPS', 'DPS']
     assert result['execution_sampling_default'] is None
     assert 'not hardware readback' in result['native_software_status_semantics']
+    assert result['named_operation_count'] == 23
+    assert result['matched_control_capability_set_required'] is True
+    assert result['beamline_pulses_default_enabled'] is False
+    assert result['faraday_hors_commands_qualified'] is False
+    assert result['faraday_3_position_feedback_qualified'] is False
+    assert result['ht_increase_requires_software_supply_and_modulator'] is True
+    assert result['autonomous_ht_ramp'] is False
+    assert 'elyse_agent/acquisition_beamline.py' in included
     assert all(hashlib.sha256((release / row['path']).read_bytes()).hexdigest() == row['sha256']
                for row in result['files'])
     assert json.loads((release / 'manifest.json').read_text())['auto_initialize'] is False

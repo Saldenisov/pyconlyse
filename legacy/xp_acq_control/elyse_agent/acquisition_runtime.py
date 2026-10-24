@@ -20,6 +20,8 @@ from .acquisition_source_controls import IMPULSION_OPERATIONS, validate_ht_comma
 from .acquisition_impulsion import ImpulsionExecutionCancelled
 from .acquisition_ht_voltage import HTVoltageCancelled
 from .acquisition_counter_timing import decode_counter_bank, CounterTimingCancelled
+from .control_policy import BEAMLINE_OPERATIONS, known_ht_command, require_ht_value
+from .acquisition_beamline import BeamlineExecutionCancelled
 
 
 class AcquisitionRuntime(object):
@@ -52,6 +54,14 @@ class AcquisitionRuntime(object):
         self._counter_timing_command = None
         self._counter_timing_stop_required = set()
         self._stage_command = None
+        # Additional Python software-sequence proof, not physical HT readiness.
+        # Never accept an old owner's EPS or a failed/queued start as completion.
+        self._ht_sequence_owner = None
+        self._ht_sequence_generation = None
+        self._ht_supply_sequence_completed = False
+        self._ht_pulses_sequence_completed = False
+        self._ht_command_observation_at = None
+        self._stage_motion_observation_at = None
         self._identity = dict(new_runtime_identity() if identity is None else identity)
         if (type(self._identity.get("runtime_protocol_version")) is not int
                 or self._identity.get("runtime_protocol_version") != RUNTIME_PROTOCOL_VERSION
@@ -134,7 +144,7 @@ class AcquisitionRuntime(object):
         Commissioning is independent of source EPS flags and off by default.
         This API does not add an HTTP/Tango command or a GUI activation button.
         """
-        if operation not in SUPPORTED_OPERATIONS + IMPULSION_OPERATIONS or type(new_value) is not bool:
+        if operation not in SUPPORTED_OPERATIONS + IMPULSION_OPERATIONS + BEAMLINE_OPERATIONS or type(new_value) is not bool:
             raise ValueError("Reviewed stage operation and Boolean NewVal required")
         if operator_confirmed is not True:
             raise ValueError("Explicit local stage confirmation required")
@@ -159,6 +169,14 @@ class AcquisitionRuntime(object):
             if (operation in IMPULSION_OPERATIONS
                     and getattr(self._backend, "counter_controls_verified", False) is not True):
                 raise RuntimeError("Separate counter controls are not commissioned")
+            if (operation in BEAMLINE_OPERATIONS
+                    and getattr(self._backend, "beamline_controls_verified", False) is not True):
+                raise RuntimeError("Separate beamline controls are not commissioned")
+            if operation in BEAMLINE_OPERATIONS:
+                self._require_current_owner_inputs(self._received_at, "BEAMLINE_MOTION")
+                self._stage_motion_observation_at = self._received_at
+            if operation.endswith(".stop") or operation.endswith(".reset"):
+                self._invalidate_ht_sequences()
             self._stage_command = operation
             self._pending = "stage"
             self._operation = "acq.stage." + operation
@@ -187,6 +205,10 @@ class AcquisitionRuntime(object):
                     or getattr(self._backend, "ht_voltage_controls_verified", False) is not True
                     or getattr(self._backend, "control_profile", None) == "general_only_test"):
                 raise RuntimeError("Separate HT-voltage controls are not commissioned")
+            sequence = self._ht_sequence_snapshot()
+            require_ht_value(sequence, command_kv)
+            self._require_current_ht_increase_inputs(command_kv, sequence, self._received_at)
+            self._ht_command_observation_at = self._received_at
             self._ht_command = command_kv
             self._pending = "ht_voltage"
             self._operation = "acq.stage.ht_voltage.set"
@@ -195,6 +217,57 @@ class AcquisitionRuntime(object):
             self._state_revision += 1
             self._wake.set()
             return True
+
+    def _invalidate_ht_sequences(self):
+        self._ht_supply_sequence_completed = False
+        self._ht_pulses_sequence_completed = False
+
+    def _ht_sequence_snapshot(self):
+        """Only RAM from this retained owner; no pipe/NI calls on admission."""
+        backend = self._backend
+        try:
+            supplied = getattr(backend, "ht_sequence_state", None)
+        except Exception:
+            supplied = None
+        result = dict(supplied) if type(supplied) is dict else {}
+        result["owner_current"] = (backend is not None and backend is self._ht_sequence_owner
+                                   and bool(backend.resource_count))
+        isolation = getattr(backend, "isolation_snapshot", None)
+        if isolation is not None:
+            owner = isolation()
+            result["owner_current"] = (result["owner_current"]
+                and owner.get("ownership_uncertain") is False
+                and owner.get("worker_generation") == self._ht_sequence_generation)
+        result["supply_sequence_completed"] = (result.get("supply_sequence_completed") is True
+                                                and self._ht_supply_sequence_completed)
+        result["pulses_sequence_completed"] = (result.get("pulses_sequence_completed") is True
+                                                and self._ht_pulses_sequence_completed)
+        result["hardware_acknowledged"] = False
+        result["interpretation"] = "Additional Python software-sequence gate; not a physical ACK or interlock"
+        return result
+
+    def _require_current_ht_increase_inputs(self, command, sequence, observed_at):
+        current = known_ht_command(sequence)
+        if current is not None and command > current:
+            self._require_current_owner_inputs(observed_at, "HT_INCREASE")
+
+    def _require_current_owner_inputs(self, observed_at, operation):
+        age = None if observed_at is None else self._clock() - observed_at
+        if (type(age) not in (int, float) or not 0 <= age < 2
+                or type(self._latest) is not dict
+                or self._latest.get("source") != "python_daqmx_acquisition"
+                or self._latest.get("simulated") is not False):
+            raise RuntimeError(operation + "_REQUIRES_FRESH_CURRENT_OWNER_INPUTS")
+
+    def _complete_ht_sequence(self, operation):
+        with self._lock:
+            if (self._backend is self._ht_sequence_owner and self._pending is None
+                    and self._operation == "acq.stage." + operation
+                    and not self._cancel.is_set() and not self._shutdown_requested):
+                if operation == "alimentation_ht.start":
+                    self._ht_supply_sequence_completed = True
+                elif operation == "modulator_impulse.start":
+                    self._ht_pulses_sequence_completed = True
 
     def configure_counter_timing(self, snapshot, operator_confirmed=False):
         """Explicit local39 request; no PSP listener or remote timing route."""
@@ -249,6 +322,7 @@ class AcquisitionRuntime(object):
                     or getattr(self._backend, "control_profile", None) == "general_only_test"):
                 raise RuntimeError("Separate outer-stop controls are not commissioned")
             self._cancel.set()  # Interrupt a read/start, not the accepted stop.
+            self._invalidate_ht_sequences()
             self._stage_command = self._ht_command = None
             self._counter_timing_command = None
             self._pending, self._operation = "outer_stop", "acq.outer.controlled_stop"
@@ -266,6 +340,7 @@ class AcquisitionRuntime(object):
             if self._state != "RUNNING" or self._pending is not None or self._shutdown_requested:
                 raise RuntimeError("General Marche requires RUNNING and no pending procedure")
             self._state = "EXECUTING"
+            self._invalidate_ht_sequences()
             self._operation = "modulator.general.start"
             self._received_at = None
             self._general_stop_required = True
@@ -289,6 +364,7 @@ class AcquisitionRuntime(object):
             # Interrupt a read/start, restore its asserted pulse, then stop on
             # the SAME owner. Never close/reopen/reinitialize tasks here.
             self._cancel.set()
+            self._invalidate_ht_sequences()
             self._general_stop_required = True
             self._state = "EXECUTING"
             self._operation = "modulator.general.stop"
@@ -395,6 +471,7 @@ class AcquisitionRuntime(object):
                 ht_supply_stop_required=self._ht_supply_stop_required,
                 pulse_stop_required=self._pulse_stop_required,
                 counter_timing_stop_required=sorted(self._counter_timing_stop_required),
+                ht_sequence_state=self._ht_sequence_snapshot(),
                 procedure=copy.deepcopy(getattr(self._backend, "procedure", None)),
                 control_profile=getattr(self._backend, "control_profile", None),
                 sequence=self._sequence, latest=copy.deepcopy(self._latest),
@@ -410,6 +487,8 @@ class AcquisitionRuntime(object):
                                      commissioned=getattr(self._backend, "stage_controls_verified", False) is True,
                                      ht_commissioned=getattr(self._backend, "ht_controls_verified", False) is True,
                                      focal_commissioned=getattr(self._backend, "focal_controls_verified", False) is True,
+                                     beamline_commissioned=getattr(self._backend, "beamline_controls_verified", False) is True,
+                                     beamline_implemented=list(BEAMLINE_OPERATIONS),
                                      cooling_trip_commissioned=getattr(self._backend, "cooling_trip_verified", False) is True,
                                      impulsion_implemented=list(IMPULSION_OPERATIONS),
                                      counter_commissioned=getattr(self._backend, "counter_controls_verified", False) is True,
@@ -442,6 +521,9 @@ class AcquisitionRuntime(object):
             return False
         with self._lock:
             self._backend = None
+            self._ht_sequence_owner = None
+            self._ht_sequence_generation = None
+            self._invalidate_ht_sequences()
             self._operation = None
             self._error = error
             if self._marker_cleanup_uncertain:
@@ -456,6 +538,7 @@ class AcquisitionRuntime(object):
         # substitute for electrical stop; keep the same owner for Arret/retry.
         with self._lock:
             self._error = type(error).__name__ + ": " + str(error)
+            self._invalidate_ht_sequences()
             # A failing in-flight start/read must not erase a stop already
             # accepted by another thread or open a cleanup/replacement window.
             queued_stop = self._pending is not None and self._stop_in_progress(self._operation)
@@ -518,8 +601,13 @@ class AcquisitionRuntime(object):
                     self._backend = self._factory()
                     if self._backend is None:
                         raise RuntimeError("Backend factory returned no ownership object")
+                    self._ht_sequence_owner = self._backend
+                    self._invalidate_ht_sequences()
                     self._backend.initialize(self._cancel, startup_confirmed=True)
                     with self._lock:
+                        isolation = getattr(self._backend, "isolation_snapshot", None)
+                        self._ht_sequence_generation = (isolation().get("worker_generation")
+                                                        if isolation is not None else None)
                         if not self._cancel.is_set():
                             self._state = "RUNNING"
                             self._state_revision += 1
@@ -588,12 +676,15 @@ class AcquisitionRuntime(object):
                 try:
                     with self._lock:
                         self._require_recovery_clear()
-                        if (self._pending is None and not self._shutdown_requested
-                                and self._operation == "acq.stage." + stage_command):
-                            # Clear cancellation retained by a failed older
-                            # procedure only on the owner, never over a newly
-                            # queued General stop/confirmed close.
-                            self._cancel.clear()
+                        if (self._pending is not None or self._shutdown_requested
+                                or self._operation != "acq.stage." + stage_command):
+                            continue
+                        if stage_command in BEAMLINE_OPERATIONS:
+                            self._require_current_owner_inputs(
+                                self._stage_motion_observation_at, "BEAMLINE_MOTION")
+                        # Only the owner clears a failed earlier cancellation,
+                        # never over an accepted newer stop/confirmed close.
+                        self._cancel.clear()
                     if stage_command in IMPULSION_OPERATIONS:
                         self._backend.execute_impulsion(stage_command, self._cancel, operator_confirmed=True)
                         if stage_command.endswith(".stop"):
@@ -602,8 +693,10 @@ class AcquisitionRuntime(object):
                                 self._counter_timing_stop_required.difference_update((3, 4))
                     else:
                         self._backend.execute_stage(stage_command, self._cancel, operator_confirmed=True)
+                    self._complete_ht_sequence(stage_command)
                     self._finish_stage()
-                except (StageExecutionCancelled, ImpulsionExecutionCancelled) as error:
+                except (StageExecutionCancelled, ImpulsionExecutionCancelled,
+                        BeamlineExecutionCancelled) as error:
                     # The executor has attempted pulse restoration. Preserve
                     # a queued General stop/confirmed close on this owner.
                     with self._lock:
@@ -616,6 +709,13 @@ class AcquisitionRuntime(object):
                 try:
                     with self._lock:
                         self._require_recovery_clear()
+                        if (self._pending is not None or self._shutdown_requested
+                                or self._operation != "acq.stage.ht_voltage.set"):
+                            continue
+                        sequence = self._ht_sequence_snapshot()
+                        require_ht_value(sequence, ht_command)
+                        self._require_current_ht_increase_inputs(
+                            ht_command, sequence, self._ht_command_observation_at)
                     self._backend.set_ht_voltage(ht_command, self._cancel, operator_confirmed=True)
                     self._finish_stage()
                 except HTVoltageCancelled as error:

@@ -22,10 +22,27 @@ def main():
     from elyse_agent.dual_mode_telemetry import DualModeTelemetryPublisher
     from elyse_agent.shared_state import BANKS, validate_snapshot_packet
     from elyse_agent.command_dispatch import CommandDispatcher
+    from elyse_agent.command_protocol import OPERATIONS
+    from elyse_agent.acquisition_beamline import BEAMLINE_OPERATIONS, SOURCE_PATHS
+    from elyse_agent.control_policy import require_ht_value
     import time
     factory_calls = []
     cold = AcquisitionControlRuntime(lambda: factory_calls.append(True))
     assert cold.snapshot()["state"] == "IDLE" and cold.snapshot()["resource_count"] == 0
+    assert len(OPERATIONS) == 23 and set(BEAMLINE_OPERATIONS).issubset(OPERATIONS)
+    assert [SOURCE_PATHS[name]["field"] for name in BEAMLINE_OPERATIONS] == [23, 25, 22, 26]
+    assert [SOURCE_PATHS[name]["nominal_wait_seconds"] for name in BEAMLINE_OPERATIONS] == [.5, .5, 1., 1.]
+    assert not cold.snapshot()["stage_execution"]["beamline_commissioned"]
+    sequence = dict(owner_current=True, command_known=True, current_command_kv=0.,
+                    supply_sequence_completed=False, pulses_sequence_completed=False)
+    try:
+        require_ht_value(sequence, 1.)
+    except RuntimeError as error:
+        assert "HT_INCREASE_REQUIRES" in str(error)
+    else:
+        raise AssertionError("Unstarted supply/pulses must block HT increase")
+    sequence.update(supply_sequence_completed=True, pulses_sequence_completed=True)
+    require_ht_value(sequence, 1.)  # RAM-only policy, never driver execution.
     assert not factory_calls and "nidaqmx" not in sys.modules
     key = b"test-only-cold-loopback-key-000000000000000"
     received = []
@@ -155,6 +172,8 @@ def main():
             independent_command_admission=True, non_waiting_telemetry_projection=True,
             eps_dps_during_commands_without_measurement_refresh=True,
             recent_vi_contention_does_not_erase_or_replay=True,
+            named_operation_count=len(OPERATIONS), beamline_default_disabled=True,
+            source_beamline_pulse_metadata=True, ht_software_order_gate=True,
             build_id=control_identity(root)["build_id"],
             manifest_hashes_verified=hashes_ok,
             cards_initialized=False, hardware_commands_sent=False, live_everest_contacted=False)))

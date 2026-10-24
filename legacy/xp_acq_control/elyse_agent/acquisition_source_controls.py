@@ -43,6 +43,8 @@ class SourceControls(object):
         self._pending_counter_stops.discard(number)
 
     def _source_counter_stop(self, number):
+        if number in (3, 4):
+            self._ht_pulses_sequence_completed = False
         self._ensure_focal_quiescent()
         self._pending_counter_stops.add(number)
         self.owner.stop_counter(number)
@@ -99,6 +101,8 @@ class SourceControls(object):
             raise RuntimeError("Ambiguous counter timing properties: qualified reconciliation required")
 
     def _source_counter_timing_properties(self, number, initial, low, high):
+        if number in (3, 4):
+            self._ht_pulses_sequence_completed = False
         self._ensure_focal_quiescent()
         # A property callback may partially apply before raising. Never claim
         # the previous three-property image still describes this channel.
@@ -210,6 +214,7 @@ class SourceControls(object):
                 self._pending_stage_restorations.pop((15, index), None)
 
     def _retain_control_failure(self, error):
+        self._invalidate_ht_sequence_completion()
         report = getattr(error, "report", getattr(error, "result", None))
         if isinstance(report, dict):
             for bank, index, value in report.get("pending_output_restorations", ()):
@@ -221,6 +226,12 @@ class SourceControls(object):
                               error_type=type(error).__name__)
 
     def execute_impulsion(self, operation, cancel, operator_confirmed=False, new_value=True):
+        if operation == "modulator_impulse.stop":
+            with self._energy_reducing_scope(operation):
+                return self._execute_impulsion(operation, cancel, operator_confirmed, new_value)
+        return self._execute_impulsion(operation, cancel, operator_confirmed, new_value)
+
+    def _execute_impulsion(self, operation, cancel, operator_confirmed=False, new_value=True):
         from .acquisition_impulsion import execute_impulsion
         if operation not in IMPULSION_OPERATIONS or type(new_value) is not bool:
             raise ValueError("Reviewed impulsion operation and Boolean NewVal required")
@@ -230,6 +241,7 @@ class SourceControls(object):
             return False
         self._source_preflight("counter_controls_verified", True,
                                retry_counters=not operation.endswith(".stop"))
+        self._ht_pulses_sequence_completed = False
         self.procedure = dict(name=operation, state="EXECUTING", hardware_acknowledged=False)
         self.record_procedure_request(operation)
         try:
@@ -246,13 +258,61 @@ class SourceControls(object):
             self.last_impulsion = copy.deepcopy(self.procedure.get("report"))
             raise
         self.last_impulsion = copy.deepcopy(result)
+        if operation == "modulator_impulse.start":
+            self._ht_pulses_sequence_completed = True
         self.procedure.update(state="SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK", report=result)
         return result
 
+    @property
+    def ht_sequence_state(self):
+        """RAM-only additional Python ordering policy; no physical HT permit.
+
+        Source EPS flags alone may survive a partially failed callback chain.
+        Current-owner successful start callbacks and retained counter commands
+        therefore qualify them separately, without changing their VI literals.
+        Cold, released, ambiguous or partial command images fail closed.
+        """
+        result = dict(current_command_kv=None, command_known=False,
+                      supply_sequence_completed=False, pulses_sequence_completed=False,
+                      hardware_acknowledged=False)
+        try:
+            software = self.get_software_state()
+            self._require_known_ht_command()
+            values = self.commanded_analog["C9NI6703"]
+            if (type(values) is not tuple or len(values) != 10
+                    or any(type(value) not in (int, float) or not math.isfinite(value) for value in values)):
+                return result
+        except (KeyError, ValueError, TypeError, RuntimeError):
+            return result
+        result.update(current_command_kv=float(values[0]), command_known=True,
+            supply_sequence_completed=(software["EPS"][45] is True
+                and self._ht_supply_sequence_completed is True),
+            pulses_sequence_completed=(software["EPS"][52] is True
+                and self._ht_pulses_sequence_completed is True
+                and all(number in self.started_counters for number in (3, 4))
+                and not self._pending_counter_stops
+                and not self._counter_configuration_uncertain))
+        return result
+
     def set_ht_voltage(self, command_kv, cancel, operator_confirmed=False):
+        command_kv = validate_ht_command(command_kv)
+        sequence = self.ht_sequence_state
+        if sequence["command_known"] is True and command_kv <= sequence["current_command_kv"]:
+            with self._energy_reducing_scope("alimentation_ht.nonincrease"):
+                return self._set_ht_voltage(command_kv, cancel, operator_confirmed)
+        return self._set_ht_voltage(command_kv, cancel, operator_confirmed)
+
+    def _set_ht_voltage(self, command_kv, cancel, operator_confirmed=False):
         from .acquisition_ht_voltage import execute_ht_voltage
         command_kv = validate_ht_command(command_kv)
         self._source_preflight("ht_voltage_controls_verified", operator_confirmed)
+        sequence = self.ht_sequence_state
+        if sequence["command_known"] is not True:
+            raise RuntimeError("HT command requires a complete current-owner known C9 software command")
+        if (command_kv > sequence["current_command_kv"]
+                and (sequence["supply_sequence_completed"] is not True
+                     or sequence["pulses_sequence_completed"] is not True)):
+            raise RuntimeError("HT increase requires current-owner completed supply and modulator start sequences; not a physical permit")
         self.procedure = dict(name="alimentation_ht.voltage", state="EXECUTING", hardware_acknowledged=False)
         try:
             result = execute_ht_voltage(
@@ -270,8 +330,13 @@ class SourceControls(object):
         return result
 
     def outer_controlled_stop(self, operator_confirmed=False):
+        with self._energy_reducing_scope("acquisition.outer_controlled_stop"):
+            return self._outer_controlled_stop(operator_confirmed)
+
+    def _outer_controlled_stop(self, operator_confirmed=False):
         from .acquisition_outer_stop import execute_outer_stop
         self._source_preflight("outer_stop_verified", operator_confirmed, retry_counters=False)
+        self._invalidate_ht_sequence_completion()
         self.procedure = dict(name="acquisition.outer_controlled_stop", state="EXECUTING",
                               hardware_acknowledged=False, source_general_event6=False,
                               resource_release=False, physical_off_confirmed=False)
@@ -293,6 +358,7 @@ class SourceControls(object):
         return dict(source_scalars=copy.deepcopy(self._source_scalars),
                     pending_counter_stops=sorted(self._pending_counter_stops),
                     ht_command_uncertain=self.ht_command_uncertain,
+                    ht_sequence_state=self.ht_sequence_state,
                     counter_configuration_uncertain=sorted(self._counter_configuration_uncertain),
                     commanded_counter_ticks=copy.deepcopy(self.commanded_counter_ticks),
                     counter_ticks_interpretation="Last successful property callbacks; not physical timing readback",

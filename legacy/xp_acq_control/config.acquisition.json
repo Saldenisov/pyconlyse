@@ -13,6 +13,7 @@
   "counter_timing_controls_verified": false,
   "ht_voltage_controls_verified": false,
   "outer_stop_verified": false,
+  "beamline_controls_verified": false,
   "focal_stop": {
     "resources_verified": false,
     "timeout_seconds": 10

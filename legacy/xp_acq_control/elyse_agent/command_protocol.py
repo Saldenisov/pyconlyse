@@ -14,6 +14,8 @@ OPERATIONS = (
     "alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset",
     "modulator.reset", "modulator_impulse.start", "modulator_impulse.stop",
     "ht_voltage.set",
+    "faraday_1.en_pulse", "faraday_3.en_pulse",
+    "laser_mirror.en_pulse", "laser_mirror.hors_pulse",
 )
 FIELDS = frozenset(("command_id", "session_id", "expected_revision", "operation",
                     "operator_confirmed", "value"))

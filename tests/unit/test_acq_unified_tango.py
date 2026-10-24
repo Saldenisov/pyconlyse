@@ -44,6 +44,19 @@ def test_same_device_routes_only_confirmed_current_python_source(facade):
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize('operation,value', [
+    ('faraday_1.en_pulse', None), ('faraday_3.en_pulse', None),
+    ('laser_mirror.en_pulse', None), ('laser_mirror.hors_pulse', None),
+    ('ht_voltage.set', 6.7),
+])
+def test_existing_telemetry_device_routes_explicit_experiment_intents_without_raw_writes(facade, operation, value):
+    device, view, snapshot, calls = facade
+    request = json.loads(intent(operation))
+    request['value'] = value
+    assert json.loads(device.ExecuteCommand(json.dumps(request)))['outcome'] == 'QUEUED'
+    assert calls == [request]
+
+
 @pytest.mark.parametrize("defect", ["labview", "disabled", "closing", "missing", "stale", "old_boot", "read_error", "metadata_missing"])
 def test_no_command_without_matching_current_pushed_telemetry(facade, defect):
     device, view, snapshot, calls = facade

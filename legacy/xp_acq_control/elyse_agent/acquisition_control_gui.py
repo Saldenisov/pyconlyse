@@ -227,7 +227,8 @@ def main(entrypoint, argv=None):
         application_guard.acquire()
         flags = {name: base.get(name, False) for name in (
             "stage_controls_verified", "cooling_trip_verified", "ht_controls_verified", "focal_controls_verified",
-            "counter_controls_verified", "counter_timing_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified")}
+            "counter_controls_verified", "counter_timing_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified",
+            "beamline_controls_verified")}
         ht, focal = base.get("ht_shutdown", {}), base.get("focal_stop", {})
         profile = base.get("control_profile", "legacy_full")
         if args.demo:

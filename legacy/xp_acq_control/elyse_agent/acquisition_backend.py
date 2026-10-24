@@ -9,10 +9,12 @@ from __future__ import division
 
 import csv
 import copy
+from contextlib import contextmanager
 import io
 import json
 import math
 import os
+import threading
 import time
 
 from .hardware_plan import AI_BANKS, DI_BANKS
@@ -24,6 +26,7 @@ from .acquisition_procedures import (
 from .chroma_focal_stop import ChromaFocalStop
 from .hardware_plan import analog_startup_logical_image, digital_startup_image, load_ao_calibration
 from .acquisition_source_controls import SourceControls
+from .acquisition_beamline import BEAMLINE_OPERATIONS
 from .acquisition_ht_shutdown import (
     execute_ht_shutdown, execute_ht_supply_stop, validate_policy,
     PULSE_STOP_TASKS, PULSE_STOP_EPS, PULSE_STOP_DPS,
@@ -33,6 +36,9 @@ from .acquisition_ht_shutdown import (
 CONTROL_PROFILES = ("legacy_full", "general_only_test", "extended_ht_stop")
 HT_STAGE_OPERATIONS = ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset")
 FOCAL_STAGE_OPERATIONS = ("focales.start", "focales.stop")
+_ENERGY_REDUCING_OPERATIONS = ("modulator.general.stop", "chauffage.stop",
+    "prema.stop", "focales.stop", "relays_ht.stop", "alimentation_ht.stop",
+    "modulator_impulse.stop", "acquisition.outer_controlled_stop", "alimentation_ht.nonincrease")
 _LEGACY_CHROMA_STOP_TYPE = ChromaFocalStop
 # Source root Timeout dispatcher + named event reset tails. This maps request
 # intent only, never a physical permit or acknowledgement. Outer stop and AO
@@ -137,7 +143,8 @@ class _StageState(object):
     def _ensure_execution_not_reentrant(self):
         scheduler = getattr(self, "_execution_scheduler", None)
         if ((scheduler is not None and scheduler.active)
-                or getattr(self, "_software_state_observer_active", False)):
+                or getattr(self, "_software_state_observer_active", False)
+                or getattr(self, "_beamline_operation_active", False)):
             raise RuntimeError("Execution observer may sample, not reenter NI procedures or cleanup")
 
     def get_software_state(self):
@@ -230,8 +237,45 @@ class _StageState(object):
         self._stage_restoration_attempt_count = 0
         self._focal_helper_results = {}
         self._focal_quiescence_error = None
+        self._pending_beamline_release = None
+        self._beamline_operation_active = False
+        self._beamline_safe_stop_owner_ident = None
+        self._beamline_initialization_owner_ident = None
+        self.last_beamline_command = None
+        self._ht_supply_sequence_completed = False
+        self._ht_pulses_sequence_completed = False
+
+    def _invalidate_ht_sequence_completion(self):
+        # Additional Python ordering fence; never changes source EPS/DPS.
+        self._ht_supply_sequence_completed = False
+        self._ht_pulses_sequence_completed = False
+
+    @contextmanager
+    def _energy_reducing_scope(self, operation):
+        """Private owner-only stop scope; cannot replay or write any C5 bank.
+
+        An unresolved independent C5 release must not make reviewed C4/C9/
+        counter stops unreachable. Serial worker quiescence remains required.
+        """
+        self._ensure_execution_not_reentrant()
+        if operation not in _ENERGY_REDUCING_OPERATIONS:
+            raise ValueError("Unqualified energy-reducing scope")
+        ident = threading.current_thread().ident
+        if (self._pending_beamline_release is not None
+                and ident != self._beamline_initialization_owner_ident):
+            raise RuntimeError("Retained C5 ownership allows protective stops on original NI owner only")
+        previous = self._beamline_safe_stop_owner_ident
+        self._beamline_safe_stop_owner_ident = ident
+        try:
+            yield
+        finally:
+            self._beamline_safe_stop_owner_ident = previous
 
     def _ensure_focal_quiescent(self):
+        if (self._pending_beamline_release is not None
+                and (self._beamline_safe_stop_owner_ident != threading.current_thread().ident
+                     or self._beamline_safe_stop_owner_ident != self._beamline_initialization_owner_ident)):
+            raise RuntimeError("Unconfirmed C5 pulse release: retain owner; qualified release reconciliation required")
         # A timed-out ON worker must not race a subsequent OFF or DO write.
         # This process-ownership guard does not infer electrical output state.
         try:
@@ -400,6 +444,7 @@ class _StageState(object):
         return dict(
             local_banks={"C3_OUT_DIO96": self._stage_read_local(17),
                          "C4_OUT_DIO96": self._stage_read_local(15),
+                         "C5_OUT_DIO96": tuple(self.commanded_digital.get("C5_DIO96_DO", ())),
                          "EPS": self._stage_read_local(44),
                          "DPS": self._stage_read_local(36)},
             update_indicator=self.stage_update_indicator,
@@ -418,6 +463,10 @@ class _StageState(object):
             cooling_trip_verified=self.cooling_trip_verified,
             ht_controls_verified=self.ht_controls_verified,
             focal_controls_verified=self.focal_controls_verified,
+            beamline_controls_verified=self.beamline_controls_verified,
+            pending_beamline_release=copy.deepcopy(self._pending_beamline_release),
+            last_beamline_command=copy.deepcopy(self.last_beamline_command),
+            beamline_position_feedback_qualified=False,
             focal_resources_verified=getattr(self.focal_command, "resources_verified", False) is True,
             focal_helper_results=copy.deepcopy(self._focal_helper_results),
             focal_quiescence_error=self._focal_quiescence_error,
@@ -457,7 +506,15 @@ class _StageState(object):
             retry_counters()
 
     def execute_stage(self, operation, cancel, operator_confirmed=False, new_value=True):
+        if operation in _ENERGY_REDUCING_OPERATIONS:
+            with self._energy_reducing_scope(operation):
+                return self._execute_stage(operation, cancel, operator_confirmed, new_value)
+        return self._execute_stage(operation, cancel, operator_confirmed, new_value)
+
+    def _execute_stage(self, operation, cancel, operator_confirmed=False, new_value=True):
         """Execute one qualified local stage path; no public/remote mutation API."""
+        if operation in BEAMLINE_OPERATIONS:
+            return self.execute_beamline(operation, cancel, operator_confirmed, new_value)
         self._stage_preflight(operator_confirmed, operation)
         from .acquisition_stage_execution import execute_stage
         self.procedure = dict(name=operation, state="EXECUTING", frame=None,
@@ -481,6 +538,10 @@ class _StageState(object):
             if not new_value:
                 self.procedure.update(state="SOURCE_NEWVAL_FALSE_NOOP", report=preflight)
                 return preflight
+            if operation == "alimentation_ht.start":
+                self._ht_supply_sequence_completed = False
+            elif operation.endswith((".stop", ".reset")):
+                self._invalidate_ht_sequence_completion()
             if operation in FOCAL_STAGE_OPERATIONS:
                 self._ensure_focal_ready()
             self._ensure_focal_quiescent()
@@ -492,13 +553,103 @@ class _StageState(object):
                 operator_confirmed=True, new_value=new_value, focal_helper=focal_helper,
                 execution_wait=self._execution_waiter(cancel.wait))
         except Exception as error:
+            self._invalidate_ht_sequence_completion()
             self._remember_stage_restorations(error)
             self.procedure.update(state="INTERRUPTED_OR_FAILED",
                                   report=copy.deepcopy(getattr(error, "report", None)))
             raise
         self.procedure.update(state="SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK",
                               report=copy.deepcopy(result))
+        if operation == "alimentation_ht.start":
+            self._ht_supply_sequence_completed = True
         return result
+
+    def execute_beamline(self, operation, cancel, operator_confirmed=False, new_value=True):
+        """Explicit command pulse only; never a position/feedback acknowledgement.
+
+        Independent commissioning is additional Python policy. The retained
+        initialization owner alone may write the pulse or its mandatory False
+        release. A failed release blocks new energizing/motion paths and close;
+        independent reviewed protective stops remain available without C5 writes.
+        No automatic motion replay or implicit latch clearing is offered.
+        """
+        from .acquisition_beamline import execute_beamline_pulse, validate_c5
+        self._ensure_execution_not_reentrant()
+        if operation not in BEAMLINE_OPERATIONS or type(new_value) is not bool:
+            raise ValueError("Reviewed beamline operation and exact Boolean NewVal required")
+        if operator_confirmed is not True:
+            raise ValueError("Explicit beamline command confirmation required")
+        if (self.stage_controls_verified is not True or self.beamline_controls_verified is not True
+                or self.control_profile == "general_only_test"):
+            raise RuntimeError("Beamline controls are not independently commissioned")
+        self._stage_require_initialized()
+        owner_ident = threading.current_thread().ident
+        if owner_ident != self._beamline_initialization_owner_ident:
+            raise RuntimeError("Beamline pulse requires the existing initialization NI owner thread")
+        if not new_value:
+            return execute_beamline_pulse(operation, lambda: None, lambda i, v: None,
+                                          cancel.wait, cancel.is_set, new_value=False)
+        self._ensure_focal_quiescent()
+        require_known = getattr(self, "_require_known_source_commands", None)
+        if require_known is not None:
+            require_known()
+        if any(self.commanded_digital["C4_DIO96_DO"][i] is not False for i in (0, 2)):
+            raise RuntimeError("Release General/RAZ before a beamline pulse")
+        if self._pending_stage_restorations or getattr(self, "_pending_counter_stops", ()):
+            raise RuntimeError("Resolve retained source restoration before a beamline pulse")
+        validate_c5(tuple(self.commanded_digital.get("C5_DIO96_DO", ())))
+        self.procedure = dict(name=operation, state="EXECUTING", frame=None,
+                              hardware_acknowledged=False, safe_to_sample=False,
+                              software_command_only=True, position_feedback_qualified=False,
+                              simulated=self._stage_simulated)
+        self._beamline_operation_active = True
+
+        def commit(index, value):
+            # This private scope is the sole exception to the pending-release
+            # guard. No public procedure or input read may reenter it; exact
+            # False restoration stays on the original initialized NI owner.
+            if (not self._beamline_operation_active
+                    or threading.current_thread().ident != owner_ident):
+                raise RuntimeError("Beamline write left the original NI owner")
+            self._stage_require_initialized()
+            current = validate_c5(tuple(self.commanded_digital["C5_DIO96_DO"]))
+            pending = self._pending_beamline_release
+            if value is True:
+                if pending is not None:
+                    raise RuntimeError("A retained pulse cannot be replayed")
+                self._pending_beamline_release = dict(operation=operation, field=index,
+                    value=False, command_state="ASSERT_OR_RELEASE_MAY_HAVE_APPLIED",
+                    hardware_acknowledged=False)
+            elif (value is not False or pending is None or pending["field"] != index):
+                raise RuntimeError("Only the scoped selected-field False release is permitted")
+            changed = list(current)
+            changed[index] = value
+            if self._stage_simulated is False:
+                self.owner.write_digital_bank("C5_DIO96_DO", changed)
+            self.commanded_digital["C5_DIO96_DO"] = tuple(changed)
+            if value is False:
+                self._pending_beamline_release = None
+
+        def observe(frame, uid):
+            self.procedure.update(frame=frame, source_uid=uid, safe_to_sample=False)
+
+        try:
+            result = execute_beamline_pulse(operation,
+                lambda: tuple(self.commanded_digital["C5_DIO96_DO"]), commit,
+                cancel.wait, cancel.is_set, observe)
+        except Exception as error:
+            self.last_beamline_command = copy.deepcopy(getattr(error, "report", None))
+            if isinstance(self.last_beamline_command, dict):
+                self.last_beamline_command["simulated"] = self._stage_simulated
+            self.procedure.update(state="INTERRUPTED_OR_FAILED", report=self.last_beamline_command)
+            raise
+        else:
+            result["simulated"] = self._stage_simulated
+            self.last_beamline_command = copy.deepcopy(result)
+            self.procedure.update(state="SOFTWARE_PULSE_COMPLETED_NOT_POSITION_ACK", report=result)
+            return result
+        finally:
+            self._beamline_operation_active = False
 
     def execute_cooling_guard(self, snapshot, cancel):
         """Saved raw cooling predicate only; not a klystron safety permit."""
@@ -526,6 +677,7 @@ class _StageState(object):
 
         try:
             if cooling_trip_predicate(c4, c3):
+                self._invalidate_ht_sequence_completion()
                 self._ensure_focal_quiescent()
                 self._retry_stage_restorations()
             result = execute_cooling_trip(
@@ -558,7 +710,7 @@ class CardBackend(SourceControls, _StageState):
                  ht_controls_verified=False, focal_controls_verified=False,
                  focal_command=None, counter_controls_verified=False,
                  ht_voltage_controls_verified=False, outer_stop_verified=False,
-                 counter_timing_controls_verified=False):
+                 counter_timing_controls_verified=False, beamline_controls_verified=False):
         if not 0 < read_timeout <= 2:
             raise ValueError("read timeout must be in (0, 2] seconds")
         if control_profile not in CONTROL_PROFILES:
@@ -571,6 +723,9 @@ class CardBackend(SourceControls, _StageState):
         self.cooling_trip_verified = cooling_trip_verified
         self.ht_controls_verified = ht_controls_verified
         self.focal_controls_verified = focal_controls_verified
+        if type(beamline_controls_verified) is not bool:
+            raise ValueError("Exact Boolean beamline commissioning required")
+        self.beamline_controls_verified = beamline_controls_verified
         for name, value in (("counter_controls_verified", counter_controls_verified),
                             ("ht_voltage_controls_verified", ht_voltage_controls_verified),
                             ("outer_stop_verified", outer_stop_verified),
@@ -621,6 +776,8 @@ class CardBackend(SourceControls, _StageState):
             raise RuntimeError("Stage command requires initialized card ownership")
 
     def _stage_write_digital(self, name, values):
+        if name == "C5_DIO96_DO" and self._beamline_safe_stop_owner_ident is not None:
+            raise RuntimeError("Protective stop scope cannot replay C5 motion")
         self._ensure_focal_quiescent()
         self.owner.write_digital_bank(name, values)
 
@@ -706,6 +863,7 @@ class CardBackend(SourceControls, _StageState):
             raise AcquisitionCancelled()
 
         self._software_state_valid = True
+        self._beamline_initialization_owner_ident = threading.current_thread().ident
         self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
 
     def general_start(self, cancel, operator_confirmed=False):
@@ -714,6 +872,7 @@ class CardBackend(SourceControls, _StageState):
             raise RuntimeError("General Marche requires initialized card ownership")
         if operator_confirmed is not True:
             raise ValueError("General Marche confirmation required")
+        self._invalidate_ht_sequence_completion()
         self._require_known_source_commands()
         self._ensure_focal_quiescent()
         self._retry_source_counter_stops()
@@ -766,11 +925,16 @@ class CardBackend(SourceControls, _StageState):
         self.procedure["state"] = "SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK"
 
     def general_stop(self, operator_confirmed=False):
+        with self._energy_reducing_scope("modulator.general.stop"):
+            return self._general_stop(operator_confirmed)
+
+    def _general_stop(self, operator_confirmed=False):
         self._ensure_execution_not_reentrant()
         if self.owner is None or not self.commanded_digital:
             raise RuntimeError("General Arret requires existing card ownership")
         if operator_confirmed is not True:
             raise ValueError("General Arret confirmation required")
+        self._invalidate_ht_sequence_completion()
         if self.control_profile == "extended_ht_stop" and not self.ht_feedback_verified:
             raise RuntimeError("Extended stop blocked: HT feedback mapping/polarity/calibration unverified")
         self.procedure = dict(name="modulator.general.stop", state="EXECUTING", frame=None,
@@ -962,8 +1126,9 @@ class CardBackend(SourceControls, _StageState):
         return self._read_snapshot(cancel, deadline_monotonic)
 
     def _read_snapshot(self, cancel, deadline_monotonic):
-        if getattr(self, "_software_state_observer_active", False):
-            raise RuntimeError("Software-state observer cannot read NI inputs")
+        if (getattr(self, "_software_state_observer_active", False)
+                or self._beamline_operation_active):
+            raise RuntimeError("Software-state observer or active beamline pulse cannot read NI inputs")
         if self.owner is None:
             raise RuntimeError("Cards not initialized")
         remaining_reads = [len(AI_BANKS) + len(DI_BANKS)]
@@ -1051,7 +1216,7 @@ class DemoBackend(_StageState):
                  cooling_trip_verified=False, ht_controls_verified=False,
                  focal_controls_verified=False, focal_command=None, counter_controls_verified=False,
                  ht_voltage_controls_verified=False, outer_stop_verified=False,
-                 counter_timing_controls_verified=False):
+                 counter_timing_controls_verified=False, beamline_controls_verified=False):
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
@@ -1062,6 +1227,9 @@ class DemoBackend(_StageState):
         self.cooling_trip_verified = cooling_trip_verified
         self.ht_controls_verified = ht_controls_verified
         self.focal_controls_verified = focal_controls_verified
+        if type(beamline_controls_verified) is not bool:
+            raise ValueError("Exact Boolean beamline commissioning required")
+        self.beamline_controls_verified = beamline_controls_verified
         for name, value in (("counter_controls_verified", counter_controls_verified),
                             ("ht_voltage_controls_verified", ht_voltage_controls_verified),
                             ("outer_stop_verified", outer_stop_verified),
@@ -1085,6 +1253,8 @@ class DemoBackend(_StageState):
 
     def _stage_write_digital(self, name, values):
         # No NI owner exists in demo mode. The shared adapter updates RAM only.
+        if name == "C5_DIO96_DO" and self._beamline_safe_stop_owner_ident is not None:
+            raise RuntimeError("Protective stop scope cannot replay C5 motion")
         self._ensure_focal_quiescent()
 
     @property
@@ -1102,9 +1272,12 @@ class DemoBackend(_StageState):
         self._reset_stage_state()
         self.active = True
         self._software_state_valid = True
+        self._beamline_initialization_owner_ident = threading.current_thread().ident
         self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
 
     def read_snapshot(self, cancel):
+        if self._beamline_operation_active:
+            raise RuntimeError("An active beamline pulse cannot be sampled")
         if cancel.is_set():
             raise AcquisitionCancelled()
         return dict(source="python_acquisition_demo", simulated=True, banks={},
@@ -1138,6 +1311,10 @@ class DemoBackend(_StageState):
         self.procedure["state"] = "SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK"
 
     def general_stop(self, operator_confirmed=False):
+        with self._energy_reducing_scope("modulator.general.stop"):
+            return self._general_stop(operator_confirmed)
+
+    def _general_stop(self, operator_confirmed=False):
         self._ensure_execution_not_reentrant()
         self._ensure_focal_quiescent()
         self._stage_require_initialized()

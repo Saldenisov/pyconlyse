@@ -18,6 +18,7 @@ SOURCE_MODULES = (
     "acquisition_counter_timing.py",
     "acquisition_counter_error_flow.py", "acquisition_counter_native_preview.py",
     "cooperative_execution.py",
+    "acquisition_beamline.py",
 )
 SOURCE_PATHS = ("acquisition_server.pyw",) + tuple("elyse_agent/" + name for name in SOURCE_MODULES) + (
     "data/calibration_map.csv", "data/ni6602_timing.csv", "data/modulator_stage_catalog.json",

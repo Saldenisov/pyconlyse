@@ -37,11 +37,12 @@ def load_configuration(path):
             - {"focal_stop", "control_profile", "ht_shutdown", "stage_controls_verified",
                "cooling_trip_verified", "ht_controls_verified", "focal_controls_verified",
                "counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified",
-               "counter_timing_controls_verified"}):
+               "counter_timing_controls_verified", "beamline_controls_verified"}):
         raise ValueError("Invalid acquisition configuration fields")
     for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
                  "focal_controls_verified", "counter_controls_verified",
-                 "ht_voltage_controls_verified", "outer_stop_verified", "counter_timing_controls_verified"):
+                 "ht_voltage_controls_verified", "outer_stop_verified", "counter_timing_controls_verified",
+                 "beamline_controls_verified"):
         if type(config.get(flag, False)) is not bool:
             raise ValueError("Explicit Boolean " + flag + " required")
     if config.get("control_profile", "legacy_full") not in CONTROL_PROFILES:
@@ -301,7 +302,7 @@ def main(entrypoint, argv=None):
         focal_controls_verified = config.get("focal_controls_verified", False)
         source_flags = {name: config.get(name, False) for name in (
             "counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified",
-            "counter_timing_controls_verified")}
+            "counter_timing_controls_verified", "beamline_controls_verified")}
         focal_command = (None if args.demo else
                          ChromaFocalCommand(focal.get("dll_path", DEFAULT_DLL),
                                             focal.get("resources_verified", False),

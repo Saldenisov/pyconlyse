@@ -29,11 +29,12 @@ CACHED_ATTRIBUTES = frozenset(("resource_count", "procedure", "control_profile",
     "stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
     "focal_controls_verified", "counter_controls_verified", "ht_voltage_controls_verified",
     "outer_stop_verified", "counter_timing_controls_verified", "ht_feedback_verified",
+    "beamline_controls_verified", "ht_sequence_state",
     "ht_zero_tolerance_kv", "ht_zero_timeout", "_stage_simulated", "read_timeout",
     "initial_images", "started_counters", "commanded_digital", "commanded_analog",
     "software_status_assignments", "ht_command_uncertain", "last_cooling_guard",
     "last_impulsion", "last_ht_command", "last_outer_stop", "last_counter_timing",
-    "counter_timing_publication", "commanded_counter_ticks"))
+    "counter_timing_publication", "commanded_counter_ticks", "last_beamline_command"))
 
 
 class IsolatedBackendError(RuntimeError):
@@ -62,6 +63,8 @@ def remote_error(record):
         "ProcedureCancelled": ("acquisition_procedures", False),
         "StageExecutionCancelled": ("acquisition_stage_execution", True),
         "StageExecutionError": ("acquisition_stage_execution", True),
+        "BeamlineExecutionCancelled": ("acquisition_beamline", True),
+        "BeamlineExecutionError": ("acquisition_beamline", True),
         "ImpulsionExecutionCancelled": ("acquisition_impulsion", True),
         "ImpulsionExecutionError": ("acquisition_impulsion", True),
         "HTVoltageCancelled": ("acquisition_ht_voltage", True),

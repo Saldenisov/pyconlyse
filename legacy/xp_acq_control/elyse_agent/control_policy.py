@@ -4,6 +4,34 @@ These gates are additional Python policy, not recovered hardware interlocks.
 Commissioning flags must be established locally, never from an HTTP request.
 """
 import math
+from .acquisition_beamline import BEAMLINE_OPERATIONS
+
+
+def known_ht_command(sequence):
+    """A retained software command is not measured HT or a physical permit."""
+    if type(sequence) is not dict or sequence.get("owner_current") is not True:
+        return None
+    command = sequence.get("current_command_kv")
+    if (sequence.get("command_known") is not True or type(command) not in (int, float)
+            or not math.isfinite(command) or not -20 <= command <= 20):
+        return None
+    return command
+
+
+def require_ht_value(sequence, requested):
+    """Additional Python sequence gate for increases, never a VI interlock.
+
+    Known-command decreases do not require the two completed start sequences.
+    Dedicated stop/HT-discharge procedures do not call this scalar admission.
+    """
+    current = known_ht_command(sequence)
+    if current is None:
+        raise RuntimeError("CURRENT_OWNER_HT_COMMAND_UNKNOWN")
+    if type(requested) not in (int, float) or not math.isfinite(requested):
+        raise ValueError("FINITE_HT_REQUEST_VALUE_REQUIRED")
+    if requested > current and (sequence.get("supply_sequence_completed") is not True
+                                or sequence.get("pulses_sequence_completed") is not True):
+        raise RuntimeError("HT_INCREASE_REQUIRES_CURRENT_OWNER_SUPPLY_AND_PULSE_SEQUENCES")
 
 
 def command_capabilities(value):
@@ -47,6 +75,10 @@ def command_capabilities(value):
                 reason = "COUNTER_CONTROLS_NOT_COMMISSIONED"
             elif operation == "ht_voltage.set" and stage.get("ht_voltage_commissioned") is not True:
                 reason = "HT_VOLTAGE_NOT_COMMISSIONED"
+            elif operation in BEAMLINE_OPERATIONS and stage.get("beamline_commissioned") is not True:
+                reason = "BEAMLINE_CONTROLS_NOT_COMMISSIONED"
+            elif operation == "ht_voltage.set" and known_ht_command(value.get("ht_sequence_state")) is None:
+                reason = "CURRENT_OWNER_HT_COMMAND_UNKNOWN"
             elif operation == "cooling.stop":
                 reason = "COOLING_STOP_REQUIRES_LOCAL_COOLDOWN_VERIFICATION"
             elif not stopping:
@@ -63,8 +95,10 @@ def command_capabilities(value):
     return results
 
 
-def require_command(value, operation):
+def require_command(value, operation, command_value=None):
     capability = command_capabilities(value).get(operation)
     if capability is None or not capability["enabled"]:
         raise RuntimeError(capability["reason"] if capability else "UNKNOWN_NAMED_OPERATION")
+    if operation == "ht_voltage.set":
+        require_ht_value(value.get("ht_sequence_state"), command_value)
 
