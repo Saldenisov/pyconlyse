@@ -158,7 +158,7 @@ def authorization_required(environ=None) -> bool:
     return enabled("PYCONLYSE_PRODUCTION") or enabled("PYCONLYSE_ENFORCE_DEVICE_AUTH")
 
 
-def authorization_config_from_environment(environ=None) -> AuthorizationConfig:
+def authorization_config_from_environment(environ=None, *, required: bool | None = None) -> AuthorizationConfig:
     environ = os.environ if environ is None else environ
     config = AuthorizationConfig.from_environment(environ)
     if not _is_external_file(config.policy_path):
@@ -167,7 +167,9 @@ def authorization_config_from_environment(environ=None) -> AuthorizationConfig:
         raise AuthorizationError(403, "hardware_not_authorized", "Approval directory must be an existing absolute directory outside the repository")
     if not _is_external_directory(config.consumed_dir) or config.consumed_dir.resolve() == config.approval_dir.resolve():
         raise AuthorizationError(403, "hardware_not_authorized", "Consumed directory must be a distinct existing absolute directory outside the repository")
-    required = authorization_required(environ)
+    if required is not None and type(required) is not bool:
+        raise TypeError('Explicit Boolean authorization requirement expected')
+    required = authorization_required(environ) or required is True
     if required and os.access(config.policy_path, os.W_OK):
         raise AuthorizationError(403, "hardware_not_authorized", "Hardware policy must not be writable by the web service")
     if required and os.access(config.policy_path.parent, os.W_OK):
@@ -633,10 +635,14 @@ def trusted_starter_for_server(policy: Mapping[str, Any], server_name: str) -> s
     return starter
 
 
-def authorize_runtime_operation(operation: Operation, nonce: str | None, *, subject: str | None = None) -> bool:
-    if not authorization_required():
+def authorize_runtime_operation(operation: Operation, nonce: str | None, *, subject: str | None = None,
+                                required: bool | None = None) -> bool:
+    if required is not None and type(required) is not bool:
+        raise TypeError('Explicit Boolean authorization requirement expected')
+    required = authorization_required() or required is True
+    if not required:
         return True
-    config = authorization_config_from_environment()
+    config = authorization_config_from_environment(required=True)
     subject = subject if subject is not None else get_jwt_identity()
     if not isinstance(subject, str) or not subject:
         raise AuthorizationError(403, "hardware_not_authorized", "Hardware action is not authorized")

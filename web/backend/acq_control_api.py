@@ -17,6 +17,7 @@ import tango_gateway
 from legacy.xp_acq_control.elyse_agent.acquisition_remote import OPERATIONS, validate_request, strict_json
 from legacy.xp_acq_control.elyse_agent.runtime_identity import valid_hex
 from mutation_auth import install_mutation_auth
+from hardware_authorization import AuthorizationError, Operation, authorize_runtime_operation
 
 DEVICE = "tango://10.20.30.202:10000/elyse/acquisition/telemetry"
 MAX_BYTES = 2 * 1024 * 1024
@@ -89,6 +90,19 @@ def _database():
 def _receipt(command, outcome, **extra):
     return dict(command_id=command["command_id"], session_id=command["session_id"], operation=command["operation"],
                 outcome=outcome, hardware_acknowledged=False, automatic_retry=False, **extra)
+
+
+def hardware_intent(command):
+    """Bind manual approval to the exact actuator intent and observed boot.
+
+    The random command ID is an at-most-once correlation token, not an extra
+    actuator parameter. The separate approval nonce is consumed once before
+    any command journal or Tango access. This does not authenticate arbitrary
+    direct Tango callers: that existing transport requires a trusted ACL.
+    """
+    return Operation(method='POST', route_id='acquisition.command.' + command['operation'],
+        action='execute', targets=({'device': DEVICE, 'command': 'ExecuteCommand'},),
+        args={key: command[key] for key in ('operation', 'value', 'session_id', 'expected_revision')})
 
 
 def _history(results=(), session=None):
@@ -169,6 +183,15 @@ def post_command():
         command = validate_request(strict_json(request.stream.read(2049)))
     except (ValueError, TypeError, KeyError, UnicodeError, RecursionError, OverflowError) as error:
         return jsonify(error=str(error)), 400
+    try:
+        authorize_runtime_operation(hardware_intent(command), request.headers.get('X-PYCONLYSE-HARDWARE-APPROVAL'), required=True)
+    except AuthorizationError as error:
+        # This validated, correlated attempt has not reached the command DB
+        # or Tango. A caller may clear only its newly reserved local intent;
+        # a lost transport reply or unrelated old intent remains unknown.
+        return jsonify(schema_version=1, error=error.message, code=error.code,
+            automatic_retry=False, receipt=_receipt(command, 'REJECTED',
+                dispatch_attempted=False, error=error.message)), error.status_code
     encoded = json.dumps(command, sort_keys=True, separators=(",", ":"))
     db = _database()
     try:

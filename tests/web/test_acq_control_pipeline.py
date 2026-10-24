@@ -20,6 +20,7 @@ from DeviceServers.control.elyse_acq.control_runtime_health import INPUT_BANKS
 def test_web_tango_http_owner_general_water_next_stage_and_stop(tmp_path, monkeypatch):
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "false")
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "false")
+    monkeypatch.setattr(api, 'authorize_runtime_operation', lambda *args, **kwargs: True)
     effects = []
     class FakeCards:
         resource_count = 0

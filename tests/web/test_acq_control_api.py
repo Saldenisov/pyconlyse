@@ -42,6 +42,9 @@ def view_fixture():
 def setup_api(monkeypatch, tmp_path):
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "false")
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "false")
+    # This unit fixture tests routing/ledger, not real approval issuance.
+    # test_acq_hardware_approval restores the real fail-closed boundary.
+    monkeypatch.setattr(api, 'authorize_runtime_operation', lambda *args, **kwargs: True)
     app = Flask(__name__)
     app.config.update(TESTING=True, JWT_SECRET_KEY="test-only-ACQ-command-secret-0000000000",
                       ELYSE_CONTROL_STATE_DB=str(tmp_path / "commands.sqlite3"), ELYSE_ACQUISITION_SOURCE="xp_control")
@@ -111,6 +114,37 @@ def test_exact_named_command_and_durable_duplicate_dispatch_once(setup_api):
     assert writes(setup_api) == [("command", "ExecuteCommand", request_command())]
     assert post(setup_api, request_command(operation="prema.start")).status_code == 409
     assert len(writes(setup_api)) == 1
+
+
+@pytest.mark.parametrize('operation,value', [
+    ('faraday_1.en_pulse', None), ('faraday_3.en_pulse', None),
+    ('laser_mirror.en_pulse', None), ('laser_mirror.hors_pulse', None),
+    ('ht_voltage.set', 6.7), ('ht_voltage.set', 0.),
+])
+def test_explicit_experiment_intents_preserve_numeric_value_to_named_tango_facade(setup_api, operation, value):
+    command = request_command(operation=operation, value=value)
+    reply = post(setup_api, command)
+    assert reply.status_code == 200, reply.json
+    assert writes(setup_api) == [('command', 'ExecuteCommand', command)]
+    assert reply.json['receipt']['hardware_acknowledged'] is False
+    assert reply.json['receipt']['automatic_retry'] is False
+
+
+@pytest.mark.parametrize('value', [None, True, '6.7', -1., 20.1])
+def test_ht_value_cannot_be_null_coerced_or_outside_transport_domain(setup_api, value):
+    assert post(setup_api, request_command(operation='ht_voltage.set', value=value)).status_code == 400
+    assert writes(setup_api) == []
+
+
+def test_mixed_old_new_capability_sets_disable_commands_without_fallback(setup_api):
+    for operation in ('faraday_1.en_pulse', 'faraday_3.en_pulse',
+                      'laser_mirror.en_pulse', 'laser_mirror.hors_pulse'):
+        setup_api[3]['runtime']['control']['capabilities'].pop(operation)
+    response = setup_api[1].get(ROOT)
+    assert response.status_code == 503
+    assert response.json['source_selected'] is False
+    assert post(setup_api, request_command()).status_code == 409
+    assert writes(setup_api) == []
 
 
 @pytest.mark.parametrize("changes", [dict(operator_confirmed=False), dict(operation="raw.write"),

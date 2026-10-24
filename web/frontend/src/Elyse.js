@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import AcqTelemetry from './AcqTelemetry';
 import { acqTelemetryClient } from './api/acqTelemetryClient';
+import AcquisitionCommands from './AcquisitionCommands';
+import AcquisitionExperimentControls from './AcquisitionExperimentControls';
 import Synchronization from './tabs/Synchronization';
 import Modulator from './tabs/Modulator';
 import HT from "./tabs/HT";
@@ -25,7 +27,7 @@ const tabs = [
 ];
 
 const TEST_ONLY_MESSAGE =
-  "Automatic sending is disabled here. This web panel is for UI testing only. Send data and commands manually.";
+  "Les panneaux historiques restent en lecture seule. Seul l’onglet Experiment propose les commandes Acquisition Python, après autorisation du serveur et confirmation explicite.";
 
 const Elyse = () => {
   const [activeTab, setActiveTab] = useState(tabs[0]);
@@ -36,7 +38,7 @@ const Elyse = () => {
   };
 
   const handleTestOnlyAction = (event) => {
-    if (activeTab === 'Acquisition Telemetry') return; // Read-only navigation and refresh.
+    if (activeTab === 'Acquisition Telemetry' || activeTab === 'Experiment') return;
     const button = event.target.closest('button');
     if (!button) {
       return;
@@ -55,6 +57,8 @@ const Elyse = () => {
     switch (tab) {
       case "Acquisition Telemetry":
         return <AcqTelemetry client={acqTelemetryClient} />;
+      case "Experiment":
+        return <AcquisitionExperimentControls />;
       case "Modulator":
         return <Modulator />;
       case "Synchronization":
@@ -70,7 +74,7 @@ const Elyse = () => {
   };
 
   return (
-    <div>
+    <AcquisitionCommands client={acqTelemetryClient}><div>
       <h1>ELYSE Control Panel</h1>
       <div
         style={{
@@ -126,7 +130,7 @@ const Elyse = () => {
           );
         })}
       </div>
-    </div>
+    </div></AcquisitionCommands>
   );
 };
 

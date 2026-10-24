@@ -1,0 +1,8 @@
+.acq-experiment { max-width: 880px; padding: 16px; color: #19334b; }
+.acq-experiment fieldset { border: 1px solid #9baebe; padding: 12px; margin: 16px 0; }
+.acq-experiment legend { font-size: 18px; padding: 0 6px; }
+.acq-experiment__row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.acq-experiment__row > span { flex: 0 0 200px; }
+.acq-experiment button, .acq-experiment input { margin: 4px; padding: 6px 10px; }
+.acq-experiment button:disabled { opacity: .55; cursor: not-allowed; }
+.acq-experiment p { font-size: 14px; }
