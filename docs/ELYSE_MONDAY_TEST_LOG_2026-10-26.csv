@@ -1,9 +1,8 @@
 step,action,planned_operation,observed_start_iso,observed_end_iso,xp_session_id,expected_revision,command_id,requested_value_kv,receipt_outcome,measurement_quality,measured_ht_kv,ht_current_a,canon_temperature_c,section_temperature_c,raw_feedback_changes,operator_observation,result,notes
-A1,VI reference,,,,,,,,,,,,,,,,,
-A2,VI ownership release,,,,,,,,,,,,,,,,,
-A3,Local Initialize,,,,,,,,,,,,,,,,,
-A4,Native telemetry at XP Everest and web,,,,,,,,,,,,,,,,,
-A5,Measured baseline and cooling,,,,,,,,,,,,,,,,,
+A1,Python IDLE and ownership checks,,,,,,,,,,,,,,,,,
+A2,Local Initialize,,,,,,,,,,,,,,,,,
+A3,Native telemetry at XP Everest and web,,,,,,,,,,,,,,,,,
+A4,Measured baseline and cooling,,,,,,,,,,,,,,,,,
 B1,General,modulator.general.start,,,,,,,,,,,,,,,,
 B2,Chauffage,chauffage.start,,,,,,,,,,,,,,,,
 B3,PREMA,prema.start,,,,,,,,,,,,,,,,

@@ -9,8 +9,10 @@ Exercise the normal experiment sequence through one XP application on
 ``elyse/acquisition/telemetry`` and the Pyconlyse web controls. The operator
 remains at the installation and can use the hardware controls. The assistant
 follows telemetry, requests one agreed operation at a time and records the
-result. This document prepares the session; no deployment or hardware action
-has been performed for its preparation.
+result. Start directly with the Python application in IDLE, then local
+Initialize and native operation. No VI start, VI reference recording or live
+VI-to-Python handover is scheduled. This document prepares the session; no
+deployment or hardware action has been performed for its preparation.
 
 The session uses normal operating procedures and existing protections. It
 does not add repeated permission questions, deliberate cooling failures,
@@ -74,31 +76,28 @@ Use Europe/Paris timestamps with an explicit UTC offset. Monday is 26 October
 timestamps as well. The CSV template alongside this programme starts empty;
 planned steps must not be presented as observed results.
 
-Phase A: telemetry and transfer of ownership
+Phase A: Python initialization and telemetry
 --------------------------------------------
 
-1. If Acquisition VI is already running, leave it running for a short reference
-   recording. The XP application must be in IDLE/``LABVIEW_BRIDGE`` with zero
-   native NI tasks. Verify successive receiver counts and source timestamps at
-   Everest and in the web. All 27 bank entries must be present; freshness and
-   individual validity matter more than the count. Native commands are disabled.
-   If VI is already stopped, use the saved reference and note the different
-   measurement time; do not restart VI only to manufacture a baseline.
-2. The operator stops VI normally and confirms the installation state before
-   Python initialization. Missing VI data alone does not prove NI is free.
-   Wait for the explicit ownership checks, not an arbitrary delay.
-3. Press local Initialize once. Follow the driver-call trace through completion;
+1. Begin with the single Python application in IDLE and zero native NI tasks.
+   Confirm the installation state and the existing ownership checks before
+   Initialize. Acquisition VI must not own the cards; absent VI telemetry alone
+   is not proof that they are free. Without a producer, pre-initialization
+   telemetry is expected to be unavailable; do not wait for a VI stream.
+2. Press local Initialize once. Follow the driver-call trace through completion;
    record task inventory, startup status and errors. Initialization applies
    source startup AO/DO and starts the source-selected counters; it is not a
    read-only action. A partial initialization does not justify a second click.
-4. Verify ``PYTHON_NATIVE`` and RUNNING, then verify live bank observations at
-   XP, Everest and the web. The standard envelope remains 27 banks; native
+3. Verify ``PYTHON_NATIVE`` and RUNNING, then verify successive receiver counts,
+   source timestamps and live bank observations at XP, Everest and the web.
+   The standard envelope remains 27 banks; native
    support currently populates at most 14, with 13 unsupported bank entries
    explicitly unavailable (``null``/``-80001``). Supported inputs can also become
-   unavailable when stale. These are not missing network packets. Compare valid
-   inputs and startup command images with the VI reference, accounting for time.
+   unavailable when stale. These are not missing network packets. Saved VI
+   evidence may support later comparison, accounting for measurement time;
+   acquiring a fresh VI reference is not a step in this session.
    EPS/DPS are software memory; AO/DO command memory is not electrical readback.
-5. Establish the HT baseline and current cooling state. The source startup
+4. Establish the HT baseline and current cooling state. The source startup
    ``C9NI6703[0]`` command is 6.5 kV; it does not establish measured voltage or
    permit energization. Verify the measured value and supply state separately.
 
@@ -216,9 +215,10 @@ raw Boolean levels only with the verified polarity. Record initial values,
 transition times, peak/settled observations and any quality gap. These channel
 labels require the site calibration/feedback qualification above.
 
-The session demonstrates the steps actually observed: source transfer without
-overlapping NI owners, command delivery through the same device, physical
-responses consistent with measurements, HT changes and shutdown with cooldown.
+The session demonstrates the steps actually observed: direct Python
+initialization without overlapping NI owners, command delivery through the
+same device, physical responses consistent with measurements, HT changes and
+shutdown with cooldown.
 Mark unavailable directions, missing qualification and any untested step
 explicitly. Do not label the entire VI migration complete from one successful
 start/stop, or claim every original source packet was archived by a latest-only
