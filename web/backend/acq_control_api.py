@@ -150,6 +150,7 @@ def public_view(view):
                 state=runtime["state"], quality=view.get("quality"), capabilities=capabilities,
                 startup_phase=runtime.get("startup_phase"), current_operation=runtime.get("current_operation"),
                 general_cooling_ready=runtime.get("general_cooling_ready") is True,
+                synchronization=runtime.get("counter_timing_state", {}),
                 commands=history,
                 physical_acknowledgement=False, automatic_retry=False)
 

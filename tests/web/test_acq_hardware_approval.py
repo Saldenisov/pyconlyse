@@ -14,11 +14,16 @@ NONCE = 'a' * 64
 
 
 @pytest.fixture
-def approval_setup(setup_api, tmp_path, monkeypatch):
+def approval_setup(setup_api, tmp_path, monkeypatch, request):
     api = control_tests.api
     from hardware_authorization import authorize_runtime_operation
     monkeypatch.setattr(api, 'authorize_runtime_operation', authorize_runtime_operation)
-    command = request_command(operation='ht_voltage.set', value=6.7)
+    sync = getattr(request, 'param', None) == 'sync'
+    command = request_command(operation='counter_timing.set', value=dict(counter=0, delay_us=1.25, width_us=3.5)) if sync else request_command(operation='ht_voltage.set', value=6.7)
+    value_schema = dict(type='object', required=['counter', 'delay_us', 'width_us'], additionalProperties=False,
+        properties={'counter': {'type': 'integer', 'minimum': 0, 'maximum': 7},
+                    'delay_us': {'type': 'number', 'minimum': 0, 'maximum': 2147483647 / 20.0},
+                    'width_us': {'type': 'number', 'minimum': 0, 'maximum': 2147483647 / 20.0}}) if sync else {'type': 'number', 'minimum': 0, 'maximum': 20}
     intent = api.hardware_intent(command)
     root = tmp_path / 'external-approval-fixture'
     root.mkdir()
@@ -31,7 +36,7 @@ def approval_setup(setup_api, tmp_path, monkeypatch):
             method='POST', route_id=intent.route_id, action='execute', targets=list(intent.targets), roles=['operator'],
             args=dict(type='object', required=list(intent.args), additionalProperties=False, properties={
                 'operation': {'type': 'string', 'enum': [command['operation']]},
-                'value': {'type': 'number', 'minimum': 0, 'maximum': 20},
+                'value': value_schema,
                 'session_id': {'type': 'string', 'min_length': 32, 'max_length': 32, 'pattern': '^[0-9a-f]{32}$'},
                 'expected_revision': {'type': 'integer', 'minimum': 0, 'maximum': 2**53 - 1},
             }))])
@@ -164,3 +169,28 @@ def test_wrong_target_or_expired_approval_fails_without_any_tango_access(approva
     assert submit().status_code == 409
     assert setup[4] == []
     assert not list(consumed.iterdir())
+
+
+@pytest.mark.parametrize('approval_setup', ['sync'], indirect=True)
+@pytest.mark.parametrize('field,value', [('counter', 1), ('delay_us', 2.), ('width_us', 4.)])
+def test_sync_approval_binds_each_nested_parameter_before_any_journal_or_tango(approval_setup, field, value):
+    setup, command, intent, consumed, approve, submit = approval_setup
+    approve(args=dict(intent.args, value=dict(command['value'], **{field: value})))
+    response = submit()
+    assert response.status_code == 409, response.json
+    assert response.json['receipt']['dispatch_attempted'] is False
+    assert setup[4] == [] and not list(consumed.iterdir())
+    assert not Path(setup[0].config['ELYSE_CONTROL_STATE_DB']).exists()
+
+
+@pytest.mark.parametrize('approval_setup', ['sync'], indirect=True)
+def test_sync_exact_pair_consumes_one_external_approval_and_cannot_replay(approval_setup):
+    setup, command, intent, consumed, approve, submit = approval_setup
+    approve()
+    response = submit()
+    assert response.status_code == 200, response.json
+    assert writes(setup) == [('command', 'ExecuteCommand', command)]
+    assert len(list(consumed.iterdir())) == 1
+    calls = list(setup[4])
+    assert submit(dict(command, command_id='c' * 32)).status_code == 409
+    assert setup[4] == calls

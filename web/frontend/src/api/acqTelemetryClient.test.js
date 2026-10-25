@@ -1,5 +1,5 @@
 import { acqTelemetryClient, ACQUISITION_TOPOLOGY, READ_DEADLINE_MS } from './acqTelemetryClient';
-import { clearHardwareApprovalNonce, setHardwareApprovalNonce } from './csrfRequest';
+import { clearHardwareApprovalNonce, getHardwareApprovalNonce, setHardwareApprovalNonce } from './csrfRequest';
 
 afterEach(() => {
   delete global.fetch; clearHardwareApprovalNonce(); document.cookie = 'csrf_access_token=; Max-Age=0; path=/';
@@ -34,6 +34,23 @@ const authorizationRefusal = (request, code = 'hardware_approval_required') => (
   receipt: { command_id: request.command_id, session_id: request.session_id, operation: request.operation,
     outcome: 'REJECTED', hardware_acknowledged: false, automatic_retry: false,
     dispatch_attempted: false, error: 'Hardware approval declined before dispatch' } });
+
+test('structured synchronization preserves exact parameters and uses same command facade', async () => {
+  const request = { ...command(), operation: 'counter_timing.set', value: { counter: 2, delay_us: 1.25, width_us: 3.5 } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => receipt(request) });
+  await acqTelemetryClient.command(request);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0][0]).toBe('/api/elyse/acquisition/control/commands');
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(request);
+});
+
+test('invalid synchronization does not consume approval or transmit', async () => {
+  global.fetch = jest.fn(); setHardwareApprovalNonce('c'.repeat(64));
+  await expect(acqTelemetryClient.command({ ...command(), operation: 'counter_timing.set',
+    value: { counter: 8, delay_us: 1, width_us: 2 } })).rejects.toThrow('Compteur C10');
+  expect(fetch).not.toHaveBeenCalled();
+  expect(getHardwareApprovalNonce()).toBe('c'.repeat(64));
+});
 
 test('a correlated first-attempt source-change refusal is known not dispatched, never retried', async () => {
   const request = command();

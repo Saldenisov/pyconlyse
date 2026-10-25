@@ -344,7 +344,7 @@ class Worker(object):
             raise ValueError("Explicit reviewed child operation required")
         counts = {"initialize": 0, "read_snapshot": 0, "general_start": 0, "general_stop": 0,
                   "execute_stage": 1, "execute_impulsion": 1, "set_ht_voltage": 1,
-                  "configure_counter_timing": 1, "outer_controlled_stop": 0,
+                  "configure_counter_timing": 1, "configure_sync_parameters": 1, "outer_controlled_stop": 0,
                   "execute_cooling_guard": 1, "close": 0}
         allowed_keywords = ({"startup_confirmed"} if operation == "initialize" else
                             {"operator_confirmed", "new_value"} if operation in ("execute_stage", "execute_impulsion") else
@@ -360,7 +360,7 @@ class Worker(object):
             self._publish_software_observation()
             return result
         if operation in ("execute_stage", "execute_impulsion", "set_ht_voltage",
-                         "configure_counter_timing", "execute_cooling_guard"):
+                         "configure_counter_timing", "configure_sync_parameters", "execute_cooling_guard"):
             result = method(arguments[0], self.cancel, **keywords)
         else:
             result = method(**keywords)

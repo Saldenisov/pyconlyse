@@ -207,6 +207,10 @@ class _ObservedBackend(object):
         return self.backend.configure_counter_timing(*args, **kwargs)
 
     @_execution_context
+    def configure_sync_parameters(self, *args, **kwargs):
+        return self._call("counter_timing.set", "configure_sync_parameters", *args, **kwargs)
+
+    @_execution_context
     def outer_controlled_stop(self, *args, **kwargs):
         return self.backend.outer_controlled_stop(*args, **kwargs)
 
@@ -505,6 +509,9 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         if operation == "ht_voltage.set":
             self._start_permit()
             return self.set_ht_voltage(value, operator_confirmed=True)
+        if operation == "counter_timing.set":
+            self._start_permit()
+            return self.set_sync_parameters(value, operator_confirmed=True)
         if operation == "cooling.start":
             if not self._stop_qualified():
                 raise RuntimeError("Cooling recovery requires commissioned shutdown")

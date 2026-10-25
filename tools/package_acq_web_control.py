@@ -30,7 +30,7 @@ def package(destination, everest=False):
                      "engine.py", "plans.py", "contracts.py", "simulator.py"):
             files.append((BRIDGE / name, "DeviceServers/control/elyse_acq/" + name))
         for name in ("__init__.py", "acquisition_remote.py", "acquisition_http.py", "runtime_identity.py", "native_telemetry.py",
-                     "command_protocol.py", "command_broker.py", "command_http.py", "command_dispatch.py",
+                     "command_protocol.py", "acquisition_counter_timing.py", "command_broker.py", "command_http.py", "command_dispatch.py",
                      "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py",
                      "shared_state.py", "labview_telemetry.py", "telemetry_relay.py", "protocol.py", "supervision_wire.py", "errors.py"):
             files.append((XP / "elyse_agent" / name, "legacy/xp_acq_control/elyse_agent/" + name))
@@ -45,7 +45,7 @@ def package(destination, everest=False):
         files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-experiment-commands-20261024-r8" if everest else "acq-unified-experiment-commands-20261024-v8-r8", default_xp_port=8772,
+                    release="everest-synchronization-20261025-r9" if everest else "acq-unified-synchronization-20261025-v8-r9", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
@@ -78,7 +78,9 @@ def package(destination, everest=False):
             faraday_3_position_feedback_qualified=False,
             ht_increase_requires_software_supply_and_modulator=True,
             autonomous_ht_ramp=False)
-    manifest.update(named_operation_count=23, matched_control_capability_set_required=True,
+    manifest.update(named_operation_count=24, matched_control_capability_set_required=True,
+                    synchronization_command="counter_timing.set", synchronization_counter_card=10,
+                    synchronization_already_running_required=True, synchronization_c11_enabled=False,
                     runtime_protocol_version=2, control_envelope_version=1)
     for source, relative in sorted(files, key=lambda item: item[1]):
         target = destination / relative

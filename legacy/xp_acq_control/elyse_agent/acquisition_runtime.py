@@ -19,7 +19,7 @@ from .acquisition_recovery import RecoveryRequired
 from .acquisition_source_controls import IMPULSION_OPERATIONS, validate_ht_command
 from .acquisition_impulsion import ImpulsionExecutionCancelled
 from .acquisition_ht_voltage import HTVoltageCancelled
-from .acquisition_counter_timing import decode_counter_bank, CounterTimingCancelled
+from .acquisition_counter_timing import decode_counter_bank, CounterTimingCancelled, validate_remote_timing
 from .control_policy import BEAMLINE_OPERATIONS, known_ht_command, require_ht_value
 from .acquisition_beamline import BeamlineExecutionCancelled
 
@@ -52,6 +52,7 @@ class AcquisitionRuntime(object):
         self._pulse_stop_required = False
         self._ht_command = None
         self._counter_timing_command = None
+        self._counter_timing_observation_at = None
         self._counter_timing_stop_required = set()
         self._stage_command = None
         # Additional Python software-sequence proof, not physical HT readiness.
@@ -293,6 +294,34 @@ class AcquisitionRuntime(object):
             self._wake.set()
             return True
 
+    def set_sync_parameters(self, value, operator_confirmed=False):
+        """Queue a copied typed pair; all NI calls remain on the existing owner."""
+        value = validate_remote_timing(value)
+        if operator_confirmed is not True:
+            raise ValueError("Explicit synchronization confirmation required")
+        with self._lock:
+            self._require_recovery_clear()
+            if (self._backend is None or not self._backend.resource_count or self._state != "RUNNING"
+                    or self._pending is not None or self._operation is not None or self._shutdown_requested):
+                raise RuntimeError("Counter timing requires idle existing NI ownership")
+            if (getattr(self._backend, "stage_controls_verified", False) is not True
+                    or getattr(self._backend, "counter_timing_controls_verified", False) is not True
+                    or getattr(self._backend, "control_profile", None) == "general_only_test"):
+                raise RuntimeError("Separate counter timing controls are not commissioned")
+            self._require_current_owner_inputs(self._received_at, "COUNTER_TIMING")
+            if value["counter"] not in getattr(self._backend, "started_counters", ()):
+                raise RuntimeError("COUNTER_TIMING_REQUIRES_ALREADY_RUNNING_COUNTER")
+            self._counter_timing_command = value
+            self._counter_timing_observation_at = self._received_at
+            self._pending, self._operation = "counter_timing", "acq.stage.counter_timing.set"
+            self._state, self._received_at = "EXECUTING", None
+            if value["counter"] in (3, 4):
+                self._ht_pulses_sequence_completed = False
+            self._general_stop_required = True
+            self._state_revision += 1
+            self._wake.set()
+            return True
+
     @staticmethod
     def inspect_counter_error_flow(snapshot, returns, handler,
                                    reset_snapshot=None, publication_snapshot=None,
@@ -471,6 +500,11 @@ class AcquisitionRuntime(object):
                 ht_supply_stop_required=self._ht_supply_stop_required,
                 pulse_stop_required=self._pulse_stop_required,
                 counter_timing_stop_required=sorted(self._counter_timing_stop_required),
+                counter_timing_state=dict(
+                    running_counters=list(getattr(self._backend, "started_counters", ())),
+                    commanded_ticks=copy.deepcopy(getattr(self._backend, "commanded_counter_ticks", {})),
+                    uncertain_counters=list(getattr(self._backend, "_counter_configuration_uncertain", ())),
+                    physical_readback=False),
                 ht_sequence_state=self._ht_sequence_snapshot(),
                 procedure=copy.deepcopy(getattr(self._backend, "procedure", None)),
                 control_profile=getattr(self._backend, "control_profile", None),
@@ -734,15 +768,23 @@ class AcquisitionRuntime(object):
                             # this extracted request before backend preflight.
                             continue
                         if (self._shutdown_requested or self._state != "EXECUTING"
-                                or self._operation != "acq.stage.counter_timing.configure"):
+                                or self._operation not in ("acq.stage.counter_timing.configure", "acq.stage.counter_timing.set")):
                             # No callback ran. Keep a preceding FAULT's actual
                             # cause and any older stop requirements unchanged.
                             continue
-                        self._counter_timing_stop_required.add(
-                            decode_counter_bank(counter_timing_command)["counter"])
+                        remote_timing = type(counter_timing_command) is dict
+                        number = (validate_remote_timing(counter_timing_command)["counter"] if remote_timing
+                                  else decode_counter_bank(counter_timing_command)["counter"])
+                        if remote_timing:
+                            self._require_current_owner_inputs(self._counter_timing_observation_at, "COUNTER_TIMING")
+                        self._counter_timing_stop_required.add(number)
                         self._cancel.clear()
-                    self._backend.configure_counter_timing(
-                        counter_timing_command, self._cancel, operator_confirmed=True)
+                    if remote_timing:
+                        self._backend.configure_sync_parameters(
+                            counter_timing_command, self._cancel, operator_confirmed=True)
+                    else:
+                        self._backend.configure_counter_timing(
+                            counter_timing_command, self._cancel, operator_confirmed=True)
                     self._finish_stage()
                 except CounterTimingCancelled as error:
                     with self._lock:

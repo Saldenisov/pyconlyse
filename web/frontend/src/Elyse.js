@@ -6,7 +6,7 @@ import AcquisitionCommands from './AcquisitionCommands';
 import AcquisitionExperimentControls from './AcquisitionExperimentControls';
 import AcquisitionConnection from './AcquisitionConnection';
 import useAcquisitionTelemetry from './useAcquisitionTelemetry';
-import Synchronization from './tabs/Synchronization';
+import AcquisitionSynchronizationControls from './AcquisitionSynchronizationControls';
 import Modulator from './tabs/Modulator';
 import HT from "./tabs/HT";
 import Fluides from "./tabs/Fluides";
@@ -29,7 +29,7 @@ const tabs = [
 ];
 
 const TEST_ONLY_MESSAGE =
-  "Les panneaux historiques restent en lecture seule. Seul l’onglet Experiment propose les commandes Acquisition Python, après autorisation du serveur et confirmation explicite.";
+  "Les panneaux historiques restent en lecture seule. Les onglets Experiment et Synchronization proposent les commandes Acquisition Python, après autorisation du serveur et confirmation explicite.";
 
 const Elyse = () => {
   const [activeTab, setActiveTab] = useState(tabs[0]);
@@ -42,7 +42,7 @@ const Elyse = () => {
   };
 
   const handleTestOnlyAction = (event) => {
-    if (activeTab === 'Acquisition Telemetry' || activeTab === 'Experiment') return;
+    if (activeTab === 'Acquisition Telemetry' || activeTab === 'Experiment' || activeTab === 'Synchronization') return;
     const button = event.target.closest('button');
     if (!button) {
       return;
@@ -67,7 +67,7 @@ const Elyse = () => {
       case "Modulator":
         return <Modulator />;
       case "Synchronization":
-        return <Synchronization />;
+        return <AcquisitionSynchronizationControls />;
       case "HT":
         return <HT />;
       case "Fluides":

@@ -109,7 +109,7 @@ class ExperimentPolicyTests(unittest.TestCase):
     def test_only_four_explicit_beamline_names_no_open_or_hors_alias(self):
         self.assertEqual(set(BEAMLINE_OPERATIONS), {
             "faraday_1.en_pulse", "faraday_3.en_pulse", "laser_mirror.en_pulse", "laser_mirror.hors_pulse"})
-        self.assertEqual(len(OPERATIONS), 23)
+        self.assertEqual(len(OPERATIONS), 24)
         for name in BEAMLINE_OPERATIONS:
             request = dict(command_id="a" * 32, session_id="b" * 32, expected_revision=1,
                            operation=name, operator_confirmed=True, value=None)

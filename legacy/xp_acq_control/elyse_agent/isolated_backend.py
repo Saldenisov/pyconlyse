@@ -23,7 +23,7 @@ from .isolated_wire import encode_frame, read_frame, write_frame, IsolationProto
 
 OPERATIONS = frozenset(("initialize", "read_snapshot", "general_start", "general_stop",
                        "execute_stage", "execute_impulsion", "set_ht_voltage",
-                       "configure_counter_timing", "outer_controlled_stop",
+                       "configure_counter_timing", "configure_sync_parameters", "outer_controlled_stop",
                        "execute_cooling_guard", "close"))
 CACHED_ATTRIBUTES = frozenset(("resource_count", "procedure", "control_profile",
     "stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
@@ -34,7 +34,8 @@ CACHED_ATTRIBUTES = frozenset(("resource_count", "procedure", "control_profile",
     "initial_images", "started_counters", "commanded_digital", "commanded_analog",
     "software_status_assignments", "ht_command_uncertain", "last_cooling_guard",
     "last_impulsion", "last_ht_command", "last_outer_stop", "last_counter_timing",
-    "counter_timing_publication", "commanded_counter_ticks", "last_beamline_command"))
+    "counter_timing_publication", "commanded_counter_ticks", "last_beamline_command",
+    "_counter_configuration_uncertain"))
 
 
 class IsolatedBackendError(RuntimeError):
@@ -445,6 +446,10 @@ class IsolatedCardBackend(object):
 
     def configure_counter_timing(self, snapshot, cancel, operator_confirmed=False):
         return self._rpc("configure_counter_timing", (snapshot,),
+                         dict(operator_confirmed=operator_confirmed), cancel)
+
+    def configure_sync_parameters(self, value, cancel, operator_confirmed=False):
+        return self._rpc("configure_sync_parameters", (value,),
                          dict(operator_confirmed=operator_confirmed), cancel)
 
     def execute_cooling_guard(self, snapshot, cancel):

@@ -5,6 +5,7 @@ Commissioning flags must be established locally, never from an HTTP request.
 """
 import math
 from .acquisition_beamline import BEAMLINE_OPERATIONS
+from .acquisition_counter_timing import validate_remote_timing
 
 
 def known_ht_command(sequence):
@@ -75,6 +76,8 @@ def command_capabilities(value):
                 reason = "COUNTER_CONTROLS_NOT_COMMISSIONED"
             elif operation == "ht_voltage.set" and stage.get("ht_voltage_commissioned") is not True:
                 reason = "HT_VOLTAGE_NOT_COMMISSIONED"
+            elif operation == "counter_timing.set" and stage.get("counter_timing_commissioned") is not True:
+                reason = "COUNTER_TIMING_NOT_COMMISSIONED"
             elif operation in BEAMLINE_OPERATIONS and stage.get("beamline_commissioned") is not True:
                 reason = "BEAMLINE_CONTROLS_NOT_COMMISSIONED"
             elif operation == "ht_voltage.set" and known_ht_command(value.get("ht_sequence_state")) is None:
@@ -101,4 +104,9 @@ def require_command(value, operation, command_value=None):
         raise RuntimeError(capability["reason"] if capability else "UNKNOWN_NAMED_OPERATION")
     if operation == "ht_voltage.set":
         require_ht_value(value.get("ht_sequence_state"), command_value)
+    elif operation == "counter_timing.set":
+        timing = validate_remote_timing(command_value)
+        running = value.get("counter_timing_state", {}).get("running_counters", [])
+        if timing["counter"] not in running:
+            raise RuntimeError("COUNTER_TIMING_REQUIRES_ALREADY_RUNNING_COUNTER")
 

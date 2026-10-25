@@ -12,7 +12,8 @@ const commandView = (selected = true) => ({ schema_version: 1, mode: selected ? 
   source_selected: selected, session_id: 'a'.repeat(32), revision: 7, state: 'RUNNING', commands: [],
   capabilities: selected ? { 'modulator.general.start': { enabled: true, reason: '' },
     'modulator.general.stop': { enabled: true, reason: '' },
-    'ht_voltage.set': { enabled: true, reason: '' } } : {} });
+    'ht_voltage.set': { enabled: true, reason: '' }, 'counter_timing.set': { enabled: true, reason: '' } } : {},
+  synchronization: { running_counters: [0, 1, 2, 5, 6, 7], commanded_ticks: {}, uncertain_counters: [] } });
 
 function telemetry(selected = false) {
   return { schema_version: 1, server_state: 'ON', quality: 'FRESH', expected_banks: BANKS,
@@ -94,6 +95,25 @@ test('one persistent telemetry poller feeds connection status and raw banks acro
   expect(reads()).toBe(2);
   expect(fetch.mock.calls.every(([url]) => url.startsWith('/api/elyse/acquisition/'))).toBe(true);
   expect(fetch.mock.calls.every(([, options]) => options.method === 'GET')).toBe(true);
+});
+
+test('Synchronization tab reaches same confirmed and approved command path', async () => {
+  mount();
+  fireEvent.click(screen.getByRole('tab', { name: 'Synchronization' }));
+  fireEvent.change(screen.getByLabelText('Délai (µs)'), { target: { value: '1.25' } });
+  fireEvent.change(screen.getByLabelText('Largeur (µs)'), { target: { value: '3.5' } });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Appliquer synchronisation C10' })).toBeEnabled());
+  fireEvent.change(screen.getByLabelText('Hardware approval nonce'), { target: { value: 'c'.repeat(64) } });
+  fireEvent.click(screen.getByRole('button', { name: 'Arm one mutation' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Appliquer synchronisation C10' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await waitFor(() => expect(fetch.mock.calls.some(([, options]) => options.method === 'POST')).toBe(true));
+  const posts = fetch.mock.calls.filter(([, options]) => options.method === 'POST');
+  expect(posts).toHaveLength(1);
+  expect(posts[0][0]).toBe('/api/elyse/acquisition/control/commands');
+  expect(posts[0][1].headers['X-PYCONLYSE-HARDWARE-APPROVAL']).toBe('c'.repeat(64));
+  expect(JSON.parse(posts[0][1].body)).toEqual(expect.objectContaining({ operation: 'counter_timing.set',
+    value: { counter: 0, delay_us: 1.25, width_us: 3.5 } }));
 });
 
 test('the same server changing to VI mode invalidates confirmation without issuing a command', async () => {

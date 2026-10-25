@@ -36,12 +36,15 @@ def experiment(tmp_path, monkeypatch):
         ht_feedback_verified = stage_controls_verified = ht_controls_verified = True
         focal_controls_verified = counter_controls_verified = ht_voltage_controls_verified = True
         beamline_controls_verified = True
+        counter_timing_controls_verified = True
         focal_command = SimpleNamespace(resources_verified=True)
         procedure = None
 
         def __init__(self):
             self.eps, self.dps = [False] * 77, [False] * 29
             self.command_kv, self.revision, self.fail_operation = 6.6, 1, None
+            self.started_counters = [0, 1, 2, 5, 6, 7]
+            self.commanded_counter_ticks = {}
             created.append(self)
 
         @property
@@ -86,6 +89,11 @@ def experiment(tmp_path, monkeypatch):
             assert operator_confirmed
             self.effect('ht_voltage.set', value)
             self.command_kv = value
+
+        def configure_sync_parameters(self, value, cancel, operator_confirmed=False):
+            assert operator_confirmed and value['counter'] in self.started_counters
+            self.effect('counter_timing.set', dict(value))
+            self.commanded_counter_ticks[value['counter']] = dict(initial_delay_ticks=25, low_ticks=25, high_ticks=70)
 
         def execute_impulsion(self, operation, cancel, operator_confirmed=False):
             return self.execute_stage(operation, cancel, operator_confirmed)
@@ -250,6 +258,30 @@ def test_failed_motion_is_not_replayed_and_does_not_run_next_experiment_step(exp
     assert denied.status_code == 409
     assert not any(name == 'laser_mirror.en_pulse' for name, value, owner in run.effects)
     assert not any(name == 'ht_voltage.set' for name, value, owner in run.effects)
+
+
+def test_sync_pair_crosses_same_facade_device_signed_channel_and_owner_once(experiment):
+    run = experiment
+    before = run.client.get(ROOT).json
+    assert before['synchronization']['running_counters'] == [0, 1, 2, 5, 6, 7]
+    command_id = uuid4().hex
+    value = dict(counter=2, delay_us=1.25, width_us=3.5)
+    reply = run.submit('counter_timing.set', value, command_id)
+    assert reply.status_code == 200 and reply.json['receipt']['outcome'] == 'QUEUED', reply.json
+    run.ready()
+    current = run.client.get(ROOT).json
+    assert current['synchronization']['commanded_ticks']['2']['high_ticks'] == 70
+    matching = [item for item in current['commands'] if item['command_id'] == command_id]
+    assert matching[0]['outcome'] == 'COMPLETED'
+    original = run.runtime.broker.records[command_id]['request']
+    duplicate = run.client.post(ROOT + '/commands', headers=run.headers, json=original)
+    assert duplicate.status_code == 200 and duplicate.json['duplicate'] is True
+    applied = [(name, argument, owner) for name, argument, owner in run.effects if name == 'counter_timing.set']
+    assert len(applied) == 1 and applied[0][1] == value
+    assert len({owner for name, argument, owner in run.effects}) == 1
+    stopped = run.submit('counter_timing.set', dict(value, counter=3))
+    assert stopped.json['receipt']['outcome'] == 'REJECTED'
+    assert 'ALREADY_RUNNING_COUNTER' in stopped.json['receipt']['error']
 
 
 @pytest.mark.parametrize('operation', ['faraday_1.hors_pulse', 'faraday_3.hors_pulse', 'faraday.open', 'raw.write'])

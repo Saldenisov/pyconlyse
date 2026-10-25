@@ -5,6 +5,7 @@ import json
 import math
 
 from .runtime_identity import valid_hex
+from .acquisition_counter_timing import validate_remote_timing
 
 OPERATIONS = (
     "cooling.start", "cooling.stop",
@@ -14,6 +15,7 @@ OPERATIONS = (
     "alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset",
     "modulator.reset", "modulator_impulse.start", "modulator_impulse.stop",
     "ht_voltage.set",
+    "counter_timing.set",
     "faraday_1.en_pulse", "faraday_3.en_pulse",
     "laser_mirror.en_pulse", "laser_mirror.hors_pulse",
 )
@@ -51,9 +53,11 @@ def validate_request(value):
     if value["operation"] == "ht_voltage.set":
         if type(setting) not in (int, float) or not math.isfinite(setting) or not 0 <= setting <= 20:
             raise ValueError("Finite HT command in [0,20] kV required")
+    elif value["operation"] == "counter_timing.set":
+        setting = validate_remote_timing(setting)
     elif setting is not None:
         raise ValueError("This operation takes no setpoint")
-    return dict(value)
+    return dict(value, value=setting)
 
 
 def command_signature(key, nonce, body):

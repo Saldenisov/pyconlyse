@@ -22,14 +22,22 @@ def main():
     from elyse_agent.dual_mode_telemetry import DualModeTelemetryPublisher
     from elyse_agent.shared_state import BANKS, validate_snapshot_packet
     from elyse_agent.command_dispatch import CommandDispatcher
-    from elyse_agent.command_protocol import OPERATIONS
+    from elyse_agent.command_protocol import OPERATIONS, validate_request
     from elyse_agent.acquisition_beamline import BEAMLINE_OPERATIONS, SOURCE_PATHS
     from elyse_agent.control_policy import require_ht_value
     import time
     factory_calls = []
     cold = AcquisitionControlRuntime(lambda: factory_calls.append(True))
     assert cold.snapshot()["state"] == "IDLE" and cold.snapshot()["resource_count"] == 0
-    assert len(OPERATIONS) == 23 and set(BEAMLINE_OPERATIONS).issubset(OPERATIONS)
+    assert len(OPERATIONS) == 24 and set(BEAMLINE_OPERATIONS).issubset(OPERATIONS)
+    assert "counter_timing.set" in OPERATIONS
+    pair = dict(counter=0, delay_us=1.25, width_us=3.5)
+    request = dict(command_id="c" * 32, session_id="a" * 32, expected_revision=0,
+                   operation="counter_timing.set", operator_confirmed=True, value=pair)
+    checked = validate_request(request)
+    pair["delay_us"] = 99
+    assert checked["value"]["delay_us"] == 1.25
+    assert not cold.snapshot()["stage_execution"]["counter_timing_commissioned"]
     assert [SOURCE_PATHS[name]["field"] for name in BEAMLINE_OPERATIONS] == [23, 25, 22, 26]
     assert [SOURCE_PATHS[name]["nominal_wait_seconds"] for name in BEAMLINE_OPERATIONS] == [.5, .5, 1., 1.]
     assert not cold.snapshot()["stage_execution"]["beamline_commissioned"]
@@ -174,6 +182,7 @@ def main():
             recent_vi_contention_does_not_erase_or_replay=True,
             named_operation_count=len(OPERATIONS), beamline_default_disabled=True,
             source_beamline_pulse_metadata=True, ht_software_order_gate=True,
+            typed_sync_value_and_default_disabled=True,
             build_id=control_identity(root)["build_id"],
             manifest_hashes_verified=hashes_ok,
             cards_initialized=False, hardware_commands_sent=False, live_everest_contacted=False)))

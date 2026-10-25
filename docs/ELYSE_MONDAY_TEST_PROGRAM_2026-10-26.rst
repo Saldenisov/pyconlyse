@@ -30,7 +30,7 @@ the actual equipment response. No automatic next stage or voltage increase.
 Software preparation before the operator session
 ------------------------------------------------
 
-The reviewed source baseline is ``791f1bff`` on
+The source baseline is ``791f1bff`` plus the r9 synchronization changes on
 ``codex/acq-unified-telemetry-v6``. It is an offline candidate, not a statement
 of the currently installed version. Complete the following preparation before
 calling the full experiment path ready:
@@ -48,7 +48,7 @@ calling the full experiment path ready:
   It raises ``Start blocked: full HT/Chroma/cooling shutdown not commissioned``
   when evidence is absent. Do not promise General will run merely because NI
   initialization succeeds, or set verification flags solely to pass this gate.
-* Recheck the matched capability set: 23 named operations, runtime protocol 2,
+* Recheck the matched capability set: 24 named operations, runtime protocol 2,
   policy 2 and envelope 1. Check the local window has only Initialize,
   Deinitialize and Stop server. Keep the existing single recorder running;
   identify its actual destination and verify fresh commits without opening an
@@ -70,6 +70,9 @@ Record these once at the start, rather than asking again before every stage:
 * Verified measured-zero tolerance and the feedback used to establish HT OFF.
 * Desired Faraday 1/3 physical positions and mirror position. The term
   ``open`` must be resolved to the physical action before a pulse is requested.
+* Requested C10 synchronization output, delay and width in microseconds. Keep
+  drafts distinct from applied values; the named command stops and restarts
+  an already running counter on the current owner.
 
 Use Europe/Paris timestamps with an explicit UTC offset. Monday is 26 October
 2026; the date uses UTC+01:00 after the daylight-saving change. Keep UTC source
@@ -142,6 +145,17 @@ Device Server receipt and XP procedure can be matched without ambiguity.
    source schemas. If the required position needs an unavailable direction,
    record that software gap and use the operator's established local control;
    do not rename EN as open or silently substitute a bank write.
+
+Synchronization adjustments use the Synchronization tab and
+``counter_timing.set`` with an explicit C10 counter, ``delay_us`` and
+``width_us``. Apply outputs already running after General/cooling verification.
+C10/ctr3 and ctr4 are not started on Initialize; their settings can be drafted
+earlier but applied only after Marche impulsions modulateur. Changing either
+invalidates the HT-increase sequence proof, so repeat the explicit Marche
+impulsions step before requesting an increase. The confirmed source writes
+initial delay and low ticks from delay, high ticks from width, with DBL*20 and
+ties-to-even conversion. No frequency-only or C11 command is qualified.
+Record the exact structured request in ``requested_sync_json`` in the CSV.
 
 Throughout stages 1--9, watch measurement ages as well as changing EPS/DPS.
 Transport updates during a long command do not establish a new NI sample.

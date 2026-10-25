@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import './AcquisitionCommands.css';
+import { validCommandValue, sameCommandValue, describeCommandValue } from './acquisitionCommandValue';
 
 const Context = createContext(null);
 const id = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (x) => x.toString(16).padStart(2, '0')).join('');
@@ -9,8 +10,7 @@ const capabilityKey = (value) => JSON.stringify(Object.keys(value?.capabilities 
 const currentNative = (value) => value?.source_selected === true
   && (value.source_mode === undefined || value.source_mode === 'PYTHON_NATIVE')
   && /^[0-9a-f]{32}$/.test(value.session_id || '') && Number.isSafeInteger(value.revision) && value.revision >= 0;
-const validValue = (operation, value) => operation === 'ht_voltage.set'
-  ? typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 20 : value === null;
+const validValue = validCommandValue;
 export const COMMAND_INTENTS_KEY = 'elyse-acquisition-unresolved-intents-v1';
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'REJECTED', 'INTERRUPTED']);
 const emptyLedger = () => ({ schema_version: 1, intents: [], stop_intent: null, error: '' });
@@ -50,7 +50,8 @@ export function AcquisitionCommand({ operation, name, value = null, className, c
   return <button type="button" disabled={!enabled} className={className}
     aria-label={enabled ? name.replace(/ · (commande )?désactivée?$/, '') : name}
     title={enabled ? 'Commande via Tango → Acquisition Python. Confirmation obligatoire.'
-      : !validValue(operation, value) ? 'Saisir une consigne HT explicite et finie de 0 à 20 kV.'
+      : !validValue(operation, value) ? (operation === 'counter_timing.set'
+        ? 'Saisir compteur C10, délai et largeur explicites et valides.' : 'Saisir une consigne HT explicite et finie de 0 à 20 kV.')
         : capability?.reason || 'Commande non disponible sur le serveur Python sélectionné.'}
     onClick={() => control.choose(operation, name.replace(/ · (commande )?désactivée?$/, ''), value)}>{children}</button>;
 }
@@ -122,12 +123,14 @@ export default function AcquisitionCommands({ client, children }) {
     if (busy.current || !fresh || performance.now() - received.current >= 2000
       || !currentNative(latest.current) || !validValue(operation, value) || !permitted(operation)
       || latest.current?.capabilities?.[operation]?.enabled !== true) return;
-    selected.current = { operation, name, value, session_id: latest.current.session_id,
+    const frozenValue = value !== null && typeof value === 'object' ? Object.freeze({ ...value }) : value;
+    selected.current = { operation, name, value: frozenValue, session_id: latest.current.session_id,
       expected_revision: latest.current.revision, capabilities: capabilityKey(latest.current), invalidated: false };
     setConfirmation(selected.current);
   };
   const invalidateValue = useCallback((operation, value) => {
-    if (selected.current && operation && selected.current.operation === operation && selected.current.value !== value) {
+    if (selected.current && operation && selected.current.operation === operation
+      && !sameCommandValue(operation, selected.current.value, value)) {
       invalidate('Consigne modifiée. Annuler puis confirmer la nouvelle valeur explicitement.');
     }
   }, [invalidate]);
@@ -184,7 +187,7 @@ export default function AcquisitionCommands({ client, children }) {
         {['QUEUED', 'EXECUTING', 'INDETERMINATE'].includes(last.outcome) ? ' · Ne pas renvoyer la commande.' : ''}</span>}
       {message && <span role="status">{message}</span>}
       {(ledger.error || ledger.intents.length > 0 || ledger.stop_intent) && <span role="alert">{ledger.error || 'Intention non résolue : nouvelles commandes bloquées, sauf Arrêt General autorisé sans arrêt déjà non résolu.'}
-        {ledger.intents.map((intent) => ` · ${intent.operation}${intent.operation === 'ht_voltage.set' ? ` = ${intent.value} kV` : ''} · ${intent.command_id}`).join('')}
+        {ledger.intents.map((intent) => ` · ${intent.operation}${describeCommandValue(intent.operation, intent.value) ? ` = ${describeCommandValue(intent.operation, intent.value)}` : ''} · ${intent.command_id}`).join('')}
         {ledger.stop_intent && ` · Arrêt General non résolu : ${ledger.stop_intent.command_id}. Aucun second envoi ; vérifier localement si un arrêt est nécessaire.`}
         {' '}Un historique vide ou un nouveau démarrage du serveur ne vaut pas réconciliation.</span>}
     </div>}
@@ -200,6 +203,8 @@ export default function AcquisitionCommands({ client, children }) {
       }}>
       <h2>{confirmation.name}</h2><p>Exécuter cette commande sur l’équipement réel ?</p>
       {confirmation.operation === 'ht_voltage.set' && <p>Consigne confirmée : <strong>{confirmation.value} kV</strong>. Une valeur unique, aucune rampe automatique.</p>}
+      {confirmation.operation === 'counter_timing.set' && <p>Réglage confirmé : <strong>{describeCommandValue(confirmation.operation, confirmation.value)}</strong>.
+        Le compteur sélectionné sera arrêté, reconfiguré puis redémarré. La commande ne démarre pas un compteur auparavant arrêté.</p>}
       {confirmation.operation === 'modulator.general.start' && <p>General → démarrage de l’eau → circulation CANON et SECTION confirmée pendant 2 s. Les étapes suivantes restent bloquées sinon.</p>}
       {confirmation.invalidated && <p role="alert">{confirmation.invalidationReason}</p>}
       <p>Une commande acceptée n’est pas une confirmation physique. Aucun renvoi automatique.</p>

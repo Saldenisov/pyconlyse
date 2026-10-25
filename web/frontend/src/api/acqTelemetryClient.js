@@ -1,4 +1,5 @@
 import { fetchWithHardwareApproval } from './csrfRequest';
+import { validSyncValue } from '../acquisitionCommandValue';
 
 // Both channels use the fixed web facade. No browser-side XP/NI/PSP path.
 const CONTROL = '/api/elyse/acquisition/control';
@@ -76,6 +77,9 @@ export const acqTelemetryClient = Object.freeze({
     return value;
   },
   async command(command) {
+    if (command?.operation === 'counter_timing.set' && !validSyncValue(command.value)) {
+      throw new Error('Compteur C10, délai et largeur explicites et valides requis.');
+    }
     if (command?.operation === 'ht_voltage.set' && (typeof command.value !== 'number'
       || !Number.isFinite(command.value) || command.value < 0 || command.value > 20)) {
       throw new Error('Consigne HT explicite et finie de 0 à 20 kV requise.');

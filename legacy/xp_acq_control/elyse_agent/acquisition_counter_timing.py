@@ -47,6 +47,57 @@ CALLER_UIDS = {
     "publication_read": "5036", "publication": "21449",
 }
 
+# Remote typed-pair policy, not an assertion of physical operating limits.
+MAX_REMOTE_MICROSECONDS = 2147483647 / 20.0
+
+
+def validate_remote_timing(value):
+    """One C10 pair; no arbitrary bank, selector, driver name or C11 route."""
+    if (type(value) is not dict or set(value) != {"counter", "delay_us", "width_us"}
+            or type(value["counter"]) is not int or not 0 <= value["counter"] < 8):
+        raise ValueError("Exact C10 counter 0..7, delay_us and width_us required")
+    for name in ("delay_us", "width_us"):
+        number = value[name]
+        if (type(number) not in (int, float) or not 0 < number <= MAX_REMOTE_MICROSECONDS
+                or not math.isfinite(number)
+                or round(number * 20.0) <= 0):
+            raise ValueError("Positive finite timing with nonzero unsaturated I32 ticks required")
+    return dict(value)
+
+
+def execute_remote_timing(value, pulse_done, stop_counter, write_properties,
+                          start_counter, wait_seconds, cancelled):
+    """Reuse source sequencing on a private request, never a fabricated bank.
+
+    Only the selected pair is an actuator argument. Other scratch slots are
+    inert padding for the source decoder, not observed/retained shared state.
+    Reset/publication callbacks stay private; no C1011 telemetry is fabricated.
+    """
+    value = validate_remote_timing(value)
+    image = [0.0] * BANK_SIZE
+    offset = value["counter"] * 2
+    image[offset:offset + 2] = [float(value["delay_us"]), float(value["width_us"])]
+    image[SELECTOR_INDEX] = float(offset + 1)
+    scratch = [tuple(image)]
+    def reset(values):
+        scratch[0] = values
+    try:
+        report = execute_counter_timing(lambda: scratch[0], reset, lambda values: None,
+            pulse_done, stop_counter, write_properties, start_counter,
+            wait_seconds, cancelled)
+    except CounterTimingError as error:
+        _remote_report(error.report, value)
+        raise
+    _remote_report(report, value)
+    return report
+
+
+def _remote_report(report, value):
+    report.update(remote_request=dict(value), request_image_only=True,
+                  shared_bank_observed=False, shared_bank_published=False)
+    for name in ("dispatch_snapshot", "reset_snapshot", "requested_reset_snapshot", "publication_snapshot"):
+        report.pop(name, None)
+
 
 class CounterTimingError(RuntimeError):
     def __init__(self, report):

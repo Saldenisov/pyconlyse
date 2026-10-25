@@ -153,6 +153,36 @@ class SourceControls(object):
         self.procedure.update(state="SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK", report=result)
         return result
 
+    def configure_sync_parameters(self, value, cancel, operator_confirmed=False):
+        """Typed remote pair on an already running retained C10 counter.
+
+        Does not populate unknown local39 fields or change the full-bank local
+        API. The VI stop/properties/start sequence can only restart a counter
+        that was already running; configuring a stopped pulse source is refused.
+        """
+        from .acquisition_counter_timing import validate_remote_timing, execute_remote_timing
+        value = validate_remote_timing(value)
+        if value["counter"] not in self.started_counters:
+            raise RuntimeError("COUNTER_TIMING_REQUIRES_ALREADY_RUNNING_COUNTER")
+        self._source_preflight("counter_timing_controls_verified", operator_confirmed)
+        # Existing preflight may reconcile a pending stop on this owner.
+        if value["counter"] not in self.started_counters:
+            raise RuntimeError("COUNTER_TIMING_REQUIRES_ALREADY_RUNNING_COUNTER")
+        self.procedure = dict(name="counter_timing.set", state="EXECUTING", hardware_acknowledged=False)
+        try:
+            result = execute_remote_timing(value, self.owner.read_counter_pulse_done,
+                self._source_counter_stop, self._source_counter_timing_properties,
+                self._source_counter_start, cancel.wait, cancel.is_set)
+        except Exception as error:
+            self._retain_control_failure(error)
+            self.last_counter_timing = copy.deepcopy(self.procedure.get("report"))
+            if isinstance(self.last_counter_timing, dict):
+                self._pending_counter_stops.update(self.last_counter_timing.get("pending_counter_stops", ()))
+            raise
+        self.last_counter_timing = copy.deepcopy(result)
+        self.procedure.update(state="SOFTWARE_SEQUENCE_COMPLETED_NOT_HARDWARE_ACK", report=result)
+        return result
+
     def _source_commit_analog(self, group, values):
         if group == "C9NI6703":
             self._require_known_ht_command()

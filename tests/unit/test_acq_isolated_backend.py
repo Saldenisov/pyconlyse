@@ -133,6 +133,10 @@ class FixtureBackend(object):
         assert operator_confirmed is True and type(snapshot) is tuple
         return self._record("configure_counter_timing", snapshot)
 
+    def configure_sync_parameters(self, value, cancel, operator_confirmed=False):
+        assert operator_confirmed is True and type(value) is dict
+        return self._record("configure_sync_parameters", value)
+
     def outer_controlled_stop(self, operator_confirmed=False):
         assert operator_confirmed is True
         return self._record("outer_controlled_stop")
@@ -305,13 +309,16 @@ class IsolatedBackendTests(unittest.TestCase):
                        backend.set_ht_voltage(0., cancel, operator_confirmed=True),
                        backend.configure_counter_timing((0.,) * 33, cancel, operator_confirmed=True),
                        backend.execute_cooling_guard({39: (1.,)}, cancel),
-                       backend.outer_controlled_stop(operator_confirmed=True)]
+                       backend.outer_controlled_stop(operator_confirmed=True),
+                       backend.configure_sync_parameters(dict(counter=2, delay_us=1.25, width_us=3.),
+                                                         cancel, operator_confirmed=True)]
             for result in results:
                 self.assertEqual(result["pid"], first["pid"])
                 self.assertEqual(result["owner_thread"], first["owner_thread"])
                 self.assertFalse(result["nidaqmx_loaded"])
             self.assertEqual(results[0]["value"][39], (1.25, False))
             self.assertEqual(type(results[6]["value"]), tuple)
+            self.assertEqual(results[-1]["value"], dict(counter=2, delay_us=1.25, width_us=3.))
             saved = backend._rpc
             def forbidden(*args, **kwargs):
                 raise AssertionError("RAM attribute attempted RPC")
