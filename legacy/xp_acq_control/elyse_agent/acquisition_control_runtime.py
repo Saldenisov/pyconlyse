@@ -51,7 +51,7 @@ CONTROL_MODULES += ("card_service.py", "card_process_owner.py", "card_observatio
                     "orchestrator_backend.py")
 CONTROL_MODULES += ("federation_wire.py", "orchestrator_publisher.py", "synchronization_profiles.py",
                     "supervision_cards.py", "supervision_imaq.py", "supervision_service.py",
-                    "supervision_runtime.py", "supervision_gui.py")
+                    "supervision_runtime.py", "supervision_gui.py", "supervision_vi_telemetry.py")
 
 
 def control_identity(root=None):
@@ -307,6 +307,9 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             if native is not None:
                 result["native_isolation"] = native
             result["card_processes"] = copy.deepcopy(getattr(self._backend, "card_processes", None))
+            # Capture under the runtime lock. A publisher transform must never
+            # take this lock while it owns its own publication lock.
+            result["_publisher_counter_part"] = self.counter_memory_part()
             result.update(self._software_telemetry(now))
             return result
         finally:

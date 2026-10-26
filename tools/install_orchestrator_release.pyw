@@ -1,4 +1,4 @@
-"""Cold r16 source installation into a NEW role directory; Python 3.4 stdlib.
+"""Cold r17 source installation into a NEW role directory; Python 3.4 stdlib.
 
 No process discovery/start/stop, NI imports, network access, registry, PATH or
 security changes. Package and site manifests require independently supplied
@@ -15,9 +15,9 @@ import shutil
 import uuid
 
 
-RELEASE = "elyse-card-process-orchestrators-20261026-r16"
-TARGETS = dict(acquisition=r"C:\ELYSE_Orchestrator_Acquisition_r16",
-               supervision=r"C:\ELYSE_Orchestrator_Supervision_r16")
+RELEASE = "elyse-card-process-orchestrators-20261026-r17"
+TARGETS = dict(acquisition=r"C:\ELYSE_Orchestrator_Acquisition_r17",
+               supervision=r"C:\ELYSE_Orchestrator_Supervision_r17")
 RUNTIME = r"C:\Python34_ELYSE"
 SOURCE_MANIFEST = "source_manifest.json"
 INSTALL_MANIFEST = "orchestrator_installation.json"
@@ -180,7 +180,7 @@ def _source(folder, pin):
             or manifest.get("standard_bank_count") != 27 or manifest.get("auto_initialize") is not False
             or manifest.get("hardware_activated") is not False or manifest.get("commands_default_enabled") is not False
             or manifest.get("federation_default_enabled") is not False):
-        raise ValueError("Expected cold two-orchestrator r16 source package")
+        raise ValueError("Expected cold two-orchestrator r17 source package")
     rows = _rows(manifest)
     names = set(row["path"] for row in rows)
     if not set(ENTRYPOINTS.values()) | DEFAULT_CONFIGS <= names:
@@ -207,7 +207,7 @@ def _site(folder, pin, role):
     manifest = _pinned_manifest(folder, "site_manifest.json", pin)
     if (set(manifest) != {"schema_version", "role", "release", "files"}
             or manifest["schema_version"] != 1 or manifest["role"] != role or manifest["release"] != RELEASE):
-        raise ValueError("Exact role-specific r16 site manifest required")
+        raise ValueError("Exact role-specific r17 site manifest required")
     rows = _rows(manifest)
     result_name = "installation_result." + role + ".json"
     result_path = safe_path(folder, result_name)
@@ -259,8 +259,9 @@ def _site(folder, pin, role):
             raise ValueError("Runtime journal cannot overwrite a staged source/configuration/key")
         telemetry = config["telemetry"]
         if (type(telemetry) is not dict or set(telemetry) != {"enabled", "host", "port", "period_seconds", "wire_mode"}
-                or telemetry["enabled"] is not True or telemetry["wire_mode"] != "legacy_27"):
-            raise ValueError("VI-running Acquisition rollout must retain enabled legacy_27 telemetry")
+                or telemetry["enabled"] is not True
+                or telemetry["wire_mode"] not in ("legacy_27", "federated_owner")):
+            raise ValueError("Explicit enabled Acquisition telemetry wire mode required")
         keys = (base["key_file"], config["command_key_file"])
         expected = {"config.acquisition.json", CONFIGS[role]} | set(keys)
     else:
@@ -274,8 +275,8 @@ def _site(folder, pin, role):
             raise ValueError("Cold uncommissioned fixed SuperVision source configuration required")
         telemetry = config["telemetry"]
         if (type(telemetry) is not dict or set(telemetry) != {"enabled", "wire", "host", "port", "period_seconds"}
-                or telemetry["enabled"] is not False or telemetry["wire"] != "federated_owner"):
-            raise ValueError("SuperVision publisher stays disabled until explicit DS activation")
+                or type(telemetry["enabled"]) is not bool or telemetry["wire"] != "federated_owner"):
+            raise ValueError("Explicit SuperVision telemetry enablement and owner wire required")
         keys = (config["read_key_file"], config["command_key_file"])
         if any(len(_name(name)) != 1 for name in keys):
             raise ValueError("SuperVision keys use installation-local basenames")

@@ -78,6 +78,11 @@ def missing_bank(name, reason):
         producer_kind="unavailable", hardware_acknowledged=False)
 
 
+def _video_capture_key(video):
+    return (video.get("source_session_id") if video["source"] == "labview_supervision_ni1409" else "native",
+            video["capture_session_id"])
+
+
 class FederatedTelemetryStore(object):
     def __init__(self, owner_keys, clock=time.monotonic, max_relays=64, cooling=None, archive=None):
         if type(owner_keys) is not dict or set(owner_keys) != set(ROLES):
@@ -152,6 +157,10 @@ class FederatedTelemetryStore(object):
                     raise ValueError("Owner source sequence regressed")
                 observed_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 observed_at = self.clock()
+                mode_changed = bool(frame["session_id"] == owner["session"] and owner["latest"] is not None
+                    and owner["latest"]["body"]["packet"]["source_mode"] != frame["source_mode"])
+                if mode_changed and owner["video"] is not None and len(owner["retired_video_sessions"]) >= self.max_relays:
+                    raise ValueError("Camera replay-state capacity reached; source mode change refused")
                 video_update = self._plan_video(owner, frame, body["age_seconds_on_xp"], observed_at)
                 if self.archive is not None:
                     self.archive.append_ingress(body, digest, self.receiver_session,
@@ -175,11 +184,14 @@ class FederatedTelemetryStore(object):
                                 owner["retired"].add(owner["session"])
                             owner["session"] = frame["session_id"]
                             owner["video"], owner["retired_video_sessions"] = None, set()
+                        elif mode_changed and owner["video"] is not None:
+                            owner["retired_video_sessions"].add(owner["video"]["capture_key"])
+                            owner["video"] = None
                         owner.update(sequence=frame["sequence"], relay=relay_id, latest=entry)
                         if video_update is not None:
                             prior_video = owner["video"]
-                            if prior_video is not None and prior_video["capture_session_id"] != video_update["capture_session_id"]:
-                                owner["retired_video_sessions"].add(prior_video["capture_session_id"])
+                            if prior_video is not None and prior_video["capture_key"] != video_update["capture_key"]:
+                                owner["retired_video_sessions"].add(prior_video["capture_key"])
                             owner["video"] = video_update
                     owner["relays"][relay_id] = dict(message_id=message_id, digest=digest,
                                                     session_id=frame["session_id"])
@@ -197,15 +209,15 @@ class FederatedTelemetryStore(object):
         if video is None:
             return None
         same_boot = frame["session_id"] == owner["session"]
-        prior = owner["video"] if same_boot else None
-        capture = video["capture_session_id"]
+        prior = owner["video"] if same_boot and owner["video"] is not None and owner["video"]["source_mode"] == frame["source_mode"] else None
+        capture = _video_capture_key(video)
         if same_boot and capture in owner["retired_video_sessions"]:
             raise ValueError("Retired camera capture session cannot overwrite its successor")
         identity = copy.deepcopy(video)
         identity.pop("source_age_seconds")
         digest = hashlib.sha256(canonical(identity)).hexdigest()
         age = video["source_age_seconds"] + queue_age
-        if prior is not None and prior["capture_session_id"] == capture:
+        if prior is not None and prior["capture_key"] == capture:
             if video["sequence"] < prior["sequence"]:
                 raise ValueError("Camera frame sequence regressed within its capture session")
             if video["sequence"] == prior["sequence"]:
@@ -219,9 +231,10 @@ class FederatedTelemetryStore(object):
                 raise ValueError("Camera capture replay-state capacity reached")
             if age >= 2:
                 return None  # Stale new worker cannot replace a healthy capture.
-        return dict(frame=copy.deepcopy(video), capture_session_id=capture,
+        return dict(frame=copy.deepcopy(video), capture_session_id=video["capture_session_id"], capture_key=capture,
                     sequence=video["sequence"], digest=digest, base_age=age,
-                    received_at=observed_at, owner_session_id=frame["session_id"])
+                    received_at=observed_at, owner_session_id=frame["session_id"],
+                    source_mode=frame["source_mode"])
 
     def _owner_view(self, role, now):
         owner = self.owners[role]
@@ -239,6 +252,7 @@ class FederatedTelemetryStore(object):
         present = any(record["data"] is not None for record in frame["banks"]) or frame["counter_part"] is not None
         video = owner["video"]
         video_current = bool(video is not None and video["owner_session_id"] == frame["session_id"]
+            and video["source_mode"] == frame["source_mode"]
             and video["base_age"] + max(0., now - video["received_at"]) < 2)
         available = (frame["source_mode"] != "UNAVAILABLE" and (
             any(record["data"] is not None and record["source_age_seconds"] + age < 2
@@ -252,6 +266,7 @@ class FederatedTelemetryStore(object):
             observed_candidate_session=candidate_frame.get("session_id"),
             candidate_requires_current_data=candidate_frame.get("session_id") != frame["session_id"],
             received_utc_on_everest=entry["received_utc"], relay_id=entry["body"]["relay_id"],
+            source_identity=copy.deepcopy(frame.get("source_identity")),
             received_this_process=owner["received"], duplicate_receipts=owner["duplicates"])
 
     def owner_current(self, role, session_id=None, native=False):
@@ -334,15 +349,17 @@ class FederatedTelemetryStore(object):
                         session_id=owner["session"], age_seconds=None, frame=None) if include_data else dict(
                             owner="supervision", available=False, stale=True, session_id=owner["session"], age_seconds=None)
         age = video["base_age"] + max(0., now - video["received_at"])
-        native = (owner["latest"] is not None
-                  and owner["latest"]["body"]["packet"]["source_mode"] == "PYTHON_NATIVE")
-        available = bool(not self.closed and native and video["owner_session_id"] == owner["session"] and age < 2)
+        mode = owner["latest"]["body"]["packet"]["source_mode"] if owner["latest"] is not None else None
+        available = bool(not self.closed and mode in ("PYTHON_NATIVE", "LABVIEW_BRIDGE")
+            and video["source_mode"] == mode and video["owner_session_id"] == owner["session"] and age < 2)
         frame = video["frame"]
         value = dict(owner="supervision", available=available, stale=not available,
             session_id=owner["session"], capture_session_id=video["capture_session_id"],
             sequence=video["sequence"], age_seconds=age, width=frame["width"], height=frame["height"],
             pixel_type=frame["pixel_type"], encoding=frame["encoding"], channel=frame["channel"],
             processing=frame["processing"], observed_utc=frame["observed_utc"], hardware_acknowledged=False)
+        value.update(source=frame["source"], source_mode=video["source_mode"],
+                     source_session_id=frame.get("source_session_id"))
         if include_data:
             value["frame"] = copy.deepcopy(frame) if available else None
         return value

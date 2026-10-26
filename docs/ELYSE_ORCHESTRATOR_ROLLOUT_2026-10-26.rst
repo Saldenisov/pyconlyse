@@ -1,4 +1,4 @@
-Cold r16 dual-host rollout
+Cold r17 dual-host rollout
 =========================
 
 Prepared state and boundary
@@ -22,8 +22,8 @@ Host layout:
 ================  ========================  ================================================
 Role              Fixed local API           New source directory
 ================  ========================  ================================================
-Acquisition       10.20.30.10:8772           C:\ELYSE_Orchestrator_Acquisition_r16
-SuperVision       10.20.30.2:8772            C:\ELYSE_Orchestrator_Supervision_r16
+Acquisition       10.20.30.10:8772           C:\ELYSE_Orchestrator_Acquisition_r17
+SuperVision       10.20.30.2:8772            C:\ELYSE_Orchestrator_Supervision_r17
 Portable runtime  separately installed      C:\Python34_ELYSE
 Everest receiver  10.20.30.202:8767          existing Tango telemetry Device Server
 ================  ========================  ================================================
@@ -43,7 +43,7 @@ The package directory and site directory must be separate from the installer:
 
 ::
 
-    C:\ELYSE_r16_stage\
+    C:\ELYSE_r17_stage\
       install_orchestrator_release.pyw
       source\manifest.json
       source\... manifest-listed source files only ...
@@ -56,7 +56,7 @@ The package directory and site directory must be separate from the installer:
       supervision_site\... two local key basenames from that configuration ...
 
 The common source package has release
-``elyse-card-process-orchestrators-20261026-r16``, role ``xp_python34``,
+``elyse-card-process-orchestrators-20261026-r17``, role ``xp_python34``,
 27 standard banks and 25 named operations. Its manifest must explicitly state
 ``auto_initialize=false``, ``hardware_activated=false``,
 ``commands_default_enabled=false`` and ``federation_default_enabled=false``.
@@ -69,7 +69,7 @@ Each site manifest has exactly this schema. SHA256 strings are lower-case:
     {
       "schema_version": 1,
       "role": "acquisition",
-      "release": "elyse-card-process-orchestrators-20261026-r16",
+      "release": "elyse-card-process-orchestrators-20261026-r17",
       "files": [
         {"path": "config.acquisition.json", "sha256": "<64 hex characters>"},
         {"path": "config.acquisition.control.json", "sha256": "<64 hex characters>"},
@@ -138,13 +138,13 @@ Acquisition 10.20.30.10:
 
 ::
 
-    "C:\Python34_ELYSE\python.exe" -B "C:\ELYSE_r16_stage\install_orchestrator_release.pyw" --package "C:\ELYSE_r16_stage\source" --site "C:\ELYSE_r16_stage\acquisition_site" --role acquisition --manifest-sha256 <SOURCE_MANIFEST_SHA256> --site-manifest-sha256 <ACQUISITION_SITE_MANIFEST_SHA256>
+    "C:\Python34_ELYSE\python.exe" -B "C:\ELYSE_r17_stage\install_orchestrator_release.pyw" --package "C:\ELYSE_r17_stage\source" --site "C:\ELYSE_r17_stage\acquisition_site" --role acquisition --manifest-sha256 <SOURCE_MANIFEST_SHA256> --site-manifest-sha256 <ACQUISITION_SITE_MANIFEST_SHA256>
 
 SuperVision 10.20.30.2:
 
 ::
 
-    "C:\Python34_ELYSE\python.exe" -B "C:\ELYSE_r16_stage\install_orchestrator_release.pyw" --package "C:\ELYSE_r16_stage\source" --site "C:\ELYSE_r16_stage\supervision_site" --role supervision --manifest-sha256 <SOURCE_MANIFEST_SHA256> --site-manifest-sha256 <SUPERVISION_SITE_MANIFEST_SHA256>
+    "C:\Python34_ELYSE\python.exe" -B "C:\ELYSE_r17_stage\install_orchestrator_release.pyw" --package "C:\ELYSE_r17_stage\source" --site "C:\ELYSE_r17_stage\supervision_site" --role supervision --manifest-sha256 <SOURCE_MANIFEST_SHA256> --site-manifest-sha256 <SUPERVISION_SITE_MANIFEST_SHA256>
 
 The result is ``INSTALLED`` or ``ALREADY_INSTALLED`` with
 ``hardware_commands_sent=false``. Files are copied into an invocation-owned
@@ -267,11 +267,11 @@ camera equivalence, independent pulse calibration or completed native testing.
 Installer verification
 -----------------------
 
-Eleven tests use random temporary directories and synthetic source/runtime
+Twelve tests use random temporary directories and synthetic source/runtime
 bytes which are never executed. Actual CPython 3.4 x86 and Python 3.12 with
 external networking denied pass both role installations, exact idempotence,
 preservation of the old directory, source/site pin and payload mismatch,
 copy failure, final-rename race, modified-target refusal, Windows-path/case
-checks, key separation, disabled SuperVision federation and runtime-binary
+checks, key separation, explicit publisher modes without automatic startup and runtime-binary
 hash mismatch. No live target, XP process, NI resource or network endpoint is
 accessed by these tests.

@@ -207,10 +207,10 @@ class OrchestratorReleaseInstallTests(unittest.TestCase):
         self.assertRaises(ValueError, self.install)
         self.assertFalse(os.path.exists(self.target))
 
-    def test_role_configuration_does_not_activate_federation_or_remote_sup(self):
+    def test_role_configuration_rejects_unknown_wire_and_remote_sup(self):
         path = os.path.join(self.site, "config.acquisition.control.json")
         config = installer._read_json(path)
-        config["telemetry"]["wire_mode"] = "federated_owner"
+        config["telemetry"]["wire_mode"] = "arbitrary_remote_source"
         json_file(path, config)
         self.site_pin = refresh_site(self.site, self.role)
         self.assertRaises(ValueError, self.install)
@@ -224,6 +224,27 @@ class OrchestratorReleaseInstallTests(unittest.TestCase):
         self.site_pin = refresh_site(self.site, self.role)
         self.assertRaises(ValueError, self.install)
         self.assertFalse(os.path.exists(self.target))
+
+    def test_explicit_federated_publishers_are_installed_but_never_started(self):
+        path = os.path.join(self.site, "config.acquisition.control.json")
+        config = installer._read_json(path)
+        config["telemetry"]["wire_mode"] = "federated_owner"
+        json_file(path, config)
+        self.site_pin = refresh_site(self.site, self.role)
+        result = self.install()
+        self.assertFalse(result["processes_started"])
+        self.assertFalse(result["hardware_commands_sent"])
+        shutil.rmtree(self.site)
+        self.role, self.target = "supervision", os.path.join(self.root, "new-supervision")
+        self.site_pin = site_fixture(self.site, self.role)
+        path = os.path.join(self.site, "config.supervision.control.json")
+        config = installer._read_json(path)
+        config["telemetry"]["enabled"] = True
+        json_file(path, config)
+        self.site_pin = refresh_site(self.site, self.role)
+        result = self.install()
+        self.assertFalse(result["processes_started"])
+        self.assertFalse(result["hardware_commands_sent"])
 
     def test_same_key_unlisted_file_and_changed_runtime_refuse(self):
         write(os.path.join(self.site, "command.key"), b"r" * 32)

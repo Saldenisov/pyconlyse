@@ -24,6 +24,23 @@ class Runtime(object):
 
 
 class OwnerPublisherTests(unittest.TestCase):
+    def test_transform_never_calls_back_into_runtime_while_publication_lock_is_owned(self):
+        runtime = Runtime()
+        def forbidden():
+            self.fail("Publisher transform attempted a runtime callback under its lock")
+        runtime.counter_memory_part = runtime.video_frame_snapshot = forbidden
+        memory = dict(values=[1., 2.] * 8, source_age_seconds=.1,
+            source="last_successful_counter_command_memory", selector=-1, pending_selector=False)
+        projection = dict(runtime.value, _publisher_counter_part=memory)
+        publisher = OwnerTelemetryPublisher(runtime, ("127.0.0.1", 12345), b"x" * 32)
+        with publisher.lock:
+            frame = json.loads(publisher._transform(standard_packet(projection, 1), 0, projection))
+        self.assertEqual(frame["counter_part"], memory)
+        projection["telemetry_view_current"] = False
+        with publisher.lock:
+            expired = json.loads(publisher._transform(standard_packet(projection, 2), 0, projection))
+        self.assertIsNone(expired["counter_part"])
+
     def test_counter_memory_is_hidden_until_timing_write_is_complete(self):
         class Backend(object):
             startup_complete = True

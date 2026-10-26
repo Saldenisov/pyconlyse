@@ -7,6 +7,7 @@ import AcquisitionExperimentControls from './AcquisitionExperimentControls';
 import AcquisitionConnection from './AcquisitionConnection';
 import useAcquisitionTelemetry from './useAcquisitionTelemetry';
 import AcquisitionSynchronizationControls from './AcquisitionSynchronizationControls';
+import AcquisitionVideo from './components/AcquisitionVideo';
 import Modulator from './tabs/Modulator';
 import HT from "./tabs/HT";
 import Fluides from "./tabs/Fluides";
@@ -42,7 +43,8 @@ const Elyse = () => {
   };
 
   const handleTestOnlyAction = (event) => {
-    if (activeTab === 'Acquisition Telemetry' || activeTab === 'Experiment' || activeTab === 'Synchronization') return;
+    if (activeTab === 'Acquisition Telemetry' || activeTab === 'Experiment'
+      || activeTab === 'Synchronization' || activeTab === 'Cameras') return;
     const button = event.target.closest('button');
     if (!button) {
       return;
@@ -72,6 +74,8 @@ const Elyse = () => {
         return <HT />;
       case "Fluides":
         return <Fluides />;
+      case "Cameras":
+        return <AcquisitionVideo />;
       // Add additional cases for other tabs if you create dedicated components.
       default:
         return <div>Content for {tab}</div>;

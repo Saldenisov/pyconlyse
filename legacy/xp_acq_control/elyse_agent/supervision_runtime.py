@@ -109,6 +109,9 @@ class SupervisionRuntime(object):
                 raise RuntimeError("Start the cold local orchestrator before Initialize")
             if self._state != "IDLE" or self._owners or self._pending or self._shutdown_requested:
                 raise RuntimeError("Initialize requires a cold IDLE SuperVision host")
+            publisher = getattr(self, "telemetry_publisher", None)
+            if publisher is not None and hasattr(publisher, "assert_initialize_allowed"):
+                publisher.assert_initialize_allowed()
             recovery = self._recovery()
             if recovery.get("required"):
                 self._state, self._error = "RECOVERY_REQUIRED", recovery.get("reason", "Owner recovery required")
@@ -119,6 +122,8 @@ class SupervisionRuntime(object):
             self._pending, self._operation = ("initialize", None), "initialize"
             self._state, self._error = "INITIALIZING", ""
             self._state_revision += 1
+            if publisher is not None and hasattr(publisher, "note_native_transition"):
+                publisher.note_native_transition()
             self._wake.set()
 
     def _close_request(self, shutdown, electrical_off_confirmed):
@@ -358,7 +363,7 @@ class SupervisionRuntime(object):
         return dict(values=list(values), source_age_seconds=age,
             source="last_successful_counter_command_memory", selector=-1, pending_selector=False)
 
-    def snapshot(self):
+    def snapshot(self, include_publisher=True):
         statuses = self._statuses()
         now = self._clock()
         metadata = {name: _status_metadata(value) for name, value in statuses.items()}
@@ -424,13 +429,28 @@ class SupervisionRuntime(object):
                 hardware_writes_interpretation="This RAM snapshot read writes no hardware; Initialize and admitted commands can mutate local boards",
                 build_id_interpretation="Explicit SuperVision source closure, not configuration/firmware/environment attestation",
                 output_interpretation="Source pulse software memory; no physical timing acknowledgement",
+                telemetry_view_current=True,
+                telemetry_bridge_mode=(not self._owners and self._state in ("IDLE", "RECOVERY_REQUIRED")
+                    and self._pending is None and self._operation is None and not self._shutdown_requested),
                 cooling_safety=dict(active=False, circuits=[], stop_state="NONE", remaining_seconds=None,
                     automatic_stop_available=False, journal_error="", authority="NOT_OWNED_BY_SUPERVISION"))
             result["control"] = self.broker.snapshot(issue_lease=False)
             result["control"]["capabilities"] = self._capabilities(statuses)
             publisher = getattr(self, "telemetry_publisher", None)
-            result["telemetry_delivery"] = publisher.status() if publisher is not None else dict(enabled=False)
-            return result
+        # Never nest the runtime lock with publisher status/admission locks.
+        # The telemetry projection itself excludes this recursive status path.
+        result["telemetry_delivery"] = (publisher.status() if publisher is not None and include_publisher
+                                        else dict(enabled=False) if publisher is None else dict(projection_only=True))
+        return result
+
+    def try_telemetry_snapshot(self):
+        """RAM-only, non-waiting local admission projection; no NI/card reads."""
+        if not self._lock.acquire(False):
+            return None
+        try:
+            return self.snapshot(include_publisher=False)
+        finally:
+            self._lock.release()
 
     def join(self, timeout=None):
         worker = self._thread

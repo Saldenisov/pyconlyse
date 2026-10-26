@@ -122,7 +122,10 @@ class RamRuntime(object):
                             banks={}, counter_memory_current=True))
 
     def snapshot(self):
-        return copy.deepcopy(self.value)
+        value = copy.deepcopy(self.value)
+        value["_publisher_counter_part"] = copy.deepcopy(self.memory)
+        value["_publisher_video_frame"] = copy.deepcopy(self.video)
+        return value
 
     def counter_memory_part(self):
         return copy.deepcopy(self.memory)

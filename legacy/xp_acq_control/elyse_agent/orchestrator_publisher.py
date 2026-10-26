@@ -105,17 +105,16 @@ class OwnerTelemetryPublisher(DualModeTelemetryPublisher):
         if not bridge:
             if self.role == "acquisition":
                 records.update(independent_input_records(projection, self.calibration))
-            provider = getattr(self.runtime, "counter_memory_part", None)
-            if provider is not None:
-                counterpart = provider()
+            if projection.get("telemetry_view_current") is not False:
+                counterpart = copy.deepcopy(projection.get("_publisher_counter_part"))
             if not projection.get("resource_count"):
                 mode = "UNAVAILABLE"
         video = None
         if self.role == "supervision" and not bridge:
-            getter = getattr(self.runtime, "video_frame_snapshot", None)
-            now = time.monotonic()
-            if getter is not None and (self.last_video_sent is None or now - self.last_video_sent >= 1.):
-                video = getter()
+            now = self.clock()
+            if (projection.get("telemetry_view_current") is not False
+                    and (self.last_video_sent is None or now - self.last_video_sent >= 1.)):
+                video = copy.deepcopy(projection.get("_publisher_video_frame"))
                 if video is not None:
                     video = dict(video)
                     video.pop("age_seconds", None)

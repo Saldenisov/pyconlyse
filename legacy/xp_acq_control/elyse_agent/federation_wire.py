@@ -88,12 +88,17 @@ def validate_video_frame(value):
     """Bounded NI1409 raw U8 capture; no decoding/rescaling into a new image."""
     if value is None:
         return
-    if type(value) is not dict or set(value) != {
+    fields = {
             "source", "simulated", "sequence", "sequence_interpretation", "capture_session_id",
             "observed_utc", "sample_elapsed_seconds", "width", "height", "pixel_type",
-            "encoding", "data", "channel", "processing", "hardware_acknowledged", "source_age_seconds"}:
+            "encoding", "data", "channel", "processing", "hardware_acknowledged", "source_age_seconds"}
+    bridge = isinstance(value, dict) and value.get("source") == "labview_supervision_ni1409"
+    if bridge:
+        fields.add("source_session_id")
+    if type(value) is not dict or set(value) != fields:
         raise ValueError("Exact independently identified video frame required")
-    if (value["source"] != "python_supervision_ni1409" or value["simulated"] is not False
+    if (value["source"] not in ("python_supervision_ni1409", "labview_supervision_ni1409")
+            or bridge and not hex_id(value["source_session_id"]) or value["simulated"] is not False
             or value["hardware_acknowledged"] is not False or not hex_id(value["capture_session_id"])
             or type(value["sequence"]) is not int or not 1 <= value["sequence"] <= 9007199254740991
             or value["sequence_interpretation"] != "software grab observation, not hardware frame counter"
@@ -122,9 +127,12 @@ def validate_video_frame(value):
 
 
 def validate_owner_frame(frame):
-    if type(frame) is not dict or set(frame) != {
+    fields = {
             "schema_version", "publication", "owner", "session_id", "sequence",
-            "source_mode", "source_seconds_1904", "banks", "counter_part", "video_frame"}:
+            "source_mode", "source_seconds_1904", "banks", "counter_part", "video_frame"}
+    if isinstance(frame, dict) and "source_identity" in frame:
+        fields.add("source_identity")
+    if type(frame) is not dict or set(frame) != fields:
         raise ValueError("Exact owner telemetry frame required")
     role = frame["owner"]
     if (type(frame["schema_version"]) is not int or frame["schema_version"] != 1
@@ -136,6 +144,13 @@ def validate_owner_frame(frame):
             or type(frame["banks"]) is not list
             or len(frame["banks"]) != len(OWNED_BANKS[role])):
         raise ValueError("Invalid owner telemetry identity or source metadata")
+    if "source_identity" in frame:
+        identity = frame["source_identity"]
+        if (role != "supervision" or frame["source_mode"] != "LABVIEW_BRIDGE"
+                or type(identity) is not dict or set(identity) != {"source", "session_id", "sequence"}
+                or identity["source"] != "labview_supervision_typed_local" or not hex_id(identity["session_id"])
+                or type(identity["sequence"]) is not int or not 1 <= identity["sequence"] <= 9007199254740991):
+            raise ValueError("Explicit SuperVision VI side-channel observation identity required")
     for record, name in zip(frame["banks"], OWNED_BANKS[role]):
         if (type(record) is not dict or set(record) != {
                 "publication", "data", "lv_type", "error", "source_age_seconds"}
@@ -148,8 +163,11 @@ def validate_owner_frame(frame):
             raise ValueError("Invalid typed value or unavailable source claiming data")
     validate_counter_part(frame["counter_part"])
     validate_video_frame(frame["video_frame"])
-    if frame["video_frame"] is not None and (role != "supervision" or frame["source_mode"] != "PYTHON_NATIVE"):
-        raise ValueError("Raw NI1409 frames belong only to the native SuperVision owner")
+    if frame["video_frame"] is not None:
+        expected_source = {"PYTHON_NATIVE": "python_supervision_ni1409",
+                           "LABVIEW_BRIDGE": "labview_supervision_ni1409"}.get(frame["source_mode"])
+        if role != "supervision" or frame["video_frame"]["source"] != expected_source:
+            raise ValueError("Raw NI1409 frames must match the SuperVision source mode")
     if frame["source_mode"] == "UNAVAILABLE" and frame["counter_part"] is not None:
         raise ValueError("Unavailable source cannot publish current counter memory")
     raw = json.dumps(frame, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode("ascii")
@@ -159,7 +177,7 @@ def validate_owner_frame(frame):
 
 
 def owner_frame(owner, session_id, sequence, records=None, source_mode="UNAVAILABLE",
-                counter_part=None, now=None, video_frame=None):
+                counter_part=None, now=None, video_frame=None, source_identity=None):
     """Build complete owned subset. Missing banks stay null, never zero-filled.
 
     ``records`` is a map containing ONLY that owner's publications. Callers
@@ -184,6 +202,8 @@ def owner_frame(owner, session_id, sequence, records=None, source_mode="UNAVAILA
                  session_id=session_id, sequence=sequence, source_mode=source_mode,
                  source_seconds_1904=stamp.timestamp() + 2082844800,
                  banks=result, counter_part=copy.deepcopy(counter_part), video_frame=copy.deepcopy(video_frame))
+    if source_identity is not None:
+        frame["source_identity"] = copy.deepcopy(source_identity)
     validate_owner_frame(frame)
     return frame
 

@@ -31,7 +31,7 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'elyse-card-process-orchestrators-20261026-r16'
+    assert result['release'] == 'elyse-card-process-orchestrators-20261026-r17'
     assert result['native_isolation_default'] == 'per_card'
     assert result['local_orchestrator_roles'] == ['acquisition', 'supervision']
     assert 'supervision_control_server.pyw' in included

@@ -1,0 +1,16 @@
+.acquisition-video { border: 1px solid #ced4da; border-radius: 8px; padding: 16px; margin: 16px 0; }
+.acquisition-video header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
+.acquisition-video h2 { font-size: 1.2rem; margin: 0 0 12px; }
+.acquisition-video header span, .acquisition-video figcaption { color: #495057; font-size: .9rem; }
+.acquisition-video__status { padding: 8px 12px; border-radius: 4px; font-weight: 600; }
+.acquisition-video__status--current { color: #155724; background: #d4edda; }
+.acquisition-video__status--stale { color: #7a4800; background: #fff3cd; }
+.acquisition-video__status--unavailable { color: #721c24; background: #f8d7da; }
+.acquisition-video__status--waiting { color: #383d41; background: #e2e3e5; }
+.acquisition-video__error { color: #721c24; }
+.acquisition-video figure { margin: 0; }
+.acquisition-video canvas { display: block; width: auto; height: auto; max-width: 100%; max-height: 420px;
+  background: #000; image-rendering: pixelated; }
+.acquisition-video figcaption { margin-top: 8px; }
+.acquisition-video__empty { min-height: 120px; display: flex; align-items: center;
+  justify-content: center; background: #f8f9fa; color: #495057; text-align: center; padding: 16px; }

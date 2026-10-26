@@ -210,8 +210,8 @@ def main(entrypoint, argv=None, publisher_factory=None):
         telemetry = config["telemetry"]
         if telemetry["enabled"]:
             if publisher_factory is None:
-                from .orchestrator_publisher import OwnerTelemetryPublisher
-                publisher_factory = OwnerTelemetryPublisher
+                from .supervision_vi_telemetry import SupervisionTelemetryPublisher
+                publisher_factory = SupervisionTelemetryPublisher
             publisher = publisher_factory(runtime, (telemetry["host"], telemetry["port"]), read_key,
                 period=telemetry["period_seconds"], role="supervision")
             runtime.telemetry_publisher = publisher

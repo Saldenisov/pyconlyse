@@ -1,0 +1,119 @@
+import React from 'react';
+import { act, render, screen } from '@testing-library/react';
+import AcquisitionVideo from './AcquisitionVideo';
+
+function payload(sequence = 1, capture = 'c'.repeat(32)) {
+  const frame = { source: 'python_supervision_ni1409', simulated: false, sequence,
+    sequence_interpretation: 'software grab observation, not hardware frame counter',
+    capture_session_id: capture, observed_utc: '2026-10-26T12:00:00+00:00',
+    sample_elapsed_seconds: 0.01, source_age_seconds: 0.1, width: 2, height: 1,
+    pixel_type: 'U8', encoding: 'base64_raw_row_major', data: 'AP8=', channel: 2,
+    processing: 'raw_grab_before_legacy_interlace_bcg_profiles', hardware_acknowledged: false };
+  const { data, sample_elapsed_seconds, source_age_seconds, sequence_interpretation, simulated, ...metadata } = frame;
+  return { schema_version: 1, owner: 'supervision', available: true, stale: false,
+    session_id: 'a'.repeat(32), age_seconds: 0.2, source_mode: 'PYTHON_NATIVE', ...metadata, frame };
+}
+
+let context;
+beforeEach(() => {
+  jest.useFakeTimers();
+  context = { createImageData: jest.fn((width, height) => ({ data: new Uint8ClampedArray(width * height * 4) })),
+    putImageData: jest.fn() };
+  jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context);
+});
+afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
+const flush = async () => { await act(async () => { await Promise.resolve(); }); };
+const advance = async (ms) => { await act(async () => { jest.advanceTimersByTime(ms); }); };
+
+test('renders actual grayscale pixels and read-only metadata after a current validated frame', async () => {
+  const client = { video: jest.fn().mockResolvedValue(payload()) };
+  const { unmount } = render(<AcquisitionVideo client={client} />);
+  await flush();
+  expect(screen.getByRole('status')).toHaveTextContent('Image récente');
+  expect(screen.getByRole('img')).toHaveAttribute('width', '2');
+  expect([...context.putImageData.mock.calls[0][0].data]).toEqual([0, 0, 0, 255, 255, 255, 255, 255]);
+  expect(screen.getByText(/U8 brut · canal 2/)).toHaveTextContent('observation 1');
+  expect(client.video).toHaveBeenCalledTimes(1);
+  unmount();
+});
+
+test('repeated sequence cannot refresh a frozen image, while a new capture may restart at sequence1', async () => {
+  const client = { video: jest.fn().mockResolvedValue(payload()) };
+  const { unmount } = render(<AcquisitionVideo client={client} />);
+  await flush();
+  await advance(1000);
+  expect(client.video).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('status')).toHaveTextContent('Image récente');
+  await advance(1000);
+  expect(screen.getByRole('status')).toHaveTextContent('Image périmée');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  client.video.mockResolvedValue(payload(1, 'd'.repeat(32)));
+  await advance(1000);
+  expect(screen.getByRole('status')).toHaveTextContent('Image récente');
+  expect(screen.getByRole('img')).toBeInTheDocument();
+  unmount();
+});
+
+test('lost read or explicit unavailable response removes current pixels immediately', async () => {
+  const client = { video: jest.fn().mockResolvedValueOnce(payload()).mockRejectedValueOnce(new Error('receiver absent'))
+    .mockResolvedValue({ schema_version: 1, owner: 'supervision', available: false, frame: null }) };
+  const { unmount } = render(<AcquisitionVideo client={client} />);
+  await flush();
+  expect(screen.getByRole('img')).toBeInTheDocument();
+  await advance(1000);
+  expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.getByRole('alert')).toHaveTextContent('receiver absent');
+  await advance(1000);
+  expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  unmount();
+});
+
+test('one slow in-flight request cannot cause overlapping reads; HTTP delay consumes image age', async () => {
+  let finish;
+  const client = { video: jest.fn().mockImplementation(() => new Promise((resolve) => { finish = resolve; })) };
+  const { unmount } = render(<AcquisitionVideo client={client} />);
+  await advance(4000);
+  expect(client.video).toHaveBeenCalledTimes(1);
+  await act(async () => { finish(payload()); });
+  expect(screen.getByRole('status')).toHaveTextContent('Image périmée');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  unmount();
+});
+
+test('unmount aborts only the read, clears poll/age timers and discards a late response', async () => {
+  let finish;
+  const client = { video: jest.fn().mockImplementation(() => new Promise((resolve) => { finish = resolve; })) };
+  const { unmount } = render(<AcquisitionVideo client={client} />);
+  const signal = client.video.mock.calls[0][0];
+  unmount();
+  expect(signal.aborted).toBe(true);
+  await act(async () => { finish(payload()); });
+  await advance(10000);
+  expect(client.video).toHaveBeenCalledTimes(1);
+  expect(context.putImageData).not.toHaveBeenCalled();
+});
+
+test('same capture sequence regression and malformed frames never display as current', async () => {
+  const client = { video: jest.fn().mockResolvedValueOnce(payload(2)).mockResolvedValueOnce(payload(1))
+    .mockResolvedValue({ ...payload(3), width: 99 }) };
+  const { unmount } = render(<AcquisitionVideo client={client} />);
+  await flush();
+  await advance(1000);
+  expect(screen.getByRole('alert')).toHaveTextContent('Séquence vidéo antérieure');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  await advance(1000);
+  expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  unmount();
+});
+
+test('disabled viewer does not request pixels', async () => {
+  const client = { video: jest.fn() };
+  const { unmount } = render(<AcquisitionVideo client={client} enabled={false} />);
+  await flush();
+  expect(client.video).not.toHaveBeenCalled();
+  expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
+  unmount();
+});
