@@ -4,6 +4,7 @@ Stop requests do not close tasks concurrently with a DAQmx read. Cleanup errors
 retain ownership, prevent reinitialization/exit and allow an explicit retry.
 """
 import copy
+from .card_observation import card_inputs_current, generation_vector, selected_generations, source_age
 import datetime
 import threading
 import time
@@ -70,6 +71,7 @@ class AcquisitionRuntime(object):
         # Never accept an old owner's EPS or a failed/queued start as completion.
         self._ht_sequence_owner = None
         self._ht_sequence_generation = None
+        self._ht_card_generation_vector = None
         self._ht_supply_sequence_completed = False
         self._ht_pulses_sequence_completed = False
         self._ht_command_observation_at = None
@@ -257,6 +259,11 @@ class AcquisitionRuntime(object):
             result["owner_current"] = (result["owner_current"]
                 and owner.get("ownership_uncertain") is False
                 and owner.get("worker_generation") == self._ht_sequence_generation)
+        cards = getattr(backend, "card_processes", None)
+        if cards is not None:
+            result["owner_current"] = (result["owner_current"]
+                and selected_generations(cards, (4, 9, 10)) is not None
+                and selected_generations(cards, (4, 9, 10)) == self._ht_card_generation_vector)
         result["supply_sequence_completed"] = (result.get("supply_sequence_completed") is True
                                                 and self._ht_supply_sequence_completed)
         result["pulses_sequence_completed"] = (result.get("pulses_sequence_completed") is True
@@ -277,6 +284,8 @@ class AcquisitionRuntime(object):
                 or self._latest.get("source") != "python_daqmx_acquisition"
                 or self._latest.get("simulated") is not False):
             raise RuntimeError(operation + "_REQUIRES_FRESH_CURRENT_OWNER_INPUTS")
+        if not card_inputs_current(self._latest, getattr(self._backend, "card_processes", None)):
+            raise RuntimeError(operation + "_REQUIRES_CURRENT_CARD_GENERATIONS")
 
     def _supervised_admission(self, operation):
         return bool(self._backend is not None and supervised_allowed(self._backend, operation)
@@ -758,6 +767,8 @@ class AcquisitionRuntime(object):
                         isolation = getattr(self._backend, "isolation_snapshot", None)
                         self._ht_sequence_generation = (isolation().get("worker_generation")
                                                         if isolation is not None else None)
+                        self._ht_card_generation_vector = selected_generations(
+                            getattr(self._backend, "card_processes", None), (4, 9, 10))
                         if not self._cancel.is_set():
                             self._state = "RUNNING"
                             self._state_revision += 1
@@ -961,7 +972,7 @@ class AcquisitionRuntime(object):
                             self._sequence += 1
                             self._latest = copy.deepcopy(latest)
                             self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                            self._received_at = self._clock()
+                            self._received_at = self._clock() - source_age(latest)
                             if diagnostic_current:
                                 self._fault_diagnostic_owner = diagnostic_backend
                                 self._fault_diagnostic_generation = diagnostic_generation

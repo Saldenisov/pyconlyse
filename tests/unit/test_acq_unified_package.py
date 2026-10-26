@@ -2,6 +2,8 @@
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 from tools import package_acq_web_control as packager
@@ -29,7 +31,14 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'acq-unified-ht-cooling-scope-20261026-v8-r14'
+    assert result['release'] == 'elyse-card-process-orchestrators-20261026-r16'
+    assert result['native_isolation_default'] == 'per_card'
+    assert result['local_orchestrator_roles'] == ['acquisition', 'supervision']
+    assert 'supervision_control_server.pyw' in included
+    assert 'elyse_agent/orchestrator_backend.py' in included
+    assert json.loads((release / 'config.acquisition.json').read_text())['native_isolation_mode'] == 'per_card'
+    from legacy.xp_acq_control.elyse_agent.supervision_gui import validate_supervision_configuration
+    assert validate_supervision_configuration(json.loads((release / 'config.supervision.control.json').read_text()))['telemetry']['enabled'] is False
     assert result['operator_supervised_test_supported'] is True
     assert result['operator_test_is_physical_qualification'] is False
     assert 'TaskHandle metadata before stdin reader' in result['native_bootstrap']
@@ -62,3 +71,22 @@ def test_both_compatibility_entrypoints_launch_same_unified_main():
     assert sources[0] == sources[1]
     assert 'from elyse_agent.acquisition_control_gui import main' in sources[0]
     assert 'shared_state_receiver' not in sources[0]
+
+
+def test_everest_release_imports_from_its_own_complete_closure(tmp_path):
+    target = tmp_path / 'everest'
+    packager.package(target, everest=True)
+    code = '''
+import sys
+sys.path.insert(0, sys.argv[1])
+from DeviceServers.control.elyse_acq import DS_AcqTelemetry, federated_telemetry, telemetry_archive
+from legacy.xp_acq_control.elyse_agent import federation_wire
+for module in (DS_AcqTelemetry, federated_telemetry, telemetry_archive, federation_wire):
+    assert module.__file__.startswith(sys.argv[1]), module.__file__
+assert 'nidaqmx' not in sys.modules
+print('COLD_CLOSURE_OK')
+'''
+    result = subprocess.run([sys.executable, '-I', '-B', '-c', code, str(target)],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+    assert 'COLD_CLOSURE_OK' in result.stdout

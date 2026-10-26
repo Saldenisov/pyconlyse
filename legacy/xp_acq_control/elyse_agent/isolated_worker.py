@@ -155,7 +155,13 @@ class Worker(object):
             phase=phase, stack=stack, hardware_acknowledged=False, safe_to_sample=False))
 
     def _diagnostic_watch(self):
-        while not self.disconnected.wait(1.):
+        while not self.disconnected.wait(.25):
+            # Each card dispatcher publishes locked RAM independently of an
+            # in-flight controller request. No NI call occurs on this thread.
+            if self.backend is not None:
+                cards = getattr(self.backend, "card_processes", None)
+                if isinstance(cards, dict):
+                    self._emit(dict(kind="card_status", attributes=dict(card_processes=cards)))
             notice = self._initialization_diagnostic()
             if notice is not None:
                 # Serialize admission with terminal phase transition: a late
@@ -348,7 +354,11 @@ class Worker(object):
                 notice["sample"] = sample
                 notice["sample_started_monotonic"] = started
                 notice["sample_completed_monotonic"] = time.monotonic()
-                notice["sample_age_seconds"] = time.monotonic() - started
+                if __package__ in (None, ""):
+                    from elyse_agent.card_observation import source_age
+                else:
+                    from .card_observation import source_age
+                notice["sample_age_seconds"] = source_age(sample) + time.monotonic() - started
                 if self.request_started is not None:
                     notice["sample_started_after_request_seconds"] = max(0., started - self.request_started)
                 notice["sample_duration_seconds"] = notice["sample_completed_monotonic"] - started
@@ -379,10 +389,10 @@ class Worker(object):
         counts = {"initialize": 0, "read_snapshot": 0, "general_start": 0, "general_stop": 0,
                   "execute_stage": 1, "execute_impulsion": 1, "set_ht_voltage": 1,
                   "configure_counter_timing": 1, "configure_sync_parameters": 1, "outer_controlled_stop": 0,
-                  "execute_cooling_guard": 1, "close": 0}
+                  "execute_cooling_guard": 1, "card_call": 1, "close": 0}
         allowed_keywords = ({"startup_confirmed"} if operation == "initialize" else
                             {"operator_confirmed", "new_value"} if operation in ("execute_stage", "execute_impulsion") else
-                            set() if operation in ("read_snapshot", "execute_cooling_guard", "close") else
+                            set() if operation in ("read_snapshot", "execute_cooling_guard", "card_call", "close") else
                             {"operator_confirmed"})
         if len(arguments) != counts[operation] or set(keywords) - allowed_keywords:
             raise ValueError("Private child argument contract rejected")
@@ -394,7 +404,7 @@ class Worker(object):
             self._publish_software_observation()
             return result
         if operation in ("execute_stage", "execute_impulsion", "set_ht_voltage",
-                         "configure_counter_timing", "configure_sync_parameters", "execute_cooling_guard"):
+                         "configure_counter_timing", "configure_sync_parameters", "execute_cooling_guard", "card_call"):
             result = method(arguments[0], self.cancel, **keywords)
         else:
             result = method(**keywords)

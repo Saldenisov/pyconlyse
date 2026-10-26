@@ -4,6 +4,7 @@ These gates are additional Python policy, not recovered hardware interlocks.
 Commissioning flags must be established locally, never from an HTTP request.
 """
 import math
+from .card_observation import card_inputs_current
 from .acquisition_beamline import BEAMLINE_OPERATIONS
 from .acquisition_counter_timing import validate_remote_timing
 from .supervised_test import controls_permitted, supervised_allowed
@@ -97,7 +98,8 @@ def command_capabilities(value):
     current = (state == "RUNNING" and value.get("stale") is False
                and type(age) in (int, float) and math.isfinite(age) and 0 <= age < 2
                and latest.get("source") == "python_daqmx_acquisition"
-               and latest.get("simulated") is False and not value.get("error"))
+               and latest.get("simulated") is False and not value.get("error")
+               and card_inputs_current(latest, value.get("card_processes")))
     results = {}
     for operation in OPERATIONS:
         reason = ""

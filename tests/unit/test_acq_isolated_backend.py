@@ -399,6 +399,8 @@ class IsolatedBackendTests(unittest.TestCase):
     def test_cancellation_reaches_child_without_concurrent_ni_call(self):
         cancel, observations, parent_thread = threading.Event(), [], threading.current_thread().ident
         def observe(event):
+            if event.get("kind") == "INITIALIZATION_DIAGNOSTIC_NOT_MEASUREMENT":
+                return  # Diagnostic scheduling must not cancel the unrelated initialization.
             observations.append((threading.current_thread().ident, event))
             cancel.set()
         backend = self.make_backend(backend_options=dict(mode="cancel_start"), progress_observer=observe)

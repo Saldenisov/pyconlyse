@@ -37,8 +37,11 @@ def load_configuration(path):
             - {"focal_stop", "control_profile", "ht_shutdown", "stage_controls_verified",
                "cooling_trip_verified", "ht_controls_verified", "focal_controls_verified",
                "counter_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified",
-               "counter_timing_controls_verified", "beamline_controls_verified", "operator_supervised_test"}):
+               "counter_timing_controls_verified", "beamline_controls_verified", "operator_supervised_test",
+               "native_isolation_mode"}):
         raise ValueError("Invalid acquisition configuration fields")
+    if config.get("native_isolation_mode", "single_owner") not in ("single_owner", "per_card"):
+        raise ValueError("Invalid native_isolation_mode")
     for flag in ("stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
                  "focal_controls_verified", "counter_controls_verified",
                  "ht_voltage_controls_verified", "outer_stop_verified", "counter_timing_controls_verified",

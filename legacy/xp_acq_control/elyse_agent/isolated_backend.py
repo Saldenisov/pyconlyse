@@ -19,12 +19,13 @@ import time
 import uuid
 
 from .isolated_wire import encode_frame, read_frame, write_frame, IsolationProtocolError
+from .native_process_spawn import spawn_native_process
 
 
 OPERATIONS = frozenset(("initialize", "read_snapshot", "general_start", "general_stop",
                        "execute_stage", "execute_impulsion", "set_ht_voltage",
                        "configure_counter_timing", "configure_sync_parameters", "outer_controlled_stop",
-                       "execute_cooling_guard", "close"))
+                       "execute_cooling_guard", "card_call", "close"))
 CACHED_ATTRIBUTES = frozenset(("resource_count", "procedure", "control_profile",
     "stage_controls_verified", "cooling_trip_verified", "ht_controls_verified",
     "focal_controls_verified", "counter_controls_verified", "ht_voltage_controls_verified",
@@ -36,7 +37,8 @@ CACHED_ATTRIBUTES = frozenset(("resource_count", "procedure", "control_profile",
     "last_impulsion", "last_ht_command", "last_outer_stop", "last_counter_timing",
     "counter_timing_publication", "commanded_counter_ticks", "last_beamline_command",
     "_counter_configuration_uncertain", "initialization_cards", "startup_complete",
-    "operator_supervised_test", "operator_test_cold_attested", "operator_cold_water_only"))
+    "operator_supervised_test", "operator_test_cold_attested", "operator_cold_water_only",
+    "card_processes", "_counter_config_generation"))
 
 
 class IsolatedBackendError(RuntimeError):
@@ -100,10 +102,13 @@ class IsolatedCardBackend(object):
 
     def __init__(self, backend_options=None, focal_options=None, backend_factory=None,
                  rpc_timeout=120.0, close_timeout=10.0, progress_observer=None,
-                 safe_sample_budget_seconds=None, python_executable=None):
+                 safe_sample_budget_seconds=None, python_executable=None, initialize_timeout=None):
         for value, maximum in ((rpc_timeout, 600.0), (close_timeout, 120.0)):
             if type(value) not in (int, float) or not math.isfinite(value) or not .05 <= value <= maximum:
                 raise ValueError("Finite bounded child RPC timeout required")
+        if initialize_timeout is not None and (type(initialize_timeout) not in (int, float)
+                or not math.isfinite(initialize_timeout) or not .05 <= initialize_timeout <= 600):
+            raise ValueError("Finite bounded child initialization timeout required")
         if safe_sample_budget_seconds is not None and (type(safe_sample_budget_seconds) not in (int, float)
                 or not math.isfinite(safe_sample_budget_seconds) or not 2 <= safe_sample_budget_seconds <= 30):
             raise ValueError("Conservative safe-sampling budget must be in [2,30] seconds")
@@ -125,6 +130,7 @@ class IsolatedCardBackend(object):
                                    factory=factory_name, safe_sample_budget_seconds=safe_sample_budget_seconds)
         encode_frame(self._configuration)  # Validate cold values; no native import.
         self._rpc_timeout, self._close_timeout = float(rpc_timeout), float(close_timeout)
+        self._initialize_timeout = initialize_timeout
         self._observer = progress_observer
         self._python = python_executable or sys.executable
         if python_executable is None and os.path.basename(self._python).lower() == "pythonw.exe":
@@ -146,6 +152,7 @@ class IsolatedCardBackend(object):
         self._observer_error = ""
         self._worker_pid = None
         self._generation = uuid.uuid4().hex
+        self._card_metadata_received_at = None
         self._cache = dict(backend_options, resource_count=0, procedure=None)
         if factory_name is None:
             self._cache.update(startup_complete=False, initialization_cards=None,
@@ -169,8 +176,12 @@ class IsolatedCardBackend(object):
         with self._condition:
             if name not in self._cache:
                 raise AttributeError(name)
-            value = self._cache[name]
-        return copy.deepcopy(value)
+            value = copy.deepcopy(self._cache[name])
+            observed = self._card_metadata_received_at
+        if name == "card_processes" and isinstance(value, dict):
+            value["transport_age_seconds"] = (None if observed is None else
+                                               max(0., time.monotonic() - observed))
+        return value
 
     def isolation_snapshot(self):
         """RAM-only diagnostics: never poll/wait/read a process or pipe here."""
@@ -215,7 +226,7 @@ class IsolatedCardBackend(object):
         environment = os.environ.copy()
         environment["PYTHONPATH"] = os.pathsep.join(os.path.abspath(path or os.curdir) for path in sys.path)
         options["env"] = environment
-        self._process = subprocess.Popen([self._python, "-u", path], **options)
+        self._process = spawn_native_process([self._python, "-u", path], **options)
         with self._condition:
             self._worker_pid = self._process.pid
             self._worker_state = "SPAWNED_UNINITIALIZED"
@@ -241,6 +252,17 @@ class IsolatedCardBackend(object):
         try:
             while True:
                 message = read_frame(self._process.stdout)
+                if message.get("kind") == "card_status":
+                    if (set(message) != {"kind", "attributes"}
+                            or type(message.get("attributes")) is not dict
+                            or set(message["attributes"]) != {"card_processes"}
+                            or type(message["attributes"]["card_processes"]) is not dict):
+                        raise IsolationProtocolError("Invalid per-card RAM status")
+                    with self._condition:
+                        if not self._cleanup_confirmed:
+                            self._cache.update(copy.deepcopy(message["attributes"]))
+                            self._card_metadata_received_at = time.monotonic()
+                    continue  # Never refreshes a global measurement/command proof.
                 if message.get("kind") == "initialization_status":
                     attributes = message.get("attributes")
                     if (set(message) != {"kind", "attributes"} or type(attributes) is not dict
@@ -275,6 +297,8 @@ class IsolatedCardBackend(object):
                         self._condition.notify_all()
                         continue
                     self._cache.update(attributes)
+                    if "card_processes" in attributes:
+                        self._card_metadata_received_at = time.monotonic()
                     if message["kind"] == "result":
                         self._response = message
                     else:
@@ -440,10 +464,20 @@ class IsolatedCardBackend(object):
             from .acquisition_backend import AcquisitionCancelled
             raise AcquisitionCancelled()
         self._spawn()
-        return self._rpc("initialize", keywords=dict(startup_confirmed=True), cancel=cancel)
+        return self._rpc("initialize", keywords=dict(startup_confirmed=True), cancel=cancel,
+                         timeout=self._initialize_timeout)
 
     def read_snapshot(self, cancel):
-        return self._rpc("read_snapshot", cancel=cancel)
+        started = time.monotonic()
+        value = self._rpc("read_snapshot", cancel=cancel)
+        if isinstance(value, dict) and value.get("input_health") is not None:
+            from .card_observation import source_age
+            value["source_age_seconds"] = source_age(value) + time.monotonic() - started
+        return value
+
+    def card_call(self, request, cancel=None):
+        """Private local card-owner IPC; never exposed as a network command."""
+        return self._rpc("card_call", (request,), cancel=cancel)
 
     def general_start(self, cancel, operator_confirmed=False):
         return self._rpc("general_start", keywords=dict(operator_confirmed=operator_confirmed), cancel=cancel)

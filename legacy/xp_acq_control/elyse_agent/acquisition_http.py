@@ -85,7 +85,7 @@ class RuntimeHTTPServer(ThreadingMixIn, HTTPServer):
     request_queue_size = 4
 
     def __init__(self, address, runtime, key):
-        if address[0] not in ("127.0.0.1", "10.20.30.10"):
+        if address[0] not in ("127.0.0.1", "10.20.30.10", "10.20.30.2"):
             raise ValueError("Bind must be loopback or explicit XP interface")
         if not isinstance(key, bytes) or len(key) < 32:
             raise ValueError("A shared key of at least 32 bytes is required")

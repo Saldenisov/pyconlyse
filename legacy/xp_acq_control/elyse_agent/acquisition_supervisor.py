@@ -17,6 +17,7 @@ import json
 import math
 import os
 import subprocess
+from .native_process_spawn import spawn_native_process
 import sys
 import threading
 import time
@@ -280,7 +281,7 @@ class ColdAcquisitionSupervisor(object):
             if hook is not None and not callable(hook):
                 raise TypeError("Supervisor hooks must be callable")
         self.argv = (self.interpreter, self.entrypoint, "--config", self.config_path)
-        self._spawn = process_factory or subprocess.Popen
+        self._spawn = process_factory or spawn_native_process
         self._clock = clock or time.monotonic
         self._wait = wait or time.sleep
         self._validate_paths = path_validator or _validate_files

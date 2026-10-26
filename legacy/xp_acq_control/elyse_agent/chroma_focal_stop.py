@@ -13,6 +13,7 @@ import ctypes
 import hashlib
 import os
 import subprocess
+from .native_process_spawn import spawn_native_process
 import sys
 import time
 
@@ -111,7 +112,7 @@ class ChromaFocalStop(object):
         try:
             for branch in BRANCHES:
                 try:
-                    process = subprocess.Popen(
+                    process = spawn_native_process(
                         [python, "-m", "elyse_agent.chroma_focal_stop", "--worker",
                          self.dll_path, str(branch[0])],
                         cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

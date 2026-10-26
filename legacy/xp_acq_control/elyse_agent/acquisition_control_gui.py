@@ -21,6 +21,15 @@ from .acquisition_supervisor import FileInstanceGuard
 BUTTON_LABELS = ("Initialize", "Deinitialize", "Stop server")
 
 
+def control_backend_factory(backend_options, focal_options):
+    """Cold selection: per-card children belong directly to this GUI process."""
+    options, focal = dict(backend_options), dict(focal_options)
+    if options.get("native_isolation_mode", "single_owner") == "per_card":
+        from .orchestrator_backend import PerCardOrchestratorBackend
+        return lambda: PerCardOrchestratorBackend(focal_options=focal, **options)
+    return lambda: IsolatedCardBackend(options, focal, safe_sample_budget_seconds=None)
+
+
 def initialization_card_text(state):
     report = state.get("initialization_cards")
     if type(report) is not dict:
@@ -90,7 +99,9 @@ def load_control_configuration(path):
             or type(value["remote_control_enabled"]) is not bool):
         raise ValueError("Exact separate control configuration required")
     telemetry = value.get("telemetry", dict(enabled=False, host="10.20.30.202", port=8767, period_seconds=.2))
-    if (type(telemetry) is not dict or set(telemetry) != {"enabled", "host", "port", "period_seconds"}
+    if (type(telemetry) is not dict or not {"enabled", "host", "port", "period_seconds"} <= set(telemetry)
+            or set(telemetry) - {"enabled", "host", "port", "period_seconds", "wire_mode"}
+            or telemetry.get("wire_mode", "legacy_27") not in ("legacy_27", "federated_owner")
             or type(telemetry["enabled"]) is not bool or telemetry["host"] != "10.20.30.202"
             or telemetry["port"] != 8767 or type(telemetry["period_seconds"]) not in (int, float)
             or not .05 <= telemetry["period_seconds"] <= 10):
@@ -291,16 +302,16 @@ def main(entrypoint, argv=None):
             factory = lambda: DemoBackend(control_profile=profile, **flags)
         else:
             backend_options = dict(flags, read_timeout=base["read_timeout_seconds"], control_profile=profile,
+                native_isolation_mode=base.get("native_isolation_mode", "single_owner"),
                 ht_feedback_verified=ht.get("feedback_verified", False), ht_zero_tolerance_kv=ht.get("zero_tolerance_kv", 0),
                 ht_zero_timeout=ht.get("timeout_seconds", 10))
             focal_options = dict(dll_path=focal.get("dll_path", DEFAULT_DLL),
                 resources_verified=focal.get("resources_verified", False), timeout=focal.get("timeout_seconds", 10),
                 operator_supervised_test=base.get("operator_supervised_test", False))
-            # Cold facade; the child/native backend is created only by an
-            # explicitly accepted Initialize on the existing runtime owner.
-            # Unqualified aggregate reads are not inserted into VI dwell times.
-            factory = lambda: IsolatedCardBackend(backend_options, focal_options,
-                                                   safe_sample_budget_seconds=None)
+            # Per-card NI children are directly retained by this orchestrator,
+            # rather than hidden behind another disposable aggregate worker.
+            # Both factory branches remain cold until accepted Initialize.
+            factory = control_backend_factory(backend_options, focal_options)
         identity = control_identity()
         handover = None if args.demo else LocalHandoverVerifier()
         guard = None if args.demo else OwnershipMarker(os.path.abspath(args.config) + ".ownership",
@@ -313,7 +324,12 @@ def main(entrypoint, argv=None):
         view = ApplicationView(runtime)
         server = ControlHTTPServer((base["bind_host"], base["port"]), view, read_key, command_key)
         if control["telemetry"]["enabled"]:
-            publisher = DualModeTelemetryPublisher(runtime,
+            if control["telemetry"].get("wire_mode", "legacy_27") == "federated_owner":
+                from .orchestrator_publisher import OwnerTelemetryPublisher
+                publisher_type = OwnerTelemetryPublisher
+            else:
+                publisher_type = DualModeTelemetryPublisher
+            publisher = publisher_type(runtime,
                 (control["telemetry"]["host"], control["telemetry"]["port"]), read_key,
                 period=control["telemetry"]["period_seconds"])
             runtime.telemetry_publisher = publisher

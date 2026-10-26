@@ -1,6 +1,7 @@
 {
   "bind_host": "10.20.30.10",
   "port": 8772,
+  "native_isolation_mode": "per_card",
   "key_file": "runtime/acquisition.key",
   "period_seconds": 0.2,
   "read_timeout_seconds": 0.5,

@@ -4,6 +4,7 @@ import time
 
 from .cooling_safety import decode_publications, runtime_publications
 from .acquisition_procedures import ProcedureCancelled
+from .card_observation import source_age
 
 
 def wait_for_cooling(read_sample, cancel, observe, timeout=30.0,
@@ -19,6 +20,8 @@ def wait_for_cooling(read_sample, cancel, observe, timeout=30.0,
         sample = read_sample(cancel)
         if sample.get("source") != "python_daqmx_acquisition" or sample.get("simulated") is not False:
             raise RuntimeError("Real Python input snapshot required for circulation verification")
+        if source_age(sample) >= 2 or (sample.get("input_health") or {}).get("all_current") is False:
+            raise RuntimeError("Current per-card cooling input images required")
         circuits, unused = decode_publications(runtime_publications(sample))
         observe(sample, circuits)
         now = clock()

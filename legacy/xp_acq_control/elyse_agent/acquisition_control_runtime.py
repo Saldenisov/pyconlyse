@@ -21,6 +21,7 @@ from .chroma_focal_stop import BRANCHES
 from .runtime_identity import SOURCE_PATHS
 from .control_policy import require_command, command_capabilities, BEAMLINE_OPERATIONS
 from .cooling_startup import wait_for_cooling
+from .card_observation import card_inputs_current, generation_vector, selected_generations, source_age
 from .hardware_plan import AI_BANKS, DI_BANKS
 from .acquisition_procedures import ProcedureCancelled
 from .acquisition_backend import AcquisitionCancelled
@@ -46,11 +47,16 @@ CONTROL_MODULES += ("command_protocol.py", "command_broker.py", "command_http.py
 CONTROL_MODULES += ("handover_recovery.py", "acquisition_supervisor.py")
 CONTROL_MODULES += ("parallel_initialization.py",)
 CONTROL_MODULES += ("supervised_test.py",)
+CONTROL_MODULES += ("card_service.py", "card_process_owner.py", "card_observation.py", "native_process_spawn.py",
+                    "orchestrator_backend.py")
+CONTROL_MODULES += ("federation_wire.py", "orchestrator_publisher.py", "synchronization_profiles.py",
+                    "supervision_cards.py", "supervision_imaq.py", "supervision_service.py",
+                    "supervision_runtime.py", "supervision_gui.py")
 
 
 def control_identity(root=None):
     root = root or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    paths = set(SOURCE_PATHS) | {"acquisition_control_server.pyw"} | {"elyse_agent/" + name for name in CONTROL_MODULES}
+    paths = set(SOURCE_PATHS) | {"acquisition_control_server.pyw", "supervision_control_server.pyw"} | {"elyse_agent/" + name for name in CONTROL_MODULES}
     paths.add("data/standard_telemetry_schema.json")
     digest = hashlib.sha256()
     for path in sorted(paths):
@@ -263,6 +269,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
 
     def _measurement_current(self, age):
         return bool(self._owner_telemetry_current() and self._latest is not None
+                    and card_inputs_current(self._latest, getattr(self._backend, "card_processes", None))
                     and type(age) in (int, float) and math.isfinite(age) and 0 <= age < 2)
 
     def _software_telemetry(self, now):
@@ -299,6 +306,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                         ))
             if native is not None:
                 result["native_isolation"] = native
+            result["card_processes"] = copy.deepcopy(getattr(self._backend, "card_processes", None))
             result.update(self._software_telemetry(now))
             return result
         finally:
@@ -345,6 +353,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         self._general_cooling_ready = False
         self._supervised_general_owner = None
         self._supervised_general_generation = None
+        self._supervised_general_card_vector = None
         self._supervised_cooling_since = None
         self._supervised_cooling_samples = 0
         self._startup_phase = "NOT_STARTED"
@@ -376,6 +385,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 or not _finite_number(tolerance) or not 0 <= tolerance < 8
                 or type(latest) is not dict or latest.get("source") != "python_daqmx_acquisition"
                 or latest.get("simulated") is not False):
+            return self._cooling_ht_active
+        if not card_inputs_current(latest, getattr(backend, "card_processes", None)):
             return self._cooling_ht_active
         banks = latest.get("banks", {})
         volts = banks.get("C2_NI6071E_AI", {}).get("legacy_scaled_values")
@@ -427,6 +438,35 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         """Local metadata acknowledgment only; no lifecycle/NI side effects."""
         return self.cooling.acknowledge_journal_history(qualified_local=True,
             operator=operator, reason=reason, expected_revision=expected_revision)
+
+    def counter_memory_part(self):
+        """Current C10 software command memory, independently of other cards."""
+        with self._lock:
+            backend = self._backend
+            if (backend is None or not getattr(backend, "startup_complete", False)
+                    or self._pending in ("initialize", "close", "counter_timing")
+                    or self._operation in ("acq.stage.counter_timing.configure", "acq.stage.counter_timing.set")
+                    or self._shutdown_requested):
+                return None
+            cards = getattr(backend, "card_processes", None) or {}
+            card = cards.get("cards", {}).get("10", {})
+            age = card.get("sample_age_seconds")
+            transport = cards.get("transport_age_seconds", 0.)
+            if (card.get("state") != "READY" or card.get("input_current") is not True
+                    or card.get("native", {}).get("ownership_uncertain") is not False
+                    or card.get("unresolved_request") or not _finite_number(age)
+                    or not _finite_number(transport) or not 0 <= age + transport < 2
+                    or card.get("native", {}).get("worker_generation") !=
+                       getattr(backend, "_counter_config_generation", None)
+                    or getattr(backend, "_counter_configuration_uncertain", ())):
+                return None
+            ticks = getattr(backend, "commanded_counter_ticks", {})
+            try:
+                values = [ticks[i][key] / 20. for i in range(8) for key in ("low_ticks", "high_ticks")]
+            except (KeyError, TypeError):
+                return None
+            return dict(values=values, source_age_seconds=age + transport,
+                        source="last_successful_counter_command_memory", selector=-1, pending_selector=False)
 
     def _observation_context_current(self, value):
         context = value.get("runtime_operation_context")
@@ -561,7 +601,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 self._sequence += 1
                 self._latest = copy.deepcopy(sample)
                 self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                self._received_at = self._cooling_read_at = self._clock()
+                self._received_at = self._cooling_read_at = self._clock() - source_age(sample)
                 self._circuits = circuits
                 self._observe_cooling_inputs(circuits, sample, self._received_at)
         result = wait_for_cooling(backend.read_snapshot, cancel, observe,
@@ -578,6 +618,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         if end_epoch:
             self._supervised_general_owner = None
             self._supervised_general_generation = None
+            self._supervised_general_card_vector = None
 
     def _begin_supervised_general_epoch(self):
         self._invalidate_cooling_readiness()
@@ -585,11 +626,16 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         isolation = getattr(self._backend, "isolation_snapshot", None)
         self._supervised_general_generation = (isolation().get("worker_generation")
                                                if isolation is not None else None)
+        self._supervised_general_card_vector = generation_vector(getattr(self._backend, "card_processes", None))
 
     def _supervised_general_current(self):
         if (not self._supervised_admission("modulator.general.start")
                 or self._supervised_general_owner is not self._backend
                 or not self._general_stop_required or not self._backend.resource_count):
+            return False
+        cards = getattr(self._backend, "card_processes", None)
+        if cards is not None and (generation_vector(cards) is None
+                or generation_vector(cards) != self._supervised_general_card_vector):
             return False
         isolation = getattr(self._backend, "isolation_snapshot", None)
         if isolation is not None:
@@ -835,6 +881,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             result["startup_phase"] = self._startup_phase
             result["execution_progress"] = copy.deepcopy(self._execution_progress)
             result["initialization_cards"] = copy.deepcopy(getattr(self._backend, "initialization_cards", None))
+            result["card_processes"] = copy.deepcopy(getattr(self._backend, "card_processes", None))
             result["startup_complete"] = getattr(self._backend, "startup_complete", None)
             isolated = getattr(self._backend, "isolation_snapshot", None)
             result["native_isolation"] = isolated() if isolated is not None else dict(

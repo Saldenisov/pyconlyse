@@ -15,8 +15,12 @@ def telemetry_identity(value):
         "telemetry_view_current", "measurement_current", "software_state_sequence",
         "software_state_current"))
     diagnostic = value.get("fault_diagnostic_measurement") or {}
+    cards = value.get("card_processes") or {}
+    card_identity = tuple((name, item.get("sample_sequence"), item.get("state"), item.get("input_current"),
+                           item.get("native", {}).get("worker_generation"))
+                          for name, item in sorted(cards.get("cards", {}).items()))
     return identity + (diagnostic.get("current"), diagnostic.get("sequence"),
-                       diagnostic.get("worker_generation"))
+                       diagnostic.get("worker_generation"), card_identity)
 
 
 class StandardTelemetryPublisher(object):

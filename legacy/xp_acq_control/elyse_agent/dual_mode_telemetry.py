@@ -20,7 +20,7 @@ VI_QUIET_SECONDS = 2
 
 class DualModeTelemetryPublisher(StandardTelemetryPublisher):
     def __init__(self, runtime, address, key, period=.2, ingress_address=("127.0.0.1", 8766),
-                 xml_encoding="cp1252", clock=None):
+                 xml_encoding="cp1252", clock=None, packet_transform=None):
         StandardTelemetryPublisher.__init__(self, runtime, address, key, period)
         if xml_encoding not in ("utf-8", "cp1252"):
             raise ValueError("Explicit saved VI XML encoding required")
@@ -32,6 +32,9 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
         self.last_vi_receipt, self.last_vi_seen = None, None
         self.server, self.ingress_worker = None, None
         self.mode = "LABVIEW_BRIDGE"
+        if packet_transform is not None and not callable(packet_transform):
+            raise TypeError("Trusted local telemetry transform required")
+        self.packet_transform = packet_transform
 
     def assert_initialize_allowed(self):
         # Called with the runtime lock BEFORE the NI owner is woken.
@@ -39,9 +42,12 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
             if self.last_vi_seen is not None and self.clock() - self.last_vi_seen < VI_QUIET_SECONDS:
                 raise RuntimeError("LabVIEW telemetry is still arriving; stop Acquisition VI and confirm card release locally")
 
-    def _enqueue(self, packet, age=0):
+    def _enqueue(self, packet, age=0, projection=None):
         encoded = (validate_standard_packet(packet) if packet["producer_kind"] == "python_acquisition"
                    else validate_snapshot_packet(packet))
+        if self.packet_transform is not None:
+            encoded = self.packet_transform(packet, age, projection)
+            age = 0  # Owner frames carry a separate age on every source record.
         self.outbox.enqueue(encoded, datetime.datetime.now(datetime.timezone.utc).isoformat(), age_seconds=age)
         self.sequence = packet["sequence"]
         self.error = ""
@@ -67,7 +73,7 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
                 packet.update(producer_kind="copied_acquisition", source_site=BRIDGE_SITE)
                 packet["data"].update(capture_kind="sequential_local_controls",
                                       timestamp_origin="xp_receipt_not_card_sample", banks=records)
-                self._enqueue(packet)
+                self._enqueue(packet, projection=value)
                 self.last_vi_receipt = self.clock()
                 self.vi_accepted += 1
                 self.mode, self.last_error, self.owner_state_current = "LABVIEW_BRIDGE", "", True
@@ -123,7 +129,7 @@ class DualModeTelemetryPublisher(StandardTelemetryPublisher):
                 if self.owner_state_current:
                     self.mode = "PYTHON_NATIVE" if (value["state"] in ("RUNNING", "EXECUTING")
                         or (value["state"] == "FAULT" and value.get("resource_count", 0) > 0)) else "TRANSITION_OR_FAULT"
-            self._enqueue(packet, packet_age_seconds(value, packet) if not bridge else 0)
+            self._enqueue(packet, packet_age_seconds(value, packet) if not bridge else 0, projection=value)
             self.identity = identity
             return True
 

@@ -1,4 +1,4 @@
-"""Package one XP owner and the existing unified telemetry Tango device."""
+"""Package both XP orchestrators and the existing unified Tango device."""
 import argparse
 import hashlib
 import json
@@ -16,8 +16,8 @@ def xp_release_paths():
     from legacy.xp_acq_control.elyse_agent.runtime_identity import SOURCE_PATHS
     from legacy.xp_acq_control.elyse_agent.acquisition_control_runtime import CONTROL_MODULES
     return sorted(set(SOURCE_PATHS) | {"elyse_agent/" + name for name in CONTROL_MODULES}
-        | {"__init__.py", "acquisition_control_server.pyw", "config.acquisition.json",
-           "config.acquisition.control.json", "data/standard_telemetry_schema.json"})
+        | {"__init__.py", "acquisition_control_server.pyw", "supervision_control_server.pyw", "config.acquisition.json",
+           "config.acquisition.control.json", "config.supervision.control.json", "data/standard_telemetry_schema.json"})
 
 
 def package(destination, everest=False):
@@ -32,7 +32,7 @@ def package(destination, everest=False):
         for name in ("__init__.py", "acquisition_remote.py", "acquisition_http.py", "runtime_identity.py", "native_telemetry.py",
                      "command_protocol.py", "acquisition_counter_timing.py", "command_broker.py", "command_http.py", "command_dispatch.py",
                      "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py",
-                     "cooling_safety.py", "journal_worker.py",
+                     "cooling_safety.py", "journal_worker.py", "federation_wire.py",
                      "shared_state.py", "labview_telemetry.py", "telemetry_relay.py", "protocol.py", "supervision_wire.py", "errors.py"):
             files.append((XP / "elyse_agent" / name, "legacy/xp_acq_control/elyse_agent/" + name))
         for name in ("__init__.py", "shared_state.py", "labview_telemetry.py", "telemetry_relay.py",
@@ -42,17 +42,18 @@ def package(destination, everest=False):
                      "legacy/__init__.py", "legacy/xp_acq_control/__init__.py"):
             files.append((ROOT / name, name))
         files.append((XP / "data/standard_telemetry_schema.json", "legacy/xp_acq_control/data/standard_telemetry_schema.json"))
+        files.append((BRIDGE / "federated_telemetry.py", "DeviceServers/control/elyse_acq/federated_telemetry.py"))
     else:
         files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-cold-water-stop-20261026-r15" if everest else "acq-unified-cold-water-stop-20261026-v8-r15", default_xp_port=8772,
+                    release="everest-two-orchestrators-20261026-r16" if everest else "elyse-card-process-orchestrators-20261026-r16", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
                     reused_release="acq-control-candidate-20261021-v1 / everest-v2",
                     commands_default_enabled=False, auto_initialize=False, hardware_activated=False,
-                    ni_execution="one_retained_child_owner_process",
+                    ni_execution="retained_local_controller_with_optional_per_card_owner_processes",
                     native_wait_sampling="disabled_until_aggregate_read_budget_qualified",
                     default_live_source_changed=False, files=[])
     if not everest:
@@ -85,6 +86,11 @@ def package(destination, everest=False):
             ht_increase_requires_software_supply_and_modulator=True,
             autonomous_ht_ramp=False)
     manifest.update(named_operation_count=25, matched_control_capability_set_required=True,
+                    local_orchestrator_roles=["acquisition", "supervision"],
+                    native_isolation_modes=["single_owner", "per_card"],
+                    native_isolation_default="per_card",
+                    federation_default_enabled=False,
+                    per_card_restart="Explicit affected-output OFF, known clean close and joined child; no automatic replay",
                     circulation_confirmation="Per current incident before 120s; software audit only; no NI effect",
                     circulation_activation="Qualified measured HT above existing zero tolerance plus supply ON; not General",
                     fault_readback="Fresh diagnostic inputs with sticky FAULT and independent command gates",

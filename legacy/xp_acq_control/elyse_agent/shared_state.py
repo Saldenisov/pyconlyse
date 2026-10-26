@@ -299,7 +299,10 @@ class LatestSnapshotOutbox(object):
     snapshots cannot create a gap in the existing signed ACK protocol.
     """
 
-    def __init__(self, clock=None):
+    def __init__(self, clock=None, max_encoded_bytes=MAX_XML_BYTES):
+        if type(max_encoded_bytes) is not int or not 1 <= max_encoded_bytes <= 900 * 1024:
+            raise ValueError("Bounded explicitly configured snapshot byte limit required")
+        self.max_encoded_bytes = max_encoded_bytes
         self._clock = clock or time.monotonic
         self._lock = threading.RLock()
         self._latest = self._inflight = None
@@ -309,7 +312,7 @@ class LatestSnapshotOutbox(object):
         self.delivered = self.replaced = 0
 
     def enqueue(self, encoded, received_utc, age_seconds=0):
-        if len(encoded.encode("utf-8")) > MAX_XML_BYTES:
+        if len(encoded.encode("utf-8")) > self.max_encoded_bytes:
             raise ValueError("encoded snapshot exceeds limit")
         if type(age_seconds) not in (int, float) or not math.isfinite(age_seconds) or age_seconds < 0:
             raise ValueError("Nonnegative source age required")

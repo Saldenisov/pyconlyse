@@ -17,6 +17,7 @@ import ctypes
 import math
 import os
 import subprocess
+from .native_process_spawn import spawn_native_process
 import sys
 import threading
 import time
@@ -55,7 +56,7 @@ class ChromaFocalCommand(object):
         self.resources_verified = resources_verified
         self.operator_supervised_test = operator_supervised_test
         self.timeout = float(timeout)
-        self._spawn = process_factory or subprocess.Popen
+        self._spawn = process_factory or spawn_native_process
         self._clock = clock or time.monotonic
         self._wait = wait or time.sleep
         self._verify = driver_verifier or verify_driver

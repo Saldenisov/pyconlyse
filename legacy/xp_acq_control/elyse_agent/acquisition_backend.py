@@ -734,12 +734,17 @@ class CardBackend(SourceControls, _StageState):
                  focal_command=None, counter_controls_verified=False,
                  ht_voltage_controls_verified=False, outer_stop_verified=False,
                  counter_timing_controls_verified=False, beamline_controls_verified=False,
-                 operator_supervised_test=False):
+                 operator_supervised_test=False, native_isolation_mode="single_owner"):
         if not 0 < read_timeout <= 2:
             raise ValueError("read timeout must be in (0, 2] seconds")
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
+        if native_isolation_mode not in ("single_owner", "per_card"):
+            raise ValueError("Explicit single_owner or per_card native isolation required")
+        if factory is not None and native_isolation_mode == "per_card":
+            raise ValueError("Per-card mode selects its own reviewed process factory")
+        self.native_isolation_mode = native_isolation_mode
         if type(operator_supervised_test) is not bool:
             raise ValueError("Exact Boolean operator supervised test permission required")
         self.operator_supervised_test = operator_supervised_test
@@ -845,6 +850,12 @@ class CardBackend(SourceControls, _StageState):
             return None
         return dict(copy.deepcopy(self._initialization_cards), startup_complete=self.startup_complete)
 
+    @property
+    def card_processes(self):
+        if self.native_isolation_mode != "per_card" or self.owner is None:
+            return None
+        return self.owner.snapshot()  # Locked per-card RAM only, never RPC/NI.
+
     def _initialization_notice(self, event):
         if event.get("kind") == "INITIALIZATION_CARD_STATUS_NOT_MEASUREMENT":
             self._initialization_cards = copy.deepcopy(event["initialization_cards"])
@@ -861,7 +872,7 @@ class CardBackend(SourceControls, _StageState):
         and cannot create, configure, start, read, write or release any card.
         Driver-version metadata queries do not acquire a card task.
         """
-        if self.factory is create_legacy_card_tasks:
+        if self.factory is create_legacy_card_tasks and self.native_isolation_mode != "per_card":
             from .hardware_tasks import prepare_driver_dependencies, prepare_driver_runtime
             prepare_driver_dependencies(self._initialization_notice)
             prepare_driver_runtime(self._initialization_notice)
@@ -903,7 +914,12 @@ class CardBackend(SourceControls, _StageState):
         try:
             self._initialization_notice(dict(phase="ENTER", call="create_legacy_card_tasks"))
             options = dict(authorized=True, outputs_commissioned=True)
-            if self.factory is create_legacy_card_tasks:
+            if self.native_isolation_mode == "per_card":
+                from .card_process_owner import create_card_process_tasks
+                self.owner = create_card_process_tasks(cancel=cancel, observer=self._initialization_notice,
+                    owner_created=lambda owner: setattr(self, "owner", owner),
+                    read_timeout=self.read_timeout, **options)
+            elif self.factory is create_legacy_card_tasks:
                 from .parallel_initialization import prepare_parallel_cards
                 self.owner = prepare_parallel_cards(self.factory, cancel, observer=self._initialization_notice)
             else:
@@ -928,6 +944,13 @@ class CardBackend(SourceControls, _StageState):
         self._reset_stage_state()
         self._reset_source_controls()
         self.procedure = None
+        if self.native_isolation_mode == "per_card":
+            # Every configuration callback returned. These are remembered
+            # configured ticks, not measured pulse timing or physical readback.
+            self.commanded_counter_ticks = {row["output"]: {
+                key: row[key] for key in ("initial_delay_ticks", "low_ticks", "high_ticks")}
+                for row in self.owner.plan["counter_output"]}
+            self._counter_config_generation = self.owner.snapshot()["cards"]["10"]["native"]["worker_generation"]
         if cancel.is_set():
             raise AcquisitionCancelled()
 
@@ -1129,13 +1152,24 @@ class CardBackend(SourceControls, _StageState):
     def _read_ht_shutdown_sample(self):
         """Fresh NI reads on owner thread, never a cached telemetry/EPS flag."""
         started = time.monotonic()
-        task = self.owner.tasks["C2_NI6071E_AI"]
-        task.start()
-        try:
-            raw = self.owner.read_analog_latest("C2_NI6071E_AI", timeout_seconds=self.read_timeout)
-        finally:
-            task.stop()
-        inputs = list(self.owner.tasks["C4_DIO96_DI"].read(timeout=self.read_timeout))
+        if self.native_isolation_mode == "per_card":
+            # Foreground requests acquire NEW input images after this call;
+            # never use the independent precommand telemetry caches for stop.
+            before = self.owner.snapshot()["generation_vector"]
+            analog = self.owner.fresh_input(2)
+            digital = self.owner.fresh_input(4)
+            if before != self.owner.snapshot()["generation_vector"]:
+                raise RuntimeError("HT readback card generation changed during observation")
+            raw = analog["sample"]["banks"]["C2_NI6071E_AI"]["values"]
+            inputs = list(digital["sample"]["banks"]["C4_DIO96_DI"]["values"])
+        else:
+            task = self.owner.tasks["C2_NI6071E_AI"]
+            task.start()
+            try:
+                raw = self.owner.read_analog_latest("C2_NI6071E_AI", timeout_seconds=self.read_timeout)
+            finally:
+                task.stop()
+            inputs = list(self.owner.tasks["C4_DIO96_DI"].read(timeout=self.read_timeout))
         if len(raw) != 64 or len(inputs) != 64 or any(type(v) is not bool for v in inputs):
             raise ValueError("HT readback bank shape/type changed")
         scale, offset = self.calibration[("C2_NI6071E_AI", 7)]
@@ -1224,16 +1258,25 @@ class CardBackend(SourceControls, _StageState):
             return min(self.read_timeout, remaining / max(1, remaining_reads[0]))
 
         banks = {}
+        snapshot_started = time.monotonic()
+        process_inputs = None
+        if self.native_isolation_mode == "per_card":
+            process_inputs = self.owner.input_snapshot()
+            if process_inputs.get("all_current") is not True:
+                raise RuntimeError("CARD_INPUTS_NOT_CURRENT: independent healthy card samples remain available")
         for name, device, count in AI_BANKS:
             if cancel.is_set():
                 raise AcquisitionCancelled()
             read_timeout()  # Do not start another AI after dwell expired.
-            task = self.owner.tasks[name]
-            task.start()
-            try:
-                values = self.owner.read_analog_latest(name, timeout_seconds=read_timeout())
-            finally:
-                task.stop()
+            if process_inputs is not None:
+                values = list(process_inputs["banks"][name]["values"])
+            else:
+                task = self.owner.tasks[name]
+                task.start()
+                try:
+                    values = self.owner.read_analog_latest(name, timeout_seconds=read_timeout())
+                finally:
+                    task.stop()
             remaining_reads[0] -= 1
             if len(values) != count or any(not math.isfinite(value) for value in values):
                 raise ValueError("Invalid/nonfinite analog bank: " + name)
@@ -1251,7 +1294,8 @@ class CardBackend(SourceControls, _StageState):
         for name, device, first, last, count in DI_BANKS:
             if cancel.is_set():
                 raise AcquisitionCancelled()
-            values = list(self.owner.tasks[name].read(timeout=read_timeout()))
+            values = (list(process_inputs["banks"][name]["values"]) if process_inputs is not None else
+                      list(self.owner.tasks[name].read(timeout=read_timeout())))
             remaining_reads[0] -= 1
             if len(values) != count or any(type(value) is not bool for value in values):
                 raise ValueError("Invalid Boolean bank shape: " + name)
@@ -1264,6 +1308,11 @@ class CardBackend(SourceControls, _StageState):
             source="python_daqmx_acquisition", simulated=False,
             control_profile=self.control_profile,
             sample_kind="sequential_card_reads_not_atomic",
+            source_age_seconds=(max([v["age_seconds"] for v in process_inputs["banks"].values()] or [0.])
+                                + time.monotonic() - snapshot_started if process_inputs is not None else 0.),
+            input_health=(dict(all_current=True, generation_vector=copy.deepcopy(process_inputs["generation_vector"]),
+                               required_input_cards=process_inputs["required_input_cards"])
+                          if process_inputs is not None else None),
             banks=banks, startup_commands=self.initial_images,
             commanded_digital=copy.deepcopy(self.commanded_digital),
             commanded_analog_logical=copy.deepcopy(self.commanded_analog),
