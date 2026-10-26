@@ -125,8 +125,9 @@ General, water, heating or HT command is part of packaging or verification.
 An independent archive check reported PostgreSQL ``ConnectionTimeout`` and
 ``DEGRADED_RETRY`` with 18,562 pending disk-spool frames and zero database
 commits in that Device Server process. The queue reports durable ingress;
-this is not evidence that those frames have reached PostgreSQL. Archive
-services and queue contents were not restarted or modified by this correction.
+this is not evidence that those frames have reached PostgreSQL. The
+PostgreSQL service and queue contents were not changed. The Device Server's
+archive worker subsequently restarted with its parent, as recorded below.
 
 Candidate and verification
 --------------------------
@@ -164,5 +165,31 @@ Tango boundaries, not live device commands:
   runtime and reproduced the packaged source fingerprint without NI imports
   or task creation.
 
-No claim of physical circulation, Chroma communication, successful hardware
-shutdown or completed live rollout follows from these tests.
+No claim of physical circulation, Chroma communication or successful hardware
+shutdown follows from these tests.
+
+Matched Everest activation
+--------------------------
+
+Eight reviewed Device Server/contract/diagnostic source files and two narrow
+main-web backend/contract files were deployed with hash-verified backups under
+``F:\ELYSE_Telemetry_Server\postgres_v3\rollbacks\cooling_r13_20261026T114526Z``.
+The preceding Device Server PID3988 exited with code0 through its own Tango
+administration device; replacement PID37664 uses the same interpreter,
+arguments and working directory. Web PID50328 was replaced by PID10432 using
+the same laboratory launcher. No XP process, VI, NI task or PostgreSQL service
+was restarted by this activation.
+
+The rich build was swapped with its preceding directory retained as
+``C:\dev\pyconlyse\web\frontend\build.before_r13_20261026T114526Z``.
+Served ``main.0d5d13b6.js`` was verified against SHA256
+``15f30ec923eca91841e153e33b4f6680f90f37a9cacebd9589f654659f2337ad``.
+The page returned HTTP200 and the telemetry Device Server reported ON. Its
+disk spool retained all 18,562 pending frames across restart; PostgreSQL
+remained in ``DEGRADED_RETRY/ConnectionTimeout``.
+
+XP's control endpoint8772 did not respond during this verification. The new
+receiver had zero incoming banks, and web control correctly returned
+UNAVAILABLE/HTTP503 with execution disabled. The XP cold installation and
+actual 27-bank live-update verification therefore remain pending; the staged
+installer must not be described as an already running acquisition owner.
