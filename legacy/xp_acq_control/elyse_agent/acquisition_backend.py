@@ -754,6 +754,8 @@ class CardBackend(SourceControls, _StageState):
         self.factory = factory or create_legacy_card_tasks
         self.read_timeout = read_timeout
         self.owner = None
+        self.startup_complete = False
+        self._initialization_cards = None
         self.initial_images = None
         self.started_counters = []
         self.calibration = {}
@@ -772,7 +774,7 @@ class CardBackend(SourceControls, _StageState):
         self._ao_control_calibration = {}
 
     def _stage_require_initialized(self):
-        if self.owner is None or not self.commanded_digital:
+        if self.startup_complete is not True or self.owner is None or not self.commanded_digital:
             raise RuntimeError("Stage command requires initialized card ownership")
 
     def _stage_write_digital(self, name, values):
@@ -783,12 +785,27 @@ class CardBackend(SourceControls, _StageState):
 
     @property
     def resource_count(self):
-        return len(self.owner.tasks) if self.owner is not None else 0
+        if self.owner is None:
+            return 0
+        return getattr(self.owner, "resource_count", len(self.owner.tasks))
+
+    @property
+    def initialization_cards(self):
+        owner = self.owner
+        coordinator = getattr(owner, "parallel_initialization", owner)
+        snapshot = getattr(coordinator, "snapshot", None)
+        if callable(snapshot):
+            self._initialization_cards = snapshot()
+        if self._initialization_cards is None:
+            return None
+        return dict(copy.deepcopy(self._initialization_cards), startup_complete=self.startup_complete)
 
     def _initialization_notice(self, event):
+        if event.get("kind") == "INITIALIZATION_CARD_STATUS_NOT_MEASUREMENT":
+            self._initialization_cards = copy.deepcopy(event["initialization_cards"])
         scheduler = getattr(self, "_execution_scheduler", None)
         if scheduler is not None and scheduler.observer is not None:
-            scheduler.observer(dict(event, kind="INITIALIZATION_CALL_BOUNDARY_NOT_MEASUREMENT",
+            scheduler.observer(dict(event, kind=event.get("kind", "INITIALIZATION_CALL_BOUNDARY_NOT_MEASUREMENT"),
                                     operation="initialize", safe_to_sample=False,
                                     hardware_acknowledged=False))
 
@@ -810,6 +827,8 @@ class CardBackend(SourceControls, _StageState):
             raise ValueError("Explicit local confirmation of legacy startup effects required")
         if self.owner is not None:
             raise RuntimeError("Resources already owned; deinitialize first")
+        self.startup_complete = False
+        self._initialization_cards = None
         self._ensure_focal_quiescent()
         if cancel.is_set():
             raise AcquisitionCancelled()
@@ -839,8 +858,10 @@ class CardBackend(SourceControls, _StageState):
             self._initialization_notice(dict(phase="ENTER", call="create_legacy_card_tasks"))
             options = dict(authorized=True, outputs_commissioned=True)
             if self.factory is create_legacy_card_tasks:
-                options["observer"] = self._initialization_notice
-            self.owner = self.factory(**options)
+                from .parallel_initialization import prepare_parallel_cards
+                self.owner = prepare_parallel_cards(self.factory, cancel, observer=self._initialization_notice)
+            else:
+                self.owner = self.factory(**options)
             self._initialization_notice(dict(phase="RETURNED", call="create_legacy_card_tasks"))
         except PartialTaskCreationError as error:
             self.owner = error.owner
@@ -866,12 +887,18 @@ class CardBackend(SourceControls, _StageState):
 
         self._software_state_valid = True
         self._beamline_initialization_owner_ident = threading.current_thread().ident
-        self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
+        self.startup_complete = True
+        try:
+            self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
+        except Exception:
+            self.startup_complete = False
+            self._software_state_valid = False
+            raise
+        self._initialization_notice(dict(phase="RETURNED", call="all_cards_and_startup_complete"))
 
     def general_start(self, cancel, operator_confirmed=False):
         self._ensure_execution_not_reentrant()
-        if self.owner is None or not self.commanded_digital:
-            raise RuntimeError("General Marche requires initialized card ownership")
+        self._stage_require_initialized()
         if operator_confirmed is not True:
             raise ValueError("General Marche confirmation required")
         self._invalidate_ht_sequence_completion()
@@ -932,8 +959,7 @@ class CardBackend(SourceControls, _StageState):
 
     def _general_stop(self, operator_confirmed=False):
         self._ensure_execution_not_reentrant()
-        if self.owner is None or not self.commanded_digital:
-            raise RuntimeError("General Arret requires existing card ownership")
+        self._stage_require_initialized()
         if operator_confirmed is not True:
             raise ValueError("General Arret confirmation required")
         self._invalidate_ht_sequence_completion()
@@ -1131,8 +1157,7 @@ class CardBackend(SourceControls, _StageState):
         if (getattr(self, "_software_state_observer_active", False)
                 or self._beamline_operation_active):
             raise RuntimeError("Software-state observer or active beamline pulse cannot read NI inputs")
-        if self.owner is None:
-            raise RuntimeError("Cards not initialized")
+        self._stage_require_initialized()
         remaining_reads = [len(AI_BANKS) + len(DI_BANKS)]
 
         def read_timeout():
@@ -1199,8 +1224,10 @@ class CardBackend(SourceControls, _StageState):
 
     def close(self):
         self._ensure_execution_not_reentrant()
+        self.startup_complete = False
         self._ensure_focal_quiescent()
         if self.owner is not None:
+            self.initialization_cards  # Preserve diagnostics before release.
             self.owner.close()
             self.owner = None
         self.initial_images = None

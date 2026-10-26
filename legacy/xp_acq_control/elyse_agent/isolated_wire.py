@@ -8,6 +8,7 @@ network protocol or a general object deserializer. Python 3.4 compatible.
 import json
 import math
 import struct
+import time
 
 
 MAX_FRAME_BYTES = 1048576
@@ -16,6 +17,59 @@ MAX_DEPTH = 48
 
 class IsolationProtocolError(RuntimeError):
     pass
+
+
+class PollingPipeReader(object):
+    """Wait outside buffered/CRT reads; read only bytes already in the pipe.
+
+    One reader owns the pipe. Peek and ReadFile use its native handle directly,
+    avoiding an idle blocking read while the NI owner loads native libraries.
+    This changes private IPC waiting, not any card operation or VI timing.
+    """
+    def __init__(self, available, read_available, stopped=None, wait=None):
+        self.available = available
+        self.read_available = read_available
+        self.stopped = stopped
+        self.wait = wait or time.sleep
+
+    def read(self, count):
+        if type(count) is not int or count <= 0:
+            raise ValueError("Positive bounded pipe read required")
+        while self.stopped is None or not self.stopped.is_set():
+            try:
+                available = self.available()
+                if type(available) is not int or available < 0:
+                    raise IsolationProtocolError("Invalid pipe availability")
+                if available:
+                    data = self.read_available(min(count, available))
+                    if type(data) is not bytes or len(data) > min(count, available):
+                        raise IsolationProtocolError("Invalid available pipe read")
+                    return data
+            except OSError as error:
+                if getattr(error, "winerror", None) in (109, 232, 233):
+                    return b""  # Broken/closing pipe; caller retains NI ownership.
+                raise
+            self.wait(.02)
+        return b""
+
+
+def windows_polling_pipe(stream, stopped=None):
+    """Windows-only native anonymous pipe adapter; never closes stdin."""
+    import _winapi
+    import msvcrt
+    handle = msvcrt.get_osfhandle(stream.fileno())
+
+    def available():
+        # 3.4 returns (available, left); newer versions may prefix data.
+        return _winapi.PeekNamedPipe(handle, 0)[-2]
+
+    def read_available(count):
+        data, status = _winapi.ReadFile(handle, count)
+        if status:
+            raise OSError(status, "Private pipe ReadFile failed")
+        return data
+
+    return PollingPipeReader(available, read_available, stopped=stopped)
 
 
 def pack_value(value, depth=0):

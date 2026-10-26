@@ -153,6 +153,7 @@ class AcquisitionRuntime(object):
             return False  # The saved False NewVal arm has no effects.
         with self._lock:
             self._require_recovery_clear()
+            self._require_startup_complete()
             permitted_states = ("RUNNING", "FAULT") if operation.endswith(".stop") else ("RUNNING",)
             if (self._backend is None or not self._backend.resource_count
                     or self._state not in permitted_states or self._pending is not None
@@ -341,6 +342,7 @@ class AcquisitionRuntime(object):
             raise ValueError("Explicit local outer-stop confirmation required")
         with self._lock:
             self._require_recovery_clear()
+            self._require_startup_complete()
             if (self._backend is None or not self._backend.resource_count or self._shutdown_requested
                     or self._pending not in (None, "general_start", "stage", "ht_voltage", "counter_timing")
                     or self._state not in ("RUNNING", "FAULT", "EXECUTING")
@@ -364,6 +366,7 @@ class AcquisitionRuntime(object):
     def general_start(self, operator_confirmed=False):
         with self._lock:
             self._require_recovery_clear()
+            self._require_startup_complete()
             if operator_confirmed is not True:
                 raise ValueError("Explicit local General Marche confirmation required")
             if self._state != "RUNNING" or self._pending is not None or self._shutdown_requested:
@@ -379,6 +382,7 @@ class AcquisitionRuntime(object):
 
     def general_stop(self, operator_confirmed=False):
         with self._lock:
+            self._require_startup_complete()
             if operator_confirmed is not True:
                 raise ValueError("Explicit local General Arret confirmation required")
             if (self._backend is None or not self._backend.resource_count or self._shutdown_requested
@@ -412,6 +416,12 @@ class AcquisitionRuntime(object):
             self._thread = threading.Thread(target=self._run, name="ACQ-card-owner")
             self._thread.daemon = False
             self._thread.start()
+
+    def _require_startup_complete(self):
+        # Older offline fixtures lack this field. Real backends explicitly
+        # publish False from cold construction until every startup step returns.
+        if self._backend is not None and getattr(self._backend, "startup_complete", True) is not True:
+            raise RuntimeError("All required cards and startup operations must be ready")
 
     def initialize(self, startup_confirmed=False):
         with self._lock:
@@ -646,7 +656,10 @@ class AcquisitionRuntime(object):
                             self._state = "RUNNING"
                             self._state_revision += 1
                 except AcquisitionCancelled:
-                    self._close()
+                    if type(getattr(self._backend, "initialization_cards", None)) is dict:
+                        self._procedure_fault(AcquisitionCancelled("Parallel initialization cancelled; owners retained"))
+                    else:
+                        self._close()
                 except Exception as error:
                     if self._backend is None and self._recovery_guard is not None:
                         # No returned owner can certify cleanup of possible
@@ -657,6 +670,8 @@ class AcquisitionRuntime(object):
                             self._error = "Factory ownership uncertain: " + type(error).__name__ + ": " + str(error)
                             self._state = "RECOVERY_REQUIRED"
                             self._state_revision += 1
+                    elif type(getattr(self._backend, "initialization_cards", None)) is dict:
+                        self._procedure_fault(error)
                     else:
                         self._close(type(error).__name__ + ": " + str(error))
             elif pending == "close":

@@ -35,7 +35,7 @@ CACHED_ATTRIBUTES = frozenset(("resource_count", "procedure", "control_profile",
     "software_status_assignments", "ht_command_uncertain", "last_cooling_guard",
     "last_impulsion", "last_ht_command", "last_outer_stop", "last_counter_timing",
     "counter_timing_publication", "commanded_counter_ticks", "last_beamline_command",
-    "_counter_configuration_uncertain"))
+    "_counter_configuration_uncertain", "initialization_cards", "startup_complete"))
 
 
 class IsolatedBackendError(RuntimeError):
@@ -146,6 +146,8 @@ class IsolatedCardBackend(object):
         self._worker_pid = None
         self._generation = uuid.uuid4().hex
         self._cache = dict(backend_options, resource_count=0, procedure=None)
+        if factory_name is None:
+            self._cache.update(startup_complete=False, initialization_cards=None)
         self._cache.setdefault("control_profile", "legacy_full")
         for name in CACHED_ATTRIBUTES:
             if name.endswith("_verified"):
@@ -237,6 +239,20 @@ class IsolatedCardBackend(object):
         try:
             while True:
                 message = read_frame(self._process.stdout)
+                if message.get("kind") == "initialization_status":
+                    attributes = message.get("attributes")
+                    if (set(message) != {"kind", "attributes"} or type(attributes) is not dict
+                            or set(attributes) != {"initialization_cards", "startup_complete", "resource_count"}
+                            or type(attributes["initialization_cards"]) is not dict
+                            or attributes["startup_complete"] is not False
+                            or type(attributes["resource_count"]) is not int or attributes["resource_count"] < 0):
+                        raise IsolationProtocolError("Invalid retained initialization status")
+                    with self._condition:
+                        if self._cleanup_confirmed:
+                            raise IsolationProtocolError("Initialization status after confirmed release")
+                        self._cache.update(attributes)
+                        self._condition.notify_all()
+                    continue  # Never changes runtime state, readiness or measurements.
                 if message.get("kind") not in ("result", "progress", "initialize_ready") or type(message.get("id")) is not int:
                     raise IsolationProtocolError("Unexpected child message")
                 attributes = message.get("attributes", {})

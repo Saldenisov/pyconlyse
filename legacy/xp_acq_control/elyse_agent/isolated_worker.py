@@ -19,10 +19,10 @@ import math
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from elyse_agent.isolated_backend import OPERATIONS, CACHED_ATTRIBUTES
-    from elyse_agent.isolated_wire import read_frame, write_frame, encode_frame, pack_value
+    from elyse_agent.isolated_wire import read_frame, write_frame, encode_frame, pack_value, windows_polling_pipe
 else:
     from .isolated_backend import OPERATIONS, CACHED_ATTRIBUTES
-    from .isolated_wire import read_frame, write_frame, encode_frame, pack_value
+    from .isolated_wire import read_frame, write_frame, encode_frame, pack_value, windows_polling_pipe
 
 
 def _attributes(backend, trace=None):
@@ -99,6 +99,7 @@ class Worker(object):
         self.software_pending = None
         self.software_lock = threading.Lock()
         self.request_started = None
+        self.initialization_status_sent_at = 0.
 
     def _trace_initialization(self, event):
         """Explicit startup diagnostics only; no measurements or native I/O.
@@ -107,8 +108,9 @@ class Worker(object):
         record alone is not proof of applied effects. Storage failures are
         visible but must never skip native cleanup or abandon a returned handle.
         """
-        record = {name: event[name] for name in ("phase", "call") if name in event}
-        record.update(utc=datetime.datetime.now(datetime.timezone.utc).isoformat(), pid=os.getpid())
+        record = {name: event[name] for name in ("phase", "call", "card", "error", "error_code",
+            "initialization_cards") if name in event}
+        record.update(utc=event.get("utc", datetime.datetime.now(datetime.timezone.utc).isoformat()), pid=os.getpid())
         try:
             parent = os.path.dirname(self.initialization_trace_path)
             if not os.path.isdir(parent):
@@ -143,7 +145,12 @@ class Worker(object):
             stack.reverse()
         finally:
             del frame
-        return dict(kind="progress", id=request_id, attributes={}, event=dict(
+        attributes = {}
+        if self.backend is not None:
+            attributes = dict(initialization_cards=copy.deepcopy(getattr(self.backend, "initialization_cards", None)),
+                startup_complete=getattr(self.backend, "startup_complete", None),
+                resource_count=self.backend.resource_count)
+        return dict(kind="progress", id=request_id, attributes=attributes, event=dict(
             kind="INITIALIZATION_DIAGNOSTIC_NOT_MEASUREMENT", operation="initialize",
             phase=phase, stack=stack, hardware_acknowledged=False, safe_to_sample=False))
 
@@ -157,6 +164,29 @@ class Worker(object):
                     if (self.active_id == notice["id"] and self.diagnostic_phase
                             in ("CONSTRUCT_BACKEND", "PREPARE_DEPENDENCIES", "INITIALIZE_BACKEND")):
                         self._emit(notice)
+
+    def _publish_idle_initialization_status(self):
+        """Report late card returns in RAM; never finish/retry startup or read NI."""
+        if self.backend is None or getattr(self.backend, "startup_complete", None) is not False:
+            return
+        now = time.monotonic()
+        if now - self.initialization_status_sent_at < .2:
+            return
+        report = getattr(self.backend, "initialization_cards", None)
+        if type(report) is not dict:
+            return
+        self.initialization_status_sent_at = now
+        owner = getattr(self.backend, "owner", None)
+        coordinator = getattr(owner, "parallel_initialization", owner)
+        publish = getattr(coordinator, "publish", None)
+        if callable(publish):
+            def record_boundary(event):
+                if event.get("kind") == "INITIALIZATION_CALL_BOUNDARY_NOT_MEASUREMENT":
+                    self._trace_initialization(event)
+            publish(record_boundary)
+        self._emit(dict(kind="initialization_status", attributes=dict(
+            initialization_cards=report, startup_complete=False,
+            resource_count=self.backend.resource_count)))
 
     def _emit(self, message, reliable=False):
         event = message.get("event")
@@ -272,10 +302,14 @@ class Worker(object):
         if type(event) is not dict:
             return
         notice = copy.deepcopy(event)
-        if notice.get("kind") == "INITIALIZATION_CALL_BOUNDARY_NOT_MEASUREMENT":
+        if notice.get("kind") in ("INITIALIZATION_CARD_STATUS_NOT_MEASUREMENT",
+                                  "INITIALIZATION_CALL_BOUNDARY_NOT_MEASUREMENT"):
             self._trace_initialization(notice)
             notice.update(trace_path=self.initialization_trace_path,
                           trace_error=self.initialization_trace_error)
+            self._emit(dict(kind="progress", id=self.active_id, event=notice,
+                            attributes=_attributes(self.backend)))
+            return  # Initialization status must never trigger input reads.
         if notice.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT":
             self._emit(dict(kind="progress", id=self.active_id, event=notice,
                             attributes=_attributes(self.backend)))
@@ -406,6 +440,7 @@ class Worker(object):
                 try:
                     message = self.incoming.get(timeout=.05)
                 except queue.Empty:
+                    self._publish_idle_initialization_status()
                     continue
             operation, request_id = message.get("operation"), message["id"]
             with self.state_lock:
@@ -484,7 +519,11 @@ class Worker(object):
 def main():
     # stdout is reserved exclusively for framed IPC. This executable does not
     # load NI, open a socket or create a backend until its initialize message.
-    return Worker(sys.stdin.buffer, sys.stdout.buffer).run()
+    worker = Worker(sys.stdin.buffer, sys.stdout.buffer)
+    if sys.platform == "win32":
+        worker.source = windows_polling_pipe(sys.stdin.buffer, worker.disconnected)
+        worker._trace_initialization(dict(phase="READY", call="IPC input: PeekNamedPipe + ReadFile"))
+    return worker.run()
 
 
 if __name__ == "__main__":

@@ -21,6 +21,21 @@ from .acquisition_supervisor import FileInstanceGuard
 BUTTON_LABELS = ("Initialize", "Deinitialize", "Stop server")
 
 
+def initialization_card_text(state):
+    report = state.get("initialization_cards")
+    if type(report) is not dict:
+        return "Cards: not requested"
+    cards = report.get("cards", {})
+    lines = []
+    for card in sorted(cards, key=int):
+        item = cards[card]
+        error = item.get("error") or ""
+        lines.append("C{0:02d}: {1} | {2} | {3:.1f}s{4}".format(int(card), item.get("state", "UNKNOWN"),
+            item.get("current_call") or "", item.get("elapsed_seconds", 0.),
+            " | " + str(error)[:160] if error else ""))
+    return "\n".join(lines)
+
+
 def application_alarm_text(state):
     """A local lifecycle error must never hide a circulation countdown."""
     alarm = state["cooling_safety"]
@@ -99,6 +114,9 @@ class ControlWindow(AcquisitionWindow):
         self.status, self.link, self.alarm = tk.StringVar(), tk.StringVar(), tk.StringVar()
         for variable in (self.status, self.link):
             tk.Label(root, textvariable=variable, anchor="w").pack(fill="x", padx=12, pady=5)
+        self.cards = tk.StringVar(value="Cards: not requested")
+        tk.Label(root, textvariable=self.cards, anchor="w", justify="left",
+                 font=("Courier", 9)).pack(fill="x", padx=12)
         self.alarm_label = tk.Label(root, textvariable=self.alarm, fg="red", anchor="w", wraplength=960,
                                    justify="left")
         self.alarm_label.pack(fill="x", padx=12)
@@ -175,6 +193,7 @@ class ControlWindow(AcquisitionWindow):
         count = ("UNKNOWN (ownership retained)" if native.get("resource_count_interpretation")
                  == "UNKNOWN_RETAINED_OWNERSHIP_SENTINEL" else str(state["resource_count"]))
         self.status.set("{0} | NI resources: {1} | {2}".format(state["state"], count, state["error"]))
+        self.cards.set(initialization_card_text(state))
         age = state["everest_read_age_seconds"]
         delivery = state.get("telemetry_delivery", {})
         self.link.set("{0} | Everest telemetry ACK: {1} | {2} | ".format(delivery.get("source_mode", "DISABLED"), delivery.get("everest_acknowledged", 0),

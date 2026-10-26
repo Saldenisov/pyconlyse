@@ -42,6 +42,7 @@ CONTROL_MODULES += ("command_protocol.py", "command_broker.py", "command_http.py
                     "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py", "application_view.py",
                     "journal_worker.py", "isolated_backend.py", "isolated_wire.py", "isolated_worker.py")
 CONTROL_MODULES += ("handover_recovery.py", "acquisition_supervisor.py")
+CONTROL_MODULES += ("parallel_initialization.py",)
 
 
 def control_identity(root=None):
@@ -591,6 +592,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             result["general_cooling_ready"] = self._general_cooling_ready
             result["startup_phase"] = self._startup_phase
             result["execution_progress"] = copy.deepcopy(self._execution_progress)
+            result["initialization_cards"] = copy.deepcopy(getattr(self._backend, "initialization_cards", None))
+            result["startup_complete"] = getattr(self._backend, "startup_complete", None)
             isolated = getattr(self._backend, "isolation_snapshot", None)
             result["native_isolation"] = isolated() if isolated is not None else dict(
                 worker_state="NOT_SPAWNED" if self._backend is None else "IN_PROCESS_TEST_BACKEND",

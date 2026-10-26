@@ -68,6 +68,7 @@ def fake_backend():
     backend = acquisition_backend.CardBackend(factory=lambda **kwargs: None,
                                                read_timeout=0.25)
     backend.owner = owner
+    backend.startup_complete = True  # Explicit fully initialized offline fixture.
     backend.calibration = dict(((name, index), (2.0, 0.25))
                                for name, device, count in AI_BANKS
                                for index in range(count))

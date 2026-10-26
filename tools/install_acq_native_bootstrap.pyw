@@ -22,7 +22,7 @@ def main():
         result["source_installed"] = True
         result["transport"] = transport["configure"](updater["TARGET"], key)
         result["result"] = "INSTALLED"
-        messagebox.showinfo("r10 installed; no cards initialized",
+        messagebox.showinfo("Update installed; no cards initialized",
             "Native bootstrap updated; XP command transport configured.\n"
             "Commissioning flags and ownership evidence preserved.\n"
             "Everest command transport requires matching configuration.\n"

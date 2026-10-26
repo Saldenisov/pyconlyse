@@ -52,6 +52,8 @@ def command_capabilities(value):
         stopping = operation.endswith(".stop")
         if value.get("remote_setpoints_enabled") is not True:
             reason = "REMOTE_CONTROL_DISABLED"
+        elif value.get("startup_complete") is False:
+            reason = "ALL_REQUIRED_CARDS_AND_STARTUP_NOT_READY"
         elif recovery.get("required") is not False or recovery.get("protection_active") is not True:
             reason = "LOCAL_OWNERSHIP_RECOVERY_REQUIRED"
         elif not value.get("resource_count"):
