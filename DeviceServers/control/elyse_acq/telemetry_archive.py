@@ -42,18 +42,25 @@ def timestamp(value):
 
 def ingress_record(body, receiver_session, receiver_count, observed_utc):
     packet = body['packet']
-    if packet['publication'] == SNAPSHOT_PUBLICATION:
+    federated = packet['publication'] == 'ELYSE_OWNER_SNAPSHOT'
+    if federated:
+        from legacy.xp_acq_control.elyse_agent.federation_wire import expand_owner_frame
+        banks = expand_owner_frame(packet)
+    elif packet['publication'] == SNAPSHOT_PUBLICATION:
         expand = expand_python_snapshot if packet['producer_kind'] == 'python_acquisition' else expand_snapshot
         banks = expand(packet)
     else:
         banks = {packet['publication']: copy.deepcopy(packet)}
     for bank in banks.values():
-        bank.update(age_seconds=body['age_seconds_on_xp'],
-                    stale=body['age_seconds_on_xp'] >= 2,
+        age = body['age_seconds_on_xp'] + (bank.get('source_age_seconds', 0.) if federated else 0.)
+        bank.update(age_seconds=age,
+                    stale=age >= 2,
                     received_utc_on_everest=observed_utc,
                     relay_id=body['relay_id'], message_id=body['message_id'])
-    identity = f"live:{body['relay_id']}:{body['message_id']}"
-    source = ('python_daqmx_acquisition' if packet['producer_kind'] == 'python_acquisition'
+    identity = (f"live:{packet['owner']}:{body['relay_id']}:{body['message_id']}" if federated
+                else f"live:{body['relay_id']}:{body['message_id']}")
+    source = ('federated_orchestrators' if federated else
+              'python_daqmx_acquisition' if packet['producer_kind'] == 'python_acquisition'
               else 'copied_labview_telemetry')
     return dict(uid=identity, kind='snapshot', observed_utc=observed_utc,
                 provenance='live_ingress', receiver_session=receiver_session,

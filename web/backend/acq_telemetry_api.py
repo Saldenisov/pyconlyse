@@ -18,7 +18,8 @@ acq_telemetry_api = Blueprint(
     "acq_telemetry_api", __name__, url_prefix="/api/elyse/acquisition/telemetry"
 )
 install_mutation_auth(acq_telemetry_api, protected_get_endpoints=(
-    "get_telemetry", "get_cooling_safety", "get_history", "get_archive_status", "get_history_view"))
+    "get_telemetry", "get_cooling_safety", "get_history", "get_archive_status", "get_history_view",
+    "get_orchestrators", "get_raw_video"))
 
 
 @acq_telemetry_api.after_request
@@ -55,7 +56,7 @@ def present_snapshot(raw, server_state):
     snapshot = json.loads(raw)
     if (
         not isinstance(snapshot, dict)
-        or snapshot.get("source") not in ("copied_labview_telemetry", "python_daqmx_acquisition")
+        or snapshot.get("source") not in ("copied_labview_telemetry", "python_daqmx_acquisition", "federated_orchestrators")
         or snapshot.get("hardware_writes") is not False
         or snapshot.get("storage_mode") != "ram_latest"
         or not isinstance(snapshot.get("publications"), dict)
@@ -68,7 +69,10 @@ def present_snapshot(raw, server_state):
         if not isinstance(bank, dict):
             raise ValueError("invalid telemetry bank")
         age = bank.get("age_seconds")
-        if type(age) not in (int, float) or not math.isfinite(age) or age < 0:
+        unavailable_age = (snapshot.get("source") == "federated_orchestrators" and age is None
+                           and bank.get("data") is None and bank.get("error", {}).get("status") is True
+                           and bank.get("error", {}).get("code") == -80001)
+        if not unavailable_age and (type(age) not in (int, float) or not math.isfinite(age) or age < 0):
             raise ValueError("invalid telemetry age")
         error = bank.get("error")
         if (
@@ -78,19 +82,20 @@ def present_snapshot(raw, server_state):
             or not isinstance(error.get("source"), str)
         ):
             raise ValueError("invalid bank read error")
-        bank["stale"] = bank.get("stale") is not False or age >= STALE_SECONDS
+        bank["stale"] = unavailable_age or bank.get("stale") is not False or age >= STALE_SECONDS
         bank["data"] = browser_data(bank.get("data"))
     # Strict JSON: a corrupt receiver must not send NaN/Infinity to the browser.
     json.dumps(snapshot, allow_nan=False)
     missing = [name for name in BANKS if name not in publications]
-    stale = [name for name, bank in publications.items() if bank["stale"]]
+    stale = [name for name, bank in publications.items() if bank["stale"] and bank.get("data") is not None]
     errors = [
         name
         for name, bank in publications.items()
         if bank["error"]["status"] or bank["error"]["code"] != 0
     ]
-    unavailable = [name for name in errors if snapshot.get("source") == "python_daqmx_acquisition"
-                   and publications[name]["producer_kind"] == "python_acquisition"
+    unavailable = [name for name in errors if snapshot.get("source") in ("python_daqmx_acquisition", "federated_orchestrators")
+                   and (snapshot.get("source") == "federated_orchestrators"
+                        or publications[name].get("producer_kind") == "python_acquisition")
                    and publications[name]["error"]["code"] == -80001
                    and publications[name]["data"] is None]
     read_errors = [name for name in errors if name not in unavailable]
@@ -126,7 +131,44 @@ def present_snapshot(raw, server_state):
         source=snapshot["source"],
         snapshot=snapshot,
         cooling_safety=snapshot.get("cooling_safety"),
+        orchestrators=snapshot.get("owners"),
+        video_metadata=snapshot.get("video_metadata"),
     )
+
+
+@acq_telemetry_api.get("/owners")
+def get_orchestrators():
+    try:
+        proxy = tango_gateway.create_device_proxy(DEVICE)
+        proxy.set_timeout_millis(1500)
+        raw = proxy.read_attribute("orchestrators_json").value
+        if type(raw) is not str or len(raw.encode("utf-8")) > MAX_JSON_BYTES:
+            raise ValueError("Bounded owner metadata required")
+        value = json.loads(raw)
+        if (type(value) is not dict or type(value.get("federated")) is not bool
+                or type(value.get("owners")) is not dict
+                or set(value["owners"]) - {"acquisition", "supervision"}):
+            raise ValueError("Unexpected owner metadata")
+        return jsonify(schema_version=1, device=TANGO_DEVICE, **value)
+    except Exception:
+        return jsonify(schema_version=1, owners={}, error="Owner metadata unavailable"), 503
+
+
+@acq_telemetry_api.get("/video")
+def get_raw_video():
+    try:
+        proxy = tango_gateway.create_device_proxy(DEVICE)
+        proxy.set_timeout_millis(1500)
+        raw = proxy.read_attribute("video_json").value
+        if type(raw) is not str or len(raw.encode("utf-8")) > MAX_JSON_BYTES:
+            raise ValueError("Bounded video metadata required")
+        value = json.loads(raw)
+        if type(value) is not dict or value.get("owner") != "supervision":
+            raise ValueError("Unexpected video owner")
+        return jsonify(schema_version=1, device=TANGO_DEVICE, **value)
+    except Exception:
+        return jsonify(schema_version=1, owner="supervision", frame=None,
+                       available=False, error="Video source unavailable"), 503
 
 
 @acq_telemetry_api.get("")

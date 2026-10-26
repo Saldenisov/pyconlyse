@@ -86,6 +86,43 @@ def test_fixed_receiver_read_no_write_or_device_selection(setup_api):
     assert data["execution_allowed"] is False and data["hardware_writes"] is False
 
 
+@pytest.mark.parametrize("suffix,attribute,value,status", [
+    ("/owners", "orchestrators_json", {"federated": True, "owners": {"supervision": {"quality": "WAITING"}}}, 200),
+    ("/owners", "orchestrators_json", {"federated": True, "owners": {"other": {}}}, 503),
+    ("/video", "video_json", {"owner": "supervision", "available": False, "frame": None}, 200),
+    ("/video", "video_json", {"owner": "acquisition", "frame": {}}, 503),
+])
+def test_owner_and_video_reads_use_same_fixed_receiver(setup_api, monkeypatch, suffix, attribute, value, status):
+    app, _, calls = setup_api
+    class MetadataProxy:
+        def set_timeout_millis(self, timeout):
+            assert timeout == 1500
+        def read_attribute(self, name):
+            assert name == attribute
+            return SimpleNamespace(value=json.dumps(value))
+    def factory(name):
+        calls.append(("proxy", name))
+        return MetadataProxy()
+    monkeypatch.setattr(api.tango_gateway, "create_device_proxy", factory)
+    response = app.test_client().get(URL + suffix)
+    assert response.status_code == status
+    assert calls == [("proxy", api.DEVICE)]
+    if status == 200:
+        assert response.json["device"] == api.TANGO_DEVICE
+
+
+@pytest.mark.parametrize("suffix", ["/owners", "/video"])
+def test_owner_and_video_reject_oversized_metadata(setup_api, monkeypatch, suffix):
+    app, _, _ = setup_api
+    class OversizedProxy:
+        def set_timeout_millis(self, timeout):
+            pass
+        def read_attribute(self, name):
+            return SimpleNamespace(value=" " * (api.MAX_JSON_BYTES + 1))
+    monkeypatch.setattr(api.tango_gateway, "create_device_proxy", lambda _: OversizedProxy())
+    assert app.test_client().get(URL + suffix).status_code == 503
+
+
 def test_history_is_bounded_read_only_tango_command(setup_api, monkeypatch):
     app, _, calls = setup_api
     class HistoryProxy:

@@ -19,8 +19,11 @@ from legacy.xp_acq_control.elyse_agent.standard_banks import fault_diagnostic_me
 
 class ControlClient:
     def __init__(self, read_key, command_key=None, enabled=False, host="10.20.30.10", port=8772,
-                 timeout=2.0, opener=None, clock=time.monotonic):
-        if host not in ("10.20.30.10", "127.0.0.1") or type(port) is not int or not 1024 <= port <= 65535:
+                 timeout=2.0, opener=None, clock=time.monotonic, owner="acquisition"):
+        hosts = {"acquisition": ("10.20.30.10", "127.0.0.1"),
+                 "supervision": ("10.20.30.2", "127.0.0.1")}
+        if (owner not in hosts or host not in hosts[owner]
+                or type(port) is not int or not 1024 <= port <= 65535):
             raise ValueError("Explicit XP endpoint required")
         if not isinstance(read_key, bytes) or len(read_key) < 32 or type(enabled) is not bool:
             raise ValueError("Read key and explicit command enablement required")
@@ -28,7 +31,7 @@ class ControlClient:
             raise ValueError("Separate command key required")
         if type(timeout) not in (int, float) or not math.isfinite(timeout) or not 0 < timeout <= 5:
             raise ValueError("Bounded HTTP acceptance timeout required")
-        self.read_key, self.command_key, self.enabled = read_key, command_key, enabled
+        self.read_key, self.command_key, self.enabled, self.owner = read_key, command_key, enabled, owner
         self.base = "http://{0}:{1}".format(host, port)
         self.timeout, self.clock = timeout, clock
         self.opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
@@ -63,7 +66,9 @@ class ControlClient:
 
     def _read(self):
         value = self._exchange("/snapshot")
-        if (value.get("server_variant") != "acquisition_control_vnext"
+        expected_variant = ("acquisition_control_vnext" if self.owner == "acquisition"
+                            else "supervision_control_vnext")
+        if (value.get("server_variant") != expected_variant
                 or value.get("control_policy_version") != 2
                 or value.get("runtime_protocol_version") != 2
                 or not valid_hex(value.get("session_id"), 32) or not valid_hex(value.get("build_id"), 64)
@@ -167,6 +172,27 @@ class ControlBridge:
             value = copy.deepcopy(self.latest)
             age = None if self.received is None else self.clock() - self.received
             transport = value is not None and age is not None and 0 <= age < 2 and not self.error
+            if getattr(self.client, "owner", "acquisition") == "supervision":
+                latest = (value or {}).get("latest") or {}
+                sample_age = (value or {}).get("age_seconds")
+                ready = bool(transport and value.get("state") == "RUNNING"
+                    and value.get("stale") is False and not value.get("error")
+                    and type(sample_age) in (int, float) and math.isfinite(sample_age)
+                    and 0 <= sample_age + age < 2
+                    and latest.get("source") == "python_supervision_card_processes"
+                    and latest.get("simulated") is False
+                    and value.get("card_health", {}).get("all_required_ready") is True)
+                if value is not None and not ready:
+                    value["latest"] = None
+                return dict(source="xp_python_supervision_control",
+                    telemetry_schema="supervision_owner_memory_not_acquisition_inputs",
+                    quality="READY" if ready else value.get("state", "UNAVAILABLE") if transport else "UNAVAILABLE",
+                    bridge_age_seconds=age, bridge_error=self.error, runtime=value,
+                    source_current=False, diagnostic_source_current=False,
+                    owner_state_current=ready, measurements_hidden=True,
+                    commands_enabled=self.client.enabled and bool(transport)
+                        and value.get("control", {}).get("enabled") is True,
+                    automatic_command_retry=False)
             fresh = bool(transport and value.get("state") == "RUNNING" and value.get("stale") is False
                          and not value.get("error") and type(value.get("age_seconds")) in (int, float)
                          and math.isfinite(value["age_seconds"]) and 0 <= value["age_seconds"] + age < 2)

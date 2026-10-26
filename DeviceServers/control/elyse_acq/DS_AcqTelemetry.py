@@ -31,6 +31,7 @@ class DS_AcqTelemetry(Device):
     command_key_file = device_property(dtype=str, default_value="")
     commands_enabled = device_property(dtype=bool, default_value=False)
     archive_config_file = device_property(dtype=str, default_value="")
+    federation_config_file = device_property(dtype=str, default_value="")
 
     def init_device(self):
         self._closing = True
@@ -40,18 +41,28 @@ class DS_AcqTelemetry(Device):
                 raise RuntimeError("Previous telemetry owner did not exit; replacement refused")
         self._server = self._store = self._thread = None
         self._bridge = self._client = None
+        self._bridges, self._clients = {}, {}
+        self._federated = bool(self.federation_config_file)
         self._archive = None
         self._cooling = None
         super().init_device()
-        self._python_source = self.producer_kind_filter in ("python_acquisition", "unified_acquisition")
-        if not self.key_file:
+        self._python_source = self._federated or self.producer_kind_filter in ("python_acquisition", "unified_acquisition")
+        if not self.key_file and not self._federated:
             self.set_state(DevState.FAULT)
             self.set_status("Not listening: configure key_file; RAM-only telemetry, no database.")
             return
         try:
             if self.listen_host not in ("10.20.30.202", "127.0.0.1"):
                 raise ValueError("explicit Everest address required; wildcard disabled")
-            key = Path(self.key_file).read_bytes().strip()
+            if self._federated:
+                from DeviceServers.control.elyse_acq.federated_telemetry import (
+                    FederatedTelemetryStore, load_federation_configuration,
+                )
+                owner_config = load_federation_configuration(self.federation_config_file,
+                                                             bool(self.commands_enabled))
+                key = owner_config["acquisition"]["read_key"]
+            else:
+                key = Path(self.key_file).read_bytes().strip()
             if self.commands_enabled and not self._python_source:
                 raise ValueError("Commands require exclusive Python telemetry source")
             journal_path = self.cooling_journal_file or (
@@ -63,25 +74,41 @@ class DS_AcqTelemetry(Device):
                 from DeviceServers.control.elyse_acq.telemetry_archive import DurableArchive
                 self._archive = DurableArchive(self.archive_config_file)
                 self._archive.start()
-            self._store = TelemetrySinkStore(key, permitted_producer_kind=self.producer_kind_filter or None,
-                                             cooling=cooling, archive=self._archive)
+            if self._federated:
+                self._store = FederatedTelemetryStore(
+                    {role: item["read_key"] for role, item in owner_config.items()},
+                    cooling=cooling, archive=self._archive)
+            else:
+                self._store = TelemetrySinkStore(key, permitted_producer_kind=self.producer_kind_filter or None,
+                                                 cooling=cooling, archive=self._archive)
             self._server = TelemetrySinkServer((self.listen_host, self.listen_port), self._store,
-                                              permitted_peers=(self.permitted_xp_host,))
+                permitted_peers=(tuple(item["host"] for item in owner_config.values()) if self._federated
+                                 else (self.permitted_xp_host,)))
             self._thread = threading.Thread(target=self._server.serve_forever,
                                             kwargs={"poll_interval": 0.1}, daemon=True)
             self._thread.start()
             if self._python_source:
                 from DeviceServers.control.elyse_acq.control_client import ControlClient, ControlBridge
-                command_key = Path(self.command_key_file).read_bytes().strip() if self.commands_enabled else None
-                self._client = ControlClient(key, command_key, enabled=bool(self.commands_enabled),
-                                             port=int(self.xp_control_port))
-                self._bridge = ControlBridge(self._client)
-                self._bridge.start()
+                if self._federated:
+                    for role, item in owner_config.items():
+                        client = ControlClient(item["read_key"], item["command_key"], enabled=item["enabled"],
+                                               host=item["host"], port=item["port"], owner=role)
+                        self._clients[role] = client
+                        self._bridges[role] = ControlBridge(client)
+                        self._bridges[role].start()
+                    self._client, self._bridge = self._clients["acquisition"], self._bridges["acquisition"]
+                else:
+                    command_key = Path(self.command_key_file).read_bytes().strip() if self.commands_enabled else None
+                    self._client = ControlClient(key, command_key, enabled=bool(self.commands_enabled),
+                                                 port=int(self.xp_control_port))
+                    self._bridge = ControlBridge(self._client)
+                    self._bridge.start()
             self._closing = False
             self.set_state(DevState.ON)
             self.set_status("Standard 27-bank telemetry; exclusive source={0}; named commands={1}. "
                             "No NI/PSP tasks on Everest; no automatic command retries.".format(
-                                self.producer_kind_filter or "legacy", bool(self.commands_enabled)))
+                                "two_owner_federation" if self._federated else self.producer_kind_filter or "legacy",
+                                bool(self.commands_enabled)))
         except Exception as error:
             self.delete_device()
             self.set_state(DevState.FAULT)
@@ -92,6 +119,14 @@ class DS_AcqTelemetry(Device):
         if self._store is None:
             return json.dumps(dict(available=False, hardware_writes=False))
         snapshot = self._store.snapshot()
+        if getattr(self, "_federated", False):
+            view = self._control_view("acquisition")
+            runtime = view.get("runtime") or {}
+            if self._store.owner_current("acquisition", runtime.get("session_id"), native=True):
+                age = view.get("bridge_age_seconds")
+                snapshot["cooling_safety"] = (runtime.get("cooling_safety") if not view.get("bridge_error")
+                    and type(age) in (int, float) and 0 <= age < 2 else None)
+            return json.dumps(snapshot, allow_nan=False)
         if getattr(self, "_python_source", False) and snapshot["source"] == "python_daqmx_acquisition":
             view = self._control_view()
             runtime = view.get("runtime") or {}
@@ -128,7 +163,9 @@ class DS_AcqTelemetry(Device):
             raise RuntimeError('ARCHIVE_NOT_CONFIGURED')
         return json.dumps(archive.store.summary(), allow_nan=False)
 
-    def _control_view(self):
+    def _control_view(self, owner="acquisition"):
+        if getattr(self, "_federated", False):
+            return self._federated_control_view(owner)
         bridge = getattr(self, "_bridge", None)
         if bridge is None:
             return dict(source="labview_receive_only", quality="UNAVAILABLE", runtime=None,
@@ -158,12 +195,64 @@ class DS_AcqTelemetry(Device):
                     capability.update(enabled=False, reason="STANDARD_TELEMETRY_NOT_CURRENT")
         return view
 
+    def _federated_control_view(self, owner):
+        bridge = getattr(self, "_bridges", {}).get(owner)
+        if bridge is None:
+            return dict(owner=owner, quality="UNAVAILABLE", runtime=None, commands_enabled=False,
+                        telemetry_source_current=False, bridge_error="Owner control reader unavailable")
+        view = bridge.snapshot()
+        runtime = view.get("runtime") or {}
+        packets = self._store.snapshot()["publications"] if self._store is not None else {}
+        from legacy.xp_acq_control.elyse_agent.runtime_identity import valid_hex
+        from legacy.xp_acq_control.elyse_agent.native_telemetry import INPUTS
+        native_source = (self._store is not None and valid_hex(runtime.get("session_id"), 32)
+                         and self._store.owner_current(owner, runtime["session_id"], native=True))
+        if owner == "acquisition":
+            same_source = native_source and all(
+                name in packets and packets[name].get("owner") == owner
+                and packets[name].get("session_id") == runtime.get("session_id")
+                and packets[name].get("stale") is False
+                and packets[name].get("error", {}).get("status") is False for name in INPUTS)
+        else:
+            same_source = native_source and view.get("owner_state_current") is True
+        view.update(owner=owner, telemetry_source_current=bool(same_source))
+        age = view.get("bridge_age_seconds")
+        metadata_current = (valid_hex(runtime.get("session_id"), 32) and not view.get("bridge_error")
+                            and type(age) in (int, float) and 0 <= age < 2)
+        source_mode = runtime.get("telemetry_delivery", {}).get("source_mode")
+        view["commands_enabled"] = bool(view.get("commands_enabled") and metadata_current and not self._closing
+            and source_mode == "PYTHON_NATIVE")
+        if not same_source:
+            for name, capability in runtime.get("control", {}).get("capabilities", {}).items():
+                if not name.endswith(".stop") and name != "cooling.confirm_circulation":
+                    capability.update(enabled=False, reason="OWNER_TELEMETRY_NOT_CURRENT")
+        if owner == "supervision":
+            for name, capability in runtime.get("control", {}).get("capabilities", {}).items():
+                if name != "counter_timing.set":
+                    capability.update(enabled=False, reason="OPERATION_NOT_OWNED_BY_SUPERVISION")
+        return view
+
     @attribute(dtype=str)
     def runtime_json(self):
         return json.dumps(self._control_view(), allow_nan=False)
 
+    @attribute(dtype=str)
+    def orchestrators_json(self):
+        owners = ("acquisition", "supervision") if getattr(self, "_federated", False) else ("acquisition",)
+        return json.dumps(dict(federated=getattr(self, "_federated", False),
+                               owners={owner: self._control_view(owner) for owner in owners}), allow_nan=False)
+
+    @attribute(dtype=str)
+    def video_json(self):
+        if not getattr(self, "_federated", False) or self._store is None:
+            return json.dumps(dict(available=False, owner="supervision", frame=None,
+                                   reason="FEDERATED_RAW_VIDEO_NOT_CONFIGURED"))
+        return json.dumps(self._store.video_snapshot(), allow_nan=False)
+
     @command(dtype_in=str, dtype_out=str)
     def ExecuteCommand(self, request):
+        if getattr(self, "_federated", False):
+            return self._execute_owner_command("acquisition", request)
         if (not getattr(self, "_python_source", False) or not self.commands_enabled
                 or getattr(self, "_closing", True) or self._client is None
                 or self._control_view().get("commands_enabled") is not True):
@@ -178,8 +267,55 @@ class DS_AcqTelemetry(Device):
         # channel. XP still authenticates/fences the current boot and gates it.
         return json.dumps(self._client.submit(intent), allow_nan=False)
 
+    @command(dtype_in=str, dtype_out=str)
+    def ExecuteOwnerCommand(self, request):
+        from legacy.xp_acq_control.elyse_agent.acquisition_remote import strict_json
+        if len(request.encode("utf-8")) > 32768:
+            raise ValueError("Owner command envelope too large")
+        value = strict_json(request.encode("utf-8"))
+        if (type(value) is not dict or set(value) != {"owner", "request"}
+                or value["owner"] not in ("acquisition", "supervision")
+                or type(value["request"]) is not dict):
+            raise ValueError("Exact owner and named-command request required")
+        return self._execute_owner_command(value["owner"], json.dumps(value["request"], allow_nan=False))
+
+    def _execute_owner_command(self, owner, request):
+        if not getattr(self, "_federated", False):
+            if owner == "acquisition":
+                return self.ExecuteCommand(request)
+            raise RuntimeError("SUPERVISION_OWNER_NOT_CONFIGURED")
+        client = getattr(self, "_clients", {}).get(owner)
+        view = self._control_view(owner)
+        if (not self.commands_enabled or self._closing or client is None
+                or view.get("commands_enabled") is not True):
+            raise RuntimeError("OWNER_COMMANDS_DISABLED_OR_RUNTIME_NOT_CURRENT")
+        from legacy.xp_acq_control.elyse_agent.acquisition_remote import strict_json, validate_request
+        intent = validate_request(strict_json(request.encode("utf-8")))
+        if owner == "supervision" and intent["operation"] != "counter_timing.set":
+            raise RuntimeError("OPERATION_NOT_OWNED_BY_SUPERVISION")
+        runtime = view.get("runtime") or {}
+        if (intent["session_id"] != runtime.get("session_id")
+                or intent["expected_revision"] != runtime.get("state_revision")):
+            raise RuntimeError("OWNER_RUNTIME_SESSION_OR_REVISION_CHANGED")
+        reducing = intent["operation"].endswith(".stop") or intent["operation"] == "cooling.confirm_circulation"
+        if not reducing and not view.get("telemetry_source_current"):
+            raise RuntimeError("OWNER_TELEMETRY_NOT_CURRENT")
+        capability = (view.get("runtime") or {}).get("control", {}).get("capabilities", {}).get(intent["operation"], {})
+        if capability.get("enabled") is not True:
+            raise RuntimeError(capability.get("reason") or "OWNER_NAMED_COMMAND_DISABLED")
+        return json.dumps(client.submit(intent), allow_nan=False)
+
     def delete_device(self):
         self._closing = True
+        bridges = getattr(self, "_bridges", {})
+        for owner, reader in list(bridges.items()):
+            if not reader.stop(3):
+                self.warn_stream("Owner metadata reader still owned; replacement refused: " + owner)
+                return
+            del bridges[owner]
+        if getattr(self, "_federated", False) and not bridges:
+            self._bridge = self._client = None
+            self._clients = {}
         bridge = getattr(self, "_bridge", None)
         if bridge is not None:
             if not bridge.stop(3):
