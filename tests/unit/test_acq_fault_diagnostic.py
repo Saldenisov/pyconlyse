@@ -184,6 +184,7 @@ class FaultDiagnosticTests(unittest.TestCase):
 
     def test_cooling_trip_partial_chroma_stop_remains_failed_without_repeat_stop(self):
         runtime, backend = self.make_runtime()
+        backend.ht_feedback_verified, backend.ht_zero_tolerance_kv = True, .05
         now = [100.]
         runtime._clock = runtime.cooling.clock = lambda: now[0]
         runtime._state, runtime._error = "RUNNING", ""

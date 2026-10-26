@@ -29,7 +29,7 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'acq-unified-cooling-confirmation-20261026-v8-r13'
+    assert result['release'] == 'acq-unified-ht-cooling-scope-20261026-v8-r14'
     assert result['operator_supervised_test_supported'] is True
     assert result['operator_test_is_physical_qualification'] is False
     assert 'TaskHandle metadata before stdin reader' in result['native_bootstrap']

@@ -24,7 +24,7 @@ from legacy.xp_acq_agent.elyse_agent.labview_telemetry import ALL_PUBLICATIONS, 
 from legacy.xp_acq_agent.elyse_agent.shared_state import (
     BANKS, SNAPSHOT_PUBLICATION, expand_snapshot, validate_snapshot_packet,
 )
-from legacy.xp_acq_agent.elyse_agent.cooling_safety import CoolingSafety, decode_publications
+from legacy.xp_acq_control.elyse_agent.cooling_safety import CoolingSafety, decode_publications
 from legacy.xp_acq_control.elyse_agent.shared_state import (
     expand_snapshot as expand_python_snapshot,
 )
@@ -57,6 +57,9 @@ class TelemetrySinkStore:
         self.unified_relay = None
         self.active_kind = None
         self.cooling = cooling if cooling is not None else CoolingSafety(clock=clock)
+        bind = getattr(self.cooling, "bind_experiment_session", None)
+        if bind is not None:
+            bind(self.receiver_session)
 
     def accept(self, request):
         if type(request) is not dict or set(request) != {"body", "nonce", "signature"}:
@@ -187,8 +190,15 @@ class TelemetrySinkStore:
             identity = tuple((name, publications.get(name, {}).get("relay_id"),
                               publications.get(name, {}).get("message_id"))
                              for name in ("C3_IN_DIO96", "C4_IN_DIO96", "EPS"))
-            self.cooling.observe(circuits, active, observation_id=identity)
+            # This receiver never owns NI or a VI stop route. General/EPS
+            # alone cannot turn an old observer journal into a current HT
+            # experiment. Python-owner alarms are projected from runtime_json
+            # by the facade; VI retains its own original interlocks.
+            self.cooling.observe(circuits, False, observation_id=identity)
             self.cooling.tick(automatic_stop_available=False)
+            alarm = self.cooling.snapshot()
+            alarm.update(receive_only=True, indications=circuits,
+                interpretation="Receive-only VI indications; no local countdown or shutdown authority")
             source = "python_daqmx_acquisition" if (self.active_kind == 'python_acquisition'
                 or self.permitted_producer_kind == 'python_acquisition') else "copied_labview_telemetry"
             return dict(source=source, hardware_writes=False,
@@ -203,7 +213,7 @@ class TelemetrySinkStore:
                         permitted_producer_kind=self.permitted_producer_kind,
                         received_this_process=self.received, duplicate_receipts=self.duplicates,
                         publications=publications,
-                        cooling_safety=self.cooling.snapshot(),
+                        cooling_safety=alarm,
                         shared_snapshot_seen=self.shared_snapshot_seen,
                         missing_publications=sorted(set(BANKS if self.shared_snapshot_seen else ALL_PUBLICATIONS) - set(publications)))
 
@@ -213,8 +223,14 @@ class TelemetrySinkStore:
                 self.latest.clear()
                 self.relays.clear()
                 self.closed = True
-                if self.cooling.journal is not None:
-                    self.cooling.journal.close()
+        # Journal I/O/join must not hold ingress/RAM locks. An unfinished
+        # journal remains owned and a later close retries that same owner.
+        close = getattr(self.cooling, "close", None)
+        if close is not None:
+            if close(timeout=3) is False:
+                raise RuntimeError("Cooling journal worker still owned; replacement refused")
+        elif self.cooling.journal is not None:
+            self.cooling.journal.close()
 
 
 class _Handler(socketserver.BaseRequestHandler):

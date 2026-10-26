@@ -10,6 +10,7 @@ from tests.unit.test_acq_fault_diagnostic import Backend, sample
 class ExecutionCoolingTests(unittest.TestCase):
     def make_runtime(self, arm=True):
         clock, backend = Clock(), Backend()
+        backend.ht_feedback_verified, backend.ht_zero_tolerance_kv = True, .05
         runtime = AcquisitionControlRuntime(lambda: backend, clock=clock, remote_enabled=True)
         runtime._backend = _ObservedBackend(backend, runtime)
         runtime._state, runtime._general_stop_required = "RUNNING", True

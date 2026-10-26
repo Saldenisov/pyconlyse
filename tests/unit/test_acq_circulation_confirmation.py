@@ -21,6 +21,7 @@ class Clock(object):
 class CirculationConfirmationTests(unittest.TestCase):
     def make_runtime(self):
         clock, backend = Clock(), Backend()
+        backend.ht_feedback_verified, backend.ht_zero_tolerance_kv = True, .05
         backend.stage_controls_verified = False
         runtime = AcquisitionControlRuntime(lambda: backend, clock=clock, remote_enabled=True)
         runtime._backend = _ObservedBackend(backend, runtime)

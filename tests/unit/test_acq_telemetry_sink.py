@@ -3,6 +3,7 @@ import copy
 import json
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -26,6 +27,39 @@ def request(body, key=KEY):
 
 
 class SinkTests(unittest.TestCase):
+    def test_receive_only_restart_shows_old_failed_countdown_as_history(self):
+        from legacy.xp_acq_control.elyse_agent.cooling_safety import CoolingSafety, AlarmJournal, utc
+        old = AlarmJournal(str(self.path), 'receiver')
+        old.begin_session()
+        state = dict(incidents=dict(SECTION=dict(circuit='SECTION',
+            started_utc=utc(1000.), deadline_utc=utc(1120.), deadline_epoch=1120.,
+            causes=[dict(signal='flow', raw=True)])),
+            stop_state='FAILED', stop_error='previous experiment stop failure')
+        old.append(state, dict(kind='SHUTDOWN_FAILED'))
+        old.end_session(True)
+        old.close()
+        self.store.close()
+        alarm = CoolingSafety.with_journal(str(self.path), 'receiver')
+        self.store = TelemetrySinkStore(KEY, cooling=alarm)
+        deadline = time.monotonic() + 3
+        while not alarm.snapshot()['journal_ready'] and time.monotonic() < deadline:
+            time.sleep(.005)
+        observed = self.store.snapshot()['cooling_safety']
+        self.assertTrue(observed['receive_only'])
+        self.assertFalse(observed['active'])
+        self.assertEqual(observed['stop_state'], 'NONE')
+        self.assertIsNone(observed['remaining_seconds'])
+        self.assertEqual(observed['historical_incidents'][0]['prior_stop_error'],
+                         'previous experiment stop failure')
+        self.assertFalse(observed['automatic_stop_available'])
+
+    def test_receive_only_observer_has_no_shutdown_countdown_authority(self):
+        observed = self.store.snapshot()['cooling_safety']
+        self.assertTrue(observed['receive_only'])
+        self.assertFalse(observed['active'])
+        self.assertFalse(observed['countdown_required'])
+        self.assertFalse(observed['automatic_stop_available'])
+
     def test_fixture_only_filter_rejects_real_producer_claim_before_acceptance(self):
         store = TelemetrySinkStore(KEY, permitted_producer_kind='fixture')
         body = self.box.peek()

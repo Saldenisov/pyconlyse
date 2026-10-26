@@ -32,6 +32,7 @@ def package(destination, everest=False):
         for name in ("__init__.py", "acquisition_remote.py", "acquisition_http.py", "runtime_identity.py", "native_telemetry.py",
                      "command_protocol.py", "acquisition_counter_timing.py", "command_broker.py", "command_http.py", "command_dispatch.py",
                      "standard_banks.py", "telemetry_publisher.py", "telemetry_view.py",
+                     "cooling_safety.py", "journal_worker.py",
                      "shared_state.py", "labview_telemetry.py", "telemetry_relay.py", "protocol.py", "supervision_wire.py", "errors.py"):
             files.append((XP / "elyse_agent" / name, "legacy/xp_acq_control/elyse_agent/" + name))
         for name in ("__init__.py", "shared_state.py", "labview_telemetry.py", "telemetry_relay.py",
@@ -45,7 +46,7 @@ def package(destination, everest=False):
         files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-cooling-confirmation-20261026-r13" if everest else "acq-unified-cooling-confirmation-20261026-v8-r13", default_xp_port=8772,
+                    release="everest-ht-cooling-scope-20261026-r14" if everest else "acq-unified-ht-cooling-scope-20261026-v8-r14", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
@@ -85,6 +86,7 @@ def package(destination, everest=False):
             autonomous_ht_ramp=False)
     manifest.update(named_operation_count=25, matched_control_capability_set_required=True,
                     circulation_confirmation="Per current incident before 120s; software audit only; no NI effect",
+                    circulation_activation="Qualified measured HT above existing zero tolerance plus supply ON; not General",
                     fault_readback="Fresh diagnostic inputs with sticky FAULT and independent command gates",
                     synchronization_command="counter_timing.set", synchronization_counter_card=10,
                     synchronization_already_running_required=True, synchronization_c11_enabled=False,

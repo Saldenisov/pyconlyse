@@ -163,7 +163,7 @@ class SupervisedRuntimeTests(unittest.TestCase):
             self.assertRaises(RuntimeError, runtime.general_start, True)
             self.assertFalse(command_capabilities(runtime.snapshot())["modulator.general.start"]["enabled"], failure)
 
-    def test_two_minute_alarm_attempts_general_stop_without_commissioning(self):
+    def test_general_and_water_without_ht_do_not_start_experiment_countdown(self):
         runtime, clock, backend = self.make_runtime()
         self.general(runtime)
         self.water(runtime, clock)
@@ -172,15 +172,22 @@ class SupervisedRuntimeTests(unittest.TestCase):
         clock.now = 121.9
         runtime._tick_cooling()
         self.assertIsNone(runtime._pending)
-        clock.now = 122.
+        clock.now = 200.
         runtime._tick_cooling()
-        self.assertEqual(runtime._pending, "general_stop")
-        self.assertEqual(runtime.cooling.snapshot()["stop_state"], "REQUESTED")
+        self.assertIsNone(runtime._pending)
+        self.assertFalse(runtime.cooling.snapshot()["active"])
+        self.assertEqual(runtime.cooling.snapshot()["stop_state"], "NONE")
 
     def test_stop_failure_is_reported_and_journal_alarm_blocks_start(self):
         runtime, clock, backend = self.make_runtime()
         self.general(runtime)
         self.water(runtime, clock)
+        backend.ht_feedback_verified, backend.ht_zero_tolerance_kv = True, .05
+        runtime._latest["banks"]["C2_NI6071E_AI"] = dict(legacy_scaled_values=[12.] * 64)
+        runtime._cooling_experiment_active(runtime._latest, runtime._received_at)
+        # This fixture explicitly enters qualified HT exposure; General alone
+        # is no longer sufficient to create the extra countdown.
+        runtime.cooling.observe(runtime._circuits, True, observation_id=runtime._sequence)
         self.read(runtime, clock, fault=True)
         def fail_stop(operator_confirmed=False):
             raise RuntimeError("injected stop admission failure")

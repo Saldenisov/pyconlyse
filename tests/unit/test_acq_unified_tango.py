@@ -44,6 +44,32 @@ def test_same_device_routes_only_confirmed_current_python_source(facade):
     assert len(calls) == 1
 
 
+def test_receiver_bind_failure_closes_owned_cooling_journal(monkeypatch, tmp_path):
+    import tango.server
+    monkeypatch.setattr(tango.server, "run", lambda *args, **kwargs: None, raising=False)
+    module = importlib.import_module("DeviceServers.control.elyse_acq.DS_AcqTelemetry")
+    closed = []
+    class Cooling:
+        def bind_experiment_session(self, session): pass
+        def close(self, timeout=0):
+            closed.append(timeout)
+            return True
+    cooling = Cooling()
+    monkeypatch.setattr(module, "CoolingSafety", SimpleNamespace(with_journal=lambda *args: cooling))
+    def fail_bind(*args, **kwargs):
+        raise RuntimeError("fixture receiver bind failed")
+    monkeypatch.setattr(module, "TelemetrySinkServer", fail_bind)
+    key = tmp_path / "fixture.key"
+    key.write_bytes(b"test-only-key-000000000000000000000000")
+    device = module.DS_AcqTelemetry()
+    device.key_file, device.listen_host = str(key), "127.0.0.1"
+    device.cooling_journal_file = str(tmp_path / "alarms.sqlite")
+    device.archive_config_file, device.commands_enabled = "", False
+    device.set_status = lambda value: None
+    device.init_device()
+    assert closed and device._store is None and device._cooling is None
+
+
 @pytest.mark.parametrize('operation,value', [
     ('faraday_1.en_pulse', None), ('faraday_3.en_pulse', None),
     ('laser_mirror.en_pulse', None), ('laser_mirror.hors_pulse', None),

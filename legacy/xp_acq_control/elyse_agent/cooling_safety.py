@@ -252,6 +252,7 @@ class CoolingSafety(object):
         self.incidents, self.recovering, self.events = {}, {}, []
         self.armed, self.arming = set(), {}
         self.historical_incidents = []
+        self.experiment_session_id = None
         self.stop_state, self.stop_error = "NONE", ""
         self.journal_error = ""
         self._journal_loaded = False
@@ -286,7 +287,50 @@ class CoolingSafety(object):
     def _state_image(self):
         return dict(incidents=self.incidents, stop_state=self.stop_state,
                     stop_error=self.stop_error, policy_version=POLICY_VERSION,
+                    experiment_session_id=self.experiment_session_id,
                     historical_incidents=self.historical_incidents)
+
+    def bind_experiment_session(self, session_id):
+        """Bind this cold runtime's software episodes, never claim hardware OFF.
+
+        Previous-boot stop results remain audited history. Native ownership
+        recovery is separate and is neither acknowledged nor changed here.
+        This RAM declaration can precede attaching the owned journal.
+        """
+        if (type(session_id) is not str or len(session_id) != 32
+                or any(char not in "0123456789abcdef" for char in session_id)):
+            raise ValueError("Exact experiment session required")
+        with self.lock:
+            if self.experiment_session_id not in (None, session_id):
+                raise RuntimeError("Cooling experiment session cannot be replaced")
+            if self.experiment_session_id == session_id:
+                return
+            self.experiment_session_id = session_id
+            self._sync_journal()
+            if self.incidents or self.stop_state != "NONE":
+                self._retire_inactive_incidents("PRIOR_EXPERIMENT_SESSION")
+
+    def _retire_inactive_incidents(self, reason):
+        previous_state, previous_error = self.stop_state, self.stop_error
+        retired = []
+        for item in self.incidents.values():
+            item = copy.deepcopy(item)
+            item.update(historical=True, countdown_required=False, historical_reason=reason,
+                prior_stop_state=previous_state, prior_stop_error=previous_error,
+                reclassified_utc=utc(self.wall()))
+            self.historical_incidents.append(item)
+            retired.append(item)
+        self.incidents.clear()
+        self.recovering.clear()
+        self.armed.clear()
+        self.arming.clear()
+        self.stop_state, self.stop_error = "NONE", ""
+        if retired or previous_state != "NONE":
+            self._local_stop_changed = True
+            self._event("EXPERIMENT_COOLING_EPISODES_ARCHIVED", reason=reason,
+                historical_incidents=retired, prior_stop_state=previous_state,
+                prior_stop_error=previous_error, hardware_off_confirmed=False,
+                history_deleted=False)
 
     @staticmethod
     def _legacy_incident_id(item):
@@ -308,11 +352,14 @@ class CoolingSafety(object):
                 self.historical_incidents = copy.deepcopy(saved.get("historical_incidents", []))
                 for name, item in saved["incidents"].items():
                     item.setdefault("incident_id", self._legacy_incident_id(item))
-                    if (saved.get("policy_version", 1) < POLICY_VERSION
+                    prior_session = (self.experiment_session_id is not None
+                        and saved.get("experiment_session_id") != self.experiment_session_id)
+                    if prior_session or (saved.get("policy_version", 1) < POLICY_VERSION
                             and item["causes"] and all(isinstance(cause, dict) and cause.get("signal") == "220V"
                                     for cause in item["causes"])):
                         item.update(historical=True, countdown_required=False,
-                            historical_reason="PRE_POLICY_2_220V_STARTUP_INDICATION",
+                            historical_reason=("PRIOR_EXPERIMENT_SESSION" if prior_session
+                                else "PRE_POLICY_2_220V_STARTUP_INDICATION"),
                             prior_stop_state=saved["stop_state"], prior_stop_error=saved.get("stop_error", ""),
                             reclassified_utc=utc(self.wall()))
                         self.historical_incidents.append(copy.deepcopy(item))
@@ -347,11 +394,16 @@ class CoolingSafety(object):
             self._journal_loaded = True
             self.journal.adopt_loaded(self._state_image())
             for item in migrated:
-                self._event("LEGACY_220V_INCIDENT_RECLASSIFIED", item["circuit"],
+                self._event("PRIOR_EXPERIMENT_INCIDENT_ARCHIVED" if item["historical_reason"]
+                            == "PRIOR_EXPERIMENT_SESSION" else "LEGACY_220V_INCIDENT_RECLASSIFIED", item["circuit"],
                     incident_id=item["incident_id"], policy_version=POLICY_VERSION,
                     prior_policy_version=saved.get("policy_version", 1),
                     prior_stop_state=saved["stop_state"], prior_stop_error=saved.get("stop_error", ""),
                     historical_incident=copy.deepcopy(item), history_deleted=False)
+            if (saved is not None and self.experiment_session_id is not None
+                    and saved.get("experiment_session_id") != self.experiment_session_id
+                    and not self.incidents and self.stop_state != "NONE"):
+                self._retire_inactive_incidents("PRIOR_EXPERIMENT_SESSION")
         status = self.journal.status()
         self.journal_error = status["error"]
         return status
@@ -368,11 +420,21 @@ class CoolingSafety(object):
         with self.lock:
             self._observation_started = True
             self._sync_journal()
+            was_active = self.machine_active
             self.machine_active = machine_active
             self.quality = "FRESH" if all(c.get("quality") == "FRESH" for c in circuits.values()) else "UNKNOWN"
             if machine_active is not True:
                 self.armed.clear()
                 self.arming.clear()
+            if (machine_active is False and self.experiment_session_id is not None
+                    and self.stop_state != "REQUESTED" and (self.incidents or self.stop_state != "NONE")):
+                self._retire_inactive_incidents("HT_EXPERIMENT_INACTIVE")
+            if (self.experiment_session_id is not None and machine_active is True
+                    and was_active is not True):
+                # Runtime True now means qualified HT has actually appeared.
+                # Existing red at that point needs the same operator decision
+                # as a later green->red transition, without a startup timer.
+                self.armed.update(CIRCUITS)
             for name, reading in circuits.items():
                 if name not in CIRCUITS:
                     raise ValueError("Unknown cooling circuit")
@@ -425,8 +487,9 @@ class CoolingSafety(object):
         """Return one stop request, never a hardware command or process exit."""
         with self.lock:
             self._sync_journal()
-            self.automatic_stop_available = automatic_stop_available is True
-            due = any(item.get("confirmed") is not True and self.clock() >= item["deadline_monotonic"]
+            scope_active = self.experiment_session_id is None or self.machine_active is True
+            self.automatic_stop_available = automatic_stop_available is True and scope_active
+            due = scope_active and any(item.get("confirmed") is not True and self.clock() >= item["deadline_monotonic"]
                       for item in self.incidents.values())
             if due and self.stop_state in ("NONE", "UNAVAILABLE", "INTERRUPTED"):
                 if self.automatic_stop_available:
@@ -499,6 +562,7 @@ class CoolingSafety(object):
                     candidates.append(dict(incident_id=item["incident_id"], circuit=item["circuit"],
                         deadline_utc=item["deadline_utc"], remaining_seconds=public["remaining_seconds"]))
             return dict(schema_version=1, policy_version=POLICY_VERSION, timeout_seconds=TIMEOUT_SECONDS,
+                        experiment_session_id=self.experiment_session_id,
                         observed_utc=utc(self.wall()), machine_active=self.machine_active,
                         quality=self.quality, active=bool(items), circuits=items,
                         countdown_required=any(item["countdown_required"] for item in items),

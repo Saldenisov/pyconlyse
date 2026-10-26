@@ -331,6 +331,10 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         self._handover_verifier = handover_verifier
         self.broker = CommandBroker(self, enabled=remote_enabled, clock=self._clock)
         self.cooling = cooling if cooling is not None else CoolingSafety(clock=self._clock)
+        self.cooling.bind_experiment_session(self._identity["session_id"])
+        self._cooling_ht_active = False
+        self._cooling_ht_owner = None
+        self._cooling_ht_reason = "HT_NOT_APPLIED_IN_CURRENT_EXPERIMENT"
         self.cooling_polarity_verified = cooling_polarity_verified
         self._circuits = None
         self._cooling_read_at = None
@@ -347,6 +351,51 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         self._execution_progress = None
         self._software_state, self._software_received_at = None, None
         self._software_sequence, self._software_error = 0, ""
+
+    def _cooling_experiment_active(self, latest=None, received_at=None):
+        """Latch actual qualified HT exposure, not General or an HT setpoint.
+
+        Uses accepted NI input memory only. Missing/stale inputs, uncertain
+        ownership and native faults cannot clear an already active exposure.
+        """
+        backend = self._backend
+        if backend is None or not getattr(backend, "resource_count", 0):
+            return self._cooling_ht_active
+        isolated = getattr(backend, "isolation_snapshot", None)
+        native = isolated() if isolated is not None else {}
+        owner = (id(backend), native.get("worker_generation"))
+        if (getattr(backend, "startup_complete", False) is not True
+                or native.get("ownership_uncertain") is not False
+                or not owner[1] or getattr(backend, "ht_feedback_verified", False) is not True):
+            return self._cooling_ht_active
+        if self._cooling_ht_active and self._cooling_ht_owner != owner:
+            return True  # Another/unknown owner is not proof of zero HT.
+        age = None if received_at is None else self._clock() - received_at
+        tolerance = getattr(backend, "ht_zero_tolerance_kv", None)
+        if (not _finite_number(age) or not 0 <= age < 2
+                or not _finite_number(tolerance) or not 0 <= tolerance < 8
+                or type(latest) is not dict or latest.get("source") != "python_daqmx_acquisition"
+                or latest.get("simulated") is not False):
+            return self._cooling_ht_active
+        banks = latest.get("banks", {})
+        volts = banks.get("C2_NI6071E_AI", {}).get("legacy_scaled_values")
+        contacts = banks.get("C4_DIO96_DI", {}).get("values")
+        if (not isinstance(volts, (list, tuple)) or len(volts) != 64 or not _finite_number(volts[7])
+                or not isinstance(contacts, (list, tuple)) or len(contacts) != 64
+                or any(type(item) is not bool for item in contacts)):
+            return self._cooling_ht_active
+        if not self._cooling_ht_active:
+            if self._general_stop_required and contacts[48] is False and volts[7] > tolerance:
+                self._cooling_ht_active, self._cooling_ht_owner = True, owner
+                self._cooling_ht_reason = "FRESH_QUALIFIED_HT_APPLIED"
+        elif (contacts[48] is True and abs(volts[7]) <= tolerance and not self._pulse_stop_required):
+            self._cooling_ht_active = False
+            self._cooling_ht_reason = "FRESH_QUALIFIED_HT_ZERO_SUPPLY_OFF_PULSES_STOPPED"
+        return self._cooling_ht_active
+
+    def _observe_cooling_inputs(self, circuits, latest, received_at):
+        self.cooling.observe(circuits, self._cooling_experiment_active(latest, received_at),
+                             observation_id=self._sequence)
 
     def initialize_after_handover(self, startup_confirmed=False, electrical_off_confirmed=False,
                                   confirmation=None, operator=None):
@@ -494,7 +543,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 previous_read_at = self._cooling_read_at
                 self._circuits, unused = decode_publications(runtime_publications(sample))
                 self._cooling_read_at = self._received_at
-                self.cooling.observe(self._circuits, self._general_stop_required, observation_id=self._sequence)
+                self._observe_cooling_inputs(self._circuits, sample, self._received_at)
                 self._observe_supervised_cooling(previous_read_at)
 
     def _verify_cooling(self, backend, cancel):
@@ -514,7 +563,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 self._received_at = self._cooling_read_at = self._clock()
                 self._circuits = circuits
-                self.cooling.observe(circuits, self._general_stop_required, observation_id=self._sequence)
+                self._observe_cooling_inputs(circuits, sample, self._received_at)
         result = wait_for_cooling(backend.read_snapshot, cancel, observe,
                                   timeout=self._cooling_start_timeout, clock=self._clock)
         self._startup_phase = "COOLING_CONFIRMED"
@@ -578,13 +627,23 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         with self._lock:
             result = AcquisitionRuntime.deinitialize(self, electrical_off_confirmed)
             self._invalidate_cooling_readiness()
+            if electrical_off_confirmed is True:
+                self._end_cooling_experiment_locally()
             return result
 
     def request_shutdown(self, electrical_off_confirmed=False):
         with self._lock:
             result = AcquisitionRuntime.request_shutdown(self, electrical_off_confirmed)
             self._invalidate_cooling_readiness()
+            if electrical_off_confirmed is True:
+                self._end_cooling_experiment_locally()
             return result
+
+    def _end_cooling_experiment_locally(self):
+        self._cooling_ht_active, self._cooling_ht_owner = False, None
+        self._cooling_ht_reason = "LOCAL_ELECTRICAL_OFF_ATTESTED"
+        self.cooling.observe({name: dict(fault=None, quality="UNKNOWN", causes=[])
+            for name in ("CANON", "SECTION")}, False, observation_id=self._sequence)
 
     def general_stop(self, operator_confirmed=False):
         with self._lock:
@@ -686,14 +745,14 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             previous_read_at = self._cooling_read_at
             self._circuits, unused = decode_publications(runtime_publications(latest))
             self._cooling_read_at = self._clock()
-            self.cooling.observe(self._circuits, self._general_stop_required, observation_id=self._sequence)
+            self._observe_cooling_inputs(self._circuits, latest, self._cooling_read_at)
             self._observe_supervised_cooling(previous_read_at)
         return AcquisitionRuntime._run_cooling_guard(self, latest)
 
     def _observe_fault_diagnostic(self, latest):
         self._circuits, unused = decode_publications(runtime_publications(latest))
         self._cooling_read_at = self._clock()
-        self.cooling.observe(self._circuits, self._general_stop_required, observation_id=self._sequence)
+        self._observe_cooling_inputs(self._circuits, latest, self._cooling_read_at)
         self._invalidate_cooling_readiness()
 
     def _tick_cooling(self):
@@ -702,7 +761,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 if supervised_enabled(self._backend):
                     self._invalidate_cooling_readiness(end_epoch=False)
                 self.cooling.observe({name: dict(fault=None, quality="UNKNOWN", causes=[])
-                                     for name in ("CANON", "SECTION")}, self._general_stop_required)
+                                     for name in ("CANON", "SECTION")}, self._cooling_ht_active)
             ready = ((self._stop_qualified() or self._supervised_admission("modulator.general.stop"))
                      and not self._shutdown_requested and not self._stop_in_progress(self._operation))
             if self.cooling.tick(ready):
@@ -801,6 +860,9 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 and item.get("fault") is False for item in self._circuits.values())
                 and not self.cooling.snapshot()["active"])
             result["cooling_safety"] = self.cooling.snapshot()
+            result["cooling_safety"]["experiment_scope"] = dict(active=self._cooling_ht_active,
+                kind="QUALIFIED_HT_EXPOSURE", reason=self._cooling_ht_reason,
+                physical_off_confirmed=False)
             result["control"]["capabilities"] = command_capabilities(result)
             result["chroma_configuration"] = [dict(focale=row[0], xp_resource=row[1],
                 moxa_host="10.20.30.51", moxa_port=index + 1, voltage_v=row[2],

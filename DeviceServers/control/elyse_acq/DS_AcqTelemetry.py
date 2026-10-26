@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 from tango import DevState
 from tango.server import Device, attribute, command, device_property, run
 from DeviceServers.control.elyse_acq.telemetry_sink import TelemetrySinkServer, TelemetrySinkStore
-from legacy.xp_acq_agent.elyse_agent.cooling_safety import CoolingSafety
+from legacy.xp_acq_control.elyse_agent.cooling_safety import CoolingSafety
 
 
 class DS_AcqTelemetry(Device):
@@ -34,13 +34,14 @@ class DS_AcqTelemetry(Device):
 
     def init_device(self):
         self._closing = True
-        if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive')):
+        if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive', '_store', '_cooling')):
             self.delete_device()
-            if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive')):
+            if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive', '_store', '_cooling')):
                 raise RuntimeError("Previous telemetry owner did not exit; replacement refused")
         self._server = self._store = self._thread = None
         self._bridge = self._client = None
         self._archive = None
+        self._cooling = None
         super().init_device()
         self._python_source = self.producer_kind_filter in ("python_acquisition", "unified_acquisition")
         if not self.key_file:
@@ -57,6 +58,7 @@ class DS_AcqTelemetry(Device):
                 str(ROOT / "logs" / "elyse_cooling_alarms.sqlite3") if self.listen_host != "127.0.0.1" else "")
             cooling = (CoolingSafety.with_journal(journal_path, "labview_receiver")
                        if journal_path else CoolingSafety())
+            self._cooling = cooling
             if self.archive_config_file:
                 from DeviceServers.control.elyse_acq.telemetry_archive import DurableArchive
                 self._archive = DurableArchive(self.archive_config_file)
@@ -196,6 +198,12 @@ class DS_AcqTelemetry(Device):
         if self._store is not None:
             self._store.close()
             self._store = None
+        cooling = getattr(self, '_cooling', None)
+        if cooling is not None:
+            if cooling.close(timeout=3) is False:
+                self.warn_stream('Cooling journal still owned; replacement refused')
+                return
+            self._cooling = None
         archive = getattr(self, '_archive', None)
         if archive is not None:
             if not archive.close(15):
