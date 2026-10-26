@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 from legacy.xp_acq_control.elyse_agent.acquisition_backend import CardBackend
-from legacy.xp_acq_control.elyse_agent.hardware_tasks import prepare_driver_dependencies
+from legacy.xp_acq_control.elyse_agent.hardware_tasks import prepare_driver_dependencies, prepare_driver_runtime
 from legacy.xp_acq_control.elyse_agent.isolated_backend import IsolatedCardBackend
 
 
@@ -50,25 +50,61 @@ class DependencyBootstrapTests(unittest.TestCase):
 
     def test_real_backend_preparation_only_calls_import_helper_not_factory(self):
         backend = CardBackend()
-        with mock.patch("legacy.xp_acq_control.elyse_agent.hardware_tasks.prepare_driver_dependencies") as helper:
+        with mock.patch("legacy.xp_acq_control.elyse_agent.hardware_tasks.prepare_driver_dependencies") as helper, \
+                mock.patch("legacy.xp_acq_control.elyse_agent.hardware_tasks.prepare_driver_runtime") as native:
             backend.prepare_isolated_dependencies()
         helper.assert_called_once_with(backend._initialization_notice)
+        native.assert_called_once_with(backend._initialization_notice)
         self.assertIsNone(backend.owner)
         self.assertEqual(backend.resource_count, 0)
+
+    def test_lazy_native_metadata_prepares_without_calling_task_creation(self):
+        create = mock.Mock(side_effect=AssertionError("No DAQmxCreateTask call"))
+        library = mock.Mock(DAQmxCreateTask=create)
+        class Importer(object):
+            windll = library
+            task_handle = int
+        events = []
+        result = prepare_driver_runtime(events.append, Importer())
+        self.assertEqual(result["tasks_created"], 0)
+        self.assertFalse(create.called)
+        self.assertEqual([event["phase"] for event in events], ["ENTER", "RETURNED"] * 3)
+
+    def test_native_library_failure_does_not_attempt_typedef_or_task(self):
+        class Broken(object):
+            @property
+            def windll(self):
+                raise OSError("fixture missing NI library")
+            @property
+            def task_handle(self):
+                raise AssertionError("No continuation after library failure")
+        with self.assertRaises(OSError):
+            prepare_driver_runtime(importer=Broken())
 
 
 @unittest.skipUnless(os.environ.get("ACQ_IMPORT_ONLY_INTEGRATION") == "1",
                      "Optional development-host dependency imports, never live XP")
 class RealDependencyImportTests(unittest.TestCase):
     def test_actual_imports_complete_inside_full_worker_without_any_task(self):
+        self._check_worker(False)
+
+    def test_native_metadata_completes_before_pipe_reader_without_any_task(self):
+        self._check_worker(True)
+
+    def _check_worker(self, native_metadata):
         from tools.diagnose_acq_import_isolation import ImportOnlyBackend
-        backend = IsolatedCardBackend(backend_factory=ImportOnlyBackend, rpc_timeout=10)
+        backend = IsolatedCardBackend(backend_factory=ImportOnlyBackend,
+            backend_options=dict(native_metadata=native_metadata), rpc_timeout=10)
         try:
             result = backend.initialize(threading.Event(), startup_confirmed=True)
             self.assertEqual(result["tasks_created"], 0)
             self.assertIsNotNone(result["bootstrap_seconds"])
             self.assertLess(result["bootstrap_seconds"], 8.)
             self.assertLess(result["import_seconds"], 1.)
+            if native_metadata:
+                self.assertEqual(result["native_metadata"]["tasks_created"], 0)
+                self.assertEqual(len(result["bootstrap_events"]), 10)
+                self.assertEqual(result["bootstrap_events"][-1]["phase"], "RETURNED")
             self.assertNotIn("nidaqmx", sys.modules)  # Only this dedicated child imports it.
             backend.close()
             self.assertTrue(backend.isolation_snapshot()["cleanup_confirmed"])

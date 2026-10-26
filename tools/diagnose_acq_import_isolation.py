@@ -3,7 +3,8 @@
 Run on the development host, not on a live acquisition computer. The only
 backend admitted here is ImportOnlyBackend. Its private child may be reaped
 after a timeout because it contains no device handles, unlike production NI.
-Python 3.4 compatible. Optional installed nidaqmx is imported, not exercised.
+Python 3.4 compatible. Optional native metadata preparation loads the driver
+and queries its version; it never constructs a Task or addresses a card.
 """
 import argparse
 import json
@@ -15,12 +16,19 @@ import time
 
 
 class ImportOnlyBackend(object):
-    def __init__(self, numpy_first=False, diagnostic_path=None, legacy_order=False):
+    def __init__(self, numpy_first=False, diagnostic_path=None, legacy_order=False,
+                 native_metadata=False):
         self.numpy_first = numpy_first
         self.diagnostic_path = diagnostic_path
         self.legacy_order = legacy_order
         self.bootstrap_seconds = None
         self.resource_count = 0
+        self.native_metadata = native_metadata
+        self.native_result = None
+        self.bootstrap_events = []
+
+    def _bootstrap_notice(self, event):
+        self.bootstrap_events.append(event)
 
     def prepare_isolated_dependencies(self):
         if self.legacy_order:
@@ -28,7 +36,10 @@ class ImportOnlyBackend(object):
         assert not any(t.name == "ACQ-NI-child-ingress" for t in threading.enumerate())
         from legacy.xp_acq_control.elyse_agent.hardware_tasks import prepare_driver_dependencies
         started = time.monotonic()
-        prepare_driver_dependencies()
+        prepare_driver_dependencies(self._bootstrap_notice)
+        if self.native_metadata:
+            from legacy.xp_acq_control.elyse_agent.hardware_tasks import prepare_driver_runtime
+            self.native_result = prepare_driver_runtime(self._bootstrap_notice)
         self.bootstrap_seconds = time.monotonic() - started
 
     def initialize(self, cancel, startup_confirmed=False):
@@ -47,7 +58,9 @@ class ImportOnlyBackend(object):
             self._diagnostic_stream.close()
         return dict(import_seconds=time.monotonic() - started,
                     bootstrap_seconds=self.bootstrap_seconds,
-                    dependency_path=nidaqmx.__file__, tasks_created=0)
+                    dependency_path=nidaqmx.__file__, tasks_created=0,
+                    native_metadata=self.native_result,
+                    bootstrap_events=self.bootstrap_events)
 
     def close(self):
         pass

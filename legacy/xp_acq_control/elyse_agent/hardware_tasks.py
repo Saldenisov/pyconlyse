@@ -55,6 +55,38 @@ def prepare_driver_dependencies(observer=None):
     return result
 
 
+def prepare_driver_runtime(observer=None, importer=None):
+    """Warm lazy NI library/handle metadata before the child stdin pump.
+
+    Python module import does not load nicaiu or resolve TaskHandle in the
+    legacy binding. Task's constructor does both lazily. Version metadata is
+    queried here inside confirmed Initialize, but no Task/channel/start/write
+    is called. This is not a cold application-startup action.
+    """
+    if importer is None:
+        from nidaqmx._lib import lib_importer
+        importer = lib_importer
+    def call(label, callback):
+        def note(phase):
+            if observer is not None:
+                try:
+                    observer(dict(phase=phase, call=label, hardware_acknowledged=False))
+                except Exception:
+                    pass
+        note("ENTER")
+        try:
+            value = callback()
+        except Exception:
+            note("RAISED")
+            raise
+        note("RETURNED")
+        return value
+    library = call("load NI nicaiu library (no Task)", lambda: importer.windll)
+    handle = call("resolve NI TaskHandle driver-version metadata (no Task)", lambda: importer.task_handle)
+    call("resolve DAQmxCreateTask symbol (not invoked)", lambda: library.DAQmxCreateTask)
+    return dict(task_handle_type=handle.__name__, tasks_created=0, driver_version_metadata_queried=True)
+
+
 class TaskCleanupError(RuntimeError):
     def __init__(self, failures):
         self.failures = failures

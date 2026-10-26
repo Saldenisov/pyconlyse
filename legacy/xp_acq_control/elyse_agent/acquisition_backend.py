@@ -793,14 +793,16 @@ class CardBackend(SourceControls, _StageState):
                                     hardware_acknowledged=False))
 
     def prepare_isolated_dependencies(self):
-        """Import-only isolated-child bootstrap, before its stdin pump starts.
+        """Load modules and native driver metadata before the stdin pump starts.
 
         No calls on injected/offline factories. This is not a public operation
-        and cannot configure, start, read, write or release any card.
+        and cannot create, configure, start, read, write or release any card.
+        Driver-version metadata queries do not acquire a card task.
         """
         if self.factory is create_legacy_card_tasks:
-            from .hardware_tasks import prepare_driver_dependencies
+            from .hardware_tasks import prepare_driver_dependencies, prepare_driver_runtime
             prepare_driver_dependencies(self._initialization_notice)
+            prepare_driver_runtime(self._initialization_notice)
 
     def initialize(self, cancel, startup_confirmed=False):
         self._ensure_execution_not_reentrant()

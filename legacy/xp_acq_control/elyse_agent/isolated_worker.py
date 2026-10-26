@@ -245,7 +245,7 @@ class Worker(object):
             self.ingress_worker.start()
 
     def _await_initialization_activation(self):
-        """No native call before the parent accepts the prepared dependency set.
+        """No card task before the parent accepts prepared modules/metadata.
 
         Read on this main thread; the stdin pump is still absent. Cancellation
         queued while imports ran is consumed here, not raced against Task calls.
@@ -443,7 +443,7 @@ class Worker(object):
                     self._trace_initialization(dict(phase="ENTER", call="await_initialization_activation"))
                     self._await_initialization_activation()
                     self._trace_initialization(dict(phase="RETURNED", call="await_initialization_activation"))
-                    # Cancellation ingress is live before any native operation.
+                    # Cancellation ingress is live before task/card operations.
                     self._start_ingress()
                     with self.state_lock:
                         self.diagnostic_phase = "INITIALIZE_BACKEND"

@@ -29,7 +29,8 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'acq-unified-synchronization-20261025-v8-r9'
+    assert result['release'] == 'acq-unified-native-bootstrap-20261026-v8-r10'
+    assert 'TaskHandle metadata before stdin reader' in result['native_bootstrap']
     assert result['native_analog_processing'] == 'last_raw_sample_of_finite_block'
     assert result['native_software_averaging'] is False
     assert result['native_finite_samples_per_channel'] == 10
