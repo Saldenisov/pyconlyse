@@ -1,0 +1,625 @@
+{
+  "schema_version": 1,
+  "observed_scope": "explicit native SuperVision startup and read-only transport verification",
+  "supervision": {
+    "host": "10.20.30.2",
+    "installation": "C:\\ELYSE_Orchestrator_Supervision_r18",
+    "session_id": "0a357d810e4d452489eaa8d18a1fdfdf",
+    "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+    "state": "RUNNING",
+    "resource_count": 10
+  },
+  "stability": {
+    "observations": [
+      {
+        "observed_utc": "2026-10-26T17:06:51.890053+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1809,
+            "sample_age_seconds": 0.07800000000133878,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1631,
+            "sample_age_seconds": 0.07800000000133878,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.29599999997299165,
+        "direct_sequence": 1631,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1629,
+        "ds_video_age": 0.7030000000013388,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3744,
+        "acq_max_age": 0.5469999999986612,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1556,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:06:53.022570+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1814,
+            "sample_age_seconds": 0.125,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1635,
+            "sample_age_seconds": 0.3280000000013388,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.15499999997700797,
+        "direct_sequence": 1636,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1633,
+        "ds_video_age": 0.7499999999854481,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3748,
+        "acq_max_age": 0.31199999999807915,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1561,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:06:54.131811+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1819,
+            "sample_age_seconds": 0.031000000002677552,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1640,
+            "sample_age_seconds": 0.10900000000401633,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": false,
+        "direct_video_age": null,
+        "direct_sequence": null,
+        "direct_unavailable_reason": "VIDEO_NOT_CURRENT",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1637,
+        "ds_video_age": 0.9369999999980791,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3751,
+        "acq_max_age": 0.4069999999846914,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1565,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:06:55.290261+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1824,
+            "sample_age_seconds": 0.07899999999790452,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1644,
+            "sample_age_seconds": 0.21899999999732245,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.09400000001915032,
+        "direct_sequence": 1645,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1641,
+        "ds_video_age": 1.0929999999716529,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3755,
+        "acq_max_age": 0.2970000000059372,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1570,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:06:56.456477+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1829,
+            "sample_age_seconds": 0.125,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1649,
+            "sample_age_seconds": 0.10899999999674037,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": false,
+        "direct_video_age": null,
+        "direct_sequence": null,
+        "direct_unavailable_reason": "VIDEO_NOT_CURRENT",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1645,
+        "ds_video_age": 1.1090000000185682,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3759,
+        "acq_max_age": 0.23500000004423782,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1574,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:06:57.554551+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1834,
+            "sample_age_seconds": 0.1559999999954016,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1653,
+            "sample_age_seconds": 0.23399999999674037,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.21900000001915032,
+        "direct_sequence": 1654,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1649,
+        "ds_video_age": 1.2660000000250875,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3761,
+        "acq_max_age": 0.5160000000032596,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1578,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:06:58.646029+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1839,
+            "sample_age_seconds": 0.20300000000133878,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1658,
+            "sample_age_seconds": 0.14100000000325963,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.2349999999642023,
+        "direct_sequence": 1658,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1653,
+        "ds_video_age": 1.3899999999557622,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3764,
+        "acq_max_age": 0.4849999999642023,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1583,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:06:59.873638+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1844,
+            "sample_age_seconds": 0.20300000000133878,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1662,
+            "sample_age_seconds": 0.23500000000058208,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.3119999999762513,
+        "direct_sequence": 1662,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1661,
+        "ds_video_age": 0.5150000000212458,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3768,
+        "acq_max_age": 0.34399999996458064,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1587,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:07:00.980010+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1849,
+            "sample_age_seconds": 0.17199999999866122,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1667,
+            "sample_age_seconds": 0.11000000000058208,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.2970000000204891,
+        "direct_sequence": 1667,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1665,
+        "ds_video_age": 0.6090000000040163,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3771,
+        "acq_max_age": 0.3589999999785505,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1592,
+        "delivery_error": ""
+      },
+      {
+        "observed_utc": "2026-10-26T17:07:02.206312+00:00",
+        "session": "0a357d810e4d452489eaa8d18a1fdfdf",
+        "build_id": "8b7f4562653ba220ac973f48a487485862cff028ff4b787dac20bc3a66a008b5",
+        "state": "RUNNING",
+        "error": "",
+        "cards": {
+          "sync": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1854,
+            "sample_age_seconds": 0.23500000000058208,
+            "started_counters": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "video": {
+            "state": "READY",
+            "error": "",
+            "input_current": true,
+            "sample_sequence": 1671,
+            "sample_age_seconds": 0.20300000000133878,
+            "started_counters": []
+          }
+        },
+        "worker_pids": {
+          "sync": 4624,
+          "video": 4044
+        },
+        "generations": {
+          "sync": "c8861511a29e44428211b12da98977ab",
+          "video": "e3f79a161c824c5cab0cf7aa10314551"
+        },
+        "direct_video_available": true,
+        "direct_video_age": 0.12500000002182787,
+        "direct_sequence": 1672,
+        "direct_unavailable_reason": "",
+        "ds_video_available": true,
+        "ds_video_stale": false,
+        "ds_sequence": 1669,
+        "ds_video_age": 0.7339999999530846,
+        "acq_bank_count": 27,
+        "acq_receiver_count": 3775,
+        "acq_max_age": 0.2190000000409782,
+        "all_acq_sequences_advanced": true,
+        "ACK": 1596,
+        "delivery_error": ""
+      }
+    ],
+    "api_read_attempts": 10,
+    "direct_video_available": 8,
+    "ds_video_available": 10,
+    "all_runtime_running": true,
+    "all_acq_27_current": true,
+    "generations_unchanged": true,
+    "physical_pulses_measured": false,
+    "laser_spot_confirmed": false,
+    "commands_or_repairs_sent": false
+  },
+  "cleanup_prior_run": {
+    "state": "IDLE",
+    "resource_count": 0,
+    "error": "",
+    "source_receipt": "supervision_r17_deinitialized.json"
+  },
+  "web": {
+    "started_utc": "2026-10-26T17:00:44.799495+00:00",
+    "old_pid": 44480,
+    "old_build": "C:\\dev\\pyconlyse\\web\\frontend\\build.rollback-20261026T170037Z",
+    "new_build": "F:\\ELYSE_Orchestrators\\supervision_takeover_20261026\\web_candidate_20261026T165347Z",
+    "backend_sources": "F:\\ELYSE_Orchestrators\\supervision_takeover_20261026\\web_backup\\camera_20261026T165347Z",
+    "hardware_commands_sent": false,
+    "device_servers_restarted": false,
+    "new_pid": 43956,
+    "result": "VERIFIED",
+    "last_verification_error": "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>",
+    "verified_utc": "2026-10-26T17:00:49.739750+00:00",
+    "telemetry_quality": "FRESH",
+    "bank_count": 27,
+    "video_sequence": 191,
+    "video_shape": [
+      768,
+      576
+    ]
+  },
+  "tests": {
+    "python312_passed": 166,
+    "python34_passed": 57,
+    "python34_skipped": 3,
+    "live_web_react_passed": 116,
+    "live_web_backend_passed": 24
+  },
+  "limits": [
+    "Physical pulse waveforms and external PFI11 frequency not measured",
+    "Visible laser spot not confirmed",
+    "Raw capture precedes legacy Vision image processing",
+    "Acquisition VI and native cards not controlled",
+    "SuperVision VI raw exporter remains unauthored/unqualified"
+  ]
+}

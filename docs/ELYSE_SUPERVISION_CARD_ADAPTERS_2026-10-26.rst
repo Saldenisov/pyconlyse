@@ -5,8 +5,9 @@ Scope and provenance
 --------------------
 
 Two local NI boards are represented: NI6602 ``Dev1`` and NI1409 ``img0``.
-The parent investigation independently observed these entries in read-only
-NI MAX on 10.20.30.2. No board was reserved or initialized by this work.
+The initial investigation independently observed these entries in read-only
+NI MAX on 10.20.30.2. The subsequent explicitly authorized native startup and
+cleanup are recorded in ``ELYSE_SUPERVISION_NATIVE_ROLLOUT_2026-10-26.rst``.
 
 ``tools.validate_supervision_card_sources`` validates original extraction
 receipts, original VI bytes, raw block-diagram XML and front-panel defaults.
@@ -45,6 +46,15 @@ writer, in contrast, writes a requested delay to both InitialDelay and LowTicks.
 Neither software agreement proves the actual external clock frequency or
 electrical pulse timing.
 
+An optional reviewed local ``initial_sync_values_us`` configuration can replace
+only the16 LowTicks/HighTicks-derived UI values. It is validated completely
+before any task; all eight override configurations complete before the first
+start. InitialDelay=0 and all source routes/modes remain. Omission retains
+source constants and per-frame starts. Source memory provenance and the
+conflicting mirrored/direct front-panel observations are documented in
+``ELYSE_SUPERVISION_INITIAL_SYNC_PROFILE_2026-10-26.rst``; mirrored Acquisition
+values are never automatically applied as current SuperVision hardware timing.
+
 ``SupervisionCounterCard`` is cold at construction. Explicit local release and
 start confirmations precede driver loading. Initialization starts counters in
 source frame order. Partial construction/configuration retains every returned
@@ -74,8 +84,9 @@ source defaults rather than a fresh readback from a running VI.
 
 ``SupervisionVideoCard`` requires those three explicit configuration fields.
 ``CtypesIMAQ`` defers the installed 32-bit ``imaq.dll`` load until explicit
-initialization. Function prototypes and attribute IDs are checked against the
-installed NI-IMAQ ``niimaq.h`` (not NI-IMAQdx). Standard functions use stdcall;
+initialization. The binding targets the NI-IMAQ C API (not NI-IMAQdx); this
+repository does not retain an independently audited target ``niimaq.h``.
+Standard functions use stdcall;
 variadic ``imgSetAttribute2`` uses cdecl with typed U32/double arguments.
 
 The native path is interface open, session open, white/black/channel attributes,
@@ -89,8 +100,10 @@ software grab observation, not a hardware exposure counter or timestamp.
 The adapter deliberately publishes raw frames before the source Vision
 interlace, BCG, centroid/profile and display operations. It does not pretend
 that the nine legacy Vision processing buffers are implemented. Native frame
-lifetime, installed XP DLL compatibility and actual geometry require the first
-explicit hardware qualification; RAM tests are not that qualification.
+lifetime, installed XP DLL compatibility and actual geometry require explicit
+hardware qualification; RAM tests are not that qualification. The first live
+startup returned changing 768x576 U8 frames and the normal close completed;
+this qualifies that observed path, not every NI1409 mode or optical signal.
 
 ``C12NI1409`` in the standard 27-bank schema is a String variant, not pixels.
 Raw image frames require a separate bounded image stream/attribute. Neither

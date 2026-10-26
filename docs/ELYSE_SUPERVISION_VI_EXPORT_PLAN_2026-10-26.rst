@@ -17,9 +17,11 @@ work. Existing builders assemble copies of previously native-authored VIs;
 they are not an offline LabVIEW diagram compiler. The new Python typed ingress
 does not, by itself, create a working LabVIEW producer.
 
-Before 18:00 Europe/Paris on 2026-10-26, only offline inspection and preparation
-are authorized. The earliest authorized SuperVision VI stop/rework window is
-18:00 CET, 17:00 UTC, that day. This document and preparation script perform
+The initial authorization limited live work to after18:00 Europe/Paris on
+2026-10-26. A later explicit user instruction authorized immediate SuperVision
+VI stop and native synchronization/camera takeover, superseding that time
+restriction. The parent alone performs live UI/hardware actions; this offline
+source task does not perform the authorized takeover. The preparation script performs
 no scheduled or automatic live action. No running VI, card, camera, clock,
 client command or unrelated main LabVIEW/TRANCON work is touched. A later
 native editing session must remain scoped to copied SuperVision sources and
@@ -73,7 +75,7 @@ states ``live_canonical_source_bound=false`` and
 ``authoring_workspace_bound=false``. Neither a matching VI title nor the
 offline helper hashes satisfy that binding.
 
-Only after the authorized 18:00 stop window, identify the exact live/canonical
+After the authorized normal stop, identify the exact live/canonical
 SuperVision main path, project/application context and dependency locations.
 Record any unsaved in-memory changes; a disk hash alone does not attest a
 modified loaded diagram. Normally stop the scoped VI before copying or editing.

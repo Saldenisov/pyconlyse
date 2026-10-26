@@ -1,0 +1,568 @@
+{
+  "NI_access": false,
+  "VI_execution": false,
+  "all_backup_file_hashes_match": true,
+  "backup_file_count": 58,
+  "backup_finished_utc": "2026-10-26T16:43:30.250000Z",
+  "backup_receipt": "C:\\Users\\elyse\\AppData\\Local\\Temp\\elyse-supervision-takeover-eb67a984ecd04a62a3cc5ae8725deccb\\supervision_source_backup_flat_receipt.json",
+  "backup_receipt_sha256": "8db9bd2213dca13c15aa32c449d2dcdbde8813e883e25ddbb0bb18b1e9c75819",
+  "backup_total_bytes": 2973581,
+  "boundaries": [
+    "Canonical embeddedmain/initializer/writer bytes match pinnedoriginals; previouslyloaded helperresolution is notattested",
+    "Project initializer/writer URLs name G:/PILOTAGE_ELYSE_SUP_moteurs/SUPERVISIONAudrey.llb, absentfromthisfolderbackup; do not infer resolvedloadedpath",
+    "Folderbackup is not acomplete installedNI/Vision/systemdependencyclosure",
+    "Sourcecontrol/saveddefaults do not independentlymeasure tasksettings/electricalpulse timing",
+    "NormalVIstopcleanup source inventory is notliveproof of successfulcleanup or physicalstate"
+  ],
+  "camera_grab": false,
+  "camera_saved_defaults": {
+    "black_reference_v": 0.1,
+    "channel": 2,
+    "interface": "img0",
+    "raw_python_capture_equals_full_legacy_vision_pipeline": false,
+    "white_reference_v": 0.9
+  },
+  "canonical_llb_sha256": "d427b2ba8544e4ffd6868f4e2ef74762363c7c713e30b2ff151e5f5ad168bcf4",
+  "canonical_project_sha256": "f93b9043c87853e69f7663a699aa52917c5a3968bf52bd5f97ada2e2d6dd97d1",
+  "counter_defaults": {
+    "all8_source_tasks_started": true,
+    "delay_width_pairs_us": [
+      [
+        0.35,
+        0.35
+      ],
+      [
+        2176.0,
+        100.0
+      ],
+      [
+        2008.3,
+        10.0
+      ],
+      [
+        2175.0,
+        10.0
+      ],
+      [
+        2175.0,
+        100.0
+      ],
+      [
+        500.0,
+        500.0
+      ],
+      [
+        0.3,
+        10.0
+      ],
+      [
+        2175.0,
+        100.0
+      ]
+    ],
+    "initial_delay_ticks": 0,
+    "physical_clock_hz_measured": false,
+    "start_trigger": "/Dev1/PFI10",
+    "timebase": "/Dev1/PFI11"
+  },
+  "extraction_method": "pylabview VI/UCRF.getData with original backup filesystem stream held open, no VI execution",
+  "extraction_warnings": [
+    "Archive CONP/CPC2 section1 complex parsing unimplemented; raw UCRF reads used, and3extractedmemberhashes independentlymatch originalpins"
+  ],
+  "extractor_module": "C:\\dev\\ELYSE-ACQ-analysis\\converter\\lvkit\\src\\lvkit\\extractor.py",
+  "extractor_module_sha256": "45e3d33a44f24447baacf4ab04ab5615e8c05ffea6efbb6ed3540aedf918890f",
+  "file_checks": [
+    {
+      "backup_file": "00000.txt",
+      "bytes": 420,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\configReport_LV2009.txt",
+      "sha256": "e9310bc6226d869606a89d8d7ecbadd4ec5118b343a40db161b35dccc8efa03e",
+      "verified": true
+    },
+    {
+      "backup_file": "00001.aliases",
+      "bytes": 55,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\SUPERVISION.aliases",
+      "sha256": "e76407f290ff7f04dd6263406dbbfb913578f10663a16e5413d9699a81109408",
+      "verified": true
+    },
+    {
+      "backup_file": "00002.llb",
+      "bytes": 2232683,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\SUPERVISION.llb",
+      "sha256": "d427b2ba8544e4ffd6868f4e2ef74762363c7c713e30b2ff151e5f5ad168bcf4",
+      "verified": true
+    },
+    {
+      "backup_file": "00003.lvproj",
+      "bytes": 42531,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\SUPERVISION.lvproj",
+      "sha256": "f93b9043c87853e69f7663a699aa52917c5a3968bf52bd5f97ada2e2d6dd97d1",
+      "verified": true
+    },
+    {
+      "backup_file": "00004.ctl",
+      "bytes": 6660,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C1011NI6602.ctl",
+      "sha256": "cfd246d993853730acb1a6efa9bdc425c120a14f87167628e2d89be5652571ef",
+      "verified": true
+    },
+    {
+      "backup_file": "00005.ctl",
+      "bytes": 4070,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C12NI1409.ctl",
+      "sha256": "92789a8136ed089eda1effcdc0eb06553d00c051fdaad3bb53be68275f0862d1",
+      "verified": true
+    },
+    {
+      "backup_file": "00006.ctl",
+      "bytes": 9382,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C1NI6071E.ctl",
+      "sha256": "9d54aa74cbd8421a5deaebce5519b438c365433df18825b49b3e7631740c9847",
+      "verified": true
+    },
+    {
+      "backup_file": "00007.ctl",
+      "bytes": 9262,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C2NI6071E.ctl",
+      "sha256": "ab3f5125b9fb676e9eb41d8daff2863f335021ce6ada1822dc3348c3e517e1f3",
+      "verified": true
+    },
+    {
+      "backup_file": "00008.ctl",
+      "bytes": 8496,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C3_IN_DIO96.ctl",
+      "sha256": "f12af0e1b2a9e7ca752edd8b5974f88d088ddd7e6384adf21371d8479841ec5b",
+      "verified": true
+    },
+    {
+      "backup_file": "00009.ctl",
+      "bytes": 7313,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C3_OUT_DIO96.ctl",
+      "sha256": "e68e738779641f265cdd45d39b5f21e8ae7d6df81d2755032cd2804afae1a866",
+      "verified": true
+    },
+    {
+      "backup_file": "00010.ctl",
+      "bytes": 9432,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C4_IN_DIO96.ctl",
+      "sha256": "5d92ea1e672087fecbab8d7603e7deb1714f1d5be79da9e48ed8ebdb3cb25d7a",
+      "verified": true
+    },
+    {
+      "backup_file": "00011.ctl",
+      "bytes": 6861,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C4_OUT_DIO96.ctl",
+      "sha256": "ae53200223ede7235517144df60d06e17ce570d49c7888843c9bb2942634421b",
+      "verified": true
+    },
+    {
+      "backup_file": "00012.ctl",
+      "bytes": 8624,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C5_IN_DIO96.ctl",
+      "sha256": "b6ac8620ac19e7d829615f371d2000c9af491c6991dc46e6d57c470043ca2fc6",
+      "verified": true
+    },
+    {
+      "backup_file": "00013.ctl",
+      "bytes": 7349,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C5_OUT_DIO96.ctl",
+      "sha256": "ac85e510cd846de663c190e8633eacc4704fdbaca763e69ac90373633e47afd9",
+      "verified": true
+    },
+    {
+      "backup_file": "00014.ctl",
+      "bytes": 5345,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C6NI6703.ctl",
+      "sha256": "d3bde8cbafc3ed122cc12fcbe15f00ed302d8ab2078b5f54fafb8e3695ef17e3",
+      "verified": true
+    },
+    {
+      "backup_file": "00015.ctl",
+      "bytes": 5385,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C7NI6703.ctl",
+      "sha256": "d44571926c2d5f238b6c580b6fd0424178561ee3b0c9dd81e6cdc9c7ef070b07",
+      "verified": true
+    },
+    {
+      "backup_file": "00016.ctl",
+      "bytes": 5477,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C8NI6703.ctl",
+      "sha256": "155c3e5034b22b8ef6d61929487892df130908544d9e27ce523be0d82a50fb9f",
+      "verified": true
+    },
+    {
+      "backup_file": "00017.ctl",
+      "bytes": 5381,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\C9NI6703.ctl",
+      "sha256": "e8f64d1274a95d9dc9861904d94a4e227f5f02f75c62a6f67e6bb99f806285a9",
+      "verified": true
+    },
+    {
+      "backup_file": "00018.ctl",
+      "bytes": 4672,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\DPC.ctl",
+      "sha256": "70d8a866f9248302a113f62ab0b0cd2560a4acb35cab5dcd712c9f2083470c52",
+      "verified": true
+    },
+    {
+      "backup_file": "00019.ctl",
+      "bytes": 6164,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\DPS.ctl",
+      "sha256": "ce2fa894ba1f00966f11d565819c0ff88b857c48a39551e9b3abb18f60a00233",
+      "verified": true
+    },
+    {
+      "backup_file": "00020.ctl",
+      "bytes": 5140,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\EPC.ctl",
+      "sha256": "7407f52c0f8172fdff38e8f2d37ff1a2e412f7a6ae1ae33d6628da07d363de98",
+      "verified": true
+    },
+    {
+      "backup_file": "00021.ctl",
+      "bytes": 9136,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\EPS.ctl",
+      "sha256": "1a7dd7be89598a7acd550c237bef41f714b029149e6b0e91fd2c02d469acc3b3",
+      "verified": true
+    },
+    {
+      "backup_file": "00022.ctl",
+      "bytes": 4128,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\FARADAY.ctl",
+      "sha256": "a757392a1ef7974273fe4e2f2159ca88360f2f791d5e3fb9159a01853261b09d",
+      "verified": true
+    },
+    {
+      "backup_file": "00023.ctl",
+      "bytes": 4312,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\Fr\u00e9quence Elyse.ctl",
+      "sha256": "2f6ffda50b3fb5a3b88b6a69691946b27f04c2e846a71b6cd3b611fa529b58f0",
+      "verified": true
+    },
+    {
+      "backup_file": "00024.ctl",
+      "bytes": 7564,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\VAD.ctl",
+      "sha256": "a0fedfd163903c6fa4b7fbed919bdfd68693cea141a80f85fa9acc9e3358945c",
+      "verified": true
+    },
+    {
+      "backup_file": "00025.ctl",
+      "bytes": 7666,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\VAM-A.ctl",
+      "sha256": "b37cf0b7f2954d82264628df05bf8f249bb74c4744a6edaa35cad7520ea15993",
+      "verified": true
+    },
+    {
+      "backup_file": "00026.ctl",
+      "bytes": 7554,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\VAM-S.ctl",
+      "sha256": "34fe9c2c945bf3f66b075a944225c9a1e2eb252919f16a0dfcce39c506271841",
+      "verified": true
+    },
+    {
+      "backup_file": "00027.ctl",
+      "bytes": 7428,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\VDD.ctl",
+      "sha256": "49af103dead631655da2be8c29870d1ec2b5cff8c7006ada56ea6abfda6f5f13",
+      "verified": true
+    },
+    {
+      "backup_file": "00028.ctl",
+      "bytes": 7490,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\VDM-A.ctl",
+      "sha256": "e09dc33d82ade994c1ab8cb22d9e4bea2741b7af47740e52059f21ffe1bec191",
+      "verified": true
+    },
+    {
+      "backup_file": "00029.ctl",
+      "bytes": 7438,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\VDM-S.ctl",
+      "sha256": "cd8a84faab18bd0383eaa9fb428f3e9c4a055b8e5207bbb7f04613125012a6df",
+      "verified": true
+    },
+    {
+      "backup_file": "00030.ctl",
+      "bytes": 4592,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\VTA-S-L.ctl",
+      "sha256": "ba65612ed2844d6a3d12b28fdd02d21bd206301a1dafedce37e6af73a23470b4",
+      "verified": true
+    },
+    {
+      "backup_file": "00031.ctl",
+      "bytes": 6484,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C1011NI6602.ctl",
+      "sha256": "0b207ed9a2743ba790ebb127072d100a4501613a21abad34fb4f5fd534a01c0d",
+      "verified": true
+    },
+    {
+      "backup_file": "00032.ctl",
+      "bytes": 9566,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C1NI6071E.ctl",
+      "sha256": "9fa96ccdc7c51d1ec56deeb7bdaf968a5b2058534dd6432320b94554a252f616",
+      "verified": true
+    },
+    {
+      "backup_file": "00033.ctl",
+      "bytes": 9418,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C2NI6071E.ctl",
+      "sha256": "12bc89104ad282aa995b0376fe4188572742bd7bdcae4f8017fe7c3e3b88668b",
+      "verified": true
+    },
+    {
+      "backup_file": "00034.ctl",
+      "bytes": 8616,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C3_IN_DIO96.ctl",
+      "sha256": "642d17d724b6f3924afc334ac00215c3ee5e150a9eaf5c3575b6c3e5cd95f57b",
+      "verified": true
+    },
+    {
+      "backup_file": "00035.ctl",
+      "bytes": 7453,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C3_OUT_DIO96.ctl",
+      "sha256": "eb997061fa39fce377d9dd0d713f0283c17c02987132165ab9c6f202dab448d3",
+      "verified": true
+    },
+    {
+      "backup_file": "00036.ctl",
+      "bytes": 9536,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C4_IN_DIO96.ctl",
+      "sha256": "d2321675f7dc6950b570d1fe73aa24258a702972543b3e7b9174e853143301ee",
+      "verified": true
+    },
+    {
+      "backup_file": "00037.ctl",
+      "bytes": 6981,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C4_OUT_DIO96.ctl",
+      "sha256": "68d26f044eaee3b124491bc9307c104cb81abb0130e28eac14d4d72960b84f64",
+      "verified": true
+    },
+    {
+      "backup_file": "00038.ctl",
+      "bytes": 8756,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C5_IN_DIO96.ctl",
+      "sha256": "7d5262c1554135dc3ca6a5bd517c3dbee95f0bf1af3764836fb3a8be8ab372f8",
+      "verified": true
+    },
+    {
+      "backup_file": "00039.ctl",
+      "bytes": 7481,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C5_OUT_DIO96.ctl",
+      "sha256": "223fc1275b6812ff1676e0e6c917d024c9916f7c03b4504e6711c296f4ccdba4",
+      "verified": true
+    },
+    {
+      "backup_file": "00040.ctl",
+      "bytes": 5477,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C6NI6703.ctl",
+      "sha256": "2896b8ef0c4a5efa8a66703f613dfa524334b32a34207519e047fc04242d249e",
+      "verified": true
+    },
+    {
+      "backup_file": "00041.ctl",
+      "bytes": 5529,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C7NI6703.ctl",
+      "sha256": "265257c020f09729dd90ee992d99efc9df7f515b3917a7913e84a533e2334437",
+      "verified": true
+    },
+    {
+      "backup_file": "00042.ctl",
+      "bytes": 5617,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C8NI6703.ctl",
+      "sha256": "fc0db4d483edd27d75477be3bbbab8c8e884a641afb5df064a52058c4892bd00",
+      "verified": true
+    },
+    {
+      "backup_file": "00043.ctl",
+      "bytes": 5529,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\C9NI6703.ctl",
+      "sha256": "f8b78adb5378625b5ff06cdbdf675aca13c41e63367a0fe2a32679340784ef85",
+      "verified": true
+    },
+    {
+      "backup_file": "00044.ctl",
+      "bytes": 4640,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\DPC.ctl",
+      "sha256": "7745524dd8085abb9d2b0a68f88146a31eb9d263bb31fc85cf3c20af31dadd6d",
+      "verified": true
+    },
+    {
+      "backup_file": "00045.ctl",
+      "bytes": 5840,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\DPS.ctl",
+      "sha256": "d3d0cb88af92ffb37fbcdcac9546852a132051d05db966f87c854946b7f9a4c4",
+      "verified": true
+    },
+    {
+      "backup_file": "00046.ctl",
+      "bytes": 5096,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\EPC.ctl",
+      "sha256": "11a7a5c4ff6d713257f93b110c8793225661f15fa5b9906d9537c6cfbcff8788",
+      "verified": true
+    },
+    {
+      "backup_file": "00047.ctl",
+      "bytes": 8692,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\EPS.ctl",
+      "sha256": "347dfce937fec5007aa06c146e334911cd38230f0a761d8b00c3af140a6c34c4",
+      "verified": true
+    },
+    {
+      "backup_file": "00048.ctl",
+      "bytes": 4338,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\IOcmd.ctl",
+      "sha256": "a106fa8489ee2083cbc0599e384845ca1a0fbd4686af7824f4fe9e183a67ad48",
+      "verified": true
+    },
+    {
+      "backup_file": "00049.ctl",
+      "bytes": 9773,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\MARA.ctl",
+      "sha256": "9c6330a9b51b4717e29b30592203d55760f41f951516a8e8772cb7802e188b23",
+      "verified": true
+    },
+    {
+      "backup_file": "00050.ctl",
+      "bytes": 10597,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\MARE.ctl",
+      "sha256": "dc97eaed419a3db503436965dc9cb1bcce7619245ecf6910f1db40fa09511e33",
+      "verified": true
+    },
+    {
+      "backup_file": "00051.ctl",
+      "bytes": 7509,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\VANA.ctl",
+      "sha256": "e5ebcc34e4bcbf6acbb96f411893c83581b6c1fcdce96f77a7c8f38ae2e2c85e",
+      "verified": true
+    },
+    {
+      "backup_file": "00052.ctl",
+      "bytes": 33079,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\Commandes personnalis\u00e9es\\temp\\vision.ctl",
+      "sha256": "87747b0bcd0d52ccad2040f8ec0bd76f0fe11e0263d51d3e3666a33706134a37",
+      "verified": true
+    },
+    {
+      "backup_file": "00053.ini",
+      "bytes": 117,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\FW102\\setup.ini",
+      "sha256": "6fd7b7ccbd6381209133697fc1ce6bfb2a5a2172b90d905086a8db7dda86e103",
+      "verified": true
+    },
+    {
+      "backup_file": "00054.txt",
+      "bytes": 8299,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\PILOTAGE_ELYSE_SUP_moteurs\\Mises en garde Vi Moteurs.txt",
+      "sha256": "041ce568667ec56b5ed744ea132033a33eadf1a34515c80759587868e77644b5",
+      "verified": true
+    },
+    {
+      "backup_file": "00055.vi",
+      "bytes": 86720,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\PILOTAGE_ELYSE_SUP_moteurs\\Moteurs SdC Autonome.vi",
+      "sha256": "94895ac2677244af7f9eb849b37cafffde6517561e387b41b2e8047517fa7619",
+      "verified": true
+    },
+    {
+      "backup_file": "00056.vi",
+      "bytes": 40872,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\PILOTAGE_ELYSE_SUP_moteurs\\Moteurs SdC GoTo.vi",
+      "sha256": "4f33f363f0e21f76074cde926e8439d9bc93947610b55bc42304fafc2b1eff3f",
+      "verified": true
+    },
+    {
+      "backup_file": "00057.llb",
+      "bytes": 193556,
+      "canonical_path": "C:\\PILOTAGE_ELYSE_SUP\\PILOTAGE_ELYSE_SUP_moteurs\\LabVIEW6.1_VI_LibraryExample V2.3_pour2controleurs\\LabVIEW6.1_VI_Library+Example V2.3.llb",
+      "sha256": "843c90a6a9fca2235215b7dfd1fd0f479229aede33194c75f8b949676789334d",
+      "verified": true
+    }
+  ],
+  "kind": "READ_ONLY_CANONICAL_SUPERVISION_BACKUP_AUDIT",
+  "member_inventory_path": "C:\\Users\\elyse\\AppData\\Local\\Temp\\elyse-supervision-live-llb-offline-audit-akxqli5u\\member_inventory.json",
+  "member_inventory_sha256": "da5a8c071fd3ca6f3045bcc320889bf39f818454e1b8ef579bdccef237c1e68a",
+  "named_llb_members": 43,
+  "network_protocol_calls": false,
+  "normal_stop_source": {
+    "all_NI6602_tasks_released_proven": false,
+    "all_stop_paths_reach_cleanup_proven": false,
+    "direct_root_DAQmx_Stop_or_Clear_calls_found": 0,
+    "frame3_diagram": "14127",
+    "imaq_close_uid": "22923",
+    "imaq_dispose_buffers": 9,
+    "imaq_dispose_uid": "22899",
+    "motion_abort_uid": "177515",
+    "motion_shutdown_uid": "192398",
+    "outer_sequence": "988",
+    "physical_safe_state_proven": false,
+    "psp_close_refs": 13
+  },
+  "originals_modified": false,
+  "project_format": {
+    "LVVersion": "12008004",
+    "Type": "Project"
+  },
+  "project_main_and_counter_urls": [
+    {
+      "name": "0_SUP_ELYSE.vi",
+      "type": "VI",
+      "url": "../SUPERVISION.llb/0_SUP_ELYSE.vi"
+    },
+    {
+      "name": "1_SUP_INIT_NI6602.vi",
+      "type": "VI",
+      "url": "/G/PILOTAGE_ELYSE_SUP_moteurs/SUPERVISIONAudrey.llb/1_SUP_INIT_NI6602.vi"
+    },
+    {
+      "name": "1_SUP_WRITE_NI6602.vi",
+      "type": "VI",
+      "url": "/G/PILOTAGE_ELYSE_SUP_moteurs/SUPERVISIONAudrey.llb/1_SUP_WRITE_NI6602.vi"
+    },
+    {
+      "name": "1_SUP_INIT_NI6602.vi",
+      "type": "VI",
+      "url": "../SUPERVISION.llb/1_SUP_INIT_NI6602.vi"
+    },
+    {
+      "name": "1_SUP_WRITE_NI6602.vi",
+      "type": "VI",
+      "url": "../SUPERVISION.llb/1_SUP_WRITE_NI6602.vi"
+    }
+  ],
+  "project_url_count": 274,
+  "recorded_utc": "2026-10-26T16:47:56.579867+00:00",
+  "schema_version": 1,
+  "source_member_comparisons": [
+    {
+      "block": "UCRF",
+      "byte_identical_to_original": true,
+      "bytes": 24010,
+      "expected_original_sha256": "81F29F2C56C22DB6FB37CC8893D360362B2610B6488F9D95C8AFCE0CB21E0DCE",
+      "extracted_path": "C:\\Users\\elyse\\AppData\\Local\\Temp\\elyse-supervision-live-llb-offline-audit-akxqli5u\\1_SUP_WRITE_NI6602.vi",
+      "name": "1_SUP_WRITE_NI6602.vi",
+      "section": 27,
+      "sha256": "81F29F2C56C22DB6FB37CC8893D360362B2610B6488F9D95C8AFCE0CB21E0DCE"
+    },
+    {
+      "block": "UCRF",
+      "byte_identical_to_original": true,
+      "bytes": 74437,
+      "expected_original_sha256": "CE8BCA30E727C9B8C1EE9681263FBCE1D60247C2DBECDD0B73A37A385C88104F",
+      "extracted_path": "C:\\Users\\elyse\\AppData\\Local\\Temp\\elyse-supervision-live-llb-offline-audit-akxqli5u\\1_SUP_INIT_NI6602.vi",
+      "name": "1_SUP_INIT_NI6602.vi",
+      "section": 39,
+      "sha256": "CE8BCA30E727C9B8C1EE9681263FBCE1D60247C2DBECDD0B73A37A385C88104F"
+    },
+    {
+      "block": "UCRF",
+      "byte_identical_to_original": true,
+      "bytes": 1142015,
+      "expected_original_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+      "extracted_path": "C:\\Users\\elyse\\AppData\\Local\\Temp\\elyse-supervision-live-llb-offline-audit-akxqli5u\\0_SUP_ELYSE.vi",
+      "name": "0_SUP_ELYSE.vi",
+      "section": 44,
+      "sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B"
+    }
+  ]
+}
