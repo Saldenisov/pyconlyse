@@ -94,6 +94,51 @@ def _measurement_current(runtime):
             and latest.get("simulated") is False)
 
 
+def fault_diagnostic_measurement_current(runtime):
+    """Fresh readback from a settled FAULT owner, never permission to act.
+
+    A procedure error does not invalidate a later successful input read. The
+    explicit observation must match this owner, session and sample; old latest
+    data or an idle HTTP heartbeat cannot supply the missing evidence.
+    """
+    value = runtime.get("fault_diagnostic_measurement")
+    native = runtime.get("native_isolation")
+    latest = runtime.get("latest") or {}
+    age = runtime.get("age_seconds")
+    sequence = runtime.get("sequence")
+    if (runtime.get("state") != "FAULT"
+            or runtime.get("telemetry_view_current") is False
+            or runtime.get("application_view_current") is False
+            or not isinstance(value, dict) or not isinstance(native, dict)):
+        return False
+    settled = (native.get("worker_state") == "IDLE_OWNED"
+               and native.get("active_request_id") is None)
+    reading = (value.get("read_in_progress") is True
+               and native.get("worker_state") == "EXECUTING_READ_SNAPSHOT"
+               and type(native.get("active_request_id")) is int
+               and native["active_request_id"] > 0)
+    return (value.get("current") is True
+            and value.get("source") == "settled_fault_owner_readback"
+            and value.get("command_admission") is False
+            and isinstance(runtime.get("session_id"), str)
+            and value.get("session_id") == runtime["session_id"]
+            and type(sequence) is int and sequence > 0
+            and type(value.get("sequence")) is int
+            and value["sequence"] == sequence
+            and _finite(age) and 0 <= age < 2
+            and _finite(value.get("age_seconds"))
+            and value["age_seconds"] == age
+            and (settled or reading)
+            and native.get("ownership_uncertain") is False
+            and type(native.get("resource_count")) is int
+            and native["resource_count"] > 0
+            and isinstance(native.get("worker_generation"), str)
+            and bool(native["worker_generation"])
+            and value.get("worker_generation") == native["worker_generation"]
+            and latest.get("source") == "python_daqmx_acquisition"
+            and latest.get("simulated") is False)
+
+
 def _software_status_image(runtime, measured_current):
     """Select independently attested current-owner memory or fresh sample.
 
@@ -139,12 +184,13 @@ def standard_packet(runtime, publication_sequence, now=None):
     """Same bank order/envelope as LabVIEW; honest source and per-bank errors."""
     latest = runtime.get("latest") or {}
     current = _measurement_current(runtime)
+    diagnostic = fault_diagnostic_measurement_current(runtime)
     software = _software_status_image(runtime, current)
     records = []
     for bank in BANKS:
         value, kind = None, None
         reason = "PYTHON_BANK_NOT_YET_MIGRATED" if current else "PYTHON_INPUTS_NOT_CURRENT"
-        if current and bank in INPUTS:
+        if (current or diagnostic) and bank in INPUTS:
             source, native_kind, device, count, field, kind = INPUTS[bank]
             record = latest.get("banks", {}).get(source, {})
             candidate = record.get(field)

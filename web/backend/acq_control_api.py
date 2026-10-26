@@ -4,6 +4,7 @@ The durable dispatch fence is committed before Tango I/O. An uncertain result
 is never retried automatically, including after a page/server restart.
 """
 import json
+import copy
 import math
 import os
 import sqlite3
@@ -176,6 +177,31 @@ def public_view(view):
         for name, capability in capabilities.items():
             if name != "modulator.general.stop":
                 capability.update(enabled=False, reason="UNRESOLVED_DISPATCH_DO_NOT_RESEND")
+    cooling = copy.deepcopy(runtime.get("cooling_safety", {}))
+    bridge_age = view.get("bridge_age_seconds", 0.)
+    if type(bridge_age) in (int, float) and math.isfinite(bridge_age) and bridge_age >= 0:
+        for item in [cooling] + cooling.get("circuits", []) + cooling.get("confirmation_candidates", []):
+            remaining = item.get("remaining_seconds")
+            if type(remaining) in (int, float):
+                item["remaining_seconds"] = max(0, remaining - bridge_age)
+        if cooling.get("policy_version") == 2:
+            cooling["confirmation_candidates"] = [row for row in cooling.get("confirmation_candidates", [])
+                if type(row.get("remaining_seconds")) in (int, float) and row["remaining_seconds"] > 0]
+            cooling["confirmation_required"] = bool(cooling["confirmation_candidates"]
+                and cooling.get("stop_state") == "NONE")
+            name = "cooling.confirm_circulation"
+            reason = "" if cooling["confirmation_required"] else "NO_UNEXPIRED_CIRCULATION_CONFIRMATION"
+            cache_age = runtime.get("application_view_age_seconds")
+            if type(cache_age) in (int, float) and cache_age + bridge_age >= 2:
+                reason = "APPLICATION_METADATA_NOT_CURRENT"
+            if runtime.get("state") == "FAULT":
+                diagnostic = runtime.get("fault_diagnostic_measurement") or {}
+                diagnostic_age = diagnostic.get("age_seconds")
+                if (diagnostic.get("current") is not True or type(diagnostic_age) not in (int, float)
+                        or diagnostic_age + bridge_age >= 2):
+                    reason = "FRESH_FAULT_DIAGNOSTIC_INPUTS_REQUIRED"
+            if name in capabilities and reason:
+                capabilities[name] = dict(enabled=False, reason=reason)
     return dict(schema_version=1, mode="XP_CONTROL", device=DEVICE,
                 source_selected=source_mode == "PYTHON_NATIVE", source_mode=source_mode,
                 topology=topology(),
@@ -187,6 +213,7 @@ def public_view(view):
                 operator_test_admission=runtime.get("operator_test_admission"),
                 approval_mode="LOCAL_CONSOLE" if _local_subject(read_only=True) else "JWT_APPROVAL",
                 general_cooling_ready=runtime.get("general_cooling_ready") is True,
+                cooling_safety=cooling,
                 synchronization=runtime.get("counter_timing_state", {}),
                 commands=history,
                 physical_acknowledgement=False, automatic_retry=False)

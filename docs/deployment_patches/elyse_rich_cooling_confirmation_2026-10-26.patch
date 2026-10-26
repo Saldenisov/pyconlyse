@@ -1,0 +1,170 @@
+--- a/web/frontend/src/AcquisitionCommands.js
++++ b/web/frontend/src/AcquisitionCommands.js
+@@ -2,0 +3 @@
++import { CIRCULATION_CONFIRMATION, validCommandValue, sameCommandValue } from './acquisitionCommandValue';
+@@ -5,0 +7,15 @@
++export function circulationConfirmationCandidates(view) {
++  const safety = view?.cooling_safety;
++  const candidates = safety?.confirmation_candidates;
++  if (safety?.confirmation_required !== true || !Array.isArray(candidates)
++    || !validCommandValue(CIRCULATION_CONFIRMATION, { incident_ids: candidates.map((item) => item?.incident_id) })
++    || candidates.some((item) => !['CANON', 'SECTION'].includes(item?.circuit)
++      || typeof item.deadline_utc !== 'string' || !Number.isFinite(Date.parse(item.deadline_utc)))) return [];
++  return candidates.map(({ incident_id, circuit, deadline_utc }) => ({ incident_id, circuit, deadline_utc }));
++}
++const waterKey = (view) => JSON.stringify(circulationConfirmationCandidates(view));
++const waterSelectionCurrent = (view, value) => sameCommandValue(CIRCULATION_CONFIRMATION, value,
++  { incident_ids: circulationConfirmationCandidates(view).map((item) => item.incident_id) });
++const deadlineText = (value) => new Date(value).toLocaleTimeString('fr-FR', {
++  timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', second: '2-digit',
++});
+@@ -12 +28 @@
+-export function AcquisitionCommand({ operation, name, className, children }) {
++export function AcquisitionCommand({ operation, name, value = null, className, children }) {
+@@ -15 +31,2 @@
+-  const enabled = !!(operation && capability?.enabled && control?.fresh && !control?.pending);
++  const enabled = !!(operation && capability?.enabled && control?.fresh && !control?.pending
++    && validCommandValue(operation, value));
+@@ -20 +37 @@
+-    onClick={() => control.choose(operation, name.replace(/ · (commande )?désactivée?$/, ''))}>{children}</button>;
++    onClick={() => control.choose(operation, name.replace(/ · (commande )?désactivée?$/, ''), value)}>{children}</button>;
+@@ -27,0 +45,2 @@
++  const selected = useRef(null);
++  const dismiss = () => { selected.current = null; setConfirmation(null); };
+@@ -39,0 +59,7 @@
++        if (selected.current?.operation === CIRCULATION_CONFIRMATION
++          && (value.session_id !== selected.current.session_id || value.revision !== selected.current.expected_revision
++            || waterKey(value) !== selected.current.water_key
++            || value.capabilities?.[CIRCULATION_CONFIRMATION]?.enabled !== true)) {
++          selected.current = { ...selected.current, invalidated: true };
++          setConfirmation(selected.current);
++        }
+@@ -41 +67,6 @@
+-        if (!abort.signal.aborted) { setFresh(false); setFailure(error.message || 'Contrôle Python indisponible'); }
++        if (!abort.signal.aborted) {
++          setFresh(false); setFailure(error.message || 'Contrôle Python indisponible');
++          if (selected.current?.operation === CIRCULATION_CONFIRMATION) {
++            selected.current = { ...selected.current, invalidated: true }; setConfirmation(selected.current);
++          }
++        }
+@@ -45 +76,8 @@
+-    const age = setInterval(() => { if (performance.now() - received.current >= 2000) setFresh(false); }, 250);
++    const age = setInterval(() => {
++      if (performance.now() - received.current >= 2000) {
++        setFresh(false);
++        if (selected.current?.operation === CIRCULATION_CONFIRMATION && !selected.current.invalidated) {
++          selected.current = { ...selected.current, invalidated: true }; setConfirmation(selected.current);
++        }
++      }
++    }, 250);
+@@ -48 +86 @@
+-  const choose = (operation, name) => {
++  const choose = (operation, name, value = null) => {
+@@ -50,2 +88,9 @@
+-      || latest.current?.capabilities?.[operation]?.enabled !== true) return;
+-    setConfirmation({ operation, name, session_id: latest.current.session_id, expected_revision: latest.current.revision });
++      || !validCommandValue(operation, value) || latest.current?.capabilities?.[operation]?.enabled !== true
++      || (operation === CIRCULATION_CONFIRMATION && (!latest.current?.source_selected
++        || !waterSelectionCurrent(latest.current, value)))) return;
++    selected.current = { operation, name, value: operation === CIRCULATION_CONFIRMATION
++      ? Object.freeze({ incident_ids: Object.freeze([...value.incident_ids]) }) : value,
++      session_id: latest.current.session_id, expected_revision: latest.current.revision,
++      ...(operation === CIRCULATION_CONFIRMATION ? { water_key: waterKey(latest.current),
++        water_candidates: circulationConfirmationCandidates(latest.current) } : {}) };
++    setConfirmation(selected.current);
+@@ -54 +99 @@
+-    const choice = confirmation;
++    const choice = selected.current;
+@@ -57,2 +102,2 @@
+-    setConfirmation(null);
+-    if (!fresh || performance.now() - received.current >= 2000
++    dismiss();
++    if (choice.invalidated || !fresh || performance.now() - received.current >= 2000
+@@ -60 +105,3 @@
+-      || current?.capabilities?.[choice.operation]?.enabled !== true) {
++      || current?.capabilities?.[choice.operation]?.enabled !== true
++      || (choice.operation === CIRCULATION_CONFIRMATION && (!waterSelectionCurrent(current, choice.value)
++        || waterKey(current) !== choice.water_key))) {
+@@ -66 +113 @@
+-        expected_revision: choice.expected_revision, operation: choice.operation, operator_confirmed: true, value: null });
++        expected_revision: choice.expected_revision, operation: choice.operation, operator_confirmed: true, value: choice.value });
+@@ -75,0 +123,2 @@
++  const waterCandidates = circulationConfirmationCandidates(view);
++  const waterValue = { incident_ids: waterCandidates.map((item) => item.incident_id) };
+@@ -84,0 +134,10 @@
++    {supported && waterCandidates.length > 0 && <section role="alert" aria-label="Confirmer la circulation physique de l’eau" className="acq-command-status">
++      <strong>Vérifier la circulation d’eau maintenant</strong>
++      <p>Après passage du vert au rouge, l’eau circule-t-elle physiquement dans les circuits suivants ?</p>
++      <ul>{waterCandidates.map((item) => <li key={item.incident_id}>{item.circuit} · échéance serveur {deadlineText(item.deadline_utc)}</li>)}</ul>
++      <p>Délai serveur : 120 s. Sans confirmation, l’arrêt supplémentaire reste demandé à l’échéance.</p>
++      <AcquisitionCommand operation={CIRCULATION_CONFIRMATION} name="Confirmer la circulation physique de l’eau" value={waterValue}>
++        L’eau circule physiquement maintenant…
++      </AcquisitionCommand>
++      <p>Confirmer uniquement après vérification sur place. Aucun reset ni démarrage. Les règles de la garde VI restent inchangées.</p>
++    </section>}
+@@ -88 +147 @@
+-        if (event.key === 'Escape') setConfirmation(null);
++        if (event.key === 'Escape') dismiss();
+@@ -95 +154,6 @@
+-      <h2>{confirmation.name}</h2><p>Exécuter cette commande sur l’équipement réel ?</p>
++      <h2>{confirmation.name}</h2><p>{confirmation.operation === CIRCULATION_CONFIRMATION
++        ? 'L’eau circule-t-elle physiquement maintenant dans chacun de ces circuits ?' : 'Exécuter cette commande sur l’équipement réel ?'}</p>
++      {confirmation.operation === CIRCULATION_CONFIRMATION && <>
++        <ul>{confirmation.water_candidates.map((item) => <li key={item.incident_id}>{item.circuit} · échéance serveur {deadlineText(item.deadline_utc)}</li>)}</ul>
++        <p>Oui annule uniquement l’arrêt supplémentaire de 120 s pour ces incidents. Le signal rouge reste affiché. Les règles de la garde VI restent inchangées. Aucun incident futur n’est confirmé.</p>
++      </>}
+@@ -99,3 +163,6 @@
+-      <p>Une commande acceptée n’est pas une confirmation physique. Aucun renvoi automatique.</p>
+-      <button type="button" autoFocus onClick={() => setConfirmation(null)}>Annuler</button>
+-      <button type="button" onClick={execute}>Confirmer</button>
++      <p>{confirmation.operation === CIRCULATION_CONFIRMATION
++        ? 'Cette confirmation est une déclaration de l’opérateur, pas un retour capteur indépendant. Aucun renvoi automatique.'
++        : 'Une commande acceptée n’est pas une confirmation physique. Aucun renvoi automatique.'}</p>
++      <button type="button" autoFocus onClick={dismiss}>Annuler</button>
++      <button type="button" disabled={confirmation.invalidated} onClick={execute}>{confirmation.operation === CIRCULATION_CONFIRMATION
++        ? 'Oui, l’eau circule physiquement maintenant' : 'Confirmer'}</button>
+--- a/web/frontend/src/CoolingAlarm.js
++++ b/web/frontend/src/CoolingAlarm.js
+@@ -12,2 +12,2 @@
+-// Display only SERVER incidents/deadlines. No browser fault detector, reset,
+-// acknowledgement, timeout action or device command is implemented here.
++// Display only SERVER incidents/deadlines and confirmations. The shared
++// Acquisition command flow owns the explicit operator confirmation action.
+@@ -26,0 +27,8 @@
++  const episodePolicy = typeof safety.countdown_required === 'boolean'
++    || typeof safety.confirmation_required === 'boolean';
++  const countdown = episodePolicy ? safety.countdown_required === true
++    || (safety.countdown_required === undefined && safety.confirmation_required === true) : active;
++  const candidates = new Set((Array.isArray(safety.confirmation_candidates) ? safety.confirmation_candidates : [])
++    .map((item) => item.incident_id));
++  const confirmed = (item) => typeof item.confirmed === 'boolean' ? item.confirmed
++    : item.water_confirmation_received === true || (typeof item.confirmed_utc === 'string' && item.confirmed_utc.length > 0);
+@@ -30 +38 @@
+-    {active && <><h2>PERTE DE CIRCULATION — {incidents.map((item) => item.circuit).join(' + ')}</h2>
++    {active && <><h2>{episodePolicy ? 'SIGNAL REFROIDISSEMENT ROUGE' : 'PERTE DE CIRCULATION'} — {incidents.map((item) => item.circuit).join(' + ')}</h2>
+@@ -32 +40,5 @@
+-        {' · détectée à '}{clock(item.started_utc)}{' · échéance '}{clock(item.deadline_utc)}
++        {item.started_utc && <>{' · détectée à '}{clock(item.started_utc)}</>}
++        {(!episodePolicy || (!confirmed(item) && candidates.has(item.incident_id))) && <>{' · échéance '}{clock(item.deadline_utc)}</>}
++        {episodePolicy && confirmed(item) && <small> · Circulation physique confirmée par {item.confirmed_by || 'l’opérateur'}
++          {item.confirmed_utc && <> à {clock(item.confirmed_utc)}</>}. Arrêt supplémentaire de 120 s annulé pour cet incident uniquement.
++          Le signal rouge reste affiché. Les règles de la garde VI restent inchangées.</small>}
+@@ -36 +48 @@
+-      {safety.stop_state === 'NONE' ? <p>COUNTDOWN — {remaining === null ? 'inconnu' : `${remaining} s`}.
++      {safety.stop_state === 'NONE' && countdown ? <p>COUNTDOWN — {remaining === null ? 'inconnu' : `${remaining} s`}.
+@@ -40,2 +52,5 @@
+-        : <p>Procédure d’arrêt : {safety.stop_state}{safety.stop_error && ` — ${safety.stop_error}`}</p>}
+-      {failed && <p>Retour de circulation non confirmé : télémétrie périmée ou indisponible. Le délai serveur n’est pas annulé.</p>}
++        : safety.stop_state !== 'NONE' ? <p>Procédure d’arrêt : {safety.stop_state}{safety.stop_error && ` — ${safety.stop_error}`}</p>
++          : <p>Aucun arrêt supplémentaire de 120 s en attente pour les incidents confirmés ou les signaux rouges initiaux.
++            Les règles de la garde VI restent inchangées.</p>}
++      {failed && <p>Retour de circulation non confirmé par les entrées : télémétrie périmée ou indisponible.
++        {countdown && ' Le délai serveur n’est pas annulé.'}</p>}
+--- a/web/frontend/src/api/acqLocalApproval.js
++++ b/web/frontend/src/api/acqLocalApproval.js
+@@ -3,0 +4 @@
++import { CIRCULATION_CONFIRMATION, validCirculationConfirmationValue } from '../acquisitionCommandValue';
+@@ -16,0 +18,3 @@
++    if (command?.operation === CIRCULATION_CONFIRMATION && !validCirculationConfirmationValue(command.value)) {
++      throw new Error('Incidents de refroidissement explicites et distincts requis.');
++    }

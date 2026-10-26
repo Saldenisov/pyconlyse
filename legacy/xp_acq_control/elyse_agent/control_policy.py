@@ -7,6 +7,8 @@ import math
 from .acquisition_beamline import BEAMLINE_OPERATIONS
 from .acquisition_counter_timing import validate_remote_timing
 from .supervised_test import controls_permitted, supervised_allowed
+from .command_protocol import validate_circulation_confirmation
+from .runtime_identity import valid_hex
 
 
 def known_ht_command(sequence):
@@ -34,6 +36,55 @@ def require_ht_value(sequence, requested):
     if requested > current and (sequence.get("supply_sequence_completed") is not True
                                 or sequence.get("pulses_sequence_completed") is not True):
         raise RuntimeError("HT_INCREASE_REQUIRES_CURRENT_OWNER_SUPPLY_AND_PULSE_SEQUENCES")
+
+
+def _confirmation_candidates(value):
+    rows = value.get("cooling_safety", {}).get("confirmation_candidates", ())
+    if type(rows) is not list:
+        return set()
+    return {row["incident_id"] for row in rows if type(row) is dict
+        and valid_hex(row.get("incident_id"), 32)
+        and type(row.get("remaining_seconds")) in (int, float)
+        and math.isfinite(row["remaining_seconds"]) and row["remaining_seconds"] > 0}
+
+
+def _circulation_confirmation_reason(value):
+    """Software incident decision only; never a water or energy-start permit."""
+    age = value.get("application_view_age_seconds")
+    if (value.get("application_view_current") is False or value.get("telemetry_view_current") is False
+            or value.get("application_view_error") or value.get("local_request_pending")
+            or ("application_view_age_seconds" in value and (type(age) not in (int, float)
+                or not math.isfinite(age) or not 0 <= age < 2))):
+        return "APPLICATION_METADATA_NOT_CURRENT"
+    operation = value.get("current_operation")
+    stopping = (operation in ("modulator.general.stop", "acq.outer.controlled_stop", "acq.timeout.cooling_trip")
+        or isinstance(operation, str) and operation.startswith("acq.stage.") and operation.endswith(".stop"))
+    if (stopping or value.get("pending_operation") in ("close", "general_stop", "outer_stop")
+            or value.get("shutdown_requested") is True or value.get("cancellation_requested") is True):
+        return "STOP_OR_CLEANUP_ALREADY_IN_PROGRESS"
+    if value.get("state") not in ("RUNNING", "EXECUTING", "FAULT"):
+        return "CURRENT_OWNER_REQUIRED_FOR_CIRCULATION_CONFIRMATION"
+    native = value.get("native_isolation")
+    if (not isinstance(native, dict) or native.get("ownership_uncertain") is not False
+            or type(native.get("resource_count")) is not int or native["resource_count"] <= 0
+            or not isinstance(native.get("worker_generation"), str) or not native["worker_generation"]):
+        return "CURRENT_OWNER_UNCERTAIN"
+    worker_state, request = native.get("worker_state"), native.get("active_request_id", "UNKNOWN")
+    if not ((worker_state == "IDLE_OWNED" and request is None)
+            or isinstance(worker_state, str) and worker_state.startswith("EXECUTING_")
+            and type(request) is int and request > 0
+            and worker_state not in ("EXECUTING_GENERAL_STOP", "EXECUTING_OUTER_CONTROLLED_STOP", "EXECUTING_CLOSE")):
+        return "CURRENT_OWNER_UNCERTAIN"
+    alarm = value.get("cooling_safety", {})
+    if alarm.get("active") is not True or alarm.get("stop_state") != "NONE":
+        return "NO_PENDING_CIRCULATION_CONFIRMATION"
+    if value.get("state") == "FAULT":
+        from .standard_banks import fault_diagnostic_measurement_current
+        if not fault_diagnostic_measurement_current(value):
+            return "FRESH_FAULT_DIAGNOSTIC_INPUTS_REQUIRED"
+    if not _confirmation_candidates(value):
+        return "NO_UNEXPIRED_CIRCULATION_CONFIRMATION"
+    return ""
 
 
 def command_capabilities(value):
@@ -66,6 +117,11 @@ def command_capabilities(value):
         elif ("ownership_uncertain" in value.get("native_isolation", {})
               and value["native_isolation"].get("ownership_uncertain") is not False):
             reason = "CURRENT_OWNER_UNCERTAIN"
+        elif operation == "cooling.confirm_circulation":
+            if value.get("startup_complete") is not True:
+                reason = "ALL_REQUIRED_CARDS_AND_STARTUP_NOT_READY"
+            else:
+                reason = _circulation_confirmation_reason(value)
         elif operation == "modulator.general.stop":
             if state not in ("RUNNING", "FAULT", "EXECUTING") or (
                     state == "EXECUTING" and value.get("current_operation") in
@@ -75,7 +131,7 @@ def command_capabilities(value):
             reason = "OWNER_BUSY_OR_NOT_RUNNING"
         elif not stopping and not current:
             reason = "FRESH_PYTHON_INPUTS_REQUIRED"
-        if not reason and operation != "modulator.general.stop":
+        if not reason and operation not in ("modulator.general.stop", "cooling.confirm_circulation"):
             if not controls_permitted(permissions, "commissioned", operation):
                 reason = "STAGE_CONTROLS_NOT_COMMISSIONED"
             elif operation.startswith("alimentation_ht.") and stage.get("ht_commissioned") is not True:
@@ -122,4 +178,8 @@ def require_command(value, operation, command_value=None):
         running = value.get("counter_timing_state", {}).get("running_counters", [])
         if timing["counter"] not in running:
             raise RuntimeError("COUNTER_TIMING_REQUIRES_ALREADY_RUNNING_COUNTER")
+    elif operation == "cooling.confirm_circulation":
+        confirmation = validate_circulation_confirmation(command_value)
+        if not set(confirmation["incident_ids"]).issubset(_confirmation_candidates(value)):
+            raise RuntimeError("CIRCULATION_CONFIRMATION_INCIDENT_CHANGED_OR_EXPIRED")
 

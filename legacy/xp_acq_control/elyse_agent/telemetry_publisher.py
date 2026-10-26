@@ -10,10 +10,13 @@ from .telemetry_view import TelemetryView
 
 def telemetry_identity(value):
     """Measurement and software observations advance independently."""
-    return tuple(value.get(k) for k in (
+    identity = tuple(value.get(k) for k in (
         "session_id", "sequence", "state_revision", "state", "stale", "error",
         "telemetry_view_current", "measurement_current", "software_state_sequence",
         "software_state_current"))
+    diagnostic = value.get("fault_diagnostic_measurement") or {}
+    return identity + (diagnostic.get("current"), diagnostic.get("sequence"),
+                       diagnostic.get("worker_generation"))
 
 
 class StandardTelemetryPublisher(object):

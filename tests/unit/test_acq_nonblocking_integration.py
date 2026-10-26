@@ -44,6 +44,20 @@ def wait_until(predicate, timeout=3):
     raise AssertionError("Offline synchronization condition not reached")
 
 
+def arm_cooling_baseline(alarm):
+    """Establish fresh active green before testing loss persistence/cleanup."""
+    original, now = alarm.clock, alarm.clock()
+    green = dict((name, dict(fault=False, quality="FRESH", causes=[]))
+                 for name in ("CANON", "SECTION"))
+    try:
+        alarm.clock = lambda: now - cooling_safety.RECOVERY_SECONDS
+        alarm.observe(green, True, -2)
+        alarm.clock = lambda: now
+        alarm.observe(green, True, -1)
+    finally:
+        alarm.clock = original
+
+
 class HTTPFixture(object):
     def __init__(self, view):
         self.server = ControlHTTPServer(("127.0.0.1", 0), view, READ_KEY, COMMAND_KEY)
@@ -563,6 +577,7 @@ class NonblockingIntegrationTests(unittest.TestCase):
                 cleanup = None
                 try:
                     wait_until(lambda: alarm.snapshot()["journal_ready"])
+                    arm_cooling_baseline(alarm)
                     alarm.observe(dict(SECTION=dict(fault=True, quality="FRESH", causes=[]),
                                        CANON=dict(fault=False, quality="FRESH", causes=[])), True, 1)
                     self.assertTrue(entered.wait(1))

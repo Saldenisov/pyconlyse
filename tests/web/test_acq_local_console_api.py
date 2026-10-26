@@ -65,7 +65,7 @@ def test_metadata_exposes_only_mode_and_updated_exact_contract(local_setup):
     assert response.status_code == 200
     assert response.json["approval_mode"] == "LOCAL_CONSOLE"
     assert set(response.json["capabilities"]) == set(api.OPERATIONS)
-    assert len(api.OPERATIONS) == 24
+    assert len(api.OPERATIONS) == 25
     assert "local.key" not in response.text
     assert "nonce" not in response.text
     assert writes(local_setup) == []

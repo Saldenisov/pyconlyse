@@ -12,11 +12,13 @@ import os
 import sqlite3
 import threading
 import time
+import uuid
 
 from .journal_worker import JournalWorker
 
 TIMEOUT_SECONDS = 120.0
 RECOVERY_SECONDS = 2.0
+POLICY_VERSION = 2
 JOURNAL_RECONCILIATION_CONFIRMATION = "ACKNOWLEDGE ALARM JOURNAL HISTORY GAP"
 CIRCUITS = {"CANON": (("C3_IN_DIO96", 0, True, "220V"),
                        ("C3_IN_DIO96", 1, False, "controller_fault"),
@@ -220,6 +222,25 @@ class CoolingSafety(object):
                     or type(item.get("deadline_utc")) is not str
                     or type(item.get("causes")) is not list):
                 raise ValueError("Invalid persisted cooling incident")
+        if (type(saved.get("policy_version", 1)) is not int
+                or saved.get("policy_version", 1) not in (1, POLICY_VERSION)
+                or type(saved.get("historical_incidents", [])) is not list):
+            raise ValueError("Invalid persisted cooling policy version/history")
+        for item in saved.get("historical_incidents", []):
+            if type(item) is not dict or item.get("circuit") not in CIRCUITS:
+                raise ValueError("Invalid persisted historical cooling incident")
+        for item in saved["incidents"].values():
+            if "incident_id" in item and (type(item["incident_id"]) is not str
+                    or len(item["incident_id"]) != 32
+                    or any(letter not in "0123456789abcdef" for letter in item["incident_id"])):
+                raise ValueError("Invalid persisted cooling incident identity")
+            if item.get("confirmation_eligible") is True:
+                if (item.get("policy_version") != POLICY_VERSION
+                        or type(item.get("confirmed")) is not bool
+                        or (item["confirmed"] and (type(item.get("confirmed_by")) is not str
+                            or not 1 <= len(item["confirmed_by"].strip()) <= 128
+                            or type(item.get("confirmed_utc")) is not str))):
+                    raise ValueError("Invalid persisted circulation confirmation")
 
     def __init__(self, clock=None, wall_clock=None, journal=None):
         self.clock, self.wall = clock or time.monotonic, wall_clock or time.time
@@ -229,6 +250,8 @@ class CoolingSafety(object):
                         else JournalWorker(lambda: journal, validate_loaded=self._validate_saved))
         self.lock = threading.RLock()
         self.incidents, self.recovering, self.events = {}, {}, []
+        self.armed, self.arming = set(), {}
+        self.historical_incidents = []
         self.stop_state, self.stop_error = "NONE", ""
         self.journal_error = ""
         self._journal_loaded = False
@@ -262,7 +285,16 @@ class CoolingSafety(object):
 
     def _state_image(self):
         return dict(incidents=self.incidents, stop_state=self.stop_state,
-                    stop_error=self.stop_error)
+                    stop_error=self.stop_error, policy_version=POLICY_VERSION,
+                    historical_incidents=self.historical_incidents)
+
+    @staticmethod
+    def _legacy_incident_id(item):
+        # Historical, unconfirmable identities stay stable without arming a
+        # new process or changing an old journal merely to assign an ID.
+        value = {key: item.get(key) for key in ("circuit", "started_utc", "deadline_utc", "causes")}
+        return uuid.uuid5(uuid.NAMESPACE_URL,
+                         json.dumps(value, sort_keys=True, allow_nan=False)).hex
 
     def _sync_journal(self):
         """Short RAM-only status exchange; never calls SQLite or waits on I/O."""
@@ -271,8 +303,29 @@ class CoolingSafety(object):
         loaded = self.journal.loaded() if not self._journal_loaded else None
         if loaded is not None:
             saved, events = loaded
+            migrated, retained_loaded = [], False
             if saved is not None:
+                self.historical_incidents = copy.deepcopy(saved.get("historical_incidents", []))
                 for name, item in saved["incidents"].items():
+                    item.setdefault("incident_id", self._legacy_incident_id(item))
+                    if (saved.get("policy_version", 1) < POLICY_VERSION
+                            and item["causes"] and all(isinstance(cause, dict) and cause.get("signal") == "220V"
+                                    for cause in item["causes"])):
+                        item.update(historical=True, countdown_required=False,
+                            historical_reason="PRE_POLICY_2_220V_STARTUP_INDICATION",
+                            prior_stop_state=saved["stop_state"], prior_stop_error=saved.get("stop_error", ""),
+                            reclassified_utc=utc(self.wall()))
+                        self.historical_incidents.append(copy.deepcopy(item))
+                        migrated.append(item)
+                        continue
+                    retained_loaded = True
+                    item["confirmation_eligible"] = (item.get("confirmation_eligible") is True
+                        and item.get("policy_version") == POLICY_VERSION)
+                    if item["confirmation_eligible"] is not True:
+                        item.update(confirmed=False, confirmed_by=None, confirmed_utc=None)
+                    item.setdefault("confirmed", False)
+                    item.setdefault("confirmed_by", None)
+                    item.setdefault("confirmed_utc", None)
                     remaining = item["deadline_epoch"] - self.wall()
                     # Backward wall-clock steps never grant a new grace period.
                     if remaining > TIMEOUT_SECONDS:
@@ -287,10 +340,18 @@ class CoolingSafety(object):
                     # A previous queued request is never a completed stop.
                     if self.stop_state == "REQUESTED":
                         self.stop_state = "INTERRUPTED"
+                    if migrated and not retained_loaded:
+                        self.stop_state, self.stop_error = "NONE", ""
             self.events = (events + self.events)[-100:]
             self._journal_revision += 1
             self._journal_loaded = True
             self.journal.adopt_loaded(self._state_image())
+            for item in migrated:
+                self._event("LEGACY_220V_INCIDENT_RECLASSIFIED", item["circuit"],
+                    incident_id=item["incident_id"], policy_version=POLICY_VERSION,
+                    prior_policy_version=saved.get("policy_version", 1),
+                    prior_stop_state=saved["stop_state"], prior_stop_error=saved.get("stop_error", ""),
+                    historical_incident=copy.deepcopy(item), history_deleted=False)
         status = self.journal.status()
         self.journal_error = status["error"]
         return status
@@ -309,16 +370,27 @@ class CoolingSafety(object):
             self._sync_journal()
             self.machine_active = machine_active
             self.quality = "FRESH" if all(c.get("quality") == "FRESH" for c in circuits.values()) else "UNKNOWN"
+            if machine_active is not True:
+                self.armed.clear()
+                self.arming.clear()
             for name, reading in circuits.items():
+                if name not in CIRCUITS:
+                    raise ValueError("Unknown cooling circuit")
                 item = self.incidents.get(name)
                 if reading["fault"] is True:
                     self.recovering.pop(name, None)
-                    if item is None and machine_active is True:
+                    self.arming.pop(name, None)
+                    if (item is None and machine_active is True and name in self.armed
+                            and reading.get("quality") == "FRESH"):
                         now, wall = self.clock(), self.wall()
-                        self.incidents[name] = dict(circuit=name, started_utc=utc(wall),
+                        self.incidents[name] = dict(circuit=name, incident_id=uuid.uuid4().hex,
+                            policy_version=POLICY_VERSION, confirmation_eligible=True,
+                            confirmed=False, confirmed_by=None, confirmed_utc=None, started_utc=utc(wall),
                             deadline_utc=utc(wall + TIMEOUT_SECONDS), deadline_epoch=wall + TIMEOUT_SECONDS,
                             deadline_monotonic=now + TIMEOUT_SECONDS, causes=copy.deepcopy(reading["causes"]))
-                        self._event("CIRCULATION_LOST", name, causes=reading["causes"])
+                        self.armed.discard(name)
+                        self._event("CIRCULATION_LOST", name, causes=reading["causes"],
+                                    incident_id=self.incidents[name]["incident_id"], policy_version=POLICY_VERSION)
                 elif item is not None and reading["fault"] is False and reading["quality"] == "FRESH":
                     previous = self.recovering.get(name)
                     if previous is None:
@@ -327,20 +399,35 @@ class CoolingSafety(object):
                           and observation_id is not None and observation_id != previous[1]
                           and self.stop_state in ("NONE", "COMPLETED")
                           and (self.journal is None or self._journal_loaded)):
-                        del self.incidents[name]
+                        restored = self.incidents.pop(name)
                         self.recovering.pop(name, None)
+                        if machine_active is True:
+                            self.armed.add(name)
                         if not self.incidents:
                             self.stop_state, self.stop_error = "NONE", ""
-                        self._event("CIRCULATION_RESTORED", name)
+                        self._event("CIRCULATION_RESTORED", name, incident_id=restored["incident_id"],
+                                    confirmed_by=restored.get("confirmed_by"))
                 else:
                     self.recovering.pop(name, None)
+                    if (item is None and machine_active is True and reading["fault"] is False
+                            and reading.get("quality") == "FRESH" and name not in self.armed):
+                        previous = self.arming.get(name)
+                        if previous is None:
+                            self.arming[name] = (self.clock(), observation_id)
+                        elif (self.clock() - previous[0] >= RECOVERY_SECONDS
+                                and observation_id is not None and observation_id != previous[1]):
+                            self.armed.add(name)
+                            self.arming.pop(name, None)
+                    else:
+                        self.arming.pop(name, None)
 
     def tick(self, automatic_stop_available=False):
         """Return one stop request, never a hardware command or process exit."""
         with self.lock:
             self._sync_journal()
             self.automatic_stop_available = automatic_stop_available is True
-            due = any(self.clock() >= item["deadline_monotonic"] for item in self.incidents.values())
+            due = any(item.get("confirmed") is not True and self.clock() >= item["deadline_monotonic"]
+                      for item in self.incidents.values())
             if due and self.stop_state in ("NONE", "UNAVAILABLE", "INTERRUPTED"):
                 if self.automatic_stop_available:
                     self.stop_state = "REQUESTED"
@@ -361,19 +448,65 @@ class CoolingSafety(object):
             self.stop_error = str(error)
             self._event("SHUTDOWN_FAILED" if error else "SHUTDOWN_COMPLETED", error=str(error))
 
+    def confirm_circulation(self, incident_ids, operator):
+        """Suppress only these additional Python countdowns, without NI I/O.
+
+        Admission is atomic for the exact current incidents. It neither clears
+        red indications nor extends deadlines, proves flow, or cancels a stop
+        already requested/queued. Journal admission is not a durable commit ACK.
+        """
+        if (type(incident_ids) is not list or not incident_ids
+                or any(type(value) is not str or len(value) != 32
+                    or any(letter not in "0123456789abcdef" for letter in value) for value in incident_ids)
+                or len(set(incident_ids)) != len(incident_ids)
+                or type(operator) is not str or not 1 <= len(operator.strip()) <= 128):
+            raise ValueError("Exact unique active incident IDs and authenticated operator required")
+        with self.lock:
+            self._sync_journal()
+            now = self.clock()
+            by_id = dict((item.get("incident_id"), item) for item in self.incidents.values())
+            if (self.stop_state != "NONE" or any(value not in by_id
+                    or by_id[value].get("confirmation_eligible") is not True
+                    or by_id[value].get("confirmed") is True
+                    or now >= by_id[value]["deadline_monotonic"] for value in incident_ids)):
+                raise RuntimeError("Circulation confirmation requires exact active unexpired incidents before stop admission")
+            stamp, operator = utc(self.wall()), operator.strip()
+            for value in incident_ids:
+                by_id[value].update(confirmed=True, confirmed_by=operator, confirmed_utc=stamp)
+            self._event("CIRCULATION_CONFIRMED_BY_OPERATOR", incident_ids=list(incident_ids),
+                        operator=operator, confirmed_utc=stamp, policy_version=POLICY_VERSION,
+                        deadlines_extended=False, physical_circulation_verified=False)
+            return dict(accepted=True, incident_ids=list(incident_ids), confirmed_by=operator,
+                        confirmed_utc=stamp, hardware_acknowledged=False,
+                        physical_circulation_verified=False, deadline_extended=False)
+
     def snapshot(self):
         with self.lock:
             journal = self._sync_journal()
-            items = []
+            items, candidates = [], []
+            now = self.clock()
             for item in self.incidents.values():
                 public = {key: copy.deepcopy(value) for key, value in item.items()
                           if key not in ("deadline_monotonic", "deadline_epoch")}
-                public["remaining_seconds"] = max(0, item["deadline_monotonic"] - self.clock())
+                public["remaining_seconds"] = max(0, item["deadline_monotonic"] - now)
+                public["confirmed"] = item.get("confirmed") is True
+                public["confirmed_by"] = item.get("confirmed_by")
+                public["confirmed_utc"] = item.get("confirmed_utc")
+                public["countdown_required"] = not public["confirmed"]
                 items.append(public)
-            return dict(schema_version=1, timeout_seconds=TIMEOUT_SECONDS,
+                if (public["countdown_required"] and item.get("confirmation_eligible") is True
+                        and self.stop_state == "NONE" and public["remaining_seconds"] > 0):
+                    candidates.append(dict(incident_id=item["incident_id"], circuit=item["circuit"],
+                        deadline_utc=item["deadline_utc"], remaining_seconds=public["remaining_seconds"]))
+            return dict(schema_version=1, policy_version=POLICY_VERSION, timeout_seconds=TIMEOUT_SECONDS,
                         observed_utc=utc(self.wall()), machine_active=self.machine_active,
                         quality=self.quality, active=bool(items), circuits=items,
-                        remaining_seconds=min((item["remaining_seconds"] for item in items), default=None),
+                        countdown_required=any(item["countdown_required"] for item in items),
+                        confirmation_required=bool(candidates), confirmation_candidates=candidates,
+                        armed_circuits=sorted(self.armed),
+                        historical_incidents=copy.deepcopy(self.historical_incidents),
+                        remaining_seconds=min((item["remaining_seconds"] for item in items
+                                               if item["countdown_required"]), default=None),
                         stop_state=self.stop_state, stop_error=self.stop_error,
                         automatic_stop_available=self.automatic_stop_available,
                         journal_required=self.journal is not None,

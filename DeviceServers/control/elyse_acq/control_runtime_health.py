@@ -1,13 +1,15 @@
 """Pure health projection for the read-only XP runtime view.
 
 A responsive authenticated HTTP service is not proof of fresh NI input data.
-Tango state names are returned as strings so this module needs no Tango, NI,
-network, clock or device imports. Thresholds match the existing two boundaries:
+Tango state names are returned as strings. Projection performs no Tango, NI,
+network, clock or device calls. Thresholds match the existing two boundaries:
 the XP runtime marks input snapshots stale after 2 s; the bridge after 3 s.
 """
 
 import math
 import re
+
+from legacy.xp_acq_control.elyse_agent.standard_banks import fault_diagnostic_measurement_current
 
 
 SOURCE_MAX_AGE_SECONDS = 2.0
@@ -25,12 +27,21 @@ INPUT_BANKS = {
 }
 
 
+def _finite_number(value):
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except (OverflowError, ValueError):
+        return False
+
+
 def _valid_age(value):
-    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+    return _finite_number(value) and value >= 0
 
 
 def project_runtime_health(runtime, bridge_age_seconds, bridge_error="", reader_started=True,
-                           read_duration_seconds=0.0):
+                           read_duration_seconds=0.0, session_changed=False, protocol_error=""):
     """Separate transport freshness, source freshness and lifecycle activity.
 
     EXECUTING deliberately marks the XP input snapshot stale while its single
@@ -58,6 +69,8 @@ def project_runtime_health(runtime, bridge_age_seconds, bridge_error="", reader_
                       and isinstance(latest, dict)
                       and latest.get("source") == "python_daqmx_acquisition"
                       and latest.get("simulated") is False)
+    diagnostic_current = _diagnostic_current(value, bridge_stale, source_age,
+                                             session_changed, protocol_error)
     prefix = "XP runtime: {0}".format(state if state is not None else "unknown")
     if not reader_started:
         tango_state = "FAULT"
@@ -68,6 +81,8 @@ def project_runtime_health(runtime, bridge_age_seconds, bridge_error="", reader_
     elif state == "FAULT":
         tango_state = "FAULT"
         status = prefix + "; " + str(value.get("error") or "NI runtime fault")
+        if diagnostic_current:
+            status += "; fresh diagnostic NI input readback during FAULT"
     elif state in STANDBY_RUNTIME_STATES:
         tango_state = "STANDBY"
         status = prefix + "; no current NI acquisition data expected"
@@ -85,6 +100,9 @@ def project_runtime_health(runtime, bridge_age_seconds, bridge_error="", reader_
         status=status + "; no remote controls enabled",
         bridge_stale=bridge_stale,
         source_current=source_current,
+        diagnostic_source_current=diagnostic_current,
+        diagnostic_source_age_seconds=(source_age if _valid_age(source_age)
+            and isinstance(value.get("fault_diagnostic_measurement"), dict) else None),
         source_stale=not source_current,
         source_age_seconds=source_age if _valid_age(source_age) else None,
         source_reported_age_seconds=reported_age if _valid_age(reported_age) else None,
@@ -142,13 +160,28 @@ def _complete_input_banks(latest):
         if kind == "digital_input":
             if any(type(value) is not bool for value in values):
                 return False
-        elif any(type(value) not in (int, float) or not math.isfinite(value) for value in values):
+        elif any(not _finite_number(value) for value in values):
             return False
         scaled = bank.get("legacy_scaled_values")
         if scaled is not None and (not isinstance(scaled, list) or len(scaled) != count or any(
-                type(value) not in (int, float) or not math.isfinite(value) for value in scaled)):
+                not _finite_number(value) for value in scaled)):
             return False
     return True
+
+
+def _diagnostic_current(runtime, bridge_stale, source_age, session_changed, protocol_error):
+    """Independent settled-FAULT input observation, never lifecycle recovery."""
+    if (bridge_stale or session_changed or protocol_error
+            or not _valid_age(source_age) or source_age >= SOURCE_MAX_AGE_SECONDS
+            or runtime.get("stale") is not True or runtime.get("measurement_current") is not False
+            or not runtime.get("error") or not _complete_input_banks(runtime.get("latest"))):
+        return False
+    try:
+        identity = validate_runtime_identity(runtime)
+    except ValueError:
+        return False
+    return (identity["recovery"]["required"] is False
+            and fault_diagnostic_measurement_current(runtime))
 
 
 def project_runtime_contract(runtime, bridge_age_seconds, bridge_error="", reader_started=True,
@@ -161,12 +194,12 @@ def project_runtime_contract(runtime, bridge_age_seconds, bridge_error="", reade
     banks and independent source/bridge age; cached Tango ON is insufficient.
     """
     health = project_runtime_health(runtime, bridge_age_seconds, bridge_error, reader_started,
-                                    read_duration_seconds)
+                                    read_duration_seconds, session_changed, protocol_error)
     health.update(quality="UNAVAILABLE", session_id=None, build_id=None,
                   state_revision=None, recovery=None, protocol_error="",
                   execution_allowed=False, hardware_writes=False)
     if not reader_started or bridge_error or runtime is None:
-        health.update(source_current=False, source_stale=True)
+        health.update(source_current=False, source_stale=True, diagnostic_source_current=False)
         return health
     try:
         identity = validate_runtime_identity(runtime)
@@ -174,7 +207,8 @@ def project_runtime_contract(runtime, bridge_age_seconds, bridge_error="", reade
             raise ValueError(str(protocol_error)[:1000])
     except ValueError as error:
         health.update(quality="INCOMPATIBLE", tango_state="UNKNOWN", source_current=False,
-                      source_stale=True, protocol_error=str(error), status=str(error))
+                      source_stale=True, diagnostic_source_current=False,
+                      protocol_error=str(error), status=str(error))
         return health
     health.update(identity)
     if health["bridge_stale"]:

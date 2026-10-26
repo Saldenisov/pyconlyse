@@ -81,9 +81,17 @@ class ApplicationView(object):
             for field in ("age_seconds", "everest_read_age_seconds", "software_state_age_seconds"):
                 if type(value.get(field)) in (int, float):
                     value[field] += age
+            diagnostic = value.get("fault_diagnostic_measurement")
+            if isinstance(diagnostic, dict) and type(diagnostic.get("age_seconds")) in (int, float):
+                diagnostic["age_seconds"] += age
+                if diagnostic["age_seconds"] >= 2:
+                    diagnostic["current"] = False
             alarm = value.get("cooling_safety", {})
             if alarm.get("active") and type(alarm.get("remaining_seconds")) in (int, float):
                 alarm["remaining_seconds"] = max(0, alarm["remaining_seconds"] - age)
+            for item in alarm.get("circuits", []) + alarm.get("confirmation_candidates", []):
+                if type(item.get("remaining_seconds")) in (int, float):
+                    item["remaining_seconds"] = max(0, item["remaining_seconds"] - age)
         value["stale"] = bool(value.get("stale", True) or not current
                               or type(value.get("age_seconds")) in (int, float)
                               and value["age_seconds"] >= 2)
@@ -97,12 +105,24 @@ class ApplicationView(object):
         if not current or action:
             value.setdefault("control", {})["lease"] = None
             value["control"]["enabled"] = False
+            if isinstance(value.get("fault_diagnostic_measurement"), dict):
+                value["fault_diagnostic_measurement"]["current"] = False
         if not current:
             value["software_state_current"] = False
             value["measurement_current"] = False
             value["control"]["enabled"] = False
             for capability in value["control"].get("capabilities", {}).values():
                 capability.update(enabled=False, reason="APPLICATION_METADATA_NOT_CURRENT")
+        alarm = value.get("cooling_safety", {})
+        if alarm.get("policy_version") == 2:
+            alarm["confirmation_candidates"] = [row for row in alarm.get("confirmation_candidates", [])
+                if type(row.get("remaining_seconds")) in (int, float) and row["remaining_seconds"] > 0]
+            alarm["confirmation_required"] = bool(alarm["confirmation_candidates"]
+                and alarm.get("stop_state") == "NONE" and current and not action)
+        capabilities = value.get("control", {}).get("capabilities", {})
+        if "cooling.confirm_circulation" in capabilities:
+            from .control_policy import command_capabilities
+            capabilities["cooling.confirm_circulation"] = command_capabilities(value)["cooling.confirm_circulation"]
         return value
 
     def issue_command_lease(self, body):

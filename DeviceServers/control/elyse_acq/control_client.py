@@ -14,6 +14,7 @@ from .control_runtime_health import INPUT_BANKS
 from legacy.xp_acq_control.elyse_agent.acquisition_http import request_signature, response_signature
 from legacy.xp_acq_control.elyse_agent.acquisition_remote import command_signature, validate_request, OPERATIONS
 from legacy.xp_acq_control.elyse_agent.runtime_identity import valid_hex
+from legacy.xp_acq_control.elyse_agent.standard_banks import fault_diagnostic_measurement_current
 
 
 class ControlClient:
@@ -169,24 +170,28 @@ class ControlBridge:
             fresh = bool(transport and value.get("state") == "RUNNING" and value.get("stale") is False
                          and not value.get("error") and type(value.get("age_seconds")) in (int, float)
                          and math.isfinite(value["age_seconds"]) and 0 <= value["age_seconds"] + age < 2)
+            diagnostic = bool(transport and fault_diagnostic_measurement_current(value)
+                              and 0 <= value["age_seconds"] + age < 2)
             latest = value.get("latest") if value else None
             banks = latest.get("banks", {}) if isinstance(latest, dict) else {}
-            if fresh:
-                fresh = latest.get("source") == "python_daqmx_acquisition" and latest.get("simulated") is False
+            if fresh or diagnostic:
+                valid = latest.get("source") == "python_daqmx_acquisition" and latest.get("simulated") is False
                 for name, (kind, device, size) in INPUT_BANKS.items():
                     record = banks.get(name, {})
                     values = record.get("values")
-                    fresh = fresh and record.get("kind") == kind and record.get("device") == device and isinstance(values, list) and len(values) == size
-                    if fresh:
-                        fresh = all(type(item) is bool for item in values) if kind == "digital_input" else all(
+                    valid = valid and record.get("kind") == kind and record.get("device") == device and isinstance(values, list) and len(values) == size
+                    if valid:
+                        valid = all(type(item) is bool for item in values) if kind == "digital_input" else all(
                             type(item) in (int, float) and math.isfinite(item) for item in values)
-            if value is not None and not fresh:
+                fresh, diagnostic = fresh and valid, diagnostic and valid
+            if value is not None and not (fresh or diagnostic):
                 value["latest"] = None
             quality = "FRESH" if fresh else (value.get("state", "UNAVAILABLE") if transport else "UNAVAILABLE")
             if quality == "RUNNING":
                 quality = "STALE"
             return dict(source="xp_python_acquisition_control", telemetry_schema="python_runtime_inputs_not_labview_27_banks",
                         quality=quality, bridge_age_seconds=age, bridge_error=self.error, runtime=value,
-                        source_current=bool(fresh), measurements_hidden=not fresh,
+                        source_current=bool(fresh), diagnostic_source_current=bool(diagnostic),
+                        measurements_hidden=not (fresh or diagnostic),
                         commands_enabled=self.client.enabled and bool(transport) and value.get("control", {}).get("enabled") is True,
                         automatic_command_retry=False)

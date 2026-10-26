@@ -35,6 +35,22 @@ const authorizationRefusal = (request, code = 'hardware_approval_required') => (
     outcome: 'REJECTED', hardware_acknowledged: false, automatic_retry: false,
     dispatch_attempted: false, error: 'Hardware approval declined before dispatch' } });
 
+test('water observation uses existing command facade with exact episode IDs', async () => {
+  const request = { ...command(), operation: 'cooling.confirm_circulation', value: { incident_ids: ['1'.repeat(32)] } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => receipt(request) });
+  await acqTelemetryClient.command(request);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls[0][0]).toBe('/api/elyse/acquisition/control/commands');
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(request);
+});
+
+test('invalid water observation neither transmits nor consumes an approval', async () => {
+  global.fetch = jest.fn(); setHardwareApprovalNonce('c'.repeat(64));
+  await expect(acqTelemetryClient.command({ ...command(), operation: 'cooling.confirm_circulation',
+    value: { incident_ids: [] } })).rejects.toThrow('Incidents de refroidissement');
+  expect(fetch).not.toHaveBeenCalled(); expect(getHardwareApprovalNonce()).toBe('c'.repeat(64));
+});
+
 test('structured synchronization preserves exact parameters and uses same command facade', async () => {
   const request = { ...command(), operation: 'counter_timing.set', value: { counter: 2, delay_us: 1.25, width_us: 3.5 } };
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => receipt(request) });

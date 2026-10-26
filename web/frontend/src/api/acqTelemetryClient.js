@@ -1,5 +1,5 @@
 import { fetchWithHardwareApproval } from './csrfRequest';
-import { validSyncValue } from '../acquisitionCommandValue';
+import { CIRCULATION_CONFIRMATION, validCirculationConfirmationValue, validSyncValue } from '../acquisitionCommandValue';
 import { rememberAcquisitionApproval, prepareAcquisitionApproval, usesLocalAcquisitionApproval } from './acqLocalApproval';
 
 // Both channels use the fixed web facade. No browser-side XP/NI/PSP path.
@@ -79,6 +79,9 @@ export const acqTelemetryClient = Object.freeze({
     return value;
   },
   async command(command) {
+    if (command?.operation === CIRCULATION_CONFIRMATION && !validCirculationConfirmationValue(command.value)) {
+      throw new Error('Incidents de refroidissement explicites et distincts requis pour confirmer la circulation.');
+    }
     if (command?.operation === 'counter_timing.set' && !validSyncValue(command.value)) {
       throw new Error('Compteur C10, délai et largeur explicites et valides requis.');
     }

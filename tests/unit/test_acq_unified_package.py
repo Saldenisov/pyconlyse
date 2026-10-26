@@ -29,7 +29,7 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'acq-unified-operator-test-20261026-v8-r12'
+    assert result['release'] == 'acq-unified-cooling-confirmation-20261026-v8-r13'
     assert result['operator_supervised_test_supported'] is True
     assert result['operator_test_is_physical_qualification'] is False
     assert 'TaskHandle metadata before stdin reader' in result['native_bootstrap']
@@ -43,7 +43,7 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert result['native_software_status_banks'] == ['EPS', 'DPS']
     assert result['execution_sampling_default'] is None
     assert 'not hardware readback' in result['native_software_status_semantics']
-    assert result['named_operation_count'] == 24
+    assert result['named_operation_count'] == 25
     assert result['matched_control_capability_set_required'] is True
     assert result['beamline_pulses_default_enabled'] is False
     assert result['faraday_hors_commands_qualified'] is False

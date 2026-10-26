@@ -84,6 +84,16 @@ class LocalOperatorGUITests(unittest.TestCase):
         self.assertIn('disk failed', rendered)
         self.assertNotIn('old gap', rendered)
 
+    def test_confirmed_red_indication_does_not_crash_refresh_or_claim_a_countdown(self):
+        value = state()
+        value['cooling_safety'].update(active=True, circuits=[dict(circuit='SECTION')],
+            countdown_required=False, remaining_seconds=None, stop_state='NONE',
+            automatic_stop_available=True, journal_history_warning='', journal_error='')
+        rendered = application_alarm_text(value)
+        self.assertIn('COOLING INDICATION RED: SECTION', rendered)
+        self.assertIn('confirmed by operator', rendered)
+        self.assertNotIn('countdown:', rendered)
+
 
 if __name__ == '__main__':
     unittest.main()

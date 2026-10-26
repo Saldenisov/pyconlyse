@@ -42,6 +42,8 @@ class TelemetryView(object):
             # a current image. Native packets become null/unavailable instead.
             value.update(stale=True, error='OWNER_STATE_BUSY', telemetry_view_current=False,
                          measurement_current=False, software_state_current=False)
+            if isinstance(value.get('fault_diagnostic_measurement'), dict):
+                value['fault_diagnostic_measurement']['current'] = False
             return value
 
     def status(self):

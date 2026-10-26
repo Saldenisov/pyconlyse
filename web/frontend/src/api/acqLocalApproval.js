@@ -1,6 +1,7 @@
 import {
   fetchWithCsrfToken, getHardwareApprovalNonce, setHardwareApprovalNonce,
 } from './csrfRequest';
+import { CIRCULATION_CONFIRMATION, validCirculationConfirmationValue } from '../acquisitionCommandValue';
 
 let mode = 'JWT_APPROVAL';
 
@@ -14,6 +15,9 @@ export function usesLocalAcquisitionApproval() { return mode === 'LOCAL_CONSOLE'
 export async function prepareAcquisitionApproval(command, signal) {
   if (mode !== 'LOCAL_CONSOLE') return null;
   try {
+    if (command?.operation === CIRCULATION_CONFIRMATION && !validCirculationConfirmationValue(command.value)) {
+      throw new Error('Incidents de refroidissement explicites et distincts requis.');
+    }
     if (getHardwareApprovalNonce()) throw new Error('Une autre autorisation est déjà armée.');
     const response = await fetchWithCsrfToken('/api/elyse/acquisition/control/approvals', {
       method: 'POST', credentials: 'include', cache: 'no-store', signal,

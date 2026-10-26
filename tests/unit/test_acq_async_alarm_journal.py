@@ -35,6 +35,19 @@ def circuits(fault=True):
                 CANON=dict(fault=False, quality="FRESH", causes=[]))
 
 
+def lose_after_baseline(alarm):
+    """Journal tests begin after a distinct two-second green active baseline."""
+    original, now = alarm.clock, alarm.clock()
+    try:
+        alarm.clock = lambda: now - cooling_safety.RECOVERY_SECONDS
+        alarm.observe(circuits(False), True, -2)
+        alarm.clock = lambda: now
+        alarm.observe(circuits(False), True, -1)
+    finally:
+        alarm.clock = original
+    alarm.observe(circuits(), True, 1)
+
+
 def saved_incident(deadline=1120.):
     return dict(incidents=dict(CANON=dict(circuit="CANON", started_utc=utc(deadline - 120),
                 deadline_utc=utc(deadline), deadline_epoch=deadline,
@@ -129,7 +142,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
         alarm, worker = self.make(storage, clock=clock, wall=Clock(1000.))
         wait_until(lambda: alarm.snapshot()["journal_durable"])
         start = time.monotonic()
-        alarm.observe(circuits(), True, 1)
+        lose_after_baseline(alarm)
         self.assertLess(time.monotonic() - start, .2)
         self.assertTrue(storage.write_entered.wait(2))
         state = alarm.snapshot()
@@ -155,7 +168,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
         self.assertTrue(storage.load_entered.wait(2))
         self.assertFalse(alarm.snapshot()["journal_ready"])
         self.assertIn("initial load", alarm.snapshot()["journal_error"])
-        alarm.observe(circuits(), True, 1)
+        lose_after_baseline(alarm)
         self.assertEqual(alarm.snapshot()["remaining_seconds"], 120.)
         self.assertEqual(storage.rows, [])
         clock.value, wall.value = 10., 1010.
@@ -173,7 +186,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
         storage.fail_load = True
         alarm, worker = self.make(storage, clock=clock, wall=Clock(1000.))
         wait_until(lambda: "load failed" in alarm.snapshot()["journal_error"])
-        alarm.observe(circuits(), True, 1)
+        lose_after_baseline(alarm)
         clock.value = 120.
         self.assertTrue(alarm.tick(True))
         self.assertEqual(storage.rows, [])
@@ -186,7 +199,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
         storage = Storage(dict(incidents={}, stop_state="NOT_A_STATE"))
         alarm, worker = self.make(storage)
         wait_until(lambda: "Invalid persisted alarm state" in alarm.snapshot()["journal_error"])
-        alarm.observe(circuits(), True, 1)
+        lose_after_baseline(alarm)
         self.assertFalse(alarm.snapshot()["journal_ready"])
         self.assertFalse(alarm.snapshot()["journal_durable"])
         self.assertEqual(storage.rows, [])
@@ -207,7 +220,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
         storage = Storage(block_write=True)
         alarm, worker = self.make(storage, capacity=1)
         wait_until(lambda: alarm.snapshot()["journal_ready"])
-        alarm.observe(circuits(), True, 1)
+        lose_after_baseline(alarm)
         self.assertTrue(storage.write_entered.wait(2))
         alarm.stop_result("injected stop result")
         state = alarm.snapshot()
@@ -224,7 +237,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
         storage.fail_write = True
         alarm, worker = self.make(storage)
         wait_until(lambda: alarm.snapshot()["journal_ready"])
-        alarm.observe(circuits(), True, 1)
+        lose_after_baseline(alarm)
         wait_until(lambda: "injected disk failure" in alarm.snapshot()["journal_error"])
         self.assertEqual(alarm.snapshot()["journal_committed"], 0)
         self.assertFalse(alarm.close(0))
@@ -238,7 +251,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
         storage, clock = Storage(), Clock()
         alarm, worker = self.make(storage, clock=clock)
         wait_until(lambda: alarm.snapshot()["journal_ready"])
-        alarm.observe(circuits(), True, 1)
+        lose_after_baseline(alarm)
         wait_until(lambda: alarm.snapshot()["journal_durable"])
         storage.write_release.clear()
         alarm.observe(circuits(False), True, 2)
@@ -278,7 +291,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
             alarm = CoolingSafety.with_journal(path, "test", clock=clock, wall_clock=wall)
             try:
                 wait_until(lambda: alarm.snapshot()["journal_ready"])
-                alarm.observe(circuits(), True, 1)
+                lose_after_baseline(alarm)
                 wait_until(lambda: alarm.snapshot()["journal_durable"])
             finally:
                 self.assertTrue(alarm.close(3))
@@ -306,7 +319,7 @@ class AsyncAlarmJournalTests(unittest.TestCase):
             alarm = CoolingSafety(journal=worker)
             try:
                 wait_until(lambda: alarm.snapshot()["journal_ready"])
-                alarm.observe(circuits(), True, 1)
+                lose_after_baseline(alarm)
                 wait_until(lambda: alarm.snapshot()["journal_durable"])
                 self.assertEqual(len(calls), 2)
                 self.assertEqual(len(set(calls)), 1)

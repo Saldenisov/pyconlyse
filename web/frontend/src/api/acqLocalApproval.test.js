@@ -36,3 +36,21 @@ test('lost approval response is a known non-dispatch rejection and never retried
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(getHardwareApprovalNonce()).toBeNull();
 });
+
+test('local water confirmation approval binds the unchanged incident IDs', async () => {
+  rememberAcquisitionApproval({ approval_mode: 'LOCAL_CONSOLE' });
+  const request = { ...command, operation: 'cooling.confirm_circulation', value: { incident_ids: ['1'.repeat(32)] } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+    schema_version: 1, nonce: 'c'.repeat(64), dispatch_attempted: false, hardware_writes: false,
+  }) });
+  expect(await prepareAcquisitionApproval(request)).toBeNull();
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(request);
+  expect(getHardwareApprovalNonce()).toBe('c'.repeat(64));
+});
+
+test('invalid local water confirmation cannot create an approval', async () => {
+  rememberAcquisitionApproval({ approval_mode: 'LOCAL_CONSOLE' }); global.fetch = jest.fn();
+  const rejected = await prepareAcquisitionApproval({ ...command, operation: 'cooling.confirm_circulation', value: { incident_ids: [] } });
+  expect(rejected.receipt.dispatch_attempted).toBe(false);
+  expect(fetch).not.toHaveBeenCalled(); expect(getHardwareApprovalNonce()).toBeNull();
+});

@@ -43,6 +43,16 @@ class AcquisitionRuntime(object):
         self._error = ""
         self._latest = None
         self._received_at = None
+        self._fault_diagnostic_owner = None
+        self._fault_diagnostic_expected_owner = None
+        self._fault_diagnostic_expected_generation = None
+        self._fault_diagnostic_generation = None
+        self._fault_diagnostic_revision = None
+        self._fault_diagnostic_sequence = None
+        self._fault_diagnostic_received_at = None
+        self._fault_diagnostic_read_in_progress = False
+        self._fault_diagnostic_failed = False
+        self._fault_diagnostic_error = ""
         self._sequence = 0
         self._everest_seen = None
         self._operation = None
@@ -520,6 +530,63 @@ class AcquisitionRuntime(object):
         with self._lock:
             self._everest_seen = self._clock()
 
+    def _fault_diagnostic_owner_snapshot(self, native=None):
+        """RAM-only identity/lifecycle proof, independent of a read RPC's phase."""
+        backend = self._backend
+        if (self._state != "FAULT" or backend is None or not backend.resource_count
+                or getattr(backend, "startup_complete", False) is not True
+                or self._pending is not None or self._operation is not None
+                or self._shutdown_requested or self._cancel.is_set()
+                or self._recovery_latched or self._marker_cleanup_uncertain
+                or self._fault_diagnostic_failed or backend is not self._fault_diagnostic_expected_owner):
+            return None
+        if native is None:
+            isolation = getattr(backend, "isolation_snapshot", None)
+            if isolation is None:
+                return None
+            native = isolation()
+        owner = native
+        if (owner.get("ownership_uncertain") is not False
+                or not owner.get("worker_generation")
+                or owner.get("worker_generation") != self._fault_diagnostic_expected_generation
+                or owner.get("resource_count", 0) <= 0):
+            return None
+        return owner
+
+    def _fault_diagnostic_ready(self):
+        """Admit a new read only after the preceding native call has settled."""
+        owner = self._fault_diagnostic_owner_snapshot()
+        return bool(owner is not None and owner.get("worker_state") == "IDLE_OWNED"
+                    and owner.get("active_request_id", "UNKNOWN") is None)
+
+    def _fault_diagnostic_snapshot(self, now, native=None):
+        age = (None if self._fault_diagnostic_received_at is None
+               else now - self._fault_diagnostic_received_at)
+        owner = self._fault_diagnostic_owner_snapshot(native)
+        reading = bool(owner is not None and self._fault_diagnostic_read_in_progress
+            and owner.get("worker_state") == "EXECUTING_READ_SNAPSHOT"
+            and type(owner.get("active_request_id")) is int and owner["active_request_id"] > 0)
+        settled = bool(owner is not None and owner.get("worker_state") == "IDLE_OWNED"
+                       and owner.get("active_request_id", "UNKNOWN") is None)
+        # A new read does not refresh or invalidate a completed sample. Only
+        # this runtime's read-only RPC may coexist with its still-fresh image.
+        current = bool((settled or reading)
+            and self._backend is self._fault_diagnostic_owner
+            and self._state_revision == self._fault_diagnostic_revision
+            and self._sequence == self._fault_diagnostic_sequence
+            and self._received_at == self._fault_diagnostic_received_at
+            and type(age) in (int, float) and 0 <= age < 2
+            and owner.get("worker_generation") == self._fault_diagnostic_generation)
+        return dict(current=current, session_id=self._identity["session_id"],
+            sequence=self._fault_diagnostic_sequence, age_seconds=age,
+            worker_generation=self._fault_diagnostic_generation,
+            source="settled_fault_owner_readback", command_admission=False,
+            read_in_progress=reading,
+            error=self._fault_diagnostic_error)
+
+    def _observe_fault_diagnostic(self, latest):
+        pass  # A diagnostic read never executes a stage or clears the fault.
+
     def snapshot(self):
         with self._lock:
             now = self._clock()
@@ -549,6 +616,7 @@ class AcquisitionRuntime(object):
                 control_profile=getattr(self._backend, "control_profile", None),
                 sequence=self._sequence, latest=copy.deepcopy(self._latest),
                 age_seconds=age,
+                fault_diagnostic_measurement=self._fault_diagnostic_snapshot(now),
                 stale=self._state != "RUNNING" or recovery["required"] or age is None or age > 2,
                 resource_count=self._backend.resource_count if self._backend is not None else 0,
                 everest_read_age_seconds=(None if self._everest_seen is None
@@ -610,6 +678,14 @@ class AcquisitionRuntime(object):
         # An output may already have changed. Releasing NI tasks is NOT a
         # substitute for electrical stop; keep the same owner for Arret/retry.
         with self._lock:
+            self._fault_diagnostic_owner = None
+            self._fault_diagnostic_expected_owner = self._backend
+            isolated = getattr(self._backend, "isolation_snapshot", None)
+            self._fault_diagnostic_expected_generation = (isolated().get("worker_generation")
+                                                         if isolated is not None else None)
+            self._fault_diagnostic_received_at = None
+            self._fault_diagnostic_failed = False
+            self._fault_diagnostic_error = ""
             self._error = type(error).__name__ + ": " + str(error)
             self._invalidate_ht_sequences()
             # A failing in-flight start/read must not erase a stop already
@@ -667,6 +743,7 @@ class AcquisitionRuntime(object):
                 if pending == "counter_timing":
                     self._counter_timing_command = None
                 running = self._state == "RUNNING"
+                diagnostic = self._fault_diagnostic_ready()
             if pending == "initialize":
                 try:
                     with self._lock:
@@ -855,23 +932,61 @@ class AcquisitionRuntime(object):
                     self._finish_stage()
                 except Exception as error:
                     self._procedure_fault(error)
-            elif running:
+            elif running or diagnostic:
                 try:
+                    if diagnostic:
+                        with self._lock:
+                            if not self._fault_diagnostic_ready():
+                                continue
+                            self._require_recovery_clear()
+                            diagnostic_backend = self._backend
+                            diagnostic_revision = self._state_revision
+                            diagnostic_generation = self._backend.isolation_snapshot()["worker_generation"]
+                            self._fault_diagnostic_read_in_progress = True
                     latest = self._backend.read_snapshot(self._cancel)
                     with self._lock:
-                        if not self._cancel.is_set() and self._state == "RUNNING" and self._pending is None:
+                        diagnostic_current = (diagnostic and self._fault_diagnostic_ready()
+                            and self._backend is diagnostic_backend
+                            and self._state_revision == diagnostic_revision
+                            and self._backend.isolation_snapshot()["worker_generation"] == diagnostic_generation)
+                        if diagnostic_current:
+                            if (type(latest) is not dict or latest.get("source") != "python_daqmx_acquisition"
+                                    or latest.get("simulated") is not False or type(latest.get("banks")) is not dict):
+                                raise RuntimeError("Invalid fault diagnostic input sample")
+                            validator = getattr(self, "_valid_execution_sample", None)
+                            if validator is not None and not validator(latest):
+                                raise RuntimeError("Incomplete fault diagnostic input sample")
+                        if diagnostic_current or (not diagnostic and not self._cancel.is_set()
+                                and self._state == "RUNNING" and self._pending is None):
                             self._sequence += 1
                             self._latest = copy.deepcopy(latest)
                             self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                             self._received_at = self._clock()
-                    self._run_cooling_guard(latest)
+                            if diagnostic_current:
+                                self._fault_diagnostic_owner = diagnostic_backend
+                                self._fault_diagnostic_generation = diagnostic_generation
+                                self._fault_diagnostic_revision = diagnostic_revision
+                                self._fault_diagnostic_sequence = self._sequence
+                                self._fault_diagnostic_received_at = self._received_at
+                                self._observe_fault_diagnostic(latest)
+                    if not diagnostic:
+                        self._run_cooling_guard(latest)
                 except AcquisitionCancelled:
                     pass  # Pending close is processed on this same owner thread.
                 except Exception as error:
-                    if self._general_stop_required:
+                    if diagnostic:
+                        with self._lock:
+                            self._fault_diagnostic_failed = True
+                            self._fault_diagnostic_received_at = None
+                            self._fault_diagnostic_error = type(error).__name__ + ": " + str(error)
+                    elif self._general_stop_required:
                         self._procedure_fault(error)
                     else:
                         self._close(type(error).__name__ + ": " + str(error))
+                finally:
+                    if diagnostic:
+                        with self._lock:
+                            self._fault_diagnostic_read_in_progress = False
             with self._lock:
                 if self._state == "STOPPED":
                     return

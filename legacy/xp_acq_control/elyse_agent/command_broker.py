@@ -122,14 +122,22 @@ class CommandBroker(object):
                     if self._lifecycle_pending.is_set():
                         raise RuntimeError("LOCAL_LIFECYCLE_PENDING")
                     return self.runtime.dispatch_remote(request["operation"], request["value"])
-                self.runtime.fenced_local_request(
+                dispatched = self.runtime.fenced_local_request(
                     request["session_id"], request["expected_revision"],
                     dispatch)
             except Exception as error:
                 result["error"] = str(error)[:300]
                 result["error_type"] = type(error).__name__
             else:
-                result["outcome"] = "QUEUED"
+                if (request["operation"] == "cooling.confirm_circulation"
+                        and isinstance(dispatched, dict)
+                        and dispatched.get("completed_without_hardware") is True
+                        and dispatched.get("confirmed_incident_ids") == request["value"]["incident_ids"]):
+                    result.update(outcome="COMPLETED", operator_confirmation_only=True,
+                        hardware_writes=False,
+                        confirmed_incident_ids=list(dispatched["confirmed_incident_ids"]))
+                else:
+                    result["outcome"] = "QUEUED"
             return copy.deepcopy(result)
 
     def begin(self, operation):

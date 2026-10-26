@@ -91,6 +91,43 @@ def test_get_redacts_leases_and_never_sends_commands(setup_api):
     assert writes(setup_api) == []
 
 
+def test_control_get_retains_same_revision_circulation_prompt_and_conservative_age(setup_api):
+    setup_api[3]["runtime"]["cooling_safety"] = dict(schema_version=1, policy_version=2,
+        active=True, confirmation_required=True, remaining_seconds=90., stop_state="NONE",
+        confirmation_candidates=[dict(incident_id="e" * 32, circuit="SECTION",
+            deadline_utc="2026-10-26T12:02:00+00:00", remaining_seconds=90.)],
+        circuits=[dict(incident_id="e" * 32, circuit="SECTION", remaining_seconds=90.)])
+    response = setup_api[1].get(ROOT)
+    assert response.status_code == 200 and response.json["revision"] == 7
+    alarm = response.json["cooling_safety"]
+    assert alarm["confirmation_required"] is True
+    assert alarm["confirmation_candidates"][0]["incident_id"] == "e" * 32
+    assert alarm["remaining_seconds"] == pytest.approx(89.9)
+    assert alarm["circuits"][0]["remaining_seconds"] == pytest.approx(89.9)
+    assert setup_api[3]["runtime"]["cooling_safety"]["remaining_seconds"] == 90.
+    assert writes(setup_api) == []
+
+
+def test_circulation_confirmation_carries_exact_ids_through_authenticated_facade(setup_api):
+    command = request_command(operation="cooling.confirm_circulation", value=dict(incident_ids=["e" * 32]))
+    response = post(setup_api, command)
+    assert response.status_code == 200
+    assert writes(setup_api) == [("command", "ExecuteCommand", command)]
+    assert response.json["receipt"]["hardware_acknowledged"] is False
+
+
+def test_bridge_elapsed_time_expires_water_confirmation_before_web_prompt(setup_api):
+    setup_api[3]["runtime"]["cooling_safety"] = dict(schema_version=1, policy_version=2,
+        active=True, confirmation_required=True, remaining_seconds=.05, stop_state="NONE",
+        confirmation_candidates=[dict(incident_id="e" * 32, circuit="SECTION",
+            deadline_utc="2026-10-26T12:02:00+00:00", remaining_seconds=.05)], circuits=[])
+    value = setup_api[1].get(ROOT).json
+    assert value["cooling_safety"]["confirmation_required"] is False
+    assert value["cooling_safety"]["confirmation_candidates"] == []
+    assert value["capabilities"]["cooling.confirm_circulation"]["enabled"] is False
+    assert writes(setup_api) == []
+
+
 def test_live_commands_require_auth_even_in_development(setup_api):
     assert post(setup_api, auth=False).status_code == 401
     assert writes(setup_api) == []

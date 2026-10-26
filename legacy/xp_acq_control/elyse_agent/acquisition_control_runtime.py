@@ -25,6 +25,7 @@ from .hardware_plan import AI_BANKS, DI_BANKS
 from .acquisition_procedures import ProcedureCancelled
 from .acquisition_backend import AcquisitionCancelled
 from .supervised_test import SUPERVISED_OPERATIONS, supervised_enabled
+from .command_protocol import validate_circulation_confirmation
 
 
 def _finite_number(value):
@@ -281,11 +282,14 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             age = None if self._received_at is None else max(0, now - self._received_at)
             recovery = self._recovery_latched or self._marker_cleanup_uncertain or self._state == 'RECOVERY_REQUIRED'
             current = self._measurement_current(age)
+            isolated = getattr(self._backend, "isolation_snapshot", None)
+            native = isolated() if isolated is not None else None
             result = dict(self._identity, state=self._state, sequence=self._sequence,
                         state_revision=self._state_revision, error=self._error,
                         resource_count=0 if self._backend is None else self._backend.resource_count,
                         latest=copy.deepcopy(self._latest), age_seconds=age,
                         stale=not current, measurement_current=current,
+                        fault_diagnostic_measurement=self._fault_diagnostic_snapshot(now, native),
                         telemetry_view_current=True,
                         telemetry_bridge_mode=((self._state == 'IDLE' and not self._error and not recovery
                             or self._cold_prior_recovery_bridge and self._state == 'RECOVERY_REQUIRED'
@@ -293,6 +297,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                             and self._backend is None and self._operation is None
                             and self._pending is None and not self._shutdown_requested
                         ))
+            if native is not None:
+                result["native_isolation"] = native
             result.update(self._software_telemetry(now))
             return result
         finally:
@@ -382,7 +388,9 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 or context.get("backend_identity") != id(getattr(self._backend, "backend", self._backend))
                 or self._pending is not None or self._shutdown_requested or self._cancel.is_set()
                 or self._recovery_latched or self._marker_cleanup_uncertain
-                or self._state not in ("INITIALIZING", "RUNNING", "EXECUTING")):
+                or (self._state not in ("INITIALIZING", "RUNNING", "EXECUTING")
+                    and not (self._state == "FAULT" and self._fault_diagnostic_read_in_progress
+                             and self._operation is None))):
             return False
         isolation = getattr(self._backend, "isolation_snapshot", None)
         if isolation is not None:
@@ -464,6 +472,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             self._execution_progress = dict(value, observation_current=current)
             if not current:
                 return
+            if self._state == "FAULT":
+                return  # Only the returned diagnostic read can attest a measurement.
             if value.get("kind") == "SOFTWARE_STATE_NOT_MEASUREMENT":
                 self._observe_software_state(value)
                 return  # A software observation never refreshes measurement time.
@@ -478,6 +488,14 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 self._latest = sample
                 self._latest["received_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 self._received_at = self._clock() - sample_age
+                # Feed the same accepted owner image to the RAM cooling policy
+                # immediately during long procedures. Never enter the source
+                # cooling guard or issue NI operations from this observer.
+                previous_read_at = self._cooling_read_at
+                self._circuits, unused = decode_publications(runtime_publications(sample))
+                self._cooling_read_at = self._received_at
+                self.cooling.observe(self._circuits, self._general_stop_required, observation_id=self._sequence)
+                self._observe_supervised_cooling(previous_read_at)
 
     def _verify_cooling(self, backend, cancel):
         self._startup_phase = "WAIT_CANON_SECTION_CIRCULATION"
@@ -626,6 +644,14 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             raise RuntimeError("Start blocked: fresh normal Canon and Section cooling indications required")
 
     def dispatch_remote(self, operation, value):
+        if operation == "cooling.confirm_circulation":
+            with self._lock:
+                confirmation = validate_circulation_confirmation(value)
+                require_command(self.snapshot(), operation, confirmation)
+                self.cooling.confirm_circulation(confirmation["incident_ids"],
+                                                 operator="authenticated_remote_operator")
+                return dict(completed_without_hardware=True,
+                            confirmed_incident_ids=list(confirmation["incident_ids"]))
         require_command(self.snapshot(), operation, value)
         if operation == "modulator.general.start":
             return self.general_start(operator_confirmed=True)
@@ -663,6 +689,12 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             self.cooling.observe(self._circuits, self._general_stop_required, observation_id=self._sequence)
             self._observe_supervised_cooling(previous_read_at)
         return AcquisitionRuntime._run_cooling_guard(self, latest)
+
+    def _observe_fault_diagnostic(self, latest):
+        self._circuits, unused = decode_publications(runtime_publications(latest))
+        self._cooling_read_at = self._clock()
+        self.cooling.observe(self._circuits, self._general_stop_required, observation_id=self._sequence)
+        self._invalidate_cooling_readiness()
 
     def _tick_cooling(self):
         with self._lock:
@@ -718,6 +750,9 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             publisher = getattr(self, "telemetry_publisher", None)
             result["telemetry_delivery"] = publisher.status() if publisher is not None else dict(enabled=False)
             result["remote_setpoints_enabled"] = self.broker.enabled
+            result["pending_operation"] = self._pending
+            result["shutdown_requested"] = self._shutdown_requested
+            result["cancellation_requested"] = self._cancel.is_set()
             result["stage_execution"]["remote_commands_enabled"] = self.broker.enabled
             # Internal UI/watchdog/policy reads never consume command leases.
             # Only the authenticated HTTP snapshot reply issues one.
@@ -746,6 +781,13 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 resource_count=0 if self._backend is None else self._backend.resource_count,
                 ownership_uncertain=False,
                 automatic_restart=False)
+            if self._state == "FAULT":
+                # Bind publication proof to this same native phase capture;
+                # an idle/read transition cannot produce mismatched fields.
+                sample_now = (self._clock() if self._received_at is None or result["age_seconds"] is None
+                              else self._received_at + result["age_seconds"])
+                result["fault_diagnostic_measurement"] = self._fault_diagnostic_snapshot(
+                    sample_now, result["native_isolation"])
             result["local_handover_available"] = bool(self._handover_verifier is not None
                 and self._recovery_guard is not None
                 and self._recovery_guard.quiescence_checker is self._handover_verifier
@@ -758,8 +800,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 and self._circuits and all(item.get("quality") == "FRESH"
                 and item.get("fault") is False for item in self._circuits.values())
                 and not self.cooling.snapshot()["active"])
-            result["control"]["capabilities"] = command_capabilities(result)
             result["cooling_safety"] = self.cooling.snapshot()
+            result["control"]["capabilities"] = command_capabilities(result)
             result["chroma_configuration"] = [dict(focale=row[0], xp_resource=row[1],
                 moxa_host="10.20.30.51", moxa_port=index + 1, voltage_v=row[2],
                 current_slew_source_value=row[3], current_a=row[4], physical_output_state="UNKNOWN")

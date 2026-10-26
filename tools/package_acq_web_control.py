@@ -45,7 +45,7 @@ def package(destination, everest=False):
         files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-synchronization-20261025-r9" if everest else "acq-unified-operator-test-20261026-v8-r12", default_xp_port=8772,
+                    release="everest-cooling-confirmation-20261026-r13" if everest else "acq-unified-cooling-confirmation-20261026-v8-r13", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
@@ -83,7 +83,9 @@ def package(destination, everest=False):
             faraday_3_position_feedback_qualified=False,
             ht_increase_requires_software_supply_and_modulator=True,
             autonomous_ht_ramp=False)
-    manifest.update(named_operation_count=24, matched_control_capability_set_required=True,
+    manifest.update(named_operation_count=25, matched_control_capability_set_required=True,
+                    circulation_confirmation="Per current incident before 120s; software audit only; no NI effect",
+                    fault_readback="Fresh diagnostic inputs with sticky FAULT and independent command gates",
                     synchronization_command="counter_timing.set", synchronization_counter_card=10,
                     synchronization_already_running_required=True, synchronization_c11_enabled=False,
                     runtime_protocol_version=2, control_envelope_version=1)

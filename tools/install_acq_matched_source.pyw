@@ -57,10 +57,10 @@ def install(folder, target=TARGET, closed_check=require_closed, replace=os.repla
     before = protected_image(target)
     with open(os.path.join(folder, "manifest.json"), "r") as stream:
         manifest = json.load(stream)
-    if (manifest.get("role") != "xp_python34" or manifest.get("named_operation_count") != 24
+    if (manifest.get("role") != "xp_python34" or manifest.get("named_operation_count") != 25
             or manifest.get("commands_default_enabled") is not False
             or manifest.get("auto_initialize") is not False):
-        raise ValueError("Expected cold 24-operation XP package")
+        raise ValueError("Expected cold 25-operation XP package")
     names = [item["path"] for item in manifest["files"]]
     if len(names) != len(set(names)) or any(name.startswith("runtime/") for name in names):
         raise ValueError("Invalid source closure")

@@ -166,12 +166,13 @@ class SupervisedRuntimeTests(unittest.TestCase):
     def test_two_minute_alarm_attempts_general_stop_without_commissioning(self):
         runtime, clock, backend = self.make_runtime()
         self.general(runtime)
+        self.water(runtime, clock)
         self.read(runtime, clock, fault=True)
         self.assertFalse(runtime._stop_qualified())
-        clock.now = 119.9
+        clock.now = 121.9
         runtime._tick_cooling()
         self.assertIsNone(runtime._pending)
-        clock.now = 120.
+        clock.now = 122.
         runtime._tick_cooling()
         self.assertEqual(runtime._pending, "general_stop")
         self.assertEqual(runtime.cooling.snapshot()["stop_state"], "REQUESTED")
@@ -179,11 +180,12 @@ class SupervisedRuntimeTests(unittest.TestCase):
     def test_stop_failure_is_reported_and_journal_alarm_blocks_start(self):
         runtime, clock, backend = self.make_runtime()
         self.general(runtime)
+        self.water(runtime, clock)
         self.read(runtime, clock, fault=True)
         def fail_stop(operator_confirmed=False):
             raise RuntimeError("injected stop admission failure")
         runtime.general_stop = fail_stop
-        clock.now = 120.
+        clock.now = 122.
         runtime._tick_cooling()
         self.assertEqual(runtime.cooling.snapshot()["stop_state"], "FAILED")
         self.assertIn("injected stop admission failure", runtime.cooling.snapshot()["stop_error"])

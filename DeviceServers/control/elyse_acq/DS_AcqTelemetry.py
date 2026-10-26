@@ -152,7 +152,7 @@ class DS_AcqTelemetry(Device):
         view["commands_enabled"] = bool(view.get("commands_enabled") and metadata_current and not self._closing)
         if not same_source:
             for name, capability in runtime.get("control", {}).get("capabilities", {}).items():
-                if not name.endswith(".stop"):
+                if not name.endswith(".stop") and name != "cooling.confirm_circulation":
                     capability.update(enabled=False, reason="STANDARD_TELEMETRY_NOT_CURRENT")
         return view
 
@@ -168,7 +168,9 @@ class DS_AcqTelemetry(Device):
             raise RuntimeError("TANGO_COMMANDS_DISABLED_OR_TELEMETRY_SOURCE_NOT_CURRENT")
         from legacy.xp_acq_control.elyse_agent.acquisition_remote import strict_json, validate_request
         intent = validate_request(strict_json(request.encode("utf-8")))
-        if not intent["operation"].endswith(".stop") and not self._control_view()["telemetry_source_current"]:
+        if (not intent["operation"].endswith(".stop")
+                and intent["operation"] != "cooling.confirm_circulation"
+                and not self._control_view()["telemetry_source_current"]):
             raise RuntimeError("TANGO_COMMANDS_DISABLED_OR_TELEMETRY_SOURCE_NOT_CURRENT")
         # An explicitly requested stop is not hidden by a stale measurement
         # channel. XP still authenticates/fences the current boot and gates it.

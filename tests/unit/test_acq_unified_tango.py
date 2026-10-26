@@ -91,6 +91,21 @@ def test_stale_push_does_not_hide_explicit_stop_when_current_owner_is_authentica
         device.ExecuteCommand(intent("modulator.general.stop"))
 
 
+def test_software_circulation_confirmation_needs_metadata_but_not_current_ai_di_push(facade):
+    device, view, snapshot, calls = facade
+    operation = "cooling.confirm_circulation"
+    view["runtime"]["control"] = dict(capabilities={operation: dict(enabled=True, reason="")})
+    snapshot["publications"] = {}
+    request = json.loads(intent(operation))
+    request["value"] = dict(incident_ids=["e" * 32])
+    assert device._control_view()["runtime"]["control"]["capabilities"][operation]["enabled"] is True
+    assert json.loads(device.ExecuteCommand(json.dumps(request)))["outcome"] == "QUEUED"
+    assert calls == [request]
+    view["bridge_age_seconds"] = 3
+    with pytest.raises(RuntimeError, match="TANGO_COMMANDS_DISABLED"):
+        device.ExecuteCommand(json.dumps(request))
+
+
 @pytest.mark.parametrize('mode', ['LABVIEW_BRIDGE', 'TRANSITION_OR_FAULT'])
 def test_unified_bridge_and_transition_have_no_equipment_command_authority(facade, mode):
     device, view, snapshot, calls = facade

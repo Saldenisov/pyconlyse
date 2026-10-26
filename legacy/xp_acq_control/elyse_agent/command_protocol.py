@@ -8,7 +8,7 @@ from .runtime_identity import valid_hex
 from .acquisition_counter_timing import validate_remote_timing
 
 OPERATIONS = (
-    "cooling.start", "cooling.stop",
+    "cooling.start", "cooling.stop", "cooling.confirm_circulation",
     "modulator.general.start", "modulator.general.stop",
     "chauffage.start", "chauffage.stop", "prema.start", "prema.stop",
     "focales.start", "focales.stop", "relays_ht.start", "relays_ht.stop",
@@ -23,6 +23,17 @@ FIELDS = frozenset(("command_id", "session_id", "expected_revision", "operation"
                     "operator_confirmed", "value"))
 LEASE_SECONDS = 2.0
 MAX_COMMAND_BYTES = 2048
+
+
+def validate_circulation_confirmation(value):
+    if type(value) is not dict or set(value) != {"incident_ids"}:
+        raise ValueError("Exact current circulation incident IDs required")
+    ids = value["incident_ids"]
+    if (type(ids) is not list or not 1 <= len(ids) <= 2
+            or any(not valid_hex(item, 32) for item in ids)
+            or len(set(ids)) != len(ids)):
+        raise ValueError("One or two distinct current circulation incident IDs required")
+    return dict(incident_ids=list(ids))
 
 
 def strict_json(raw):
@@ -55,6 +66,8 @@ def validate_request(value):
             raise ValueError("Finite HT command in [0,20] kV required")
     elif value["operation"] == "counter_timing.set":
         setting = validate_remote_timing(setting)
+    elif value["operation"] == "cooling.confirm_circulation":
+        setting = validate_circulation_confirmation(setting)
     elif setting is not None:
         raise ValueError("This operation takes no setpoint")
     return dict(value, value=setting)

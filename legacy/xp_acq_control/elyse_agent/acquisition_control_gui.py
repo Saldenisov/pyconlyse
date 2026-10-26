@@ -41,9 +41,16 @@ def application_alarm_text(state):
     alarm = state["cooling_safety"]
     messages = []
     if alarm["active"]:
-        messages.append("COOLING FAULT: " + ", ".join(item["circuit"] for item in alarm["circuits"]) +
-            " | countdown: {0:.0f}s | stop: {1}".format(alarm["remaining_seconds"], alarm["stop_state"]) +
-            (" | AUTOMATIC STOP UNAVAILABLE" if not alarm["automatic_stop_available"] else ""))
+        circuits = ", ".join(item["circuit"] for item in alarm["circuits"])
+        if alarm.get("countdown_required") is False:
+            messages.append("COOLING INDICATION RED: " + circuits +
+                " | circulation confirmed by operator for this incident; additional countdown canceled")
+        else:
+            remaining = alarm.get("remaining_seconds")
+            countdown = "unknown" if remaining is None else "{0:.0f}s".format(remaining)
+            messages.append("COOLING FAULT: " + circuits +
+                " | countdown: {0} | stop: {1}".format(countdown, alarm["stop_state"]) +
+                (" | AUTOMATIC STOP UNAVAILABLE" if not alarm["automatic_stop_available"] else ""))
     history = alarm.get("journal_history_warning", "")
     if history:
         messages.append("JOURNAL HISTORY (click to acknowledge): " + history)
@@ -52,6 +59,17 @@ def application_alarm_text(state):
         if error and error not in messages:
             messages.append(error)
     return " | ".join(messages)
+
+
+def input_read_text(state):
+    diagnostic = state.get("fault_diagnostic_measurement") or {}
+    if diagnostic.get("current") is True:
+        return "NI inputs: FAULT diagnostic readback | sample {0} | age {1:.1f}s".format(
+            diagnostic["sequence"], diagnostic["age_seconds"])
+    if state.get("measurement_current") is True:
+        return "NI inputs: current | sample {0} | age {1:.1f}s".format(
+            state["sequence"], state["age_seconds"])
+    return "NI inputs: not current" + (" | " + diagnostic["error"] if diagnostic.get("error") else "")
 
 
 def initialize_available(state, closing=False):
@@ -217,6 +235,7 @@ class ControlWindow(AcquisitionWindow):
         self.link.set("{0} | Everest telemetry ACK: {1} | {2} | ".format(delivery.get("source_mode", "DISABLED"), delivery.get("everest_acknowledged", 0),
                       delivery.get("publisher_error") or delivery.get("last_error", "publisher disabled")) +
                       ("command channel not seen" if age is None else "last signed read {0:.1f}s ago".format(age)) +
+                      " | " + input_read_text(state) +
                       " | Commands: " + ("enabled / commissioned gates still apply" if state["control"]["enabled"] else "DISABLED"))
         self.alarm.set(application_alarm_text(state))
         metadata_current = state.get("application_view_current", True) and not state.get("local_request_pending")

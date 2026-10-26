@@ -37,7 +37,7 @@ class MatchedSourceInstallerTests(unittest.TestCase):
                 installed = self.target / name
                 put(installed, b"value = 1\n" if name == "module.py" else
                     b'{"site":"preserved"}' if name.startswith("config.") else data)
-        put(self.incoming / "manifest.json", json.dumps(dict(role="xp_python34", named_operation_count=24,
+        put(self.incoming / "manifest.json", json.dumps(dict(role="xp_python34", named_operation_count=25,
             commands_default_enabled=False, auto_initialize=False, files=records)).encode("utf-8"))
         put(self.target / "manifest.json", b'{"old":"manifest"}')
         put(self.target / "config.acquisition.control.json.ownership", b"prior evidence unchanged")
