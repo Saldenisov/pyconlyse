@@ -95,6 +95,29 @@ class SupervisionVITests(unittest.TestCase):
     def submit(self, value):
         return self.publisher.ingest_observation(encoded(value), "127.0.0.1")
 
+    def test_instantiated_publisher_reports_enabled_without_claiming_delivery(self):
+        value = self.publisher.status()
+        self.assertIs(value["enabled"], True)
+        self.assertEqual(value["everest_acknowledged"], 0)
+        self.assertEqual(value["owner"], "supervision")
+        self.assertEqual(value["telemetry_wire"], "federated_owner")
+        self.assertEqual(value["raw_video_period_seconds"], 1.)
+        self.assertEqual(value["vi_typed_endpoint"], "127.0.0.1:8768")
+        self.assertIs(self.runtime.snapshot()["telemetry_delivery"]["enabled"], True)
+        self.assertIsNone(self.publisher.worker)  # No socket/thread started.
+
+    def test_ack_progress_preserves_enabled_and_no_publisher_remains_disabled(self):
+        cold = SupervisionRuntime(identity=dict(self.runtime._identity), clock=lambda: self.now)
+        self.assertEqual(cold.snapshot()["telemetry_delivery"], dict(enabled=False))
+        self.publisher.ingest(xml(), "127.0.0.1")
+        self.take()  # Private RAM fixture acknowledges exactly one message.
+        value = self.runtime.snapshot()["telemetry_delivery"]
+        self.assertIs(value["enabled"], True)
+        self.assertEqual(value["everest_acknowledged"], 1)
+        self.assertEqual(value["owner"], "supervision")
+        self.assertEqual(value["telemetry_wire"], "federated_owner")
+        self.assertEqual(cold.snapshot()["telemetry_delivery"], dict(enabled=False))
+
     def test_cold_runtime_accepts_existing_27_control_xml_and_only_forwards_local_part(self):
         self.assertTrue(self.runtime.try_telemetry_snapshot()["telemetry_bridge_mode"])
         result = self.publisher.ingest(xml(), "127.0.0.1")

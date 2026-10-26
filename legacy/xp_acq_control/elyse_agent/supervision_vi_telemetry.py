@@ -385,7 +385,10 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
         OwnerTelemetryPublisher.close(self)
 
     def status(self):
-        result = OwnerTelemetryPublisher.status(self)
+        # This object exists only for explicitly enabled telemetry. Delivery
+        # errors/ACK counters describe link health separately; they must not
+        # make the GUI mistake an instantiated publisher for disabled config.
+        result = dict(OwnerTelemetryPublisher.status(self), enabled=True)
         with self.lock:
             result.update(vi_typed_endpoint="127.0.0.1:8768", vi_typed_accepted=self.typed_accepted,
                 vi_typed_duplicates=self.typed_duplicates, vi_source_session_id=self._typed_session,

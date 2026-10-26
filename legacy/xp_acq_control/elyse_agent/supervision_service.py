@@ -3,7 +3,7 @@ import importlib
 import threading
 import time
 
-from .supervision_cards import SupervisionCounterCard
+from .supervision_cards import SupervisionCounterCard, validate_initial_sync_values_us
 from .supervision_imaq import SupervisionVideoCard, source_video_configuration
 
 
@@ -56,10 +56,11 @@ class _Service(object):
 
 
 class SupervisionSyncService(_Service):
-    def __init__(self, device="sync", trusted_factory=None):
+    def __init__(self, device="sync", trusted_factory=None, initial_sync_values_us=None):
         if device != "sync":
             raise ValueError("SuperVision synchronization service identity must be sync")
         _Service.__init__(self, device, trusted_factory)
+        self.initial_sync_values_us = validate_initial_sync_values_us(initial_sync_values_us)
 
     def _make_adapter(self):
         return SupervisionCounterCard()
@@ -67,7 +68,7 @@ class SupervisionSyncService(_Service):
     def initialize(self, cancel, startup_confirmed=False):
         self._require_initialize(cancel, startup_confirmed)
         self.adapter.initialize(operator_confirmed=True, resources_released_confirmed=True,
-                                observer=self.observer)
+                                observer=self.observer, initial_sync_values_us=self.initial_sync_values_us)
         return dict(device=self.device, tasks=list(SYNC_TASKS), started_counters=list(range(8)),
                     hardware_acknowledged=False)
 

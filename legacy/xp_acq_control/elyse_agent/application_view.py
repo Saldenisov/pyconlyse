@@ -138,6 +138,38 @@ class ApplicationView(object):
         return issuer(session_id=body.get("session_id"), expected_revision=body.get("state_revision"),
                       view_deadline=at + 2, return_details=True)
 
+    def video_snapshot(self):
+        """SuperVision-only RAM image read after the cached lifecycle fence."""
+        if getattr(self.runtime, "server_variant", None) != "supervision_control_vnext":
+            return None
+        unavailable = self.runtime.unavailable_video_snapshot
+        body = self.snapshot()  # Never enters runtime policy/storage/native I/O.
+        if (body.get("application_view_current") is not True or body.get("local_request_pending")
+                or body.get("server_variant") != "supervision_control_vnext"
+                or body.get("host_role") != "supervision"
+                or body.get("state") not in ("INITIALIZING", "RUNNING", "EXECUTING", "FAULT")):
+            return unavailable("APPLICATION_METADATA_NOT_CURRENT")
+        value = self.runtime.video_snapshot()  # Independent per-card RAM only.
+        if (value.get("session_id") != body.get("session_id")
+                or value.get("state_revision") != body.get("state_revision")):
+            return unavailable("APPLICATION_VIDEO_CONTEXT_CHANGED")
+        if value.get("available"):
+            card = body.get("card_processes", {}).get("cards", {}).get("video", {})
+            if (card.get("input_current") is not True
+                    or card.get("native", {}).get("ownership_uncertain") is not False
+                    or card.get("native", {}).get("worker_generation") != value.get("capture_session_id")):
+                return unavailable("APPLICATION_VIDEO_OWNER_NOT_CURRENT")
+        # Another metadata capture is harmless, but a changed owner/revision
+        # or accepted lifecycle request cannot rebase pixels to that new view.
+        after = self.snapshot()
+        if (after.get("application_view_current") is not True or after.get("local_request_pending")
+                or after.get("session_id") != body.get("session_id")
+                or after.get("state_revision") != body.get("state_revision")
+                or value.get("available") and after.get("card_processes", {}).get("cards", {})
+                    .get("video", {}).get("native", {}).get("worker_generation") != value.get("capture_session_id")):
+            return unavailable("APPLICATION_VIDEO_CONTEXT_CHANGED")
+        return value
+
     def note_everest_read(self):
         # Connection liveness is informational; never wait behind admission.
         if not self.runtime._lock.acquire(False):

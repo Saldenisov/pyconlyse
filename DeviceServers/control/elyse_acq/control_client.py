@@ -11,7 +11,8 @@ import uuid
 
 from .control_runtime_client import _NoRedirect, MAX_RUNTIME_BYTES, strict_runtime_json
 from .control_runtime_health import INPUT_BANKS
-from legacy.xp_acq_control.elyse_agent.acquisition_http import request_signature, response_signature
+from legacy.xp_acq_control.elyse_agent.acquisition_http import (
+    request_signature, response_signature, SUPERVISION_VIDEO_PATH, MAX_VIDEO_RUNTIME_BYTES)
 from legacy.xp_acq_control.elyse_agent.acquisition_remote import command_signature, validate_request, OPERATIONS
 from legacy.xp_acq_control.elyse_agent.runtime_identity import valid_hex
 from legacy.xp_acq_control.elyse_agent.standard_banks import fault_diagnostic_measurement_current
@@ -37,7 +38,9 @@ class ControlClient:
         self.opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
         self._transport_lock = threading.Lock()
 
-    def _exchange(self, path, body=None):
+    def _exchange(self, path, body=None, max_bytes=MAX_RUNTIME_BYTES):
+        if max_bytes not in (MAX_RUNTIME_BYTES, MAX_VIDEO_RUNTIME_BYTES):
+            raise ValueError("Explicit ordinary/video response bound required")
         nonce = uuid.uuid4().hex
         key = self.read_key if body is None else self.command_key
         signature = request_signature(key, path, nonce) if body is None else command_signature(key, nonce, body)
@@ -52,14 +55,14 @@ class ControlClient:
         except urllib.error.HTTPError as error:
             response = error
         with response:
-            raw = response.read(MAX_RUNTIME_BYTES + 1)
+            raw = response.read(max_bytes + 1)
             elapsed = self.clock() - started
             if not 0 <= elapsed <= self.timeout:
                 raise TimeoutError("Complete HTTP reply exceeded acceptance deadline")
             if not hmac.compare_digest(response_signature(key, nonce, raw),
                                        response.headers.get("X-ACQ-Response-Signature", "")):
                 raise ValueError("Invalid authenticated XP response")
-            result = strict_runtime_json(raw)
+            result = strict_runtime_json(raw, max_bytes=max_bytes)
             if response.code != 200:
                 raise RuntimeError(result.get("error", "XP request refused"))
         return result
@@ -87,6 +90,44 @@ class ControlClient:
     def read(self):
         with self._transport_lock:
             return self._read()
+
+    def read_video(self):
+        """Optional SuperVision-only image read; no lease or command dispatch."""
+        if self.owner != "supervision":
+            raise ValueError("Raw video belongs only to the SuperVision host")
+        with self._transport_lock:
+            started = self.clock()
+            value = self._exchange(SUPERVISION_VIDEO_PATH, max_bytes=MAX_VIDEO_RUNTIME_BYTES)
+            elapsed = self.clock() - started
+            if (value.get("schema_version") != 1 or value.get("owner") != "supervision"
+                    or value.get("server_variant") != "supervision_control_vnext"
+                    or not valid_hex(value.get("session_id"), 32) or not valid_hex(value.get("build_id"), 64)
+                    or type(value.get("state_revision")) is not int or value["state_revision"] < 0
+                    or type(value.get("available")) is not bool or type(value.get("stale")) is not bool
+                    or value.get("hardware_writes") is not False or value.get("execution_allowed") is not False
+                    or value.get("remote_initialization_enabled") is not False or value.get("auto_initialize") is not False):
+                raise ValueError("Incompatible read-only SuperVision video contract")
+            if not value["available"]:
+                if value.get("frame") is not None or value["stale"] is not True:
+                    raise ValueError("Unavailable video must have no current pixels")
+                return value
+            from legacy.xp_acq_control.elyse_agent.federation_wire import validate_video_frame
+            frame = value.get("frame")
+            validate_video_frame(frame)
+            if (not isinstance(frame, dict) or value["stale"] is not False
+                    or type(value.get("age_seconds")) not in (int, float)
+                    or not math.isfinite(value["age_seconds"]) or value["age_seconds"] < 0
+                    or value.get("hardware_acknowledged") is not False
+                    or value.get("source_mode") != ("LABVIEW_BRIDGE" if frame.get("source")
+                        == "labview_supervision_ni1409" else "PYTHON_NATIVE")
+                    or any(value.get(key) != frame.get(key) for key in ("sequence", "capture_session_id",
+                        "width", "height", "pixel_type", "encoding", "channel", "source"))):
+                raise ValueError("SuperVision video metadata mismatch")
+            value["age_seconds"] = max(value["age_seconds"], frame["source_age_seconds"]) + elapsed
+            value["transport_age_seconds"] = elapsed
+            if not 0 <= elapsed <= self.timeout or value["age_seconds"] >= 2:
+                value.update(available=False, stale=True, frame=None, reason="VIDEO_EXPIRED_IN_TRANSIT")
+            return value
 
     def submit(self, request):
         request = validate_request(request)

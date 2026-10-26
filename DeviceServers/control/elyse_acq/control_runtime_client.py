@@ -11,7 +11,8 @@ import time
 import urllib.request
 import uuid
 
-from legacy.xp_acq_control.elyse_agent.acquisition_http import request_signature, response_signature
+from legacy.xp_acq_control.elyse_agent.acquisition_http import (
+    request_signature, response_signature, MAX_VIDEO_RUNTIME_BYTES)
 
 
 MAX_RUNTIME_BYTES = 262144
@@ -21,7 +22,7 @@ def strict_runtime_json(raw, max_bytes=MAX_RUNTIME_BYTES):
     """Bounded, duplicate-free, finite JSON object; no trusted-source bypass."""
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
-    if (type(max_bytes) is not int or not 0 < max_bytes <= 2 * MAX_RUNTIME_BYTES
+    if (type(max_bytes) is not int or not 0 < max_bytes <= max(2 * MAX_RUNTIME_BYTES, MAX_VIDEO_RUNTIME_BYTES)
             or not isinstance(raw, bytes) or len(raw) > max_bytes):
         raise ValueError("Runtime snapshot exceeds limit or has invalid type")
     def pairs(items):

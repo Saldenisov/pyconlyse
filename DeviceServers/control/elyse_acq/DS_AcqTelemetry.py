@@ -32,6 +32,7 @@ class DS_AcqTelemetry(Device):
     commands_enabled = device_property(dtype=bool, default_value=False)
     archive_config_file = device_property(dtype=str, default_value="")
     federation_config_file = device_property(dtype=str, default_value="")
+    supervision_migration_config_file = device_property(dtype=str, default_value="")
 
     def init_device(self):
         self._closing = True
@@ -42,16 +43,21 @@ class DS_AcqTelemetry(Device):
         self._server = self._store = self._thread = None
         self._bridge = self._client = None
         self._bridges, self._clients = {}, {}
-        self._federated = bool(self.federation_config_file)
         self._archive = None
         self._cooling = None
         super().init_device()
+        # PyTango loads device properties in the base initialization. Reading
+        # them earlier selects class defaults on a real first server boot.
+        self._federated = bool(self.federation_config_file)
+        self._migration = bool(self.supervision_migration_config_file)
         self._python_source = self._federated or self.producer_kind_filter in ("python_acquisition", "unified_acquisition")
         if not self.key_file and not self._federated:
             self.set_state(DevState.FAULT)
             self.set_status("Not listening: configure key_file; RAM-only telemetry, no database.")
             return
         try:
+            if self._federated and self._migration:
+                raise ValueError("Select either full federation or explicit read-only SuperVision migration")
             if self.listen_host not in ("10.20.30.202", "127.0.0.1"):
                 raise ValueError("explicit Everest address required; wildcard disabled")
             if self._federated:
@@ -63,6 +69,13 @@ class DS_AcqTelemetry(Device):
                 key = owner_config["acquisition"]["read_key"]
             else:
                 key = Path(self.key_file).read_bytes().strip()
+            if self._migration:
+                from DeviceServers.control.elyse_acq.hybrid_telemetry import (
+                    HybridTelemetryStore, load_migration_configuration,
+                )
+                if self.permitted_xp_host != "10.20.30.10":
+                    raise ValueError("Migration requires the fixed Acquisition host")
+                supervision_config = load_migration_configuration(self.supervision_migration_config_file, key)
             if self.commands_enabled and not self._python_source:
                 raise ValueError("Commands require exclusive Python telemetry source")
             journal_path = self.cooling_journal_file or (
@@ -78,11 +91,15 @@ class DS_AcqTelemetry(Device):
                 self._store = FederatedTelemetryStore(
                     {role: item["read_key"] for role, item in owner_config.items()},
                     cooling=cooling, archive=self._archive)
+            elif self._migration:
+                self._store = HybridTelemetryStore(key, supervision_config["read_key"],
+                    permitted_producer_kind=self.producer_kind_filter or None, cooling=cooling, archive=self._archive)
             else:
                 self._store = TelemetrySinkStore(key, permitted_producer_kind=self.producer_kind_filter or None,
                                                  cooling=cooling, archive=self._archive)
             self._server = TelemetrySinkServer((self.listen_host, self.listen_port), self._store,
                 permitted_peers=(tuple(item["host"] for item in owner_config.values()) if self._federated
+                                 else ("10.20.30.10", "10.20.30.2") if self._migration
                                  else (self.permitted_xp_host,)))
             self._thread = threading.Thread(target=self._server.serve_forever,
                                             kwargs={"poll_interval": 0.1}, daemon=True)
@@ -103,11 +120,19 @@ class DS_AcqTelemetry(Device):
                                                  port=int(self.xp_control_port))
                     self._bridge = ControlBridge(self._client)
                     self._bridge.start()
+            if self._migration:
+                from DeviceServers.control.elyse_acq.control_client import ControlClient, ControlBridge
+                client = ControlClient(supervision_config["read_key"], enabled=False,
+                    host=supervision_config["host"], port=supervision_config["port"], owner="supervision")
+                self._clients["supervision"] = client
+                self._bridges["supervision"] = ControlBridge(client)
+                self._bridges["supervision"].start()
             self._closing = False
             self.set_state(DevState.ON)
             self.set_status("Standard 27-bank telemetry; exclusive source={0}; named commands={1}. "
                             "No NI/PSP tasks on Everest; no automatic command retries.".format(
-                                "two_owner_federation" if self._federated else self.producer_kind_filter or "legacy",
+                                "two_owner_federation" if self._federated else
+                                "acquisition_legacy_supervision_read_only" if self._migration else self.producer_kind_filter or "legacy",
                                 bool(self.commands_enabled)))
         except Exception as error:
             self.delete_device()
@@ -166,6 +191,17 @@ class DS_AcqTelemetry(Device):
     def _control_view(self, owner="acquisition"):
         if getattr(self, "_federated", False):
             return self._federated_control_view(owner)
+        if getattr(self, "_migration", False) and owner == "supervision":
+            bridge = getattr(self, "_bridges", {}).get(owner)
+            view = bridge.snapshot() if bridge is not None else dict(runtime=None, quality="UNAVAILABLE",
+                bridge_error="SuperVision read-only metadata reader unavailable")
+            runtime = view.get("runtime") or {}
+            view.update(owner=owner, commands_enabled=False, migration_mode="acquisition_legacy_supervision_read_only",
+                telemetry_source_current=bool(self._store is not None and
+                    self._store.owner_current(owner, runtime.get("session_id"), native=True)))
+            for capability in runtime.get("control", {}).get("capabilities", {}).values():
+                capability.update(enabled=False, reason="MIGRATION_SUPERVISION_READ_ONLY")
+            return view
         bridge = getattr(self, "_bridge", None)
         if bridge is None:
             return dict(source="labview_receive_only", quality="UNAVAILABLE", runtime=None,
@@ -238,13 +274,17 @@ class DS_AcqTelemetry(Device):
 
     @attribute(dtype=str)
     def orchestrators_json(self):
-        owners = ("acquisition", "supervision") if getattr(self, "_federated", False) else ("acquisition",)
-        return json.dumps(dict(federated=getattr(self, "_federated", False),
-                               owners={owner: self._control_view(owner) for owner in owners}), allow_nan=False)
+        owners = ("acquisition", "supervision") if (getattr(self, "_federated", False)
+            or getattr(self, "_migration", False)) else ("acquisition",)
+        value = dict(federated=getattr(self, "_federated", False),
+                     owners={owner: self._control_view(owner) for owner in owners})
+        if getattr(self, "_migration", False):
+            value["migration_mode"] = "acquisition_legacy_supervision_read_only"
+        return json.dumps(value, allow_nan=False)
 
     @attribute(dtype=str)
     def video_json(self):
-        if not getattr(self, "_federated", False) or self._store is None:
+        if not (getattr(self, "_federated", False) or getattr(self, "_migration", False)) or self._store is None:
             return json.dumps(dict(available=False, owner="supervision", frame=None,
                                    reason="FEDERATED_RAW_VIDEO_NOT_CONFIGURED"))
         return json.dumps(self._store.video_snapshot(), allow_nan=False)
@@ -280,6 +320,8 @@ class DS_AcqTelemetry(Device):
         return self._execute_owner_command(value["owner"], json.dumps(value["request"], allow_nan=False))
 
     def _execute_owner_command(self, owner, request):
+        if getattr(self, "_migration", False) and owner == "supervision":
+            raise RuntimeError("MIGRATION_SUPERVISION_READ_ONLY")
         if not getattr(self, "_federated", False):
             if owner == "acquisition":
                 return self.ExecuteCommand(request)
@@ -313,6 +355,7 @@ class DS_AcqTelemetry(Device):
                 self.warn_stream("Owner metadata reader still owned; replacement refused: " + owner)
                 return
             del bridges[owner]
+            getattr(self, "_clients", {}).pop(owner, None)
         if getattr(self, "_federated", False) and not bridges:
             self._bridge = self._client = None
             self._clients = {}

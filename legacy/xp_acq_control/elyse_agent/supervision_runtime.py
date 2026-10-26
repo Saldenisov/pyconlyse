@@ -50,6 +50,9 @@ def _status_metadata(value):
 
 
 class SupervisionRuntime(object):
+    server_variant = "supervision_control_vnext"
+    host_role = "supervision"
+
     def __init__(self, identity=None, recovery_guard=None, remote_enabled=False,
                  counter_timing_controls_verified=False, video_configuration=None,
                  period=.2, read_timeout=.5, endpoint_factory=None,
@@ -326,20 +329,87 @@ class SupervisionRuntime(object):
             hardware_acknowledged=False, automatic_restart=False)
 
     def video_frame_snapshot(self):
-        with self._lock:
+        # Independent video may stay current during a synchronization command
+        # or an unrelated synchronization fault. Lifecycle transitions never
+        # reuse an old owner/sample as a new camera observation.
+        started = self._clock()
+        if not self._lock.acquire(False):
+            return None
+        try:
             endpoint = self._owners.get("video")
+            if self._state not in ("INITIALIZING", "RUNNING", "EXECUTING", "FAULT") or self._shutdown_requested:
+                return None
+        finally:
+            self._lock.release()
         if endpoint is None:
             return None
         value = endpoint.input_snapshot()
         sample = value.get("sample") or {}
         frame = sample.get("video_frame")
-        if value.get("current") is not True or not isinstance(frame, dict):
+        if (value.get("current") is not True or not isinstance(frame, dict)
+                or not _finite(value.get("age_seconds")) or not 0 <= value["age_seconds"] < 2
+                or not valid_hex(value.get("card_generation"), 32)):
             return None
         result = copy.deepcopy(frame)
-        result.update(age_seconds=value["age_seconds"], source_age_seconds=value["age_seconds"],
+        result.update(source_age_seconds=value["age_seconds"],
+                      capture_session_id=value["card_generation"])
+        from .federation_wire import validate_video_frame
+        try:
+            validate_video_frame(result)
+        except (ValueError, TypeError):
+            return None
+        native = endpoint.status()
+        if (native.get("state") != "READY" or native.get("input_current") is not True
+                or native.get("unresolved_request")
+                or native.get("native", {}).get("ownership_uncertain") is not False
+                or native.get("native", {}).get("worker_generation") != value["card_generation"]):
+            return None
+        if not self._lock.acquire(False):
+            return None
+        try:
+            if (self._owners.get("video") is not endpoint or self._shutdown_requested
+                    or self._state not in ("INITIALIZING", "RUNNING", "EXECUTING", "FAULT")):
+                return None
+        finally:
+            self._lock.release()
+        age = value["age_seconds"] + max(0., self._clock() - started)
+        if not age < 2:
+            return None
+        result.update(age_seconds=age, source_age_seconds=age,
             capture_session_id=value.get("card_generation"),
             owner_session_id=self._identity["session_id"])
         return result
+
+    def unavailable_video_snapshot(self, reason="VIDEO_NOT_CURRENT"):
+        return dict(self._identity, schema_version=1, owner="supervision",
+            server_variant=self.server_variant, host_role=self.host_role,
+            state_revision=self._state_revision, available=False, stale=True,
+            age_seconds=None, frame=None, reason=reason,
+            hardware_writes=False, execution_allowed=False,
+            remote_initialization_enabled=False, auto_initialize=False)
+
+    def video_snapshot(self):
+        """Separate bounded raw image API; only current per-card RAM is read."""
+        revision = self._state_revision
+        frame = self.video_frame_snapshot()
+        if frame is None:
+            return self.unavailable_video_snapshot()
+        result = dict(frame)
+        age = result.pop("age_seconds")
+        result.pop("owner_session_id")
+        if not self._lock.acquire(False):
+            return self.unavailable_video_snapshot("VIDEO_CONTEXT_BUSY")
+        try:
+            if revision != self._state_revision or self._shutdown_requested:
+                return self.unavailable_video_snapshot("VIDEO_CONTEXT_CHANGED")
+            value = dict(self.unavailable_video_snapshot(), available=True, stale=False,
+                age_seconds=age, source_mode="PYTHON_NATIVE", frame=result)
+        finally:
+            self._lock.release()
+        value.update((key, copy.deepcopy(result[key])) for key in (
+            "source", "capture_session_id", "sequence", "width", "height", "pixel_type",
+            "encoding", "channel", "processing", "observed_utc", "hardware_acknowledged"))
+        return value
 
     def counter_memory_part(self):
         """Current retained-command half for federation; no physical readback."""

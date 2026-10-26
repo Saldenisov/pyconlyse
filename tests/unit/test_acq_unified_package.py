@@ -31,7 +31,7 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'elyse-card-process-orchestrators-20261026-r17'
+    assert result['release'] == 'elyse-card-process-orchestrators-20261026-r18'
     assert result['native_isolation_default'] == 'per_card'
     assert result['local_orchestrator_roles'] == ['acquisition', 'supervision']
     assert 'supervision_control_server.pyw' in included
@@ -79,9 +79,9 @@ def test_everest_release_imports_from_its_own_complete_closure(tmp_path):
     code = '''
 import sys
 sys.path.insert(0, sys.argv[1])
-from DeviceServers.control.elyse_acq import DS_AcqTelemetry, federated_telemetry, telemetry_archive
+from DeviceServers.control.elyse_acq import DS_AcqTelemetry, federated_telemetry, hybrid_telemetry, telemetry_archive
 from legacy.xp_acq_control.elyse_agent import federation_wire
-for module in (DS_AcqTelemetry, federated_telemetry, telemetry_archive, federation_wire):
+for module in (DS_AcqTelemetry, federated_telemetry, hybrid_telemetry, telemetry_archive, federation_wire):
     assert module.__file__.startswith(sys.argv[1]), module.__file__
 assert 'nidaqmx' not in sys.modules
 print('COLD_CLOSURE_OK')

@@ -19,6 +19,25 @@ class SupervisionCardError(RuntimeError):
         RuntimeError.__init__(self, message)
 
 
+def validate_initial_sync_values_us(values):
+    """Local takeover memory only; no route, clock frequency or InitialDelay."""
+    if values is None:
+        return None
+    if type(values) not in (list, tuple) or len(values) != 16:
+        raise ValueError("Exactly16 initial SuperVision delay/width values required")
+    copied = []
+    for value in values:
+        try:
+            valid = (type(value) in (int, float) and math.isfinite(value) and value > 0
+                     and value * 20.0 <= 2147483647 and int(round(value * 20.0)) > 0)
+        except (OverflowError, ValueError):
+            valid = False
+        if not valid:
+            raise ValueError("Initial timing requires finite positive unsaturated I32 ticks at sourcefactor20")
+        copied.append(float(value))
+    return tuple(copied)
+
+
 class SupervisionCounterCard(object):
     def __init__(self, driver_factory=None, wait=None, clock=None):
         self.driver_factory = driver_factory
@@ -30,6 +49,7 @@ class SupervisionCounterCard(object):
         self.initialized = False
         self.last_error = ""
         self.observer = None
+        self.initial_timing_provenance = "saved_original_initializer_constants"
 
     @property
     def resource_count(self):
@@ -63,11 +83,23 @@ class SupervisionCounterCard(object):
         notice("RETURNED")
         return result
 
-    def initialize(self, operator_confirmed=False, resources_released_confirmed=False, observer=None):
+    def initialize(self, operator_confirmed=False, resources_released_confirmed=False, observer=None,
+                   initial_sync_values_us=None):
         if operator_confirmed is not True or resources_released_confirmed is not True:
             raise ValueError("Explicit local card release and synchronization-start confirmation required")
         if self.tasks or self.creation_uncertain or self.initialized:
             raise RuntimeError("Retained SuperVision NI6602 owner cannot be replaced")
+        # Validate the COMPLETE local profile before importing a native driver,
+        # constructing a task, or starting any output. Partial profiles cannot
+        # fall back to stale saved constants.
+        initial_values = validate_initial_sync_values_us(initial_sync_values_us)
+        self.plan = supervision_counter_profile()
+        self.initial_timing_provenance = "saved_original_initializer_constants"
+        if initial_values is not None:
+            for i, row in enumerate(self.plan):
+                row.update(low_ticks=int(round(initial_values[2 * i] * 20.0)),
+                           high_ticks=int(round(initial_values[2 * i + 1] * 20.0)))
+            self.initial_timing_provenance = "explicit_local_VI_control_memory_not_physical_readback"
         if observer is not None:
             self.observer = observer
         driver = self.driver_factory() if self.driver_factory is not None else importlib.import_module("nidaqmx")
@@ -100,19 +132,31 @@ class SupervisionCounterCard(object):
                            channel, "co_ctr_timebase_active_edge", constants.Edge.RISING)
                 self._call(name + ".cfg_implicit_timing", task.timing.cfg_implicit_timing,
                     sample_mode=constants.AcquisitionType.FINITE, samps_per_chan=1)
-                self._call(name + ".start", task.start)
-                self.running.add(i)
-                self.uncertain.discard(i)
+                if initial_values is None:
+                    self._call(name + ".start", task.start)
+                    self.running.add(i)
+                    self.uncertain.discard(i)
+            if initial_values is not None:
+                # A takeover starts no counter until all eight have received
+                # their reviewed timing. Native start failures still retain
+                # earlier started tasks and every owned handle.
+                for i, task in sorted(self.tasks.items()):
+                    self._call(self.plan[i]["task_name"] + ".start", task.start)
+                    self.running.add(i)
+                    self.uncertain.discard(i)
         except Exception as error:
             raise SupervisionCardError("SuperVision NI6602 initialization failed: " + str(error), self)
         self.initialized = True
         return self.snapshot()
 
     def snapshot(self):
+        memory = synchronization_memory(self.plan, sorted(self.running), sorted(self.uncertain))
+        memory["initial_timing_provenance"] = self.initial_timing_provenance
         return dict(resource_count=self.resource_count, initialized=self.initialized,
-            synchronization=synchronization_memory(self.plan, sorted(self.running), sorted(self.uncertain)),
+            synchronization=memory,
             creation_uncertain=self.creation_uncertain, last_error=self.last_error,
             source_named_counter2_cleanup="NOT_APPLIED_TO_UNOWNED_TASK",
+            initial_timing_provenance=self.initial_timing_provenance,
             hardware_acknowledged=False, automatic_restart=False)
 
     def configure_timing(self, counter, delay_us, width_us, operator_confirmed=False,

@@ -7,6 +7,7 @@ import threading
 
 from .supervision_runtime import SupervisionRuntime, new_supervision_identity
 from .supervision_imaq import source_video_configuration
+from .supervision_cards import validate_initial_sync_values_us
 from .acquisition_recovery import OwnershipMarker
 from .acquisition_supervisor import FileInstanceGuard
 from .command_http import ControlHTTPServer
@@ -36,8 +37,13 @@ def default_supervision_configuration():
 
 
 def validate_supervision_configuration(value):
-    if type(value) is not dict or set(value) != CONFIGURATION_FIELDS or value.get("schema_version") != 1:
+    if (type(value) is not dict or not CONFIGURATION_FIELDS <= set(value)
+            or set(value) - CONFIGURATION_FIELDS - {"initial_sync_values_us"} or value.get("schema_version") != 1):
         raise ValueError("Exact versioned SuperVision host configuration required")
+    if "initial_sync_values_us" in value:
+        if value["initial_sync_values_us"] is None:
+            raise ValueError("Omit initial_sync_values_us or supply the full16-value local profile")
+        validate_initial_sync_values_us(value["initial_sync_values_us"])
     if value["bind_host"] != "10.20.30.2" or type(value["port"]) is not int or value["port"] != 8772:
         raise ValueError("SuperVision serves only 10.20.30.2:8772")
     for name in ("remote_control_enabled", "counter_timing_controls_verified"):
@@ -203,7 +209,9 @@ def main(entrypoint, argv=None, publisher_factory=None):
             remote_enabled=config["remote_control_enabled"],
             counter_timing_controls_verified=config["counter_timing_controls_verified"],
             video_configuration=config["video"], period=config["period_seconds"],
-            read_timeout=config["read_timeout_seconds"])
+            read_timeout=config["read_timeout_seconds"],
+            trusted_service_options={"sync": {"initial_sync_values_us": config["initial_sync_values_us"]}}
+                if "initial_sync_values_us" in config else None)
         view = ApplicationView(runtime)
         server = ControlHTTPServer((config["bind_host"], config["port"]), view, read_key,
                                    command_key if config["remote_control_enabled"] else None)

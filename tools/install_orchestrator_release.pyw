@@ -1,4 +1,4 @@
-"""Cold r17 source installation into a NEW role directory; Python 3.4 stdlib.
+"""Cold r18 source installation into a NEW role directory; Python 3.4 stdlib.
 
 No process discovery/start/stop, NI imports, network access, registry, PATH or
 security changes. Package and site manifests require independently supplied
@@ -15,9 +15,9 @@ import shutil
 import uuid
 
 
-RELEASE = "elyse-card-process-orchestrators-20261026-r17"
-TARGETS = dict(acquisition=r"C:\ELYSE_Orchestrator_Acquisition_r17",
-               supervision=r"C:\ELYSE_Orchestrator_Supervision_r17")
+RELEASE = "elyse-card-process-orchestrators-20261026-r18"
+TARGETS = dict(acquisition=r"C:\ELYSE_Orchestrator_Acquisition_r18",
+               supervision=r"C:\ELYSE_Orchestrator_Supervision_r18")
 RUNTIME = r"C:\Python34_ELYSE"
 SOURCE_MANIFEST = "source_manifest.json"
 INSTALL_MANIFEST = "orchestrator_installation.json"

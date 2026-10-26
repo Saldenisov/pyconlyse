@@ -4,6 +4,9 @@ import hmac
 import json
 import threading
 
+SUPERVISION_VIDEO_PATH = "/supervision/video"
+MAX_VIDEO_RUNTIME_BYTES = 900 * 1024
+
 try:
     from http.server import BaseHTTPRequestHandler, HTTPServer
     from socketserver import ThreadingMixIn
@@ -12,7 +15,7 @@ except ImportError:
 
 
 def request_signature(key, path, nonce):
-    if path not in ("/status", "/snapshot"):
+    if path not in ("/status", "/snapshot", SUPERVISION_VIDEO_PATH):
         raise ValueError("Unsupported read path")
     if not isinstance(nonce, str) or len(nonce) != 32 or any(c not in "0123456789abcdef" for c in nonce):
         raise ValueError("Invalid nonce")
@@ -35,6 +38,12 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _reply(self, code, body):
         encoded = json.dumps(body, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        if self.path == SUPERVISION_VIDEO_PATH and len(encoded) > MAX_VIDEO_RUNTIME_BYTES:
+            code = 200
+            body = dict(schema_version=1, owner="supervision", available=False, stale=True,
+                        frame=None, age_seconds=None, hardware_writes=False,
+                        error="VIDEO_RESPONSE_EXCEEDS_LIMIT")
+            encoded = json.dumps(body, allow_nan=False, separators=(",", ":")).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
@@ -50,7 +59,7 @@ class _Handler(BaseHTTPRequestHandler):
         if self.client_address[0] not in self.server.allowed_peers:
             self._reply(403, dict(error="peer_not_permitted"))
             return
-        if self.path not in ("/status", "/snapshot"):
+        if self.path not in ("/status", "/snapshot", SUPERVISION_VIDEO_PATH):
             self._reply(404, dict(error="unknown_read_path"))
             return
         try:
@@ -68,6 +77,15 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if self.client_address[0] == "10.20.30.202":
             self.server.runtime.note_everest_read()
+        if self.path == SUPERVISION_VIDEO_PATH:
+            # The Acquisition service has no such read capability. No URL,
+            # device name, camera action or lifecycle field is accepted here.
+            if getattr(self.server.runtime, "server_variant", None) != "supervision_control_vnext":
+                return self._reply(404, dict(error="unknown_read_path"))
+            reader = getattr(self.server.runtime, "video_snapshot", None)
+            if not callable(reader):
+                return self._reply(404, dict(error="unknown_read_path"))
+            return self._reply(200, reader())
         body = self.server.runtime.snapshot()
         if self.path == "/status":
             body.pop("latest", None)

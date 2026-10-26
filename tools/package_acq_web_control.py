@@ -42,12 +42,13 @@ def package(destination, everest=False):
                      "legacy/__init__.py", "legacy/xp_acq_control/__init__.py"):
             files.append((ROOT / name, name))
         files.append((XP / "data/standard_telemetry_schema.json", "legacy/xp_acq_control/data/standard_telemetry_schema.json"))
-        files.append((BRIDGE / "federated_telemetry.py", "DeviceServers/control/elyse_acq/federated_telemetry.py"))
+        for name in ("federated_telemetry.py", "hybrid_telemetry.py"):
+            files.append((BRIDGE / name, "DeviceServers/control/elyse_acq/" + name))
     else:
         files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-two-orchestrators-20261026-r17" if everest else "elyse-card-process-orchestrators-20261026-r17", default_xp_port=8772,
+                    release="everest-two-orchestrators-20261026-r18" if everest else "elyse-card-process-orchestrators-20261026-r18", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",
