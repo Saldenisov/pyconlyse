@@ -9,7 +9,8 @@ workers: failed kill/join leaves owned handles here, and ensure_quiescent must
 confirm their exit before any new spawn. Killing a worker is NOT physical OFF.
 Timeout bounds native execution (1..30 seconds); safety reaping may additionally
 wait 250 ms per owned worker. No network, driver load, or process access occurs
-until explicit readiness/execution calls with commissioned configuration.
+until explicit readiness/execution with verified resources or supervised
+fixed-target test permission. Test permission does not qualify COM mapping.
 """
 import copy
 import ctypes
@@ -39,17 +40,20 @@ def _x86_windows():
 class ChromaFocalCommand(object):
     def __init__(self, dll_path=DEFAULT_DLL, resources_verified=False, timeout=10,
                  process_factory=None, clock=None, wait=None, driver_verifier=None,
-                 platform_check=None):
+                 platform_check=None, operator_supervised_test=False):
         if (type(resources_verified) is not bool or type(timeout) not in (int, float)
                 or not math.isfinite(timeout) or not 1 <= timeout <= 30):
             raise ValueError("Invalid Chroma command configuration")
         if not isinstance(dll_path, str) or not dll_path:
             raise ValueError("Explicit Chroma DLL path required")
+        if type(operator_supervised_test) is not bool:
+            raise ValueError("Exact Boolean operator supervised test permission required")
         for hook in (process_factory, clock, wait, driver_verifier, platform_check):
             if hook is not None and not callable(hook):
                 raise TypeError("Chroma test hooks must be callable")
         self.dll_path = dll_path
         self.resources_verified = resources_verified
+        self.operator_supervised_test = operator_supervised_test
         self.timeout = float(timeout)
         self._spawn = process_factory or subprocess.Popen
         self._clock = clock or time.monotonic
@@ -73,6 +77,10 @@ class ChromaFocalCommand(object):
                                 pid=pid if type(pid) is int else None,
                                 state="OWNED_EXIT_NOT_CONFIRMED"))
         return dict(pending_worker_count=len(workers), workers=workers,
+                    resources_verified=self.resources_verified is True,
+                    operator_supervised_test=self.operator_supervised_test,
+                    operator_test_fixed_targets_permitted=self.operator_supervised_test is True,
+                    fixed_targets=[dict(focal=branch[0], resource=branch[1]) for branch in BRANCHES],
                     last_result=copy.deepcopy(self.last_result),
                     reviewed_driver_sha256=DRIVER_SHA256,
                     hardware_acknowledged=False, physical_output_state="UNKNOWN")
@@ -167,8 +175,12 @@ class ChromaFocalCommand(object):
         if (type(self.timeout) not in (int, float) or not math.isfinite(self.timeout)
                 or not 1 <= self.timeout <= 30):
             raise ValueError("Chroma execution timeout must remain within 1..30 seconds")
-        if self.resources_verified is not True:
+        if self.resources_verified is not True and self.operator_supervised_test is not True:
             raise RuntimeError("Focales command blocked: verify F3=COM10, F2=COM11, F1=COM12 on XP first")
+        if (self.operator_supervised_test is True and self.resources_verified is not True
+                and tuple((branch[0], branch[1]) for branch in BRANCHES)
+                    != ((3, "COM10"), (2, "COM11"), (1, "COM12"))):
+            raise RuntimeError("Supervised Focal test permits only F3=COM10, F2=COM11, F1=COM12")
         if self._platform_check() is not True:
             raise RuntimeError("Chroma requires the existing 32-bit XP Python process")
         self._verify(self.dll_path)

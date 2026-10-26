@@ -26,6 +26,7 @@ from .acquisition_procedures import (
 from .chroma_focal_stop import ChromaFocalStop
 from .hardware_plan import analog_startup_logical_image, digital_startup_image, load_ao_calibration
 from .acquisition_source_controls import SourceControls
+from .supervised_test import controls_permitted, supervised_enabled
 from .acquisition_beamline import BEAMLINE_OPERATIONS
 from .acquisition_ht_shutdown import (
     execute_ht_shutdown, execute_ht_supply_stop, validate_policy,
@@ -72,7 +73,7 @@ def _json_helper_diagnostics(value):
 class _DemoFocalCommand(object):
     """Pure RAM fixture, not qualification of a COM port or native driver."""
     simulated = True
-    resources_verified = True
+    resources_verified = False
 
     def ensure_ready(self):
         pass
@@ -286,9 +287,20 @@ class _StageState(object):
         self._focal_quiescence_error = None
 
     def _ensure_focal_ready(self):
-        if getattr(self.focal_command, "resources_verified", False) is not True:
+        if (getattr(self.focal_command, "resources_verified", False) is not True
+                and not self._operator_test_cold()
+                and getattr(self.focal_command, "simulated", False) is not True):
             raise RuntimeError("Focal commands blocked: serial resources not commissioned")
         self.focal_command.ensure_ready()
+
+    def _operator_test_cold(self):
+        return (supervised_enabled(self)
+                and self.operator_test_cold_attested is True
+                and self.startup_complete is True)
+
+    def _controls_permitted(self, flag, operation):
+        return (getattr(self, flag, False) is True
+                or (self._operator_test_cold() and controls_permitted(self, flag, operation)))
 
     def _stage_focal_helper(self, helper_name, cancelled):
         if helper_name not in ("1_Focales ON.vi", "1_Focales OFF.vi"):
@@ -460,6 +472,11 @@ class _StageState(object):
             publication_storage="bounded_latest_per_name_in_RAM",
             psp_delivery_acknowledged=False, hardware_acknowledged=False,
             stage_controls_verified=self.stage_controls_verified,
+            operator_supervised_test=self.operator_supervised_test,
+            operator_test_cold_attested=self.operator_test_cold_attested,
+            operator_test_cold_attestation_interpretation=(
+                "Operator confirmed all stages and HT physically OFF at Initialize; not measured proof"),
+            operator_test_fixed_targets_permitted=self._operator_test_cold(),
             cooling_trip_verified=self.cooling_trip_verified,
             ht_controls_verified=self.ht_controls_verified,
             focal_controls_verified=self.focal_controls_verified,
@@ -482,14 +499,14 @@ class _StageState(object):
         self._ensure_execution_not_reentrant()
         if operator_confirmed is not True:
             raise ValueError("Explicit local stage confirmation required")
-        if self.stage_controls_verified is not True:
+        if not self._controls_permitted("stage_controls_verified", operation):
             raise RuntimeError("Stage commands blocked: stage controls not commissioned")
-        if operation in HT_STAGE_OPERATIONS and self.ht_controls_verified is not True:
+        if operation in HT_STAGE_OPERATIONS and not self._controls_permitted("ht_controls_verified", operation):
             # Deliberate Python commissioning gate, not a recovered VI permit.
             # Starting HT can energize the already-commanded startup voltage;
             # it is independent of extended-stop feedback qualification.
             raise RuntimeError("HT stage commands blocked: HT controls not commissioned")
-        if operation in FOCAL_STAGE_OPERATIONS and self.focal_controls_verified is not True:
+        if operation in FOCAL_STAGE_OPERATIONS and not self._controls_permitted("focal_controls_verified", operation):
             raise RuntimeError("Focal stage commands blocked: Focal controls not commissioned")
         if self.control_profile == "general_only_test":
             raise RuntimeError("General-only profile forbids other stage commands")
@@ -539,6 +556,7 @@ class _StageState(object):
                 self.procedure.update(state="SOURCE_NEWVAL_FALSE_NOOP", report=preflight)
                 return preflight
             if operation == "alimentation_ht.start":
+                self.operator_test_cold_attested = False
                 self._ht_supply_sequence_completed = False
             elif operation.endswith((".stop", ".reset")):
                 self._invalidate_ht_sequence_completion()
@@ -710,12 +728,17 @@ class CardBackend(SourceControls, _StageState):
                  ht_controls_verified=False, focal_controls_verified=False,
                  focal_command=None, counter_controls_verified=False,
                  ht_voltage_controls_verified=False, outer_stop_verified=False,
-                 counter_timing_controls_verified=False, beamline_controls_verified=False):
+                 counter_timing_controls_verified=False, beamline_controls_verified=False,
+                 operator_supervised_test=False):
         if not 0 < read_timeout <= 2:
             raise ValueError("read timeout must be in (0, 2] seconds")
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
+        if type(operator_supervised_test) is not bool:
+            raise ValueError("Exact Boolean operator supervised test permission required")
+        self.operator_supervised_test = operator_supervised_test
+        self.operator_test_cold_attested = False
         if (type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool
                 or type(ht_controls_verified) is not bool or type(focal_controls_verified) is not bool):
             raise ValueError("Explicit Boolean stage commissioning flags required")
@@ -741,7 +764,8 @@ class CardBackend(SourceControls, _StageState):
                                    timeout=focal_off.timeout)
         if focal_command is None:
             from .chroma_focal_command import ChromaFocalCommand
-            focal_command = ChromaFocalCommand(**(legacy_settings or {}))
+            focal_command = ChromaFocalCommand(operator_supervised_test=operator_supervised_test,
+                                               **(legacy_settings or {}))
         elif legacy_focal and any(getattr(focal_command, name, None) != value
                                   for name, value in legacy_settings.items()):
             raise ValueError("Conflicting legacy OFF and owned Focal command configuration")
@@ -776,6 +800,22 @@ class CardBackend(SourceControls, _StageState):
     def _stage_require_initialized(self):
         if self.startup_complete is not True or self.owner is None or not self.commanded_digital:
             raise RuntimeError("Stage command requires initialized card ownership")
+        expected = self.initial_images.get("digital", {}) if isinstance(self.initial_images, dict) else {}
+        if (not expected or set(self.commanded_digital) != set(expected)
+                or any(len(self.commanded_digital[name]) != len(values)
+                       or any(type(value) is not bool for value in self.commanded_digital[name])
+                       for name, values in expected.items())):
+            raise RuntimeError("Complete known startup bank images required")
+
+    def _source_counter_start(self, number):
+        if number in (3, 4):
+            self.operator_test_cold_attested = False
+        return SourceControls._source_counter_start(self, number)
+
+    def _source_commit_analog(self, group, values):
+        if group == "C9NI6703":
+            self.operator_test_cold_attested = False
+        return SourceControls._source_commit_analog(self, group, values)
 
     def _stage_write_digital(self, name, values):
         if name == "C5_DIO96_DO" and self._beamline_safe_stop_owner_ident is not None:
@@ -828,6 +868,7 @@ class CardBackend(SourceControls, _StageState):
         if self.owner is not None:
             raise RuntimeError("Resources already owned; deinitialize first")
         self.startup_complete = False
+        self.operator_test_cold_attested = False
         self._initialization_cards = None
         self._ensure_focal_quiescent()
         if cancel.is_set():
@@ -892,8 +933,10 @@ class CardBackend(SourceControls, _StageState):
             self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
         except Exception:
             self.startup_complete = False
+            self.operator_test_cold_attested = False
             self._software_state_valid = False
             raise
+        self.operator_test_cold_attested = supervised_enabled(self)
         self._initialization_notice(dict(phase="RETURNED", call="all_cards_and_startup_complete"))
 
     def general_start(self, cancel, operator_confirmed=False):
@@ -904,6 +947,9 @@ class CardBackend(SourceControls, _StageState):
         self._invalidate_ht_sequence_completion()
         self._require_known_source_commands()
         self._ensure_focal_quiescent()
+        if (self._operator_test_cold()
+                and any(self.commanded_digital["C4_DIO96_DO"][i] is not False for i in (0, 2))):
+            raise RuntimeError("Release unconfirmed General/RAZ pulse before supervised General Marche")
         self._retry_source_counter_stops()
         if self.control_profile == "general_only_test":
             # This verifies command scope, not the physical state of switches
@@ -918,10 +964,11 @@ class CardBackend(SourceControls, _StageState):
             if tuple(self.commanded_digital["C4_DIO96_DO"][i] for i in (0, 1, 2)) != (False, True, False):
                 raise RuntimeError("General-only test requires released Marche/RAZ and idle Arret commands")
         else:
-            if self.control_profile == "extended_ht_stop" and not self.ht_feedback_verified:
+            if (self.control_profile == "extended_ht_stop" and not self.ht_feedback_verified
+                    and not self._operator_test_cold()):
                 raise RuntimeError("Extended stop unavailable: verify HT feedback before General Marche")
             # The full legacy profile still requires its complete stop path.
-            if hasattr(self.focal_off, "ensure_ready"):
+            if not self._operator_test_cold() and hasattr(self.focal_off, "ensure_ready"):
                 self.focal_off.ensure_ready()
         self.procedure = dict(name="modulator.general.start", state="EXECUTING", frame=None,
                               control_profile=self.control_profile)
@@ -963,12 +1010,13 @@ class CardBackend(SourceControls, _StageState):
         if operator_confirmed is not True:
             raise ValueError("General Arret confirmation required")
         self._invalidate_ht_sequence_completion()
-        if self.control_profile == "extended_ht_stop" and not self.ht_feedback_verified:
+        ht_preamble = self.control_profile == "extended_ht_stop" and not self._operator_test_cold()
+        if ht_preamble and not self.ht_feedback_verified:
             raise RuntimeError("Extended stop blocked: HT feedback mapping/polarity/calibration unverified")
         self.procedure = dict(name="modulator.general.stop", state="EXECUTING", frame=None,
                               control_profile=self.control_profile,
                               stop_scope=("general_only_test" if self.control_profile == "general_only_test" else
-                                          "python_ht_preamble_then_event_6" if self.control_profile == "extended_ht_stop"
+                                          "python_ht_preamble_then_event_6" if ht_preamble
                                           else "labview_event_6"),
                               source_frames_attempted=[], command_sequence_completed=False,
                               failures=[], hardware_off_confirmed=False)
@@ -976,7 +1024,8 @@ class CardBackend(SourceControls, _StageState):
             self.procedure.update(
                 requested_stop_stages=["chroma_focales", "focale_klystron", "relais_ht",
                                        "premagnetisation", "chauffage", "general"],
-                ht_supply_stop_included=self.control_profile == "extended_ht_stop",
+                ht_supply_stop_included=ht_preamble,
+                operator_test_cold_attested=self._operator_test_cold(),
                 source_psp_write_replaced_by_ram_status=True)
 
         def commit(index, value):
@@ -1035,7 +1084,7 @@ class CardBackend(SourceControls, _StageState):
                 except GeneralStopError as error:
                     raise GeneralStopError(restore_failures + list(error.failures))
             else:
-                if self.control_profile == "extended_ht_stop":
+                if ht_preamble:
                     def preamble_observer(stage):
                         self.procedure["ht_preamble_phase"] = stage
                     try:
@@ -1225,6 +1274,7 @@ class CardBackend(SourceControls, _StageState):
     def close(self):
         self._ensure_execution_not_reentrant()
         self.startup_complete = False
+        self.operator_test_cold_attested = False
         self._ensure_focal_quiescent()
         if self.owner is not None:
             self.initialization_cards  # Preserve diagnostics before release.
@@ -1245,10 +1295,16 @@ class DemoBackend(_StageState):
                  cooling_trip_verified=False, ht_controls_verified=False,
                  focal_controls_verified=False, focal_command=None, counter_controls_verified=False,
                  ht_voltage_controls_verified=False, outer_stop_verified=False,
-                 counter_timing_controls_verified=False, beamline_controls_verified=False):
+                 counter_timing_controls_verified=False, beamline_controls_verified=False,
+                 operator_supervised_test=False):
         if control_profile not in CONTROL_PROFILES:
             raise ValueError("Unknown acquisition control profile")
         self.control_profile = control_profile
+        if type(operator_supervised_test) is not bool:
+            raise ValueError("Exact Boolean operator supervised test permission required")
+        self.operator_supervised_test = operator_supervised_test
+        self.operator_test_cold_attested = False
+        self.startup_complete = False
         if (type(stage_controls_verified) is not bool or type(cooling_trip_verified) is not bool
                 or type(ht_controls_verified) is not bool or type(focal_controls_verified) is not bool):
             raise ValueError("Explicit Boolean stage commissioning flags required")
@@ -1277,7 +1333,7 @@ class DemoBackend(_StageState):
         self._reset_stage_state()
 
     def _stage_require_initialized(self):
-        if not self.active:
+        if not self.active or self.startup_complete is not True:
             raise RuntimeError("Stage simulation requires initialization")
 
     def _stage_write_digital(self, name, values):
@@ -1292,6 +1348,10 @@ class DemoBackend(_StageState):
 
     def initialize(self, cancel, startup_confirmed=False):
         self._ensure_execution_not_reentrant()
+        if self.operator_supervised_test and startup_confirmed is not True:
+            raise ValueError("Explicit local confirmation of legacy startup effects required")
+        self.startup_complete = False
+        self.operator_test_cold_attested = False
         if cancel.is_set():
             raise AcquisitionCancelled()
         self._ensure_focal_quiescent()
@@ -1303,6 +1363,8 @@ class DemoBackend(_StageState):
         self._software_state_valid = True
         self._beamline_initialization_owner_ident = threading.current_thread().ident
         self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
+        self.startup_complete = True
+        self.operator_test_cold_attested = supervised_enabled(self)
 
     def read_snapshot(self, cancel):
         if self._beamline_operation_active:
@@ -1363,12 +1425,14 @@ class DemoBackend(_StageState):
                                           time.sleep, observe, operator_confirmed=True,
                                           execution_wait=self._execution_waiter(time.sleep))
             else:
-                if self.control_profile == "extended_ht_stop":
+                if self.control_profile == "extended_ht_stop" and not self._operator_test_cold():
                     # Explicit demo callbacks only, never an NI-backed fallback.
                     execute_ht_shutdown(6.5, lambda: dict(voltage_kv=0.0, supply_on=False, age_seconds=0.0),
                                         lambda _value: None, lambda: None, lambda: None, time.sleep,
                                         feedback_verified=True)
-                execute_general_stop(commit, lambda: None, self._stage_assign_status,
+                execute_general_stop(commit,
+                                     lambda: self._stage_focal_helper("1_Focales OFF.vi", lambda: False),
+                                     self._stage_assign_status,
                                      time.sleep, observe, operator_confirmed=True,
                                      execution_wait=self._execution_waiter(time.sleep))
         except Exception:
@@ -1378,6 +1442,8 @@ class DemoBackend(_StageState):
 
     def close(self):
         self._ensure_execution_not_reentrant()
+        self.startup_complete = False
+        self.operator_test_cold_attested = False
         self._ensure_focal_quiescent()
         self.active = False
         self.commanded_digital = {}

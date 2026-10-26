@@ -1,0 +1,99 @@
+--- a/web/backend/hardware_authorization.py
++++ b/web/backend/hardware_authorization.py
+@@ -681,8 +681,11 @@
+     return starter
+ 
+ 
+-def authorize_runtime_operation(operation: Operation, nonce: str | None, *, subject: str | None = None) -> bool:
+-    if not authorization_required():
++def authorize_runtime_operation(operation: Operation, nonce: str | None, *, subject: str | None = None,
++                                required: bool | None = None) -> bool:
++    if required is not None and type(required) is not bool:
++        raise TypeError('Explicit Boolean authorization requirement expected')
++    if not (authorization_required() or required is True):
+         return True
+     config = authorization_config_from_environment()
+     subject = subject if subject is not None else get_jwt_identity()
+--- a/web/frontend/src/api/elyseSupervisionClient.js
++++ b/web/frontend/src/api/elyseSupervisionClient.js
+@@ -1,4 +1,5 @@
+-import { fetchWithCsrfToken } from './csrfRequest';
++import { fetchWithCsrfToken, fetchWithHardwareApproval } from './csrfRequest';
++import { rememberAcquisitionApproval, prepareAcquisitionApproval, usesLocalAcquisitionApproval } from './acqLocalApproval';
+ 
+ const ROOT = '/api/elyse/supervision';
+ 
+@@ -9,7 +10,8 @@
+   if (options?.signal?.aborted) abort.abort();
+   const timeout = setTimeout(cancel, 10000);
+   try {
+-    const response = await fetchWithCsrfToken(`/api/elyse/acquisition/control${path}`, {
++    const exchange = path === '/commands' ? fetchWithHardwareApproval : fetchWithCsrfToken;
++    const response = await exchange(`/api/elyse/acquisition/control${path}`, {
+       credentials: 'include', ...options, signal: abort.signal,
+     });
+     const value = await response.json();
+@@ -19,6 +21,7 @@
+     if (path !== '' && (!value.receipt || value.receipt.hardware_acknowledged !== false)) {
+       throw new Error('Résultat Acquisition non qualifié ; ne pas renvoyer.');
+     }
++    if (path === '') rememberAcquisitionApproval(value);
+     return value;
+   } finally { clearTimeout(timeout); options?.signal?.removeEventListener('abort', cancel); }
+ }
+@@ -54,8 +57,19 @@
+ 
+ export const elyseSupervisionClient = {
+   controlState: (signal) => controlRequest('', { signal }),
+-  command: (command) => controlRequest('/commands', { method: 'POST',
+-    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command) }),
++  command: async (command) => {
++    if (usesLocalAcquisitionApproval()) {
++      const abort = new AbortController();
++      const timer = setTimeout(() => abort.abort(), 5000);
++      let refused;
++      try { refused = await prepareAcquisitionApproval(command, abort.signal); }
++      finally { clearTimeout(timer); }
++      if (refused) return refused;
++      if (abort.signal.aborted) throw new Error('Confirmation interrompue avant envoi.');
++    }
++    return controlRequest('/commands', { method: 'POST', headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify(command) });
++  },
+   history: (minutes, signal) => request(`${ROOT}/workspace/history?minutes=${encodeURIComponent(minutes)}`, { signal }),
+   synchronizationDraft: (signal) => request(`${ROOT}/workspace/synchronization`, { signal }),
+   saveSynchronizationDraft: (values, expectedRevision, signal) => request(`${ROOT}/workspace/synchronization`, {
+--- a/web/frontend/src/AcquisitionCommands.js
++++ b/web/frontend/src/AcquisitionCommands.js
+@@ -76,6 +76,7 @@
+   return <Context.Provider value={{ view, fresh, pending, choose }}>
+     {supported && <div className="acq-command-status" aria-label="État commandes Acquisition">
+       <span>{failure || (view?.source_selected ? `Acquisition Python : ${view.state}` : 'LabVIEW : lecture seule · commandes Python non activées')}
++        {view?.operator_supervised_test ? ' · essai opérateur, étapes manuelles' : ''}
+         {view?.startup_phase && view.startup_phase !== 'NOT_STARTED' ? ` · ${view.startup_phase}` : ''}</span>
+       {last && <span>{last.operation} : {last.outcome}{last.error ? ` · ${last.error}` : ''}
+         {['QUEUED', 'EXECUTING', 'INDETERMINATE'].includes(last.outcome) ? ' · Ne pas renvoyer la commande.' : ''}</span>}
+@@ -92,7 +93,9 @@
+         }
+       }}>
+       <h2>{confirmation.name}</h2><p>Exécuter cette commande sur l’équipement réel ?</p>
+-      {confirmation.operation === 'modulator.general.start' && <p>General → démarrage de l’eau → circulation CANON et SECTION confirmée pendant 2 s. Les étapes suivantes restent bloquées sinon.</p>}
++      {confirmation.operation === 'modulator.general.start' && <p>{view?.operator_supervised_test
++        ? 'General uniquement. Démarrer l’eau séparément, puis vérifier la circulation CANON et SECTION. Aucun autre démarrage automatique.'
++        : 'General → démarrage de l’eau → circulation CANON et SECTION confirmée pendant 2 s. Les étapes suivantes restent bloquées sinon.'}</p>}
+       <p>Une commande acceptée n’est pas une confirmation physique. Aucun renvoi automatique.</p>
+       <button type="button" autoFocus onClick={() => setConfirmation(null)}>Annuler</button>
+       <button type="button" onClick={execute}>Confirmer</button>
+--- a/web/start_local.py
++++ b/web/start_local.py
+@@ -17,6 +17,10 @@
+         "PYCONLYSE_WEB_HOST": "0.0.0.0",
+         "PYCONLYSE_WEB_PORT": "5000",
+         "PYCONLYSE_WEB_DEBUG": "false",
++        "ACQ_LOCAL_CONSOLE_ENABLED": "true",
++        "ACQ_LOCAL_CONSOLE_ORIGIN": "http://127.0.0.1:5000",
++        "ACQ_LOCAL_CONSOLE_KEY_FILE": r"F:\ELYSE_Telemetry_Server\postgres_v3\web-control\local-console.key",
++        "ACQ_LOCAL_CONSOLE_DB_FILE": r"F:\ELYSE_Telemetry_Server\postgres_v3\web-control\local-approvals.sqlite3",
+         "PYCONLYSE_CORS_ORIGINS": (
+             "http://127.0.0.1:5000,http://localhost:5000,"
+             "http://10.20.30.202:5000,http://129.175.100.128:5000,"

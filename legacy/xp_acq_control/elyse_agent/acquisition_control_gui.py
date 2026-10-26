@@ -99,13 +99,15 @@ def load_control_configuration(path):
 
 class ControlWindow(AcquisitionWindow):
     """Reuses guarded lifecycle actions, not the old multi-button constructor."""
-    def __init__(self, root, runtime, server, config_path, entrypoint, demo=False, application_guard=None):
+    def __init__(self, root, runtime, server, config_path, entrypoint, demo=False, application_guard=None,
+                 operator_supervised_test=False):
         import tkinter as tk
         from tkinter import messagebox
         self.tk, self.messagebox = tk, messagebox
         self.root, self.runtime, self.server = root, runtime, server
         self.config_path, self.entrypoint, self.demo = config_path, entrypoint, demo
         self.closing = False
+        self.operator_supervised_test = operator_supervised_test
         self._journal_prompted = False
         self.shutdown = ApplicationShutdown(getattr(runtime, "runtime", runtime), server, runtime,
                                              application_guard=application_guard)
@@ -146,13 +148,28 @@ class ControlWindow(AcquisitionWindow):
                 "Stop LabVIEW Acquisition normally and release its NI tasks first.", parent=self.root)
             return
         if state["state"] != "RECOVERY_REQUIRED":
+            if getattr(self, "operator_supervised_test", False):
+                if not self.messagebox.askyesno("Operator-supervised startup",
+                        "Confirm LabVIEW and other NI clients are stopped and cards are released.\n"
+                        "General, Chauffage, PREMA, Focales and HT are physically OFF; HT is zero.\n\n"
+                        "This is your current-owner test premise, not verified hardware qualification.\n"
+                        "General does not start water automatically. Start one step, inspect it, then continue.\n"
+                        "Chroma test targets: F3=COM10, F2=COM11, F1=COM12.\n"
+                        "HT supply/pulses/increases retain their separate feedback gates.\n\n"
+                        "Configure all 11 cards and apply the fixed startup images?", parent=self.root):
+                    return
+                try:
+                    self.runtime.initialize(startup_confirmed=True)
+                except Exception as error:
+                    self.messagebox.showerror("Initialization not accepted", str(error), parent=self.root)
+                return
             return AcquisitionWindow.initialize(self)
         if not self.messagebox.askyesno("Confirm local ownership handover and NI startup",
                 "This server has not created a native worker. A PRIOR ownership marker remains.\n\n"
                 "Confirm ALL of the following:\n"
                 "- LabVIEW Acquisition is normally STOPPED and its NI tasks are released.\n"
                 "- ALL other NI clients have released their tasks. A quiet VI link is NOT proof.\n"
-                "- General, Chauffage, PREMA, Focales and HT are physically OFF locally.\n\n"
+                "- General, Chauffage, PREMA, Focales and HT are physically OFF locally; HT is zero.\n\n"
                 "Process metadata will check the prior parent and other Python/known NI clients.\n"
                 "It does NOT inspect driver task handles or independently prove electrical OFF.\n"
                 "The old marker is archived before the software barrier is removed.\n\n"
@@ -192,7 +209,8 @@ class ControlWindow(AcquisitionWindow):
         native = state.get("native_isolation", {})
         count = ("UNKNOWN (ownership retained)" if native.get("resource_count_interpretation")
                  == "UNKNOWN_RETAINED_OWNERSHIP_SENTINEL" else str(state["resource_count"]))
-        self.status.set("{0} | NI resources: {1} | {2}".format(state["state"], count, state["error"]))
+        mode = " | OPERATOR SUPERVISED TEST" if getattr(self, "operator_supervised_test", False) else ""
+        self.status.set("{0} | NI resources: {1}{2} | {3}".format(state["state"], count, mode, state["error"]))
         self.cards.set(initialization_card_text(state))
         age = state["everest_read_age_seconds"]
         delivery = state.get("telemetry_delivery", {})
@@ -247,7 +265,7 @@ def main(entrypoint, argv=None):
         flags = {name: base.get(name, False) for name in (
             "stage_controls_verified", "cooling_trip_verified", "ht_controls_verified", "focal_controls_verified",
             "counter_controls_verified", "counter_timing_controls_verified", "ht_voltage_controls_verified", "outer_stop_verified",
-            "beamline_controls_verified")}
+            "beamline_controls_verified", "operator_supervised_test")}
         ht, focal = base.get("ht_shutdown", {}), base.get("focal_stop", {})
         profile = base.get("control_profile", "legacy_full")
         if args.demo:
@@ -257,7 +275,8 @@ def main(entrypoint, argv=None):
                 ht_feedback_verified=ht.get("feedback_verified", False), ht_zero_tolerance_kv=ht.get("zero_tolerance_kv", 0),
                 ht_zero_timeout=ht.get("timeout_seconds", 10))
             focal_options = dict(dll_path=focal.get("dll_path", DEFAULT_DLL),
-                resources_verified=focal.get("resources_verified", False), timeout=focal.get("timeout_seconds", 10))
+                resources_verified=focal.get("resources_verified", False), timeout=focal.get("timeout_seconds", 10),
+                operator_supervised_test=base.get("operator_supervised_test", False))
             # Cold facade; the child/native backend is created only by an
             # explicitly accepted Initialize on the existing runtime owner.
             # Unqualified aggregate reads are not inserted into VI dwell times.
@@ -291,7 +310,8 @@ def main(entrypoint, argv=None):
         thread.daemon = True
         thread.start()
         ControlWindow(root, view, server, args.config, entrypoint, args.demo,
-                      application_guard=application_guard)
+                      application_guard=application_guard,
+                      operator_supervised_test=base.get("operator_supervised_test", False))
     except Exception as error:
         # Even a bind error may follow creation of a non-daemon alarm writer.
         # Keep a visible three-button failure window until ALL joins finish.

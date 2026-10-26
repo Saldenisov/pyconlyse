@@ -6,6 +6,7 @@ Commissioning flags must be established locally, never from an HTTP request.
 import math
 from .acquisition_beamline import BEAMLINE_OPERATIONS
 from .acquisition_counter_timing import validate_remote_timing
+from .supervised_test import controls_permitted, supervised_allowed
 
 
 def known_ht_command(sequence):
@@ -50,14 +51,21 @@ def command_capabilities(value):
     for operation in OPERATIONS:
         reason = ""
         stopping = operation.endswith(".stop")
+        supervised = (supervised_allowed(value, operation)
+                      and value.get("operator_test_cold_attested") is True)
+        permissions = dict(stage, operator_supervised_test=supervised)
         if value.get("remote_setpoints_enabled") is not True:
             reason = "REMOTE_CONTROL_DISABLED"
-        elif value.get("startup_complete") is False:
+        elif (value.get("startup_complete") is False
+              or supervised and value.get("startup_complete") is not True):
             reason = "ALL_REQUIRED_CARDS_AND_STARTUP_NOT_READY"
         elif recovery.get("required") is not False or recovery.get("protection_active") is not True:
             reason = "LOCAL_OWNERSHIP_RECOVERY_REQUIRED"
         elif not value.get("resource_count"):
             reason = "INITIALIZE_LOCALLY_ON_XP"
+        elif ("ownership_uncertain" in value.get("native_isolation", {})
+              and value["native_isolation"].get("ownership_uncertain") is not False):
+            reason = "CURRENT_OWNER_UNCERTAIN"
         elif operation == "modulator.general.stop":
             if state not in ("RUNNING", "FAULT", "EXECUTING") or (
                     state == "EXECUTING" and value.get("current_operation") in
@@ -68,11 +76,11 @@ def command_capabilities(value):
         elif not stopping and not current:
             reason = "FRESH_PYTHON_INPUTS_REQUIRED"
         if not reason and operation != "modulator.general.stop":
-            if stage.get("commissioned") is not True:
+            if not controls_permitted(permissions, "commissioned", operation):
                 reason = "STAGE_CONTROLS_NOT_COMMISSIONED"
             elif operation.startswith("alimentation_ht.") and stage.get("ht_commissioned") is not True:
                 reason = "HT_CONTROLS_NOT_COMMISSIONED"
-            elif operation.startswith("focales.") and stage.get("focal_commissioned") is not True:
+            elif operation.startswith("focales.") and not controls_permitted(permissions, "focal_commissioned", operation):
                 reason = "CHROMA_CONTROLS_NOT_COMMISSIONED"
             elif operation.startswith("modulator_impulse.") and stage.get("counter_commissioned") is not True:
                 reason = "COUNTER_CONTROLS_NOT_COMMISSIONED"
@@ -87,11 +95,14 @@ def command_capabilities(value):
             elif operation == "cooling.stop":
                 reason = "COOLING_STOP_REQUIRES_LOCAL_COOLDOWN_VERIFICATION"
             elif not stopping:
-                if value.get("full_stop_commissioned") is not True:
+                if value.get("full_stop_commissioned") is not True and not supervised:
                     reason = "HT_CHROMA_COOLING_SHUTDOWN_NOT_COMMISSIONED"
                 elif operation == "modulator.general.start":
                     if value.get("general_stop_required") is not False:
                         reason = "GENERAL_ALREADY_STARTED_OR_STOP_REQUIRED"
+                elif (operation == "cooling.start" and supervised
+                      and value.get("operator_test_general_epoch_current") is not True):
+                    reason = "GENERAL_REQUIRED_BEFORE_OPERATOR_WATER"
                 elif operation != "cooling.start" and value.get("general_cooling_ready") is not True:
                     reason = "GENERAL_AND_CONFIRMED_COOLING_REQUIRED"
                 elif operation != "cooling.start" and value.get("cooling_permit_current") is not True:

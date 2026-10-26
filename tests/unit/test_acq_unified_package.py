@@ -29,7 +29,9 @@ def test_release_uses_explicit_source_closure_not_runtime_or_repair_scripts(tmp_
     assert not (release / 'shared_state_receiver.pyw').exists()
     assert result['standalone_telemetry_application_included'] is False
     assert result['canonical_entrypoint'] == 'acquisition_control_server.pyw'
-    assert result['release'] == 'acq-unified-parallel-cards-20261026-v8-r11'
+    assert result['release'] == 'acq-unified-operator-test-20261026-v8-r12'
+    assert result['operator_supervised_test_supported'] is True
+    assert result['operator_test_is_physical_qualification'] is False
     assert 'TaskHandle metadata before stdin reader' in result['native_bootstrap']
     assert '11 concurrent card' in result['native_initialization']
     assert 'PeekNamedPipe' in result['native_child_input']

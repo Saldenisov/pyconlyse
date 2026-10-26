@@ -21,6 +21,9 @@ def main():
         result = updater["install"](folder)
         result["source_installed"] = True
         result["transport"] = transport["configure"](updater["TARGET"], key)
+        mode_setup = os.path.join(folder, "configure_acq_supervised_test.py")
+        if os.path.isfile(mode_setup):
+            result["supervised_test"] = runpy.run_path(mode_setup)["configure"](updater["TARGET"])
         result["result"] = "INSTALLED"
         messagebox.showinfo("Update installed; no cards initialized",
             "Native bootstrap updated; XP command transport configured.\n"

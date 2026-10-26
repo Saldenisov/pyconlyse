@@ -16,7 +16,7 @@ from functools import wraps
 
 from .acquisition_runtime import AcquisitionRuntime
 from .command_broker import CommandBroker
-from .cooling_safety import CoolingSafety, decode_publications, runtime_publications
+from .cooling_safety import CoolingSafety, RECOVERY_SECONDS, decode_publications, runtime_publications
 from .chroma_focal_stop import BRANCHES
 from .runtime_identity import SOURCE_PATHS
 from .control_policy import require_command, command_capabilities, BEAMLINE_OPERATIONS
@@ -24,6 +24,7 @@ from .cooling_startup import wait_for_cooling
 from .hardware_plan import AI_BANKS, DI_BANKS
 from .acquisition_procedures import ProcedureCancelled
 from .acquisition_backend import AcquisitionCancelled
+from .supervised_test import SUPERVISED_OPERATIONS, supervised_enabled
 
 
 def _finite_number(value):
@@ -43,6 +44,7 @@ CONTROL_MODULES += ("command_protocol.py", "command_broker.py", "command_http.py
                     "journal_worker.py", "isolated_backend.py", "isolated_wire.py", "isolated_worker.py")
 CONTROL_MODULES += ("handover_recovery.py", "acquisition_supervisor.py")
 CONTROL_MODULES += ("parallel_initialization.py",)
+CONTROL_MODULES += ("supervised_test.py",)
 
 
 def control_identity(root=None):
@@ -137,11 +139,19 @@ class _ObservedBackend(object):
     def general_start(self, *args, **kwargs):
         token = self.runtime.broker.begin("modulator.general.start")
         error = None
-        self.runtime._general_cooling_ready = False
+        self.runtime._invalidate_cooling_readiness()
         try:
+            if self.runtime._supervised_admission("modulator.general.start"):
+                with self.runtime._lock:
+                    self.runtime._start_permit(general=True,
+                        observed_at=self.runtime._supervised_operation_observation_at)
             self.runtime._startup_phase = "GENERAL_POWER"
             result = self.backend.general_start(*args, **kwargs)
             self._assert_active_context()
+            if self.runtime._supervised_admission("modulator.general.start"):
+                self.runtime._begin_supervised_general_epoch()
+                self.runtime._startup_phase = "WAIT_OPERATOR_WATER"
+                return result
             self.runtime._startup_phase = "COOLING_START"
             self.backend.execute_stage("cooling.start", args[0], operator_confirmed=True)
             self._assert_active_context()
@@ -158,7 +168,7 @@ class _ObservedBackend(object):
 
     @_execution_context
     def general_stop(self, *args, **kwargs):
-        self.runtime._general_cooling_ready = False
+        self.runtime._invalidate_cooling_readiness()
         self.runtime._startup_phase = "STOPPING"
         try:
             result = self._call("modulator.general.stop", "general_stop", *args, **kwargs)
@@ -170,6 +180,20 @@ class _ObservedBackend(object):
 
     @_execution_context
     def execute_stage(self, operation, *args, **kwargs):
+        if self.runtime._supervised_admission(operation):
+            with self.runtime._lock:
+                self.runtime._require_startup_complete()
+                self.runtime._require_recovery_clear()
+                self.runtime._require_supervised_owner_inputs(operation, fresh=False)
+                if not operation.endswith(".stop"):
+                    if operation == "cooling.start":
+                        self.runtime._require_current_owner_inputs(
+                            self.runtime._supervised_operation_observation_at, operation)
+                        if not self.runtime._supervised_general_current():
+                            raise RuntimeError("GENERAL_REQUIRED_BEFORE_OPERATOR_WATER")
+                    else:
+                        self.runtime._start_permit(operation=operation,
+                            observed_at=self.runtime._supervised_operation_observation_at)
         if operation in BEAMLINE_OPERATIONS:
             if self.runtime._general_cooling_ready is not True:
                 raise RuntimeError("GENERAL_AND_CONFIRMED_COOLING_REQUIRED")
@@ -222,7 +246,7 @@ class _ObservedBackend(object):
     @_execution_context
     def close(self):
         self.runtime.broker.interrupt_queued()
-        self.runtime._general_cooling_ready = False
+        self.runtime._invalidate_cooling_readiness()
         return self.backend.close()
 
 
@@ -280,6 +304,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             if publisher is not None and hasattr(publisher, "assert_initialize_allowed"):
                 publisher.assert_initialize_allowed()
             result = AcquisitionRuntime.initialize(self, startup_confirmed)
+            self._invalidate_cooling_readiness()
             self._software_state, self._software_received_at = None, None
             self._software_sequence, self._software_error = 0, ""
             # An accepted native ownership attempt permanently closes the cold
@@ -308,6 +333,10 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             raise ValueError("Cooling startup timeout must be in [2,120] seconds")
         self._cooling_start_timeout = cooling_start_timeout
         self._general_cooling_ready = False
+        self._supervised_general_owner = None
+        self._supervised_general_generation = None
+        self._supervised_cooling_since = None
+        self._supervised_cooling_samples = 0
         self._startup_phase = "NOT_STARTED"
         self._execution_progress = None
         self._software_state, self._software_received_at = None, None
@@ -471,7 +500,92 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         result = wait_for_cooling(backend.read_snapshot, cancel, observe,
                                   timeout=self._cooling_start_timeout, clock=self._clock)
         self._startup_phase = "COOLING_CONFIRMED"
+        if self._supervised_general_current():
+            self._general_cooling_ready = True
         return result
+
+    def _invalidate_cooling_readiness(self, end_epoch=True):
+        self._general_cooling_ready = False
+        self._supervised_cooling_since = None
+        self._supervised_cooling_samples = 0
+        if end_epoch:
+            self._supervised_general_owner = None
+            self._supervised_general_generation = None
+
+    def _begin_supervised_general_epoch(self):
+        self._invalidate_cooling_readiness()
+        self._supervised_general_owner = self._backend
+        isolation = getattr(self._backend, "isolation_snapshot", None)
+        self._supervised_general_generation = (isolation().get("worker_generation")
+                                               if isolation is not None else None)
+
+    def _supervised_general_current(self):
+        if (not self._supervised_admission("modulator.general.start")
+                or self._supervised_general_owner is not self._backend
+                or not self._general_stop_required or not self._backend.resource_count):
+            return False
+        isolation = getattr(self._backend, "isolation_snapshot", None)
+        if isolation is not None:
+            owner = isolation()
+            return (owner.get("ownership_uncertain") is False
+                    and owner.get("worker_generation") == self._supervised_general_generation)
+        return True
+
+    def _observe_supervised_cooling(self, previous_read_at):
+        if not supervised_enabled(self._backend):
+            return
+        now = self._clock()
+        normal = (self._supervised_general_current() and self._owner_telemetry_current()
+            and self._latest is not None and self._latest.get("source") == "python_daqmx_acquisition"
+            and self._latest.get("simulated") is False and set(self._circuits or {}) == {"CANON", "SECTION"}
+            and all(item.get("quality") == "FRESH" and item.get("fault") is False
+                    for item in self._circuits.values()))
+        if not normal:
+            self._invalidate_cooling_readiness(end_epoch=False)
+            return
+        if previous_read_at is None or not 0 <= now - previous_read_at < 2:
+            self._invalidate_cooling_readiness(end_epoch=False)
+        if self._supervised_cooling_since is None:
+            self._supervised_cooling_since = now
+        self._supervised_cooling_samples += 1
+        if self._supervised_cooling_samples >= 2 and now - self._supervised_cooling_since >= RECOVERY_SECONDS:
+            self._general_cooling_ready = True
+            self._startup_phase = "COOLING_CONFIRMED"
+
+    def _procedure_fault(self, error):
+        self._invalidate_cooling_readiness()
+        return AcquisitionRuntime._procedure_fault(self, error)
+
+    def deinitialize(self, electrical_off_confirmed=False):
+        with self._lock:
+            result = AcquisitionRuntime.deinitialize(self, electrical_off_confirmed)
+            self._invalidate_cooling_readiness()
+            return result
+
+    def request_shutdown(self, electrical_off_confirmed=False):
+        with self._lock:
+            result = AcquisitionRuntime.request_shutdown(self, electrical_off_confirmed)
+            self._invalidate_cooling_readiness()
+            return result
+
+    def general_stop(self, operator_confirmed=False):
+        with self._lock:
+            if self._supervised_admission("modulator.general.stop"):
+                self._require_recovery_clear()
+                self._require_supervised_owner_inputs("modulator.general.stop", fresh=False)
+            result = AcquisitionRuntime.general_stop(self, operator_confirmed)
+            self._invalidate_cooling_readiness()
+            return result
+
+    def stage_request(self, operation, operator_confirmed=False, new_value=True):
+        with self._lock:
+            if self._supervised_admission(operation) and new_value is True:
+                if operation == "cooling.start":
+                    if not self._supervised_general_current():
+                        raise RuntimeError("GENERAL_REQUIRED_BEFORE_OPERATOR_WATER")
+                elif operation.endswith(".start") or operation.endswith(".reset"):
+                    self._start_permit(operation=operation)
+            return AcquisitionRuntime.stage_request(self, operation, operator_confirmed, new_value)
 
     def _stop_qualified(self):
         backend = self._backend
@@ -481,7 +595,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                     and getattr(getattr(backend, "focal_command", None), "resources_verified", False) is True
                     and self.cooling_polarity_verified)
 
-    def _start_permit(self, general=False):
+    def _start_permit(self, general=False, operation=None, observed_at=None):
         alarm = self.cooling.snapshot()
         # An acknowledged-by-operator decision to proceed despite a historical
         # gap is NOT a claim that missing records were recovered. Keep that
@@ -490,8 +604,20 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
         if (alarm["active"] or alarm.get("journal_storage_error", alarm["journal_error"])
                 or alarm.get("journal_required") and alarm.get("journal_write_ready") is not True):
             raise RuntimeError("Start blocked by unresolved cooling alarm or journal failure")
-        if not self._stop_qualified():
+        operation = "modulator.general.start" if general else operation
+        supervised = self._supervised_admission(operation)
+        if not self._stop_qualified() and not supervised:
             raise RuntimeError("Start blocked: full HT/Chroma/cooling shutdown not commissioned")
+        if supervised:
+            self._require_startup_complete()
+            self._require_recovery_clear()
+            self._require_supervised_owner_inputs(operation, fresh=False)
+            if self._error or self._cancel.is_set():
+                raise RuntimeError("SUPERVISED_TEST_REQUIRES_CURRENT_OWNER_INPUTS")
+            self._require_current_owner_inputs(
+                self._received_at if observed_at is None else observed_at, operation)
+            if not general and (not self._supervised_general_current() or not self._general_cooling_ready):
+                raise RuntimeError("GENERAL_AND_CONFIRMED_COOLING_REQUIRED")
         # General supplies the circulation cabinet. Requiring running water
         # before General itself would prevent establishing circulation.
         if not general and (self._cooling_read_at is None or self._clock() - self._cooling_read_at >= 2
@@ -514,11 +640,14 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             self._start_permit()
             return self.set_sync_parameters(value, operator_confirmed=True)
         if operation == "cooling.start":
-            if not self._stop_qualified():
+            if not self._stop_qualified() and not self._supervised_admission(operation):
                 raise RuntimeError("Cooling recovery requires commissioned shutdown")
         elif (operation.endswith(".start") or operation.endswith(".reset")
               or operation in BEAMLINE_OPERATIONS):
-            self._start_permit()
+            if self._supervised_admission(operation):
+                self._start_permit(operation=operation)
+            else:
+                self._start_permit()
         return self.stage_request(operation, operator_confirmed=True)
 
     def general_start(self, operator_confirmed=False):
@@ -528,17 +657,22 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
 
     def _run_cooling_guard(self, latest):
         with self._lock:
+            previous_read_at = self._cooling_read_at
             self._circuits, unused = decode_publications(runtime_publications(latest))
             self._cooling_read_at = self._clock()
             self.cooling.observe(self._circuits, self._general_stop_required, observation_id=self._sequence)
+            self._observe_supervised_cooling(previous_read_at)
         return AcquisitionRuntime._run_cooling_guard(self, latest)
 
     def _tick_cooling(self):
         with self._lock:
             if self._cooling_read_at is None or self._clock() - self._cooling_read_at >= 2:
+                if supervised_enabled(self._backend):
+                    self._invalidate_cooling_readiness(end_epoch=False)
                 self.cooling.observe({name: dict(fault=None, quality="UNKNOWN", causes=[])
                                      for name in ("CANON", "SECTION")}, self._general_stop_required)
-            ready = self._stop_qualified() and not self._shutdown_requested and not self._stop_in_progress(self._operation)
+            ready = ((self._stop_qualified() or self._supervised_admission("modulator.general.stop"))
+                     and not self._shutdown_requested and not self._stop_in_progress(self._operation))
             if self.cooling.tick(ready):
                 try:
                     self.general_stop(operator_confirmed=True)
@@ -589,6 +723,18 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             # Only the authenticated HTTP snapshot reply issues one.
             result["control"] = self.broker.snapshot(issue_lease=False)
             result["full_stop_commissioned"] = self._stop_qualified()
+            result["operator_supervised_test"] = supervised_enabled(self._backend)
+            result["operator_test_cold_attested"] = bool(
+                self._backend is not None and getattr(self._backend, "operator_test_cold_attested", False) is True)
+            result["operator_test_general_epoch_current"] = self._supervised_general_current()
+            result["operator_test_admission"] = dict(
+                enabled=result["operator_supervised_test"],
+                cold_attested=result["operator_test_cold_attested"],
+                permitted_operations=sorted(SUPERVISED_OPERATIONS) if result["operator_supervised_test"] else [],
+                interpretation="Operator test permission only; physical commissioning facts remain separate")
+            if (result["operator_supervised_test"] and (self._cooling_read_at is None
+                    or not 0 <= self._clock() - self._cooling_read_at < 2)):
+                self._invalidate_cooling_readiness(end_epoch=False)
             result["general_cooling_ready"] = self._general_cooling_ready
             result["startup_phase"] = self._startup_phase
             result["execution_progress"] = copy.deepcopy(self._execution_progress)
@@ -598,6 +744,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             result["native_isolation"] = isolated() if isolated is not None else dict(
                 worker_state="NOT_SPAWNED" if self._backend is None else "IN_PROCESS_TEST_BACKEND",
                 resource_count=0 if self._backend is None else self._backend.resource_count,
+                ownership_uncertain=False,
                 automatic_restart=False)
             result["local_handover_available"] = bool(self._handover_verifier is not None
                 and self._recovery_guard is not None

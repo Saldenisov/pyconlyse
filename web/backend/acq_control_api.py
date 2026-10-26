@@ -5,6 +5,7 @@ is never retried automatically, including after a page/server restart.
 """
 import json
 import math
+import os
 import sqlite3
 from pathlib import Path
 
@@ -14,15 +15,48 @@ from flask_jwt_extended.exceptions import JWTExtendedException
 from jwt.exceptions import PyJWTError
 
 import tango_gateway
-from legacy.xp_acq_control.elyse_agent.acquisition_remote import OPERATIONS, validate_request, strict_json
+from legacy.xp_acq_control.elyse_agent.command_protocol import OPERATIONS, validate_request, strict_json
 from legacy.xp_acq_control.elyse_agent.runtime_identity import valid_hex
-from mutation_auth import install_mutation_auth
-from hardware_authorization import AuthorizationError, Operation, authorize_runtime_operation
+from mutation_auth import install_mutation_auth, mutation_auth_required
+from hardware_authorization import (AuthorizationError, Operation, authorize_runtime_operation,
+                                    authorization_required as hardware_approval_required)
+from acq_local_console import LocalConsoleError, local_subject, issue_approval, consume_approval
 from acq_contract import DEVICE, SOURCE_MODES, topology
 
 MAX_BYTES = 2 * 1024 * 1024
 api = Blueprint("acq_control_api", __name__, url_prefix="/api/elyse/acquisition/control")
 install_mutation_auth(api, protected_get_endpoints=("get_control",))
+
+
+def _local_settings():
+    names = ("ACQ_LOCAL_CONSOLE_ORIGIN", "ACQ_LOCAL_CONSOLE_KEY_FILE", "ACQ_LOCAL_CONSOLE_DB_FILE")
+    value = {name: current_app.config.get(name, os.environ.get(name)) for name in names}
+    enabled = current_app.config.get("ACQ_LOCAL_CONSOLE_ENABLED", os.environ.get("ACQ_LOCAL_CONSOLE_ENABLED", "false"))
+    value["ACQ_LOCAL_CONSOLE_ENABLED"] = enabled is True or (type(enabled) is str and enabled.lower() == "true")
+    value["ACQ_LOCAL_CONSOLE_TTL_SECONDS"] = 30
+    return value
+
+
+def _local_subject(read_only=False):
+    return local_subject(request, _local_settings(), mutation_auth_required() or hardware_approval_required(),
+                         require_origin=not read_only)
+
+
+def _approval_intent(command):
+    return dict(operation=command["operation"], value=command["value"], session_id=command["session_id"],
+                expected_revision=command["expected_revision"], device=DEVICE, method="POST",
+                route="acquisition.command." + command["operation"])
+
+
+def _check_current_command(command, view):
+    runtime = view["runtime"]
+    if runtime["session_id"] != command["session_id"] or runtime["state_revision"] != command["expected_revision"]:
+        raise ValueError("Observed XP session/revision changed; refresh and confirm again")
+    if (view.get("commands_enabled") is not True or runtime["control"]["enabled"] is not True
+            or runtime.get("remote_setpoints_enabled") is not True
+            or runtime.get("telemetry_delivery", {}).get("source_mode") != "PYTHON_NATIVE"
+            or runtime["control"]["capabilities"][command["operation"]]["enabled"] is not True):
+        raise ValueError(runtime["control"]["capabilities"][command["operation"]]["reason"] or "COMMANDS_DISABLED")
 
 
 def _json(raw):
@@ -149,6 +183,9 @@ def public_view(view):
                 session_id=runtime["session_id"], revision=runtime["state_revision"], build_id=runtime["build_id"],
                 state=runtime["state"], quality=view.get("quality"), capabilities=capabilities,
                 startup_phase=runtime.get("startup_phase"), current_operation=runtime.get("current_operation"),
+                operator_supervised_test=runtime.get("operator_supervised_test") is True,
+                operator_test_admission=runtime.get("operator_test_admission"),
+                approval_mode="LOCAL_CONSOLE" if _local_subject(read_only=True) else "JWT_APPROVAL",
                 general_cooling_ready=runtime.get("general_cooling_ready") is True,
                 synchronization=runtime.get("counter_timing_state", {}),
                 commands=history,
@@ -179,11 +216,39 @@ def get_control():
                        commands=_history(), error="Device Server Python Acquisition indisponible."), 503
 
 
+@api.post("/approvals")
+def local_approval():
+    """Local console confirmation only; performs a read, never dispatches."""
+    try:
+        subject = _local_subject()
+        if subject is None:
+            return jsonify(error="Explicit local console approval mode required"), 403
+        if request.mimetype != "application/json":
+            return jsonify(error="application/json required"), 415
+        command = validate_request(strict_json(request.stream.read(2049)))
+        unused, view = read_view()
+        _check_current_command(command, view)
+        nonce = issue_approval(_approval_intent(command), subject, _local_settings())
+        return jsonify(schema_version=1, nonce=nonce, expires_in_seconds=30,
+                       dispatch_attempted=False, hardware_writes=False)
+    except LocalConsoleError as error:
+        return jsonify(error=error.message, code=error.code, dispatch_attempted=False), error.status_code
+    except (ValueError, TypeError, KeyError, UnicodeError, RecursionError, OverflowError) as error:
+        return jsonify(error=str(error)[:300], dispatch_attempted=False), 409
+    except Exception:
+        current_app.logger.warning("Local console approval unavailable")
+        return jsonify(error="Local console approval unavailable", dispatch_attempted=False), 503
+
+
 @api.post("/commands")
 def post_command():
     # Live machine commands require authentication even on a development LAN.
     try:
-        verify_jwt_in_request()
+        subject = _local_subject()
+        if subject is None:
+            verify_jwt_in_request()
+    except LocalConsoleError as error:
+        return jsonify(error=error.message, code=error.code), error.status_code
     except (JWTExtendedException, PyJWTError):
         return jsonify(error="Authentification requise pour commander Acquisition."), 401
     if request.mimetype != "application/json":
@@ -193,8 +258,12 @@ def post_command():
     except (ValueError, TypeError, KeyError, UnicodeError, RecursionError, OverflowError) as error:
         return jsonify(error=str(error)), 400
     try:
-        authorize_runtime_operation(hardware_intent(command), request.headers.get('X-PYCONLYSE-HARDWARE-APPROVAL'), required=True)
-    except AuthorizationError as error:
+        nonce = request.headers.get('X-PYCONLYSE-HARDWARE-APPROVAL')
+        if subject is not None:
+            consume_approval(_approval_intent(command), subject, nonce, _local_settings())
+        else:
+            authorize_runtime_operation(hardware_intent(command), nonce, required=True)
+    except (AuthorizationError, LocalConsoleError) as error:
         # This validated, correlated attempt has not reached the command DB
         # or Tango. A caller may clear only its newly reserved local intent;
         # a lost transport reply or unrelated old intent remains unknown.
@@ -221,14 +290,7 @@ def post_command():
         try:
             proxy, view = read_view()
             runtime = view["runtime"]
-            if (runtime["session_id"] != command["session_id"]
-                    or runtime["state_revision"] != command["expected_revision"]):
-                raise ValueError("Observed XP session/revision changed; refresh and confirm again")
-            if (view.get("commands_enabled") is not True
-                    or runtime["control"]["enabled"] is not True or runtime.get("remote_setpoints_enabled") is not True
-                    or runtime.get("telemetry_delivery", {}).get("source_mode") != "PYTHON_NATIVE"
-                    or runtime["control"]["capabilities"][command["operation"]]["enabled"] is not True):
-                raise ValueError(runtime["control"]["capabilities"][command["operation"]]["reason"] or "COMMANDS_DISABLED")
+            _check_current_command(command, view)
         except Exception as error:
             db.execute("ROLLBACK")
             # Fresh first-attempt ID, no reservation/ExecuteCommand yet.

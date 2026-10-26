@@ -1,5 +1,6 @@
 import { fetchWithHardwareApproval } from './csrfRequest';
 import { validSyncValue } from '../acquisitionCommandValue';
+import { rememberAcquisitionApproval, prepareAcquisitionApproval, usesLocalAcquisitionApproval } from './acqLocalApproval';
 
 // Both channels use the fixed web facade. No browser-side XP/NI/PSP path.
 const CONTROL = '/api/elyse/acquisition/control';
@@ -66,6 +67,7 @@ export const acqTelemetryClient = Object.freeze({
     if (!response.ok || !validControl(value)) {
       throw new Error(value.error || 'Contrat de commandes Acquisition incompatible.');
     }
+    rememberAcquisitionApproval(value);
     return value;
   },
   async coolingSafety(signal) {
@@ -93,6 +95,11 @@ export const acqTelemetryClient = Object.freeze({
       }, 10000);
     });
     const exchange = async () => {
+      if (usesLocalAcquisitionApproval()) {
+        const refused = await prepareAcquisitionApproval(command, controller.signal);
+        if (refused) return refused;
+        if (controller.signal.aborted) throw new Error('Confirmation locale interrompue avant envoi.');
+      }
       const response = await fetchWithHardwareApproval(`${CONTROL}/commands`, {
         method: 'POST', credentials: 'include', cache: 'no-store', signal: controller.signal,
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command),

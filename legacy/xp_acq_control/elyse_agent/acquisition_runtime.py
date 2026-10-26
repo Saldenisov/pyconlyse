@@ -22,6 +22,7 @@ from .acquisition_ht_voltage import HTVoltageCancelled
 from .acquisition_counter_timing import decode_counter_bank, CounterTimingCancelled, validate_remote_timing
 from .control_policy import BEAMLINE_OPERATIONS, known_ht_command, require_ht_value
 from .acquisition_beamline import BeamlineExecutionCancelled
+from .supervised_test import controls_permitted, supervised_allowed
 
 
 class AcquisitionRuntime(object):
@@ -63,6 +64,7 @@ class AcquisitionRuntime(object):
         self._ht_pulses_sequence_completed = False
         self._ht_command_observation_at = None
         self._stage_motion_observation_at = None
+        self._supervised_operation_observation_at = None
         self._identity = dict(new_runtime_identity() if identity is None else identity)
         if (type(self._identity.get("runtime_protocol_version")) is not int
                 or self._identity.get("runtime_protocol_version") != RUNTIME_PROTOCOL_VERSION
@@ -159,14 +161,16 @@ class AcquisitionRuntime(object):
                     or self._state not in permitted_states or self._pending is not None
                     or self._shutdown_requested or self._operation is not None):
                 raise RuntimeError("Stage execution requires idle existing card ownership")
-            if (getattr(self._backend, "stage_controls_verified", False) is not True
-                    or getattr(self._backend, "control_profile", None) == "general_only_test"):
+            supervised = self._supervised_admission(operation)
+            if (not controls_permitted(self._backend, "stage_controls_verified", operation)
+                    or (getattr(self._backend, "stage_controls_verified", False) is not True and not supervised)
+                    or (getattr(self._backend, "control_profile", None) == "general_only_test" and not supervised)):
                 raise RuntimeError("Stage controls are not commissioned for this backend")
             if (operation.startswith("alimentation_ht.")
                     and getattr(self._backend, "ht_controls_verified", False) is not True):
                 raise RuntimeError("Separate HT stage controls are not commissioned")
             if (operation.startswith("focales.")
-                    and getattr(self._backend, "focal_controls_verified", False) is not True):
+                    and getattr(self._backend, "focal_controls_verified", False) is not True and not supervised):
                 raise RuntimeError("Separate Focales stage controls are not commissioned")
             if (operation in IMPULSION_OPERATIONS
                     and getattr(self._backend, "counter_controls_verified", False) is not True):
@@ -174,6 +178,9 @@ class AcquisitionRuntime(object):
             if (operation in BEAMLINE_OPERATIONS
                     and getattr(self._backend, "beamline_controls_verified", False) is not True):
                 raise RuntimeError("Separate beamline controls are not commissioned")
+            if supervised:
+                self._require_supervised_owner_inputs(operation, fresh=not operation.endswith(".stop"))
+                self._supervised_operation_observation_at = self._received_at
             if operation in BEAMLINE_OPERATIONS:
                 self._require_current_owner_inputs(self._received_at, "BEAMLINE_MOTION")
                 self._stage_motion_observation_at = self._received_at
@@ -260,6 +267,23 @@ class AcquisitionRuntime(object):
                 or self._latest.get("source") != "python_daqmx_acquisition"
                 or self._latest.get("simulated") is not False):
             raise RuntimeError(operation + "_REQUIRES_FRESH_CURRENT_OWNER_INPUTS")
+
+    def _supervised_admission(self, operation):
+        return bool(self._backend is not None and supervised_allowed(self._backend, operation)
+                    and getattr(self._backend, "operator_test_cold_attested", False) is True)
+
+    def _require_supervised_owner_inputs(self, operation, fresh=True):
+        backend = self._backend
+        if (backend is None or not backend.resource_count or self._recovery_latched
+                or self._marker_cleanup_uncertain or self._shutdown_requested):
+            raise RuntimeError("SUPERVISED_TEST_REQUIRES_CURRENT_OWNER")
+        isolation = getattr(backend, "isolation_snapshot", None)
+        if isolation is not None and isolation().get("ownership_uncertain") is not False:
+            raise RuntimeError("SUPERVISED_TEST_REQUIRES_CERTAIN_CURRENT_OWNER")
+        if fresh:
+            if self._error or self._cancel.is_set():
+                raise RuntimeError("SUPERVISED_TEST_REQUIRES_CURRENT_OWNER_INPUTS")
+            self._require_current_owner_inputs(self._received_at, operation)
 
     def _complete_ht_sequence(self, operation):
         with self._lock:
@@ -371,6 +395,11 @@ class AcquisitionRuntime(object):
                 raise ValueError("Explicit local General Marche confirmation required")
             if self._state != "RUNNING" or self._pending is not None or self._shutdown_requested:
                 raise RuntimeError("General Marche requires RUNNING and no pending procedure")
+            if self._supervised_admission("modulator.general.start"):
+                self._require_supervised_owner_inputs("modulator.general.start")
+                if self._general_stop_required:
+                    raise RuntimeError("General already started or stop required")
+                self._supervised_operation_observation_at = self._received_at
             self._state = "EXECUTING"
             self._invalidate_ht_sequences()
             self._operation = "modulator.general.start"
