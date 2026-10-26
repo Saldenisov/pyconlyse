@@ -820,6 +820,8 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             result["operator_supervised_test"] = supervised_enabled(self._backend)
             result["operator_test_cold_attested"] = bool(
                 self._backend is not None and getattr(self._backend, "operator_test_cold_attested", False) is True)
+            result["operator_cold_water_only"] = bool(result["operator_test_cold_attested"]
+                and getattr(self._backend, "operator_cold_water_only", False) is True)
             result["operator_test_general_epoch_current"] = self._supervised_general_current()
             result["operator_test_admission"] = dict(
                 enabled=result["operator_supervised_test"],

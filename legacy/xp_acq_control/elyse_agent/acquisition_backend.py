@@ -221,6 +221,7 @@ class _StageState(object):
             self._software_state_observer_active = False
 
     def _reset_stage_state(self):
+        self.operator_cold_water_only = False
         # Saved root frame 33052 resets local refs 44/36 to these literals.
         # C3/C4 images come from the reviewed startup commands, not DI values.
         self._stage_status = {44: (False,) * 77, 36: (False,) * 29}
@@ -555,6 +556,10 @@ class _StageState(object):
             if not new_value:
                 self.procedure.update(state="SOURCE_NEWVAL_FALSE_NOOP", report=preflight)
                 return preflight
+            if operation.endswith(".start") and operation != "cooling.start":
+                # Revoke before any recovery/output/helper effect, including
+                # partially failed starts. Stopping does not restore this fact.
+                self.operator_cold_water_only = False
             if operation == "alimentation_ht.start":
                 self.operator_test_cold_attested = False
                 self._ht_supply_sequence_completed = False
@@ -937,6 +942,7 @@ class CardBackend(SourceControls, _StageState):
             self._software_state_valid = False
             raise
         self.operator_test_cold_attested = supervised_enabled(self)
+        self.operator_cold_water_only = self.operator_test_cold_attested
         self._initialization_notice(dict(phase="RETURNED", call="all_cards_and_startup_complete"))
 
     def general_start(self, cancel, operator_confirmed=False):
@@ -1365,6 +1371,7 @@ class DemoBackend(_StageState):
         self._emit_software_state("INITIAL_LITERAL", source_uid="33052")
         self.startup_complete = True
         self.operator_test_cold_attested = supervised_enabled(self)
+        self.operator_cold_water_only = self.operator_test_cold_attested
 
     def read_snapshot(self, cancel):
         if self._beamline_operation_active:

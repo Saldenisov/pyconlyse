@@ -46,7 +46,7 @@ def package(destination, everest=False):
         files = [(XP / relative, relative) for relative in xp_release_paths()]
     destination.mkdir(parents=True)
     manifest = dict(schema_version=1, role="everest_tango" if everest else "xp_python34",
-                    release="everest-ht-cooling-scope-20261026-r14" if everest else "acq-unified-ht-cooling-scope-20261026-v8-r14", default_xp_port=8772,
+                    release="everest-cold-water-stop-20261026-r15" if everest else "acq-unified-cold-water-stop-20261026-v8-r15", default_xp_port=8772,
                     standard_bank_count=27, telemetry_port=8767, tango_device="elyse/acquisition/telemetry",
                     xp_modes=["IDLE: loopback VI bridge", "initialized: Python NI owner"],
                     vi_loopback_port=8766, tango_source_property="unified_acquisition",

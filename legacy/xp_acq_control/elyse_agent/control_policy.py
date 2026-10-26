@@ -104,7 +104,8 @@ def command_capabilities(value):
         stopping = operation.endswith(".stop")
         supervised = (supervised_allowed(value, operation)
                       and value.get("operator_test_cold_attested") is True)
-        permissions = dict(stage, operator_supervised_test=supervised)
+        permissions = dict(stage, operator_supervised_test=supervised,
+                           operator_cold_water_only=value.get("operator_cold_water_only") is True)
         if value.get("remote_setpoints_enabled") is not True:
             reason = "REMOTE_CONTROL_DISABLED"
         elif (value.get("startup_complete") is False
@@ -148,7 +149,7 @@ def command_capabilities(value):
                 reason = "BEAMLINE_CONTROLS_NOT_COMMISSIONED"
             elif operation == "ht_voltage.set" and known_ht_command(value.get("ht_sequence_state")) is None:
                 reason = "CURRENT_OWNER_HT_COMMAND_UNKNOWN"
-            elif operation == "cooling.stop":
+            elif operation == "cooling.stop" and not supervised:
                 reason = "COOLING_STOP_REQUIRES_LOCAL_COOLDOWN_VERIFICATION"
             elif not stopping:
                 if value.get("full_stop_commissioned") is not True and not supervised:

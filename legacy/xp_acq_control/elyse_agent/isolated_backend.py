@@ -36,7 +36,7 @@ CACHED_ATTRIBUTES = frozenset(("resource_count", "procedure", "control_profile",
     "last_impulsion", "last_ht_command", "last_outer_stop", "last_counter_timing",
     "counter_timing_publication", "commanded_counter_ticks", "last_beamline_command",
     "_counter_configuration_uncertain", "initialization_cards", "startup_complete",
-    "operator_supervised_test", "operator_test_cold_attested"))
+    "operator_supervised_test", "operator_test_cold_attested", "operator_cold_water_only"))
 
 
 class IsolatedBackendError(RuntimeError):
@@ -148,7 +148,8 @@ class IsolatedCardBackend(object):
         self._generation = uuid.uuid4().hex
         self._cache = dict(backend_options, resource_count=0, procedure=None)
         if factory_name is None:
-            self._cache.update(startup_complete=False, initialization_cards=None, operator_test_cold_attested=False)
+            self._cache.update(startup_complete=False, initialization_cards=None,
+                               operator_test_cold_attested=False, operator_cold_water_only=False)
         self._cache.setdefault("control_profile", "legacy_full")
         for name in CACHED_ATTRIBUTES:
             if name.endswith("_verified"):

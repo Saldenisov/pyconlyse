@@ -1,7 +1,7 @@
 """Explicit operator test permission, distinct from physical qualification."""
 
 SUPERVISED_OPERATIONS = frozenset((
-    "modulator.general.start", "modulator.general.stop", "cooling.start",
+    "modulator.general.start", "modulator.general.stop", "cooling.start", "cooling.stop",
     "chauffage.start", "chauffage.stop", "prema.start", "prema.stop",
     "focales.start", "focales.stop", "relays_ht.start", "relays_ht.stop",
     "modulator.reset",
@@ -15,7 +15,10 @@ def supervised_enabled(subject):
 
 
 def supervised_allowed(subject, operation):
-    return supervised_enabled(subject) and operation in SUPERVISED_OPERATIONS
+    cold_water_only = (subject.get("operator_cold_water_only", False) if isinstance(subject, dict)
+                       else getattr(subject, "operator_cold_water_only", False))
+    return (supervised_enabled(subject) and operation in SUPERVISED_OPERATIONS
+            and (operation != "cooling.stop" or cold_water_only is True))
 
 
 def controls_permitted(subject, flag, operation):

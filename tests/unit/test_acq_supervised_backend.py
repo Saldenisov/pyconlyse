@@ -123,7 +123,7 @@ class SupervisedBackendTests(unittest.TestCase):
     def test_ht_energy_and_nonwhitelisted_operations_receive_no_exemption(self):
         backend, owner, clock = fixture()
         for operation in ("alimentation_ht.start", "alimentation_ht.stop", "alimentation_ht.reset",
-                          "cooling.stop", "faraday_1.en_pulse"):
+                          "faraday_1.en_pulse"):
             self.assertRaises(RuntimeError, backend.execute_stage, operation, clock, operator_confirmed=True)
         self.assertRaises(RuntimeError, backend.execute_impulsion, "modulator_impulse.start", clock,
                           operator_confirmed=True)
