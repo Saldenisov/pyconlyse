@@ -108,3 +108,64 @@ directly through ``C:\Python34\pythonw.exe``. Neither shortcut initializes NI.
 At the time of this note r11 is staged; live installation/readiness is unverified.
 Everest's command property remains disabled; no command transport enable or
 commissioning change is implied by this initialization work.
+
+Supervised installation and live observations
+--------------------------------------------
+
+The operator installed r11 at 09:51:13 UTC (10:51:13 Paris), started the server
+and requested Initialize. Everest subsequently confirmed the exact r11 build,
+session ``3c69ef96d8f44c19b6ff79b5ca42919c``, child PID 2820,
+``RUNNING``, ``startup_complete=true`` and 21 retained tasks. All 11 cards
+reported READY without native errors or pending outcomes. Card preparation
+durations were 0.344--0.453 seconds; the accumulating report-level elapsed
+value includes subsequent owner lifetime and is not total startup duration.
+Counter starts and fixed startup images returned before startup_complete.
+This verifies one successful XP attempt; it does not isolate the relative
+contributions of the polling-pipe change and parallel preparation.
+
+An independent telemetry deployment mismatch then became visible. Everest's
+old validator accepted all-null initialization packets but rejected the first
+populated EPS/DPS packet with ``Unmigrated Python bank cannot claim valid values``.
+XP retained that unacknowledged packet and direct signed runtime reads remained
+fresh, while the standard 27-bank stream aged. An offline reproduction using
+the current captured runtime passed the candidate validator with 14 populated
+banks and failed the installed validator with that exact exception.
+
+Only these three already-tested telemetry contract modules were then updated
+on Everest; XP and its live task owner were untouched:
+
+* ``legacy/xp_acq_control/elyse_agent/standard_banks.py``
+* ``legacy/xp_acq_control/elyse_agent/native_telemetry.py``
+* ``legacy/xp_acq_control/elyse_agent/telemetry_publisher.py``
+
+The telemetry Device Server was restarted with the same arguments, directory
+and environment. The archive implementation/configuration and database were
+preserved. Backup and launch records are under
+``F:\ELYSE_Telemetry_Server\postgres_v3\rollbacks\native_validator_r11_20261026T095828Z``.
+The subsequent acknowledged stream resumed without restarting XP.
+
+The explicitly requested command transport was also enabled on the same
+Device Server with the separately provisioned key matching XP's installed
+key digest. Its prior properties are retained under
+``F:\ELYSE_Telemetry_Server\postgres_v3\rollbacks\command_transport_r11_20261026T100214Z``.
+Only the local telemetry device was reinitialized; no ExecuteCommand request
+or hardware command was issued. This enables transport, not commissioning or
+proof of trusted-caller authorization; the previously observed missing
+AccessControl service remains a separate qualification item.
+
+At 10:05:37 UTC (11:05:37 Paris), runtime sequence was 3127,
+``telemetry_source_current=true`` and both command transports were enabled.
+The receiver count had reached 715 since its reinitialization. All 27 bank
+envelopes were present; 14 migrated banks were populated, including EPS/DPS.
+The C4 packet age was 0.562 seconds with no packet error. The remaining 13
+banks retain explicit unavailable status. All six direct input banks were
+being read without errors. The C2 HT measurement channels read zero; this
+does not independently verify high-voltage safety or feedback calibration.
+
+General remained refused as ``STAGE_CONTROLS_NOT_COMMISSIONED``;
+``full_stop_commissioned=false``. Existing HT feedback, Chroma resource and
+cooling-polarity flags were not relabeled as verified merely to enable it.
+The existing General-only pulse implementation is narrower than the full
+General/water/stage programme and is not exposed by r11's unified control
+runtime. Source General event-6 still unconditionally attempts Focal OFF;
+unpowered supplies alone are not a source-supported reason to skip it.
