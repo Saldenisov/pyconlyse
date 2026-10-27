@@ -338,8 +338,38 @@ class FederatedTelemetryStore(object):
                 permitted_producer_kind="federated_orchestrators", received_this_process=self.received,
                 duplicate_receipts=self.duplicates, publications=publications,
                 owners=views, video_metadata=self._video_view(now, include_data=False),
+                supervision_counter=self._counter_view(now),
                 cooling_safety=alarm, shared_snapshot_seen=True,
                 missing_publications=[], unavailable_owners=[role for role in ROLES if not views[role]["source_current"]])
+
+    def _counter_view(self, now):
+        """Independent 16-value memory observation; never a legacy-bank fallback.
+
+        Pending selectors remain visible as observed state. They do not become
+        hardware acknowledgements or permission to combine the two owners.
+        """
+        owner = self.owners["supervision"]
+        entry = owner["latest"]
+        frame = entry["body"]["packet"] if entry is not None else {}
+        part = frame.get("counter_part")
+        age = None if part is None else (part["source_age_seconds"]
+            + entry["body"]["age_seconds_on_xp"] + max(0., now - entry["received_at"]))
+        available = bool(not self.closed and part is not None and age < 2
+            and frame.get("source_mode") in ("PYTHON_NATIVE", "LABVIEW_BRIDGE"))
+        return dict(owner="supervision", available=available, stale=not available,
+            values=copy.deepcopy(part["values"]) if available else None,
+            source=part["source"] if part is not None else None,
+            selector=part["selector"] if part is not None else None,
+            pending_selector=part["pending_selector"] if part is not None else None,
+            age_seconds=age, session_id=frame.get("session_id"),
+            sequence=frame.get("sequence"), source_mode=frame.get("source_mode", "UNAVAILABLE"),
+            source_identity=copy.deepcopy(frame.get("source_identity")),
+            read_only=True, hardware_acknowledged=False, physical_measurements_verified=False,
+            interpretation="Observed counter control memory, not hardware timing readback")
+
+    def counter_snapshot(self):
+        with self.lock:
+            return self._counter_view(self.clock())
 
     def _video_view(self, now, include_data):
         owner = self.owners["supervision"]

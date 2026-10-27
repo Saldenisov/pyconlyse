@@ -196,9 +196,11 @@ class DS_AcqTelemetry(Device):
             view = bridge.snapshot() if bridge is not None else dict(runtime=None, quality="UNAVAILABLE",
                 bridge_error="SuperVision read-only metadata reader unavailable")
             runtime = view.get("runtime") or {}
+            from legacy.xp_acq_control.elyse_agent.runtime_identity import valid_hex
             view.update(owner=owner, commands_enabled=False, migration_mode="acquisition_legacy_supervision_read_only",
-                telemetry_source_current=bool(self._store is not None and
-                    self._store.owner_current(owner, runtime.get("session_id"), native=True)))
+                telemetry_source_current=bool(self._store is not None
+                    and valid_hex(runtime.get("session_id"), 32)
+                    and self._store.owner_current(owner, runtime["session_id"], native=False)))
             for capability in runtime.get("control", {}).get("capabilities", {}).values():
                 capability.update(enabled=False, reason="MIGRATION_SUPERVISION_READ_ONLY")
             return view
@@ -288,6 +290,13 @@ class DS_AcqTelemetry(Device):
             return json.dumps(dict(available=False, owner="supervision", frame=None,
                                    reason="FEDERATED_RAW_VIDEO_NOT_CONFIGURED"))
         return json.dumps(self._store.video_snapshot(), allow_nan=False)
+
+    @attribute(dtype=str)
+    def supervision_counter_json(self):
+        if not (getattr(self, "_federated", False) or getattr(self, "_migration", False)) or self._store is None:
+            return json.dumps(dict(available=False, owner="supervision", values=None,
+                read_only=True, hardware_acknowledged=False, reason="SUPERVISION_COUNTER_NOT_CONFIGURED"))
+        return json.dumps(self._store.counter_snapshot(), allow_nan=False)
 
     @command(dtype_in=str, dtype_out=str)
     def ExecuteCommand(self, request):

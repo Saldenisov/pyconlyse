@@ -79,6 +79,7 @@ class HybridTelemetryStore:
         sidecar = self.supervision.snapshot()
         value.update(migration_mode=MIGRATION_MODE, public_bank_authority="selected_acquisition_legacy_stream",
             supervision_owner=copy.deepcopy(sidecar["owners"]["supervision"]),
+            supervision_counter=copy.deepcopy(sidecar["supervision_counter"]),
             video_metadata=copy.deepcopy(sidecar["video_metadata"]),
             migration_received_total=value["received_this_process"] + sidecar["received_this_process"],
             sidecar_read_only=True, atomic_across_sources=False)
@@ -86,6 +87,11 @@ class HybridTelemetryStore:
 
     def video_snapshot(self):
         value = self.supervision.video_snapshot()
+        value.update(migration_mode=MIGRATION_MODE, sidecar_read_only=True)
+        return value
+
+    def counter_snapshot(self):
+        value = self.supervision.counter_snapshot()
         value.update(migration_mode=MIGRATION_MODE, sidecar_read_only=True)
         return value
 
