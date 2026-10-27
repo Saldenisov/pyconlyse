@@ -11,6 +11,7 @@ from pathlib import Path
 from legacy.xp_acq_agent.elyse_agent.shared_state import BANKS
 from mutation_auth import install_mutation_auth
 from acq_contract import DEVICE, XP_HOST, TANGO_DEVICE, topology
+from acq_supervision_counter import project_counter
 
 MAX_JSON_BYTES = 2 * 1024 * 1024
 STALE_SECONDS = 2
@@ -19,7 +20,7 @@ acq_telemetry_api = Blueprint(
 )
 install_mutation_auth(acq_telemetry_api, protected_get_endpoints=(
     "get_telemetry", "get_cooling_safety", "get_history", "get_archive_status", "get_history_view",
-    "get_orchestrators", "get_raw_video"))
+    "get_orchestrators", "get_raw_video", "get_supervision_synchronization"))
 
 
 @acq_telemetry_api.after_request
@@ -136,20 +137,57 @@ def present_snapshot(raw, server_state):
     )
 
 
+def _read_observer_attribute(name):
+    """Same strict bounded observer read as the active facade; never XP."""
+    proxy = tango_gateway.create_device_proxy(DEVICE)
+    proxy.set_timeout_millis(1500)
+    attribute = proxy.read_attribute(name)
+    if attribute.has_failed:
+        raise ValueError("Read-only telemetry attribute unavailable")
+    raw = attribute.value
+    if type(raw) is not str or not 0 < len(raw.encode("utf-8")) <= MAX_JSON_BYTES:
+        raise ValueError("Bounded observer JSON required")
+    def pairs(items):
+        value = {}
+        for key, item in items:
+            if key in value:
+                raise ValueError("Duplicate observer field")
+            value[key] = item
+        return value
+    def nonfinite(unused):
+        raise ValueError("Nonfinite observer value")
+    value = json.loads(raw, object_pairs_hook=pairs, parse_constant=nonfinite)
+    if type(value) is not dict:
+        raise ValueError("Observer metadata object required")
+    return value
+
+
+@acq_telemetry_api.get("/synchronization")
+def get_supervision_synchronization():
+    try:
+        value = project_counter(_read_observer_attribute("supervision_counter_json"))
+        return jsonify(schema_version=1, device=TANGO_DEVICE, **value)
+    except Exception:
+        return jsonify(schema_version=1, owner="supervision", source_host="10.20.30.2",
+                       available=False, stale=True, values=None, read_only=True,
+                       hardware_acknowledged=False, error="SuperVision counter memory unavailable"), 503
+
+
 @acq_telemetry_api.get("/owners")
 def get_orchestrators():
     try:
-        proxy = tango_gateway.create_device_proxy(DEVICE)
-        proxy.set_timeout_millis(1500)
-        raw = proxy.read_attribute("orchestrators_json").value
-        if type(raw) is not str or len(raw.encode("utf-8")) > MAX_JSON_BYTES:
-            raise ValueError("Bounded owner metadata required")
-        value = json.loads(raw)
+        value = _read_observer_attribute("orchestrators_json")
         if (type(value) is not dict or type(value.get("federated")) is not bool
                 or type(value.get("owners")) is not dict
                 or set(value["owners"]) - {"acquisition", "supervision"}):
             raise ValueError("Unexpected owner metadata")
-        return jsonify(schema_version=1, device=TANGO_DEVICE, **value)
+        def read_only(item):
+            if isinstance(item, dict):
+                return {key: read_only(nested) for key, nested in item.items() if key != "lease"}
+            if isinstance(item, list):
+                return [read_only(nested) for nested in item]
+            return item
+        return jsonify(schema_version=1, device=TANGO_DEVICE, **read_only(value))
     except Exception:
         return jsonify(schema_version=1, owners={}, error="Owner metadata unavailable"), 503
 
@@ -157,13 +195,8 @@ def get_orchestrators():
 @acq_telemetry_api.get("/video")
 def get_raw_video():
     try:
-        proxy = tango_gateway.create_device_proxy(DEVICE)
-        proxy.set_timeout_millis(1500)
-        raw = proxy.read_attribute("video_json").value
-        if type(raw) is not str or len(raw.encode("utf-8")) > MAX_JSON_BYTES:
-            raise ValueError("Bounded video metadata required")
-        value = json.loads(raw)
-        if type(value) is not dict or value.get("owner") != "supervision":
+        value = _read_observer_attribute("video_json")
+        if value.get("owner") != "supervision" or type(value.get("available")) is not bool:
             raise ValueError("Unexpected video owner")
         return jsonify(schema_version=1, device=TANGO_DEVICE, **value)
     except Exception:

@@ -8,6 +8,7 @@ import AcquisitionConnection from './AcquisitionConnection';
 import useAcquisitionTelemetry from './useAcquisitionTelemetry';
 import AcquisitionSynchronizationControls from './AcquisitionSynchronizationControls';
 import AcquisitionVideo from './components/AcquisitionVideo';
+import SupervisionSynchronization from './components/SupervisionSynchronization';
 import Modulator from './tabs/Modulator';
 import HT from "./tabs/HT";
 import Fluides from "./tabs/Fluides";
@@ -69,7 +70,7 @@ const Elyse = () => {
       case "Modulator":
         return <Modulator />;
       case "Synchronization":
-        return <AcquisitionSynchronizationControls />;
+        return <><SupervisionSynchronization /><AcquisitionSynchronizationControls /></>;
       case "HT":
         return <HT />;
       case "Fluides":

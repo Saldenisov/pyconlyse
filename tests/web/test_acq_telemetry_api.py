@@ -99,7 +99,7 @@ def test_owner_and_video_reads_use_same_fixed_receiver(setup_api, monkeypatch, s
             assert timeout == 1500
         def read_attribute(self, name):
             assert name == attribute
-            return SimpleNamespace(value=json.dumps(value))
+            return SimpleNamespace(has_failed=False, value=json.dumps(value))
     def factory(name):
         calls.append(("proxy", name))
         return MetadataProxy()

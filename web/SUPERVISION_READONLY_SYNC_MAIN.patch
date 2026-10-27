@@ -1,0 +1,26 @@
+--- a/web/backend/acq_telemetry_api.py
++++ b/web/backend/acq_telemetry_api.py
+@@ -12,0 +13 @@
++from acq_supervision_counter import project_counter
+@@ -22 +23 @@
+-    "get_orchestrators", "get_raw_video"))
++    "get_orchestrators", "get_raw_video", "get_supervision_synchronization"))
+@@ -154,0 +156,11 @@
++
++
++@acq_telemetry_api.get("/synchronization")
++def get_supervision_synchronization():
++    try:
++        value = project_counter(_read_observer_attribute("supervision_counter_json"))
++        return jsonify(schema_version=1, device="elyse/acquisition/telemetry", **value)
++    except Exception:
++        return jsonify(schema_version=1, owner="supervision", source_host="10.20.30.2",
++                       available=False, stale=True, values=None, read_only=True,
++                       hardware_acknowledged=False, error="SuperVision counter memory unavailable"), 503
+--- a/web/frontend/src/LiveSupervision.js
++++ b/web/frontend/src/LiveSupervision.js
+@@ -5,0 +6 @@
++import SupervisionSynchronization from './components/SupervisionSynchronization';
+@@ -79 +80 @@
+-      : tab === 'synchro' ? <SynchronizationEditor telemetry={telemetry} client={client} />
++      : tab === 'synchro' ? <><SupervisionSynchronization /><SynchronizationEditor telemetry={telemetry} client={client} /></>
