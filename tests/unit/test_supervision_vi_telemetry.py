@@ -1,8 +1,10 @@
 """Synthetic VI observations in RAM only; no socket, NI, VI or XP operation."""
 import base64
 import copy
+import datetime
 import json
 import sys
+import struct
 import threading
 import unittest
 from xml.sax.saxutils import escape
@@ -15,6 +17,8 @@ from legacy.xp_acq_control.elyse_agent.supervision_runtime import SupervisionRun
 from legacy.xp_acq_control.elyse_agent.supervision_vi_telemetry import (
     PUBLICATION, MAX_VI_BYTES, SupervisionTelemetryPublisher,
     decode_vi_observation, validate_vi_observation,
+    BINARY_CAMERA_PREFIX, BINARY_CAMERA_HEADER_BYTES, MAX_BINARY_CAMERA_BYTES,
+    LABVIEW_UNIX_OFFSET, decode_vi_camera_binary, _TypedHandler,
 )
 from legacy.xp_acq_control.elyse_agent.telemetry_relay import canonical, sign, MAX_RELAY_FRAME
 
@@ -50,6 +54,22 @@ def observation(sequence=1, counter=None, video=None, source="b" * 32):
 
 def encoded(value):
     return json.dumps(value, allow_nan=False, separators=(",", ":")).encode("utf-8")
+
+
+NATIVE_NOW = int(datetime.datetime(2026, 10, 27, 12, tzinfo=datetime.timezone.utc).timestamp())
+
+
+def native_timestamp(unix_seconds, fraction=0):
+    return struct.pack("!qQ", LABVIEW_UNIX_OFFSET + unix_seconds, fraction)
+
+
+def native_camera(frame_count=7, channel=2, rows=2, columns=3, pixels=b"\x00\x01\x02\xfd\xfe\xff",
+                  run=None, capture=None, observed=None, observed_tick=100000, copy_ms=1, version=1):
+    run = native_timestamp(NATIVE_NOW - 10) if run is None else run
+    capture = native_timestamp(NATIVE_NOW - 2) if capture is None else capture
+    observed = native_timestamp(NATIVE_NOW - 1, 7 * (1 << 61)) if observed is None else observed
+    return (BINARY_CAMERA_PREFIX + struct.pack("!H", version) + run + capture + observed
+            + struct.pack("!IIIIii", frame_count, channel, copy_ms, observed_tick, rows, columns) + pixels)
 
 
 def xml(camera_error=False):
@@ -359,6 +379,160 @@ class SupervisionVITests(unittest.TestCase):
         signed["signature"] = sign(KEYS["supervision"], "ACQ-TELEMETRY-REQUEST-1", signed)
         self.assertLess(len(canonical(signed)), MAX_RELAY_FRAME)
         self.assertEqual(len(base64.b64decode(body["packet"]["video_frame"]["data"])), MAX_VIDEO_RAW_BYTES)
+
+
+class NativeCameraBinaryTests(unittest.TestCase):
+    take = SupervisionVITests.take
+
+    def setUp(self):
+        SupervisionVITests.setUp(self)
+        self.publisher.wall_clock = lambda: NATIVE_NOW + self.now
+        self.publisher.tick_clock = lambda: 100125 + int(self.now * 1000)
+
+    def tearDown(self):
+        SupervisionVITests.tearDown(self)
+
+    def submit_binary(self, raw):
+        return self.publisher.ingest_observation(raw, "127.0.0.1")
+
+    def test_fixed_flattened_cluster_has_95_byte_unpadded_header_and_exact_owned_pixels(self):
+        raw = native_camera()
+        self.assertEqual(BINARY_CAMERA_HEADER_BYTES, 95)
+        self.assertEqual(len(raw), 101)
+        self.assertEqual(struct.unpack("!I", raw[:4])[0], 17)
+        self.assertEqual(raw[4:21], b"ELYSE_SUP_CAM_BIN")
+        self.assertEqual(raw[21:23], b"\x00\x01")
+        self.assertEqual(raw[23:39], native_timestamp(NATIVE_NOW - 10))
+        self.assertEqual(struct.unpack("!IIIIii", raw[71:95]), (7, 2, 1, 100000, 2, 3))
+        value = decode_vi_camera_binary(raw, NATIVE_NOW, 100125)
+        self.assertEqual(value["source_session_id"], ''.join('{:02x}'.format(v) for v in bytearray(raw[23:39])))
+        self.assertEqual(value["video_frame"]["capture_session_id"], ''.join('{:02x}'.format(v) for v in bytearray(raw[39:55])))
+        self.assertEqual(value["sequence"], 9875001)
+        self.assertEqual(value["video_frame"]["sequence"], 8)
+        self.assertEqual(value["video_frame"]["source_age_seconds"], .125)
+        self.assertEqual(value["video_frame"]["observed_utc"], "2026-10-27T11:59:59.875000+00:00")
+        self.assertEqual(value["video_frame"]["data"], "AAEC/f7/")
+        validate_vi_observation(value)
+
+    def test_binary_listener_publishes_existing_labview_mode_without_ni_or_json_source(self):
+        result = self.submit_binary(native_camera())
+        packet = self.take()["packet"]
+        self.assertTrue(result["accepted"])
+        self.assertEqual(packet["source_mode"], "LABVIEW_BRIDGE")
+        self.assertEqual(packet["video_frame"]["width"], 3)
+        self.assertEqual(packet["video_frame"]["height"], 2)
+        self.assertEqual(packet["video_frame"]["data"], "AAEC/f7/")
+        self.assertEqual(packet["source_identity"]["sequence"], 9875001)
+        self.assertIsNone(packet["counter_part"])
+        self.assertEqual(self.runtime._owners, {})
+
+    def test_identical_binary_retry_cannot_renew_native_observation_age(self):
+        raw = native_camera()
+        self.submit_binary(raw)
+        self.take()
+        self.now = .5
+        result = self.submit_binary(raw)
+        self.assertTrue(result["duplicate"])
+        self.assertIsNone(self.publisher.outbox.peek())
+        self.assertAlmostEqual(self.publisher._aged(self.publisher._vi_video)["source_age_seconds"], .625)
+
+    def test_repeated_framecount_with_new_timestamp_cannot_fake_a_new_image(self):
+        self.submit_binary(native_camera())
+        self.take()
+        self.now = 1.
+        newer_time = native_timestamp(NATIVE_NOW, 7 * (1 << 61))
+        self.assertRaises(ValueError, self.submit_binary,
+                          native_camera(observed=newer_time, observed_tick=101000))
+        self.assertEqual(self.publisher._typed_sequence, 9875001)
+        self.assertRaises(ValueError, self.submit_binary,
+                          native_camera(frame_count=6, observed=newer_time, observed_tick=101000))
+
+    def test_new_real_capture_resets_framecount_but_retires_previous_capture(self):
+        self.submit_binary(native_camera())
+        self.take()
+        self.now = 1.
+        later = native_timestamp(NATIVE_NOW, 7 * (1 << 61))
+        self.submit_binary(native_camera(frame_count=0, capture=native_timestamp(NATIVE_NOW),
+                                         observed=later, observed_tick=101000))
+        self.assertEqual(self.take()["packet"]["video_frame"]["sequence"], 1)
+        self.now = 1.5
+        later = native_timestamp(NATIVE_NOW + 1, 3 * (1 << 61))
+        self.assertRaises(ValueError, self.submit_binary,
+            native_camera(frame_count=9, observed=later, observed_tick=101500))
+
+    def test_new_native_run_marker_is_distinct_and_old_run_cannot_return(self):
+        self.submit_binary(native_camera())
+        self.take()
+        old_run = self.publisher._typed_session
+        self.now = 2.
+        later = native_timestamp(NATIVE_NOW + 1, 7 * (1 << 61))
+        self.submit_binary(native_camera(frame_count=0, run=native_timestamp(NATIVE_NOW + 1),
+            capture=native_timestamp(NATIVE_NOW + 1, 1 << 62), observed=later, observed_tick=102000))
+        packet = self.take()["packet"]
+        self.assertNotEqual(packet["source_identity"]["session_id"], old_run)
+        self.assertRaises(ValueError, self.submit_binary,
+            native_camera(frame_count=9, observed=later, observed_tick=102000))
+
+    def test_unknown_future_stale_or_rolled_back_clock_never_creates_current_pixels(self):
+        raw = native_camera()
+        for wall, tick in ((float("nan"), 100125), (NATIVE_NOW - 1, 100125),
+                           (NATIVE_NOW + 2, 100125), (NATIVE_NOW, 102000),
+                           (NATIVE_NOW, 99999), (NATIVE_NOW, True)):
+            self.assertRaises(ValueError, decode_vi_camera_binary, raw, wall, tick)
+        # A wall clock rollback leaves a seemingly young timestamp, but the
+        # independently observed Win32 tick age still exposes the old frame.
+        self.assertRaises(ValueError, decode_vi_camera_binary, raw, NATIVE_NOW, 105000)
+        value = decode_vi_camera_binary(raw, NATIVE_NOW, 100500)
+        self.assertEqual(value["video_frame"]["source_age_seconds"], .5)
+
+    def test_win32_tick_wrap_preserves_a_real_short_monotonic_age(self):
+        raw = native_camera(observed_tick=4294967246)
+        value = decode_vi_camera_binary(raw, NATIVE_NOW, 50)
+        self.assertEqual(value["video_frame"]["source_age_seconds"], .125)
+
+    def test_bad_native_shape_epoch_version_channel_and_trailing_bytes_fail_closed(self):
+        bad = [native_camera(version=2), native_camera(channel=4), native_camera(rows=0),
+            native_camera(rows=-1), native_camera(rows=524289, columns=1),
+            native_camera(run=b"\x00" * 16), native_camera(capture=b"\x00" * 16),
+            native_camera(observed=b"\x00" * 16), native_camera(copy_ms=1000),
+            native_camera(capture=native_timestamp(NATIVE_NOW + 1)), native_camera() + b"x",
+            native_camera()[:-1], b"x" * (MAX_BINARY_CAMERA_BYTES + 1)]
+        for raw in bad:
+            self.assertRaises(ValueError, decode_vi_camera_binary, raw, NATIVE_NOW, 100125)
+
+    def test_maximum_native_u8_payload_fits_existing_owner_relay_after_conversion(self):
+        raw = native_camera(rows=512, columns=1024, pixels=b"x" * MAX_VIDEO_RAW_BYTES)
+        self.assertEqual(len(raw), MAX_BINARY_CAMERA_BYTES)
+        self.submit_binary(raw)
+        body = self.take()
+        self.assertEqual(len(base64.b64decode(body["packet"]["video_frame"]["data"])), MAX_VIDEO_RAW_BYTES)
+        self.assertLess(len(canonical(dict(body=body, nonce="5" * 32, signature="f" * 64))), MAX_RELAY_FRAME)
+
+    def test_handler_rejects_binary_oversize_and_bad_geometry_before_reading_pixels(self):
+        class FakeSocket(object):
+            def __init__(self, raw):
+                self.raw, self.reads, self.reply = raw, [], b""
+            def settimeout(self, value):
+                pass
+            def recv(self, count):
+                self.reads.append(count)
+                value, self.raw = self.raw[:count], self.raw[count:]
+                return value
+            def sendall(self, raw):
+                self.reply = raw
+        class Server(object):
+            pass
+        server = Server()
+        server.store = self.publisher
+        socket = FakeSocket(struct.pack("!I", MAX_BINARY_CAMERA_BYTES + 1) + BINARY_CAMERA_PREFIX)
+        _TypedHandler(socket, ("127.0.0.1", 1), server)
+        self.assertEqual(socket.reads, [4, len(BINARY_CAMERA_PREFIX)])
+        self.assertFalse(json.loads(socket.reply[4:].decode("utf-8"))["ok"])
+        bad_header = native_camera(rows=524289, columns=1)[:BINARY_CAMERA_HEADER_BYTES]
+        socket = FakeSocket(struct.pack("!I", 101) + bad_header)
+        _TypedHandler(socket, ("127.0.0.1", 1), server)
+        self.assertEqual(sum(socket.reads), 4 + BINARY_CAMERA_HEADER_BYTES)
+        self.assertFalse(json.loads(socket.reply[4:].decode("utf-8"))["ok"])
 
 
 @unittest.skipUnless(MODERN, "Everest store runs modern Python")

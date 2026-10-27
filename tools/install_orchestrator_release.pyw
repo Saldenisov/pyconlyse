@@ -265,8 +265,10 @@ def _site(folder, pin, role):
         keys = (base["key_file"], config["command_key_file"])
         expected = {"config.acquisition.json", CONFIGS[role]} | set(keys)
     else:
-        if (set(config) != {"schema_version", "bind_host", "port", "read_key_file", "command_key_file",
+        required = {"schema_version", "bind_host", "port", "read_key_file", "command_key_file",
                 "remote_control_enabled", "counter_timing_controls_verified", "period_seconds", "read_timeout_seconds", "video", "telemetry"}
+        if (not required <= set(config) or set(config) - required - {"vi_passive_shadow"}
+                or type(config.get("vi_passive_shadow", False)) is not bool
                 or config["schema_version"] != 1 or config["bind_host"] != "10.20.30.2"
                 or type(config["port"]) is not int or config["port"] != 8772
                 or config["remote_control_enabled"] is not False or config["counter_timing_controls_verified"] is not False

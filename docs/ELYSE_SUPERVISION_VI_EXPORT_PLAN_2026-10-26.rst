@@ -12,20 +12,31 @@ helpers for a SuperVision producer. The required counter part is fields
 Neither control is an independent hardware readback. Raw camera pixels need a
 separate owned-byte export from the existing camera loop.
 
-No new native exporter VI has been authored, compiled or executed by this
-work. Existing builders assemble copies of previously native-authored VIs;
-they are not an offline LabVIEW diagram compiler. The new Python typed ingress
-does not, by itself, create a working LabVIEW producer.
+At the 2026-10-26 reference-staging stage, no new native exporter VI had been
+authored, compiled or executed. The builders assemble copies of previously
+native-authored VIs; they are not an offline LabVIEW diagram compiler. On
+2026-10-27 a passive panel-state hook and wrapper were saved in LabVIEW 2012
+and read back. Their static preservation audit does not establish live image
+export or end-to-end telemetry. Native camera authoring and qualification are
+separate work; the binary receiver contract is documented in
+``ELYSE_SUPERVISION_NATIVE_CAMERA_WIRE_V1.rst``.
 
-The initial authorization limited live work to after18:00 Europe/Paris on
-2026-10-26. A later explicit user instruction authorized immediate SuperVision
-VI stop and native synchronization/camera takeover, superseding that time
-restriction. The parent alone performs live UI/hardware actions; this offline
-source task does not perform the authorized takeover. The preparation script performs
-no scheduled or automatic live action. No running VI, card, camera, clock,
-client command or unrelated main LabVIEW/TRANCON work is touched. A later
-native editing session must remain scoped to copied SuperVision sources and
-their new telemetry helpers; originals and current property backups are kept.
+The 2026-10-26 native synchronization/camera takeover is historical evidence,
+not the active VI-export procedure. On 2026-10-27 the user requested a separate
+SuperVision copy with passive telemetry on the SuperVision computer. LabVIEW
+retains card ownership during shadow comparison; native Python initialization
+must remain disabled for that profile. Native authoring is scoped to the copy
+and its new telemetry helpers. Originals and unrelated LabVIEW/TRANCON sources
+remain outside the edit scope. The preparation script performs no scheduled
+or automatic live action.
+
+The operator states that the original VI does not start automatically: the
+operator starts it at the configuration stage. Saved metadata must not be
+presented as proof of actual automatic startup. Preserve this operator workflow
+in the telemetry copy. The desktop shortcut resolves to
+``C:\\PILOTAGE_ELYSE_SUP\\SUPERVISION.llb\\0_SUP_ELYSE.vi``; the authoring
+copy is ``C:\\SUPERVISION_TELEMETRY_20261027``. Creating that copy does not
+establish that its telemetry exporter is complete or qualified.
 
 Pinned source evidence
 -----------------------

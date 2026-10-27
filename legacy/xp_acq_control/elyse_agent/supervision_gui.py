@@ -31,6 +31,7 @@ def default_supervision_configuration():
     return dict(schema_version=1, bind_host="10.20.30.2", port=8772,
         read_key_file="acquisition.key", command_key_file="acquisition.command.key",
         remote_control_enabled=False, counter_timing_controls_verified=False,
+        vi_passive_shadow=False,
         period_seconds=.2, read_timeout_seconds=.5, video=source_video_configuration(),
         telemetry=dict(enabled=False, wire="federated_owner", host="10.20.30.202", port=8767,
                        period_seconds=.2))
@@ -38,8 +39,10 @@ def default_supervision_configuration():
 
 def validate_supervision_configuration(value):
     if (type(value) is not dict or not CONFIGURATION_FIELDS <= set(value)
-            or set(value) - CONFIGURATION_FIELDS - {"initial_sync_values_us"} or value.get("schema_version") != 1):
+            or set(value) - CONFIGURATION_FIELDS - {"initial_sync_values_us", "vi_passive_shadow"} or value.get("schema_version") != 1):
         raise ValueError("Exact versioned SuperVision host configuration required")
+    if type(value.get("vi_passive_shadow", False)) is not bool:
+        raise ValueError("Exact Boolean vi_passive_shadow policy required")
     if "initial_sync_values_us" in value:
         if value["initial_sync_values_us"] is None:
             raise ValueError("Omit initial_sync_values_us or supply the full16-value local profile")
@@ -124,6 +127,8 @@ class SupervisionWindow(object):
 
     def initialize(self):
         value = self.view.snapshot()
+        if self.runtime.vi_passive_shadow or value.get("vi_passive_shadow") is True:
+            return
         if value.get("state") != "IDLE" or value.get("recovery", {}).get("required"):
             return
         if not self.messagebox.askyesno("Initialize SuperVision boards", 
@@ -165,14 +170,16 @@ class SupervisionWindow(object):
 
     def refresh(self):
         value = self.view.snapshot()
-        self.status.set("{0} | local NI resources: {1} | {2}".format(
-            value.get("state"), value.get("resource_count"), value.get("error", "")))
+        self.status.set("{0} | {1} | local NI resources: {2} | {3}".format(
+            value.get("state"), value.get("owner_mode", "UNKNOWN"), value.get("resource_count"), value.get("error", "")))
         delivery = value.get("telemetry_delivery", {})
         self.link.set("Everest telemetry: {0} | ACK: {1} | {2}".format(
             "enabled" if delivery.get("enabled") else "DISABLED (requires federated Device Server)",
             delivery.get("everest_acknowledged", 0), delivery.get("last_error", "")))
         current = value.get("application_view_current") and not value.get("local_request_pending") and not self.closing
-        self.buttons[0].configure(state="normal" if current and value.get("state") == "IDLE"
+        self.buttons[0].configure(state="normal" if not self.runtime.vi_passive_shadow
+                                  and value.get("vi_passive_shadow") is not True
+                                  and current and value.get("state") == "IDLE"
                                   and value.get("recovery", {}).get("required") is False else "disabled")
         self.buttons[1].configure(state="normal" if current and value.get("resource_count")
             and value.get("state") in ("RUNNING", "FAULT") else "disabled")
@@ -206,6 +213,7 @@ def main(entrypoint, argv=None, publisher_factory=None):
         marker = OwnershipMarker(os.path.abspath(options.config) + ".ownership",
                                  identity["session_id"], identity["build_id"])
         runtime = SupervisionRuntime(identity=identity, recovery_guard=marker,
+            vi_passive_shadow=config.get("vi_passive_shadow", False),
             remote_enabled=config["remote_control_enabled"],
             counter_timing_controls_verified=config["counter_timing_controls_verified"],
             video_configuration=config["video"], period=config["period_seconds"],

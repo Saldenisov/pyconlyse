@@ -56,9 +56,12 @@ class SupervisionRuntime(object):
     def __init__(self, identity=None, recovery_guard=None, remote_enabled=False,
                  counter_timing_controls_verified=False, video_configuration=None,
                  period=.2, read_timeout=.5, endpoint_factory=None,
-                 trusted_service_options=None, clock=None):
+                 trusted_service_options=None, clock=None, vi_passive_shadow=False):
         if type(counter_timing_controls_verified) is not bool or type(remote_enabled) is not bool:
             raise ValueError("Exact SuperVision commissioning and remote flags required")
+        if type(vi_passive_shadow) is not bool:
+            raise ValueError("Exact Boolean vi_passive_shadow policy required")
+        self._vi_passive_shadow = vi_passive_shadow  # Pinned for this process lifetime.
         if not _finite(period) or not .02 <= period <= 10 or not _finite(read_timeout) or not .01 <= read_timeout <= 2:
             raise ValueError("Bounded SuperVision poll/read periods required")
         identity = dict(new_supervision_identity() if identity is None else identity)
@@ -85,7 +88,15 @@ class SupervisionRuntime(object):
         self._service_options = copy.deepcopy(trusted_service_options or {})
         self._video_configuration = dict(source_video_configuration() if video_configuration is None else video_configuration)
         self.counter_timing_controls_verified = counter_timing_controls_verified
-        self.broker = CommandBroker(self, enabled=remote_enabled, clock=self._clock)
+        self.broker = CommandBroker(self, enabled=remote_enabled and not self.vi_passive_shadow, clock=self._clock)
+
+    @property
+    def vi_passive_shadow(self):
+        return self._vi_passive_shadow
+
+    def _require_native_permitted(self):
+        if self.vi_passive_shadow:
+            raise RuntimeError("VI_PASSIVE_SHADOW: native initialization and commands are disabled")
 
     def _recovery(self):
         if self._recovery_guard is None:
@@ -105,6 +116,7 @@ class SupervisionRuntime(object):
             self._everest_seen = self._clock()
 
     def initialize(self, startup_confirmed=False):
+        self._require_native_permitted()  # No telemetry-silence/recovery exception.
         if startup_confirmed is not True:
             raise ValueError("Local SuperVision synchronization/video initialization confirmation required")
         with self._lock:
@@ -169,6 +181,8 @@ class SupervisionRuntime(object):
         return {name: endpoint.status() for name, endpoint in owners.items()}
 
     def _sync_permit(self, statuses):
+        if self.vi_passive_shadow:
+            return False
         sync = statuses.get("sync", {})
         memory = (sync.get("sample") or {}).get("counter_memory") or {}
         return bool(sync.get("state") == "READY" and sync.get("input_current") is True
@@ -182,6 +196,8 @@ class SupervisionRuntime(object):
 
     def _capabilities(self, statuses):
         result = {name: dict(enabled=False, reason="NOT_OWNED_BY_SUPERVISION") for name in OPERATIONS}
+        if self.vi_passive_shadow:
+            return {name: dict(enabled=False, reason="VI_PASSIVE_SHADOW") for name in OPERATIONS}
         reason = ""
         if not self.broker.enabled:
             reason = "REMOTE_CONTROL_DISABLED"
@@ -197,6 +213,7 @@ class SupervisionRuntime(object):
         return result
 
     def dispatch_remote(self, operation, value):
+        self._require_native_permitted()
         if operation != "counter_timing.set":
             raise RuntimeError("Operation is not owned by SuperVision")
         request = validate_remote_timing(value)
@@ -217,6 +234,7 @@ class SupervisionRuntime(object):
             return True
 
     def _initialize_cards(self):
+        self._require_native_permitted()  # Also fence an incorrectly queued private action.
         specs = (("sync", SupervisionSyncService, SYNC_TASKS, tuple(range(8))),
                  ("video", SupervisionVideoService, VIDEO_TASKS, ()))
         endpoints_started, failures = [], []
@@ -251,6 +269,8 @@ class SupervisionRuntime(object):
 
     def _close_cards(self):
         owners = dict(self._owners)
+        if self.vi_passive_shadow and owners:
+            raise RuntimeError("VI_PASSIVE_SHADOW: unexpected native ownership; no card cleanup calls admitted")
         failures, threads = [], []
         lock = threading.Lock()
         def close(name, endpoint):
@@ -272,7 +292,7 @@ class SupervisionRuntime(object):
         for name, endpoint in owners.items():
             if endpoint.status().get("native", {}).get("cleanup_confirmed") is not True:
                 raise RuntimeError("Card cleanup/join unconfirmed; ownership marker retained")
-        if self._recovery_guard is not None:
+        if self._recovery_guard is not None and not self.vi_passive_shadow:
             self._recovery_guard.release_after_cleanup(resources_quiescent=True)
         with self._lock:
             self._owners = {}
@@ -296,6 +316,7 @@ class SupervisionRuntime(object):
                     elif action == "close":
                         self._close_cards()
                     elif action == "timing":
+                        self._require_native_permitted()
                         token = self.broker.begin("counter_timing.set")
                         if not self._sync_permit(self._statuses()):
                             raise RuntimeError("SuperVision counter ownership changed before dispatch")
@@ -329,6 +350,8 @@ class SupervisionRuntime(object):
             hardware_acknowledged=False, automatic_restart=False)
 
     def video_frame_snapshot(self):
+        if self.vi_passive_shadow:
+            return None  # Original-VI images arrive through its passive ingress.
         # Independent video may stay current during a synchronization command
         # or an unrelated synchronization fault. Lifecycle transitions never
         # reuse an old owner/sample as a new camera observation.
@@ -413,6 +436,8 @@ class SupervisionRuntime(object):
 
     def counter_memory_part(self):
         """Current retained-command half for federation; no physical readback."""
+        if self.vi_passive_shadow:
+            return None
         statuses = self._statuses()
         sync = statuses.get("sync", {})
         with self._lock:
@@ -473,6 +498,9 @@ class SupervisionRuntime(object):
                 video_frame_age_seconds=statuses.get("video", {}).get("sample_age_seconds"))
             resource_count = sum(row.get("native", {}).get("resource_count", 0) for row in statuses.values())
             result = dict(self._identity, server_variant="supervision_control_vnext", host_role="supervision",
+                vi_passive_shadow=self.vi_passive_shadow,
+                owner_mode="VI_PASSIVE_SHADOW" if self.vi_passive_shadow else "NATIVE_CAPABLE",
+                native_initialization_allowed=not self.vi_passive_shadow,
                 source_host="10.20.30.2", control_policy_version=2, state=self._state,
                 state_revision=self._state_revision, current_operation=self._operation,
                 pending_operation=None if self._pending is None else self._pending[0], error=self._error,
@@ -505,6 +533,10 @@ class SupervisionRuntime(object):
                 cooling_safety=dict(active=False, circuits=[], stop_state="NONE", remaining_seconds=None,
                     automatic_stop_available=False, journal_error="", authority="NOT_OWNED_BY_SUPERVISION"))
             result["control"] = self.broker.snapshot(issue_lease=False)
+            if self.vi_passive_shadow:
+                result["control"].update(enabled=False, lease=None)
+                result["remote_setpoints_enabled"] = False
+                result["stage_execution"]["remote_commands_enabled"] = False
             result["control"]["capabilities"] = self._capabilities(statuses)
             publisher = getattr(self, "telemetry_publisher", None)
         # Never nest the runtime lock with publisher status/admission locks.
