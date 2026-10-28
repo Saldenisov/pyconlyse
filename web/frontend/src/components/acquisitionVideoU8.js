@@ -8,6 +8,8 @@ const SOURCES = ['python_supervision_ni1409', 'labview_supervision_ni1409'];
 const PROCESSING = 'raw_grab_before_legacy_interlace_bcg_profiles';
 const nonnegative = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
+// Preserve observed U32 channel metadata without inferring a physical input range.
+const uint32 = (value) => Number.isInteger(value) && value >= 0 && value <= 0xFFFFFFFF;
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 function digit(code) {
@@ -63,7 +65,7 @@ export function decodeSupervisionU8Frame(frame) {
   if (!SOURCES.includes(frame.source) || frame.simulated !== false
     || frame.hardware_acknowledged !== false || !SESSION.test(frame.capture_session_id)
     || (bridge && !SESSION.test(frame.source_session_id)) || !positiveInteger(frame.sequence)
-    || !Number.isInteger(frame.channel) || frame.channel < 0 || frame.channel > 3
+    || !uint32(frame.channel)
     || frame.processing !== PROCESSING || !nonnegative(frame.sample_elapsed_seconds)
     || !nonnegative(frame.source_age_seconds)
     || frame.sequence_interpretation !== 'software grab observation, not hardware frame counter'

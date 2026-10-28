@@ -59,7 +59,7 @@ test('validates canonical base64 padding bits rather than silently changing byte
 test.each([
   { source: 'arbitrary_camera' }, { simulated: true }, { hardware_acknowledged: true },
   { sequence: 0 }, { sequence: Number.MAX_SAFE_INTEGER + 1 }, { capture_session_id: 'other' },
-  { channel: 4 }, { sample_elapsed_seconds: Infinity }, { source_age_seconds: -1 },
+  { sample_elapsed_seconds: Infinity }, { source_age_seconds: -1 },
   { observed_utc: 'not UTC' }, { processing: 'invented_processed_image' },
 ])('rejects unqualified or ambiguous image identity/metadata', (change) => {
   expect(() => decodeSupervisionU8Frame({ ...frame(), ...change })).toThrow();
@@ -74,6 +74,34 @@ test('retains separate native/VI source-run and camera capture identities', () =
   expect(bridged.identity).not.toBe(native.identity);
   expect(() => decodeSupervisionU8Frame({ ...vi, source_session_id: undefined })).toThrow();
   expect(() => decodeSupervisionVideo({ ...payload(vi), source_session_id: 'd'.repeat(32) })).toThrow('externe');
+});
+
+describe.each(['python_supervision_ni1409', 'labview_supervision_ni1409'])('%s observed channel metadata', (source) => {
+  const observed = (channel) => ({ ...frame(), source, channel,
+    ...(source.startsWith('labview') ? { source_session_id: 'b'.repeat(32) } : {}) });
+
+  test.each([0, 3, 4, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF])('preserves U32 channel %s without remapping', (channel) => {
+    const raw = observed(channel);
+    expect(decodeSupervisionU8Frame(raw).channel).toBe(channel);
+    const video = decodeSupervisionVideo(payload(raw));
+    expect(video.state).toBe('CURRENT');
+    expect(video.frame.channel).toBe(channel);
+    expect([...video.frame.pixels]).toEqual([0, 17, 128, 255]);
+  });
+
+  test.each([-1, 0.5, NaN, Infinity, -Infinity, true, false, '4', null, undefined,
+    0x100000000, Number.MAX_SAFE_INTEGER])('rejects channel outside exact U32 metadata: %s', (channel) => {
+    const raw = observed(channel);
+    expect(() => decodeSupervisionU8Frame(raw)).toThrow('métadonnées');
+    expect(() => decodeSupervisionVideo(payload(raw))).toThrow('métadonnées');
+  });
+
+  test('retains outer channel identity and freshness checks at the U32 boundary', () => {
+    const raw = observed(0xFFFFFFFF);
+    expect(() => decodeSupervisionVideo({ ...payload(raw), channel: 3 })).toThrow('externe');
+    expect(decodeSupervisionVideo({ ...payload(raw), age_seconds: 2 }).state).toBe('STALE');
+    expect(() => decodeSupervisionU8Frame({ ...raw, width: MAX_U8_BYTES + 1 })).toThrow('Géométrie');
+  });
 });
 
 test('unavailable and stale snapshots have no decoded image; stale is never current', () => {
