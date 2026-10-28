@@ -10,6 +10,13 @@ the profile subVI has two missing ``IMAQ GetRowCol`` calls. The observed errors
 identify NI Vision Development Module functions absent from the host. No Run
 was performed. The running XP VI and its card ownership were not replaced.
 
+Native Save of the stopped seed succeeded. A further diagnostic copy accepted
+the real observer inside the camera diagram, first unwired and then with image
+and error input branches. Native Save again succeeded without ``Memory Full``.
+The readback retained all 3,798 original signal endpoints. The error branch in
+this diagnostic is before Grab; it validates call types, not the final capture
+ordering. Observer outputs remain unwired and the diagnostic must not be run.
+
 Observer evidence
 -----------------
 
@@ -34,6 +41,24 @@ The portable read-only verifier and its eight refusal tests passed on actual
 Python 3.4 and Python 3.12. They check pinned VI/proof bytes, bounded RSRC
 version/flags and the explicit custom dependency closure. They do not load a VI
 or establish runtime qualification.
+
+Binary source serialization
+---------------------------
+
+An unchanged native block-diagram heap exposed a serializer defect: seven
+``DefaultData`` records changed during XML reconstruction, increasing the heap
+by 683 bytes. Three eight-byte values became 48-byte literal XML-reference text.
+The tag-specific decoder in ``tools/labview_default_data_codec.py`` restores
+byte references once, preserving C1 bytes, literal reference-looking payloads,
+the existing display-string decoder and the distinct ``[NULL]`` sentinel.
+
+Thirteen focused tests passed on actual Python 3.4 and Python 3.12. With the fix,
+the unchanged native heap reconstructs exactly: 310,244 object records,
+1,862,895 bytes and SHA-256
+``56f361d5536123b73fca9baf17053f0e370995f751494be1d634a4e7a10e5bca``.
+This validates the serialization inverse; it does not establish successful
+execution of the modified main or prove that every native load failure has the
+same cause.
 
 Everest software deployment
 --------------------------
