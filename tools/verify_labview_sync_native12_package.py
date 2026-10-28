@@ -83,6 +83,13 @@ def verify_package(root):
     root = os.path.abspath(root)
     with open(os.path.join(root, "package_manifest.json"), "r", encoding="utf-8") as f:
         manifest = json.load(f)
+    if (
+        manifest.get("full_camera_pipeline_ready") is True
+        or manifest.get("native2012_runtime_proven") is True
+    ):
+        raise ValueError(
+            "Offline helper packet cannot claim runtime/pipeline readiness"
+        )
     records = {}
     for row in manifest["files"]:
         path = _inside(root, os.path.join(root, *row["path"].split("/")))
@@ -97,6 +104,26 @@ def verify_package(root):
             records[row["path"]] = header
     actual = set()
     components = manifest.get("additional_components", [])
+    historical_metadata = set(manifest.get("historical_metadata_files", []))
+    known_metadata = {
+        "epoch_native2020_semantic_snapshot.json",
+        "camera_frametap_checkpoint_20261028.json",
+        "setup_native2020_semantic_snapshot.json",
+        "qualification.json",
+    }
+    if historical_metadata - known_metadata:
+        raise ValueError("Unreviewed historical metadata filename")
+    allowed_files = (
+        set(row["path"] for row in manifest["files"])
+        | {
+            "package_manifest.json",
+            "README.md",
+            "README.rst",
+            ".gitattributes",
+            manifest["source_receipt"],
+        }
+        | historical_metadata
+    )
     component_roots = set(
         os.path.normcase(
             os.path.realpath(_inside(root, os.path.join(root, *c["path"].split("/"))))
@@ -111,6 +138,11 @@ def verify_package(root):
             not in component_roots
         ]
         for name in files:
+            relative = os.path.relpath(os.path.join(parent, name), root).replace(
+                "\\", "/"
+            )
+            if relative not in allowed_files:
+                raise ValueError("Unexpected helper packet file: " + relative)
             if name.lower().endswith(".vi"):
                 actual.add(
                     os.path.relpath(os.path.join(parent, name), root).replace("\\", "/")

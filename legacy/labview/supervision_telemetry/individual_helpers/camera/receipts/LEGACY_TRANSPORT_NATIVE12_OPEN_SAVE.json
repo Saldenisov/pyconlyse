@@ -1,0 +1,223 @@
+{
+  "kind": "NATIVE_TRANSPORT_OPEN_SAVE_READBACK_QUALIFICATION",
+  "source": "C:\\Users\\elyse\\.codex\\worktrees\\acq-unified-v6-release\\pyconlyse\\.tmp\\supervision_camera_wrapper_builder\\native_transport_final_saved\\SUP_Camera_Transport.vi",
+  "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+  "bytes": 19484,
+  "native_open_save": true,
+  "vi_executed": false,
+  "runtime_qualified": false,
+  "LabVIEW_major": 12,
+  "execution": {
+    "State": "1",
+    "Priority": "1",
+    "PrefExecSyst": "-1",
+    "BadSignal": "0",
+    "BadNode": "0",
+    "BadSubVILink": "0",
+    "BadSubVI": "0",
+    "NotReservable": "0",
+    "IsReentrant": "0",
+    "CloseAfterCall": "0",
+    "PooledReentrancy": "0",
+    "LoadFP": "0",
+    "HasNoBD": "0",
+    "ShowFPOnLoad": "0",
+    "DynamicDispatch": "0",
+    "HasSetBP": "0",
+    "RunOnOpen": "0",
+    "ShowFPOnCall": "0",
+    "BadCompile": "0",
+    "IsSubroutine": "0",
+    "DSRecord": "0",
+    "CompilerBug": "0",
+    "TypeDefVI": "0",
+    "StrictTypeDefVI": "0",
+    "BadDDO": "0",
+    "CtlChanged": "0",
+    "SaveParallel": "0",
+    "LibIssuesNoRun": "0",
+    "AllowAutoPrealloc": "0",
+    "EvalWatermark": "0",
+    "StdntWatermark": "0",
+    "HasInsaneItems": "0",
+    "PropTypesIssues": "0",
+    "BrokenPolyVI": "0"
+  },
+  "removed_original_data_nets": {
+    "1784": [
+      "1780",
+      "263",
+      "363"
+    ],
+    "1288": [
+      "1257",
+      "1781"
+    ],
+    "1266": [
+      "1179",
+      "1260"
+    ],
+    "1143": [
+      "1062",
+      "1077"
+    ]
+  },
+  "replacement_native_nets": {
+    "933": [
+      "911",
+      "263",
+      "363"
+    ],
+    "919": [
+      "686",
+      "915"
+    ],
+    "877": [
+      "1179",
+      "680"
+    ],
+    "749": [
+      "722",
+      "683"
+    ],
+    "806": [
+      "1062",
+      "1077"
+    ]
+  },
+  "all_unaffected_original_wire_endpoints_unchanged": true,
+  "changed_original_literals": {
+    "598": {
+      "before": "00010000",
+      "after": "00004000"
+    }
+  },
+  "binary_payload_conversion": "Dequeue Variant -> native VariantToData(String) -> String tunnel",
+  "packet_and_queue_type": "LVVariant",
+  "data_queue": "ELYSE_SUP_CAMERA_RAW_LATEST_V1",
+  "stop_queue": "ELYSE_SUP_CAMERA_STOP_V1",
+  "obtain_queue_capacity": 1,
+  "TCP_port": 8768,
+  "ACK_limit": 16384,
+  "TCP_framing": {
+    "preserved_original_graph": true,
+    "payload_length_type": "NumInt32 (4 bytes)",
+    "length_net": [
+      "260",
+      "334"
+    ],
+    "header_first_concat_net": [
+      "322",
+      "360"
+    ],
+    "raw_payload_second_concat_net": [
+      "911",
+      "263",
+      "363"
+    ],
+    "output_to_TCP": [
+      "357",
+      "96"
+    ],
+    "receiver": "supervision_vi_telemetry.py reads four bytes with struct.unpack(!I)"
+  },
+  "conversion_error_pins_private_unwired": true,
+  "original_TCP_error_chain_unchanged": true,
+  "integrity": {
+    "path": "C:\\Users\\elyse\\.codex\\worktrees\\acq-unified-v6-release\\pyconlyse\\.tmp\\supervision_camera_wrapper_builder\\native_transport_final_saved\\SUP_Camera_Transport.vi",
+    "bytes": 19484,
+    "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+    "connector_counts": {
+      "number": 0,
+      "path": 0,
+      "string": 0,
+      "compound": 0,
+      "other": 12
+    },
+    "expected_cpc2_salt": "000000000000000000000000",
+    "cpc2_integrity_hash_matches": true,
+    "allzero_integrity_hash_matches": true,
+    "password_is_empty": true
+  },
+  "control_connector_layout": [
+    {
+      "uid": "1034",
+      "conNum": "-1",
+      "type": "TypeID(1)",
+      "kinds": [
+        "Cluster",
+        "Boolean",
+        "NumInt32",
+        "String"
+      ],
+      "ddo": "stdClust"
+    },
+    {
+      "uid": "1624",
+      "conNum": "-1",
+      "type": "TypeID(6)",
+      "kinds": [
+        "Cluster",
+        "Boolean",
+        "NumInt32",
+        "String"
+      ],
+      "ddo": "stdClust"
+    },
+    {
+      "uid": "1060",
+      "conNum": "-1",
+      "type": "TypeID(11)",
+      "kinds": [
+        "LVVariant"
+      ],
+      "ddo": "stdLvVariant"
+    },
+    {
+      "uid": "443",
+      "conNum": "-1",
+      "type": "TypeID(13)",
+      "kinds": [
+        "Boolean"
+      ],
+      "ddo": "stdBool"
+    },
+    {
+      "uid": "928",
+      "conNum": "-1",
+      "type": "TypeID(15)",
+      "kinds": [
+        "Boolean"
+      ],
+      "ddo": "stdBool"
+    },
+    {
+      "uid": "862",
+      "conNum": "-1",
+      "type": "TypeID(17)",
+      "kinds": [
+        "Cluster",
+        "Boolean",
+        "NumInt32",
+        "String"
+      ],
+      "ddo": "stdClust"
+    },
+    {
+      "uid": "758",
+      "conNum": "-1",
+      "type": "TypeID(22)",
+      "kinds": [
+        "String"
+      ],
+      "ddo": "stdString"
+    }
+  ],
+  "uid_audit": {
+    "unique_uid_definitions": 634,
+    "dangling_new_uid_references": [],
+    "duplicate_uids": [],
+    "wire_terminals_single_net": true
+  },
+  "scope": "Native Open+Save and offline graph/type/constant audit. Not camera/TCP/queue execution proof."
+}

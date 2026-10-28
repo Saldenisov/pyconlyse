@@ -1,3 +1,4 @@
 # Preserve native export bytes, including the project line endings.
 *.vi -text
 *.lvproj -text whitespace=cr-at-eol
+*.json -text whitespace=cr-at-eol

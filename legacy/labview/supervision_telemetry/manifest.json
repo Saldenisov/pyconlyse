@@ -30,5 +30,11 @@
   "system_dependencies": [
     "<vilib>/vision/Basics.llb/IMAQ ImageToArray",
     "<vilib>/vision/Image Controls.llb/IMAQ Image.ctl"
+  ],
+  "registered_subpackets": [
+    {
+      "path": "individual_helpers",
+      "manifest_sha256": "4e0464403996452b69e6e233adfdd11b1ba7c8e2ab305999dea13bd2b4affc34"
+    }
   ]
 }

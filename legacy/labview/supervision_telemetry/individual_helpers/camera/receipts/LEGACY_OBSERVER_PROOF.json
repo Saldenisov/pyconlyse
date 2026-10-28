@@ -1,0 +1,174 @@
+{
+  "native_authoring": {
+    "canonical_copy_changed_bytes": false,
+    "export_date": "2026-10-28",
+    "exported_by_user": true,
+    "open_and_save_observed": true,
+    "original_export_basename": "SUP_Camera_Observe_U8_ROOT17_GATED_UNCOMPILED.vi",
+    "saved_sha256": "8ba5b6b3c218b080e5afd8db80e8e9bfd77382e734fec5712a3cad416ed7d150",
+    "version": "20.0 32-bit"
+  },
+  "native_export_audit": {
+    "canonical_queue_recommendation": "retain qualified bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+    "custom_dependency_closure": [
+      "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "observer_v3/SUP_Camera_Queue_Latest.vi"
+    ],
+    "executed": false,
+    "files": [
+      {
+        "DSInit_nDCOs": 0,
+        "FPTD_fields": 17,
+        "FP_controls": 17,
+        "bytes": 26533,
+        "cache_mode": "cleared by native SaveForPrevious; native12 must construct current cache",
+        "fpdcoTableTMI": -1,
+        "label": "observer",
+        "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+        "version": {
+          "Bugfix": "0",
+          "Build": "4",
+          "Major": "12",
+          "Minor": "0",
+          "Stage": "release"
+        }
+      },
+      {
+        "DSInit_nDCOs": 0,
+        "FPTD_fields": 3,
+        "FP_controls": 3,
+        "bytes": 7967,
+        "cache_mode": "cleared by native SaveForPrevious; native12 must construct current cache",
+        "fpdcoTableTMI": -1,
+        "label": "exported_queue",
+        "sha256": "99ca26e9767b5455d4c2668c20e6b77d792291163a0d2df58c6c8fb4e770a48c",
+        "version": {
+          "Bugfix": "0",
+          "Build": "4",
+          "Major": "12",
+          "Minor": "0",
+          "Stage": "release"
+        }
+      }
+    ],
+    "native2012_open_save_run_proven": false,
+    "native_version_adaptations": [
+      "FP control 239: linked IMAQ typedef placeholder -> embedded native12 IMAQImage refnum",
+      "FP control 854: linked IMAQ typedef placeholder -> embedded native12 IMAQImage refnum",
+      "IMAQImageToArray image port6: linked typedef placeholder -> embedded native12 IMAQImage refnum",
+      "native SavePrevious cleared compiled LIvi links; LIbd and LIfp source dependency paths unchanged"
+    ],
+    "observer20_to_12_graph_nets_operators_constants_interface_preserved": true,
+    "qualification": "native2020x86 Open+Save passed; native SaveForPrevious2012 source+interface+graph+guard passed; actual native12 current-cache rebuild/runtime remains pending",
+    "queue_export_and_qualified_bef72_complete_source_semantics_identical": true,
+    "system_dependencies": [
+      "<vilib>/vision/Basics.llb/IMAQ ImageToArray",
+      "<vilib>/vision/Image Controls.llb/IMAQ Image.ctl"
+    ]
+  },
+  "runtime_boundary": {
+    "live_frames_published": false,
+    "main_integration": "Memory Full during local32 cold Open; mechanism unresolved",
+    "native2012_open_save_verified": false,
+    "physical_camera_verified": false,
+    "vi_executed": false
+  },
+  "schema_version": 1,
+  "source_graph_audit": {
+    "actual_graph_matches_exact_integer_bound": true,
+    "actual_native_guard_operators": [
+      1052,
+      1061,
+      1064,
+      1104,
+      1809
+    ],
+    "business_image_and_error_exact_identity": true,
+    "elapsed": "post-copy U32 TickCount - input986 modulo2^32",
+    "fixed_header_bytes": 95,
+    "guard_cases": 13450,
+    "limitation": "offline native-source topology/arithmetic audit; no LabVIEW compiler/runtime exercised",
+    "metadata_origin_terms": {
+      "2932": "616",
+      "2934": "700",
+      "2936": "824",
+      "2938": "903",
+      "2940": "959",
+      "2948": "986",
+      "2950": "699"
+    },
+    "native_compilation_or_execution_proven": false,
+    "native_type_shape": [
+      [
+        "String",
+        "NumUInt16",
+        "TimeStamp",
+        "TimeStamp",
+        "TimeStamp",
+        "NumUInt32",
+        "NumUInt32"
+      ],
+      [
+        "NumUInt32",
+        "NumUInt32",
+        [
+          "Array",
+          2,
+          "NumUInt8"
+        ]
+      ]
+    ],
+    "no_synthetic_pixel_array": true,
+    "queue_and_copy_errors_private": true,
+    "queue_and_postcopy_tick_only_inside_accepted_case": true,
+    "queue_input": "Flatten data String671 -> native Variant input",
+    "rejected_queue_error": "zero error cluster",
+    "root_FP_terms": 17,
+    "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9"
+  },
+  "source_interface_audit": {
+    "all17_FP_terms_root": true,
+    "byte_fixture_execution_proven_by_this_audit": false,
+    "exact_12_port_connector_mapping": true,
+    "executed": false,
+    "expected_header_bytes": 95,
+    "flags": {
+      "BadCompile": false,
+      "RunOnOpen": false,
+      "SourceOnly": false,
+      "execFlags": 1073741824,
+      "viFlags2": 536871424
+    },
+    "limit": "type/interface/flags only; native SavePrevious12 intentionally clears DSInit current cache; native12 Open+Save still required",
+    "matches_fixed_95_byte_type_layout": true,
+    "native_controls": 17,
+    "native_saved_version": {
+      "Bugfix": "0",
+      "Build": "4",
+      "Major": "12",
+      "Minor": "0",
+      "Stage": "release"
+    },
+    "serializer_shape": [
+      [
+        "String",
+        "NumUInt16",
+        "TimeStamp",
+        "TimeStamp",
+        "TimeStamp",
+        "NumUInt32",
+        "NumUInt32"
+      ],
+      [
+        "NumUInt32",
+        "NumUInt32",
+        [
+          "Array",
+          2,
+          "NumUInt8"
+        ]
+      ]
+    ],
+    "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9"
+  }
+}

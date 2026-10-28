@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "PARTIAL_FOUR_NATIVE12_CAMERA_LIFECYCLE_HELPERS",
+  "status": "EIGHT_NATIVE12_CAMERA_HELPER_FILES_OFFLINE_ONLY",
   "files": [
     {
       "path": "SUP_Camera_Epoch.vi",
@@ -37,10 +37,40 @@
       "bytes": 829,
       "sha256": "b76122d56eec5ac319c0a1d423fa680cce96ae9718a47e611922b22f2d826d49",
       "role": "ordinary project XML adds exported Setup item; no VI serialization"
+    },
+    {
+      "path": "SUP_Camera_FrameTap.vi",
+      "bytes": 27855,
+      "sha256": "a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c",
+      "native20_source_sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339"
+    },
+    {
+      "path": "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "bytes": 26533,
+      "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+      "retained_native12_sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9"
+    },
+    {
+      "path": "observer_v3/SUP_Camera_Queue_Latest.vi",
+      "bytes": 10059,
+      "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+      "retained_native12_sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7"
+    },
+    {
+      "path": "SUP_Camera_Transport.vi",
+      "bytes": 19484,
+      "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+      "retained_native12_sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03"
+    },
+    {
+      "path": "SUP_Camera_Helpers_2012.lvproj",
+      "bytes": 1177,
+      "sha256": "a43fa574299ffd1f754ae413694993911da2fb651f3fd327be00509a506ee3d8",
+      "role": "ordinary project XML indexes eight exact native12 helpers; no VI body writing"
     }
   ],
   "qualification_receipt": "receipts/NATIVE_LIFECYCLE_QUALIFICATION.json",
-  "qualification_sha256": "0e60806578668e1db66ab04fbc43241c752132ad5d4febb1de5808fe59fee7b6",
+  "qualification_sha256": "b50b4aa287308d5a837b0dc1b30acd0360d642860c462fea4abcd4a02d08d6eb",
   "projects": [
     {
       "path": "SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
@@ -58,10 +88,24 @@
         "SUP_Telemetry_Begin.vi",
         "SUP_Telemetry_End.vi"
       ]
+    },
+    {
+      "path": "SUP_Camera_Helpers_2012.lvproj",
+      "VI_members": [
+        "SUP_Camera_Epoch.vi",
+        "SUP_Camera_SetupObserve.vi",
+        "SUP_Telemetry_Begin.vi",
+        "SUP_Telemetry_End.vi",
+        "SUP_Camera_FrameTap.vi",
+        "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+        "observer_v3/SUP_Camera_Queue_Latest.vi",
+        "SUP_Camera_Transport.vi"
+      ]
     }
   ],
   "system_dependencies": [
-    "/<vilib>/vision/Image Controls.llb/IMAQ Image.ctl"
+    "/<vilib>/vision/Image Controls.llb/IMAQ Image.ctl",
+    "/<vilib>/vision/Basics.llb/IMAQ ImageToArray"
   ],
   "custom_relative_links": [
     {
@@ -87,9 +131,84 @@
         "SUP_Camera_Epoch.vi"
       ],
       "target": "SUP_Camera_Epoch.vi"
+    },
+    {
+      "caller": "SUP_Camera_FrameTap.vi",
+      "components": [
+        "",
+        "SUP_Camera_Epoch.vi"
+      ],
+      "target": "SUP_Camera_Epoch.vi"
+    },
+    {
+      "caller": "SUP_Camera_FrameTap.vi",
+      "components": [
+        "",
+        "SUP_Camera_Observe_U8_UNCOMPILED.vi"
+      ],
+      "target": "SUP_Camera_Observe_U8_UNCOMPILED.vi"
+    },
+    {
+      "caller": "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "components": [
+        "",
+        "observer_v3",
+        "SUP_Camera_Queue_Latest.vi"
+      ],
+      "target": "observer_v3/SUP_Camera_Queue_Latest.vi"
     }
   ],
-  "FrameTap_implemented": false,
+  "FrameTap_implemented": true,
   "full_camera_pipeline_ready": false,
-  "native2012_runtime_proven": false
+  "native2012_runtime_proven": false,
+  "proof_receipts": [
+    {
+      "path": "receipts/DEPENDENCY_FRESH_OPEN_RECEIPT.json",
+      "sha256": "03656e9e4820b176ee6024a788d6e73e991a5ffa43e41bbdf57475962bf3f6ce"
+    },
+    {
+      "path": "receipts/FRAMETAP_EXPORT12_SOURCE_AUDIT.json",
+      "sha256": "22dbcb4b80367847f36c533923ee0307980c8f6bce138d9c29a321d2e3e070f5"
+    },
+    {
+      "path": "receipts/FRAMETAP_FRESH_OPEN_RECEIPT.json",
+      "sha256": "f3c8b552eaddf0d3d4151e693179d5310c27e56a08a7f38a01e55fc65c4b0cb2"
+    },
+    {
+      "path": "receipts/FRAMETAP_NATIVE20_SOURCE_AUDIT.json",
+      "sha256": "9cd3016ac1a7fa2208854b8dd235a80bf3f6d0c799c1b202f05aac011fee9738"
+    },
+    {
+      "path": "receipts/FRAMETAP_NATIVE_EXPORT_RECEIPT.json",
+      "sha256": "e36b5f18f3edcfb83127f5b9f14631021cee3e4f415b2107d2ea23a396147367"
+    },
+    {
+      "path": "receipts/LEGACY_OBSERVER_PROOF.json",
+      "sha256": "8d27a36bf7d743f72687ca70d06f82175fce7680f3fdc34c92325546a5502775"
+    },
+    {
+      "path": "receipts/LEGACY_QUEUE_NATIVE12_OPEN_SAVE.json",
+      "sha256": "6e94050694daad6af7451fa626ede0b1eea76a1531ce692f555a6d6125d114d2"
+    },
+    {
+      "path": "receipts/LEGACY_TRANSPORT_NATIVE12_OPEN_SAVE.json",
+      "sha256": "4940f425caa91b48b094c8f17168941e74b1cd4cf406f6494aa14cffed2bfa62"
+    },
+    {
+      "path": "receipts/NATIVE12_SOURCE_CONTRACT_AUDIT.json",
+      "sha256": "768ff8be3b9076d22f65a4430c9facff9a61367054fae44059f494067290187e"
+    },
+    {
+      "path": "receipts/NATIVE_LIFECYCLE_QUALIFICATION.json",
+      "sha256": "b50b4aa287308d5a837b0dc1b30acd0360d642860c462fea4abcd4a02d08d6eb"
+    },
+    {
+      "path": "receipts/TRANSPORT_4AB066_READONLY_FINDING.json",
+      "sha256": "9df0e70eb433ca92b1895ea8ab71c9db880fc9c1c5a4e72ca66a6719fb194988"
+    },
+    {
+      "path": "receipts/TRANSPORT_FRESH_OPEN_RECEIPT.json",
+      "sha256": "464ed4633c78aaee276bb98b88fcb44464792dd70368ab25fa38e10a88985bfc"
+    }
+  ]
 }

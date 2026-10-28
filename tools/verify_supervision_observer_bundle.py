@@ -3,6 +3,7 @@
 This bounded RSRC envelope reader checks LVSR version/flags, not LabVIEW graph
 execution. It never loads a VI, invokes a driver, or opens a network socket.
 """
+
 from __future__ import print_function
 
 import argparse
@@ -12,17 +13,20 @@ import os
 import re
 import struct
 
-
 MAX_FILE_BYTES = 2 * 1024 * 1024
 PROOF_SHA256 = "8d27a36bf7d743f72687ca70d06f82175fce7680f3fdc34c92325546a5502775"
+OBSERVER_SHA256 = "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9"
+QUEUE_SHA256 = "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7"
 PINS = {
-    "SUP_Camera_Observe_U8_UNCOMPILED.vi":
-        "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
-    "observer_v3/SUP_Camera_Queue_Latest.vi":
-        "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+    "SUP_Camera_Observe_U8_UNCOMPILED.vi": OBSERVER_SHA256,
+    "observer_v3/SUP_Camera_Queue_Latest.vi": QUEUE_SHA256,
 }
-DEFAULT_BUNDLE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "legacy", "labview", "supervision_telemetry")
+DEFAULT_BUNDLE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "legacy",
+    "labview",
+    "supervision_telemetry",
+)
 
 
 class BundleError(ValueError):
@@ -46,10 +50,11 @@ def _resource_sections(raw):
         raise BundleError("Expected a LabVIEW VI RSRC v3 container")
     if data != 32 or data + data_size != info or info + info_size != len(raw):
         raise BundleError("RSRC data/info regions do not cover the file")
-    if info < data or info_size < 56 or raw[info:info + 32] != raw[:32]:
+    if info < data or info_size < 56 or raw[info : info + 32] != raw[:32]:
         raise BundleError("RSRC directory header mismatch")
     unused1, unused2, header_size, table_offset, table_size = _unpack(
-        ">5I", raw, info + 32, len(raw))
+        ">5I", raw, info + 32, len(raw)
+    )
     if header_size != 32 or table_offset != 52 or not 56 <= table_size <= info_size:
         raise BundleError("Unsupported RSRC directory layout")
     table = info + table_offset
@@ -63,7 +68,8 @@ def _resource_sections(raw):
     sections, tags, regions = {}, set(), []
     for index in range(count):
         tag, section_last, section_offset = _unpack(
-            ">4sII", raw, table + 4 + index * 12, directory_end)
+            ">4sII", raw, table + 4 + index * 12, directory_end
+        )
         if tag in tags or section_last >= 128:
             raise BundleError("Duplicate resource or excessive section count")
         tags.add(tag)
@@ -72,7 +78,8 @@ def _resource_sections(raw):
             raise BundleError("Section directory overlaps resource headers")
         for ordinal in range(section_last + 1):
             number, name, reserved, relative, reserved2 = _unpack(
-                ">iIIII", raw, section_table + ordinal * 20, table_end)
+                ">iIIII", raw, section_table + ordinal * 20, table_end
+            )
             key = (tag, number)
             if key in sections or number < 0:
                 raise BundleError("Duplicate or negative resource section")
@@ -102,8 +109,13 @@ def inspect_vi_rsrc(raw):
         raise BundleError("RunOnOpen is forbidden in the observer proof bundle")
     if execution & (1 << 16) or flags2 & (1 << 10):
         raise BundleError("Uncompiled source candidate is not the pinned native export")
-    return dict(version="12.0.0 release build 4", run_on_open=False,
-                bad_compile=False, source_only=False, resource_sections=len(sections))
+    return dict(
+        version="12.0.0 release build 4",
+        run_on_open=False,
+        bad_compile=False,
+        source_only=False,
+        resource_sections=len(sections),
+    )
 
 
 def _read(path, limit=MAX_FILE_BYTES):
@@ -126,7 +138,9 @@ def _unique_object(pairs):
 
 
 def _json(path):
-    return json.loads(_read(path, 128 * 1024).decode("utf-8"), object_pairs_hook=_unique_object)
+    return json.loads(
+        _read(path, 128 * 1024).decode("utf-8"), object_pairs_hook=_unique_object
+    )
 
 
 def verify_bundle(root=DEFAULT_BUNDLE):
@@ -134,20 +148,50 @@ def verify_bundle(root=DEFAULT_BUNDLE):
     if os.path.islink(root):
         raise BundleError("Bundle root must not be a symlink")
     manifest = _json(os.path.join(root, "manifest.json"))
-    if (manifest.get("schema_version") != 1 or manifest.get("status") != "NOT_RUNTIME_QUALIFIED"
-            or manifest.get("native2012_open_save_verified") is not False
-            or manifest.get("physical_camera_verified") is not False):
+    if (
+        manifest.get("schema_version") != 1
+        or manifest.get("status") != "NOT_RUNTIME_QUALIFIED"
+        or manifest.get("native2012_open_save_verified") is not False
+        or manifest.get("physical_camera_verified") is not False
+    ):
         raise BundleError("Bundle qualification must remain explicit and incomplete")
     if manifest.get("proof_sha256") != PROOF_SHA256:
         raise BundleError("Manifest differs from the reviewed proof receipt hash")
     records = manifest.get("files")
     if not isinstance(records, dict) or set(records) != set(PINS):
         raise BundleError("Custom VI dependency closure differs from the reviewed pair")
+    registered = manifest.get("registered_subpackets", [])
+    nested_results = []
+    if registered:
+        if len(registered) != 1 or registered[0].get("path") != "individual_helpers":
+            raise BundleError(
+                "Only the declared individual helper subpacket may be registered"
+            )
+        nested = os.path.join(root, "individual_helpers")
+        if os.path.islink(nested):
+            raise BundleError("Registered subpacket cannot be a symlink")
+        raw_manifest = _read(os.path.join(nested, "package_manifest.json"), 128 * 1024)
+        if hashlib.sha256(raw_manifest).hexdigest() != registered[0].get(
+            "manifest_sha256"
+        ):
+            raise BundleError("Registered subpacket manifest pin changed")
+        try:
+            try:
+                from tools.verify_labview_sync_native12_package import verify_package
+            except ImportError:
+                from verify_labview_sync_native12_package import verify_package
+            nested_results.append(verify_package(nested))
+        except (OSError, ValueError, KeyError, struct.error) as error:
+            raise BundleError("Registered subpacket verification failed: " + str(error))
     allowed = set(PINS) | {"manifest.json", "proof.json", "README.rst"}
     actual = set()
     for base, folders, files in os.walk(root):
-        if len(actual) > 16 or any(os.path.islink(os.path.join(base, p)) for p in folders):
+        if len(actual) > 16 or any(
+            os.path.islink(os.path.join(base, p)) for p in folders
+        ):
             raise BundleError("Unexpected bundle directory or symlink")
+        if base == root and registered:
+            folders[:] = [p for p in folders if p != "individual_helpers"]
         for name in files:
             path = os.path.join(base, name)
             relative = os.path.relpath(path, root).replace(os.sep, "/")
@@ -164,16 +208,27 @@ def verify_bundle(root=DEFAULT_BUNDLE):
         if not isinstance(record, dict) or record.get("sha256") != expected:
             raise BundleError("Manifest differs from the pinned native VI hashes")
         raw = _read(os.path.join(root, *name.split("/")))
-        if len(raw) != record.get("bytes") or hashlib.sha256(raw).hexdigest() != expected:
+        if (
+            len(raw) != record.get("bytes")
+            or hashlib.sha256(raw).hexdigest() != expected
+        ):
             raise BundleError("Native VI checksum/length mismatch: " + name)
         checked[name] = inspect_vi_rsrc(raw)
     proof = _read(os.path.join(root, "proof.json"), 128 * 1024)
     if hashlib.sha256(proof).hexdigest() != PROOF_SHA256:
         raise BundleError("Proof receipt checksum mismatch")
-    return dict(status="NOT_RUNTIME_QUALIFIED", files=checked,
-                native2012_open_save_verified=False, physical_camera_verified=False,
-                validation="pinned bytes, bounded RSRC version/flags, explicit dependency closure",
-                vi_loaded=False, vi_executed=False)
+    return dict(
+        status="NOT_RUNTIME_QUALIFIED",
+        files=checked,
+        native2012_open_save_verified=False,
+        physical_camera_verified=False,
+        validation=(
+            "pinned bytes, bounded RSRC version/flags, explicit dependency closure"
+        ),
+        registered_subpackets=nested_results,
+        vi_loaded=False,
+        vi_executed=False,
+    )
 
 
 def main(argv=None):

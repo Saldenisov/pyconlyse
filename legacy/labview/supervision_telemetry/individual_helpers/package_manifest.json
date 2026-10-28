@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "PARTIAL_7_OF_11_NATIVE2012_HELPERS",
+  "status": "COMPLETE_11_OF_11_HELPER_FILES_OFFLINE_ONLY",
   "files": [
     {
       "path": "export2012_preparation/SUP_Sync_Export_Native_2020.lvproj",
@@ -60,7 +60,16 @@
   "additional_components": [
     {
       "path": "camera",
-      "manifest_sha256": "e21dbbbf9543cddb5553ef5bf1f8a94386e1f16ae941d4a2c82fa9f719891109"
+      "manifest_sha256": "1f26979e10091bf2dd28dcca4153c4cda4d7de727457628b0555db28140ff515"
     }
+  ],
+  "helper_file_set_complete": true,
+  "full_camera_pipeline_ready": false,
+  "native2012_runtime_proven": false,
+  "historical_metadata_files": [
+    "qualification.json",
+    "epoch_native2020_semantic_snapshot.json",
+    "setup_native2020_semantic_snapshot.json",
+    "camera_frametap_checkpoint_20261028.json"
   ]
 }

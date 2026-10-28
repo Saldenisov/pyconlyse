@@ -1,8 +1,9 @@
 # Individual SuperVision helpers
 
-This packet contains **7 of the planned 11 helpers**: the three synchronization
-helpers below and the four-helper [camera lifecycle subset](camera/README.md).
-FrameTap is unfinished; the complete camera pipeline remains unready.
+This packet contains **11 of 11 helper files**: the three synchronization
+helpers below and the eight [camera helpers](camera/README.md). This is an
+offline artifact inventory, not a runnable application or runtime qualification.
+Main insertion and transport error/framing/lifecycle review remain pending.
 
 The three synchronization VIs and project
 are byte-identical copies of the native LabVIEW 2020 x86 **Save for Previous
@@ -38,12 +39,12 @@ subset is listed in `package_manifest.json`.
 | `ACQ_SharedState_Transport_Auto.vi` | Yes | Native project export; prior source receipts retained | Passed | Pending for these exported bytes |
 | `SUP_Camera_Epoch.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed | Pending |
 | `SUP_Camera_SetupObserve.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed via guarded native API | Pending |
-| `SUP_Camera_FrameTap.vi` | No | Native-call/gate authoring in progress | Pending | Pending |
+| `SUP_Camera_FrameTap.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD; 4000 source cases | Passed via guarded native API | Pending |
 | `SUP_Telemetry_Begin.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed | Pending |
 | `SUP_Telemetry_End.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed | Pending |
-| `SUP_Camera_Observe_U8_UNCOMPILED.vi` | No | Existing canonical receipts outside this subset | Existing canonical export; not copied here | Retain existing limits |
-| `SUP_Camera_Queue_Latest.vi` | No | Existing canonical receipts outside this subset | Existing canonical artifact; not copied here | Retain existing limits |
-| `SUP_Camera_Transport.vi` | No | Existing canonical receipts outside this subset | Existing canonical artifact; not copied here | Retain existing limits |
+| `SUP_Camera_Observe_U8_UNCOMPILED.vi` | Yes, exact retained copy | Original native20 Save + current retained-native12 FP/BD | Original canonical export | Pending |
+| `SUP_Camera_Queue_Latest.vi` | Yes, exact retained copy | Original native12 Open/Save + current fresh FP/BD | Native12 artifact; no invented new export | Runtime pending |
+| `SUP_Camera_Transport.vi` | Yes, exact retained copy | Original native12 Open/Save + current fresh FP/BD | Native12 artifact; no invented new export | Error/ACK/lifecycle hazards remain |
 
 Native export and offline checks do not establish LabVIEW 2012 execution or
 hardware behavior. No XP deployment or runtime test was performed for this
@@ -95,7 +96,7 @@ sync_lifecycle/
     ACQ_SharedState_Queue_Latest.vi
 ```
 
-The seven included native12 files form a partial packet. Future additions need
+The eleven native12 helper files form an offline review packet. Future changes need
 their own native Open/BD/Save, post-save literal/state audits, native12 export,
 hashes and relative-link checks. Begin/End manage the observation epoch only;
 queue ownership and worker lifecycle stay in native assembly. FrameTap requires

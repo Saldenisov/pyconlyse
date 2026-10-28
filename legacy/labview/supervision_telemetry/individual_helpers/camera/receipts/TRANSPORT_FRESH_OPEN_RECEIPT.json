@@ -1,0 +1,20 @@
+{
+  "checked_utc": "2026-10-28T20:02:40.953436+00:00",
+  "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+  "bytes": 19484,
+  "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_01\\SUP_Native_Transport_Fresh_Proven_2020.lvproj",
+  "native_application": "LabVIEW2020x86",
+  "front_panel_window": 38865670,
+  "block_diagram_window": 7605196,
+  "FP_open": true,
+  "BD_open": true,
+  "Run_arrow_unbroken": true,
+  "MemoryFull_observed": false,
+  "Run": false,
+  "Save": false,
+  "stopped": true,
+  "cold_process_restart": false,
+  "first_open_in_new_project": true,
+  "dirty_asterisk_after_cross_version_load": true,
+  "source_bytes_unchanged": true
+}

@@ -1,0 +1,64 @@
+{
+  "kind": "NATIVE_QUEUE_OPEN_SAVE_READBACK_QUALIFICATION",
+  "root_observed_open_save_pass": true,
+  "native_saved_source": "C:\\dev\\sup_vi_camera_20261027\\native_v5\\Telemetry_Authoring\\SUP_Camera_Queue_Latest.vi",
+  "snapshot": "C:\\Users\\elyse\\.codex\\worktrees\\acq-unified-v6-release\\pyconlyse\\.tmp\\supervision_camera_wrapper_builder\\native_queue_v5_saved_audit_1\\SUP_Camera_Queue_Latest.vi",
+  "bytes": 10059,
+  "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+  "LabVIEW_major": 12,
+  "RunOnOpen": false,
+  "BadCompile": false,
+  "native_compile_flags_clear": true,
+  "vi_executed": false,
+  "behavior_run_qualified": false,
+  "packet_connector": 11,
+  "packet_type": "LVVariant",
+  "data_queue": "ELYSE_SUP_CAMERA_RAW_LATEST_V1",
+  "capacity": 1,
+  "queue_primitives": {
+    "222": [
+      "476",
+      "9130"
+    ],
+    "529": [
+      "96",
+      "1062"
+    ],
+    "112": [
+      "473",
+      "9109"
+    ],
+    "43": [
+      "472",
+      "9108"
+    ]
+  },
+  "wire_endpoint_topology_unchanged": true,
+  "literal_payloads_unchanged": true,
+  "native_source_unchanged_during_readback": true,
+  "NI_or_subVI_calls": false,
+  "uid_audit": {
+    "unique_uid_definitions": 178,
+    "dangling_new_uid_references": [],
+    "duplicate_uids": [],
+    "wire_terminals_single_net": true
+  },
+  "integrity": {
+    "path": "C:\\Users\\elyse\\.codex\\worktrees\\acq-unified-v6-release\\pyconlyse\\.tmp\\supervision_camera_wrapper_builder\\native_queue_v5_saved_audit_1\\SUP_Camera_Queue_Latest.vi",
+    "bytes": 10059,
+    "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+    "connector_counts": {
+      "number": 1,
+      "path": 0,
+      "string": 1,
+      "compound": 1,
+      "other": 12
+    },
+    "expected_cpc2_salt": "010000000100000000000000",
+    "cpc2_integrity_hash_matches": true,
+    "allzero_integrity_hash_matches": false,
+    "password_is_empty": true
+  },
+  "scope": "Native Open+Save and offline readback only, not runtime queue/TCP/camera behavior",
+  "other_helpers_native_qualified": false
+}

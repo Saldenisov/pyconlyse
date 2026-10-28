@@ -1,0 +1,40 @@
+{
+  "checked_utc": "2026-10-28T20:00:38.474412+00:00",
+  "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Native_FrameTap_Fresh_Proven_2020.lvproj",
+  "native_application": "LabVIEW2020x86",
+  "stopped": true,
+  "cold_process_restart": false,
+  "first_explicit_FP_BD_open_in_new_project": true,
+  "dependencies": [
+    {
+      "path": "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+      "bytes": 26533,
+      "front_panel_window": 99422724,
+      "block_diagram_window": 121507812,
+      "FP_open": true,
+      "BD_open": true,
+      "Run_arrow_unbroken": true,
+      "MemoryFull_observed": false,
+      "Run": false,
+      "Save": false,
+      "dirty_asterisk_after_cross_version_load": true,
+      "source_bytes_unchanged": true
+    },
+    {
+      "path": "observer_v3/SUP_Camera_Queue_Latest.vi",
+      "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+      "bytes": 10059,
+      "front_panel_window": 2820714,
+      "block_diagram_window": 22611708,
+      "FP_open": true,
+      "BD_open": true,
+      "Run_arrow_unbroken": true,
+      "MemoryFull_observed": false,
+      "Run": false,
+      "Save": false,
+      "dirty_asterisk_after_cross_version_load": true,
+      "source_bytes_unchanged": true
+    }
+  ]
+}

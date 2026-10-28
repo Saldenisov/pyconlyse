@@ -1,0 +1,58 @@
+{
+  "actual_native_saved_source_cases": 4000,
+  "original_matrix_cases": 6400,
+  "excluded_inconsistent_Epoch_valid_inputs": 2400,
+  "boundary": "Epoch valid implies matching nonzero run and run<=capture; haveCopy==haveFrame is inductive.",
+  "Boolean_selectors_and_original_image_error_identity": true,
+  "private_errors_consume_owned_attempt_budget": true,
+  "native_execution_proven": false,
+  "VI_bytes_written": false,
+  "source_filename": "SUP_Camera_FrameTap.vi",
+  "source_sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+  "source_bytes": 28451,
+  "native_save_reported_by_root": true,
+  "native_layout_cleanup_reported_by_root": true,
+  "flags": {
+    "BadNode": 0,
+    "BadSignal": 0,
+    "BadSubVILink": 0,
+    "BadSubVI": 0,
+    "BadCompile": 0,
+    "RunOnOpen": 0,
+    "IsReentrant": 0,
+    "PropTypesIssues": 1
+  },
+  "InlineIfPossible": 0,
+  "ShouldInline": 0,
+  "state_type": [
+    "MeasureData",
+    "MeasureData",
+    "NumUInt32",
+    "NumUInt32",
+    "Boolean",
+    "Boolean"
+  ],
+  "right_state_type": [
+    "MeasureData",
+    "MeasureData",
+    "NumUInt32",
+    "NumUInt32",
+    "Boolean",
+    "Boolean"
+  ],
+  "FP_terminals": 21,
+  "direct_subVI_calls": 2,
+  "one_iteration_while": 1,
+  "Boolean_cases": 2,
+  "source_graph_XML_files": {
+    "SUP_Camera_FrameTap.xml": "850add4aadae0c26e552fec75f3fe543d79682f7259407a2630c7372f6cd3aea",
+    "SUP_Camera_FrameTap_BDHb.xml": "ca0208ce9a5c5d5e53333ab4f23280a7c4febe736c9d1e99906d15c6d53f1de4",
+    "SUP_Camera_FrameTap_FPHb.xml": "a2f03b8982f19389d5dc16ba43b427cf975191a6be0fe8efae068e0c98a781b5"
+  },
+  "parser_limits": [
+    "DFDS Variant-default decode unsupported; not used for source graph semantics.",
+    "VICD patch decode unsupported; no native execution claimed."
+  ],
+  "native2012_export_qualified": false,
+  "physical_camera_qualified": false
+}

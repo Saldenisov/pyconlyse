@@ -34,3 +34,7 @@ Read-only verification, using Python 3.4 or later::
 Verification checks pinned bytes, bounded RSRC version/execution flags, receipt
 integrity, and dependency closure. It neither loads nor executes a VI. The JSON
 proof records source audits; it does not establish hardware runtime behavior.
+
+The separately pinned ``individual_helpers`` subpacket is explicitly registered
+in ``manifest.json`` and validated through its own native-provenance guard.
+Registration does not change the original observer/queue bytes or runtime limits.

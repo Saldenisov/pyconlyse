@@ -1,0 +1,46 @@
+{
+  "source": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Camera_FrameTap.vi",
+  "source_sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+  "destination": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\export2012_camera_frametap_native\\SUP_Camera_FrameTap.vi",
+  "bytes": 27855,
+  "sha256": "a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c",
+  "requested_version": "12.0",
+  "native_warnings": "",
+  "application": {
+    "directory": "C:\\Program Files (x86)\\National Instruments\\LabVIEW 2020",
+    "version": "20.0f1",
+    "process_id": 18488
+  },
+  "before": {
+    "path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Camera_FrameTap.vi",
+    "execution": 1,
+    "vi_modifications": 0,
+    "fp_modifications": 0,
+    "bd_modifications": 0
+  },
+  "after": {
+    "path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Camera_FrameTap.vi",
+    "execution": 1,
+    "vi_modifications": 0,
+    "fp_modifications": 0,
+    "bd_modifications": 0
+  },
+  "source_unchanged": true,
+  "Run": false,
+  "SaveInstrument": false,
+  "RSRC_writer": false,
+  "source_header": {
+    "major": 20,
+    "encoded_version": "20008000",
+    "RunOnOpen": false,
+    "source_diagram": true
+  },
+  "output_header": {
+    "major": 12,
+    "encoded_version": "12008004",
+    "RunOnOpen": false,
+    "source_diagram": true
+  },
+  "output_version_verified": true,
+  "output_version_and_dependencies_verified": false
+}

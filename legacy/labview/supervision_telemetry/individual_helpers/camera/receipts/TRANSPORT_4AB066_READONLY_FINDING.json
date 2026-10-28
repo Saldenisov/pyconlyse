@@ -1,0 +1,178 @@
+{
+  "schema": 1,
+  "scope": "READ_ONLY_TRANSPORT_SOURCE_FINDING_NOT_RUNTIME_APPROVAL",
+  "artifact": {
+    "filename": "SUP_Camera_Transport.vi",
+    "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+    "bytes": 19484,
+    "major": 12,
+    "native_Open_Save_receipt_retained": true,
+    "Run_performed": false,
+    "runtime_qualified": false
+  },
+  "source_evidence": {
+    "source_qualification_receipt_sha256": "4940f425caa91b48b094c8f17168941e74b1cd4cf406f6494aa14cffed2bfa62",
+    "XML_sha256": {
+      "SUP_Camera_Transport.xml": "3507994b2df0aeb188785692c79a5629cdcdb3f5a6d366f868ca361505564829",
+      "SUP_Camera_Transport_BDHb.xml": "853d4b301dcf7b91173e6928ffd561da66a5aff24fa3c49161ef16ae538bbf5c",
+      "SUP_Camera_Transport_FPHb.xml": "5e0dcbb9a9f91b2e89b112529cc8cba9caaa5ed2cd002d83053c6d6193dc2bf4"
+    },
+    "node_and_wire_IDs_are_from_exact_canonical_artifact": true
+  },
+  "queues": {
+    "data": {
+      "name": "ELYSE_SUP_CAMERA_RAW_LATEST_V1",
+      "element_type": "LVVariant containing String payload",
+      "max_size": 1,
+      "obtain_node": 1072,
+      "create_if_not_found": true,
+      "created_new_output_used": false,
+      "dequeue_node": 62,
+      "dequeue_timeout_ms": 100,
+      "worker_release_node": 1342
+    },
+    "stop": {
+      "name": "ELYSE_SUP_CAMERA_STOP_V1",
+      "element_type": "Boolean",
+      "max_size": 1,
+      "obtain_node": 495,
+      "create_if_not_found": true,
+      "created_new_output_used": false,
+      "dequeue_node": 397,
+      "dequeue_timeout_ms": 0,
+      "worker_release_node": 1046
+    }
+  },
+  "network": {
+    "address": "127.0.0.1",
+    "port": 8768,
+    "open_node": 43,
+    "write_node": 75,
+    "ACK_prefix_read_node": 221,
+    "ACK_body_read_node": 459,
+    "close_node": 105,
+    "timeout_ms_for_each_of_four_timed_operations": 1000,
+    "timeout_source_DCO": 699,
+    "shared_timeout_wire_terms": [
+      701,
+      63,
+      93,
+      242,
+      480
+    ],
+    "TCP_read_modes_unwired_default_standard": true,
+    "new_connection_per_available_payload": true,
+    "connection_error_chain": [
+      43,
+      75,
+      221,
+      459,
+      105
+    ],
+    "TCP_Close_has_no_timeout_input": true,
+    "TCP_Close_error_input_is_wired": true
+  },
+  "ACK": {
+    "prefix_bytes": 4,
+    "prefix_cast_node": 492,
+    "prefix_cast_primitive": 1166,
+    "body_length_bound_node": 551,
+    "minimum_coerced_read_length": 1,
+    "maximum_coerced_read_length": 16384,
+    "coerced_output_term560_drives_body_read_term483": true,
+    "in_range_output_only_drives_indicator930": true,
+    "invalid_length_rejected": false,
+    "JSON_or_OK_or_session_or_frame_validation": false,
+    "body_indicator": "Ack JSON (raw; not validated)"
+  },
+  "stop_logic": {
+    "loop": 286,
+    "stop_condition": "stop_queue_element OR front_panel_Stop OR data_Obtain_error.status",
+    "OR_nodes": [
+      893,
+      1410
+    ],
+    "data_Obtain_error_status_node": 1394,
+    "network_case": 1680,
+    "network_case_predicate": "NOT data_Dequeue.timed_out",
+    "network_case_ignores_stop_flag": true,
+    "stop_poll_order_relative_to_data_network": "independent parallel dataflow; no first/last ordering edge",
+    "stop_token_can_be_observed_while_same_iteration_still_sends": true,
+    "data_Dequeue_error_in_stop_predicate": false,
+    "stop_Obtain_Dequeue_errors_in_stop_predicate": false,
+    "network_errors_in_stop_predicate": false,
+    "wait_or_backoff_primitive_present": false
+  },
+  "configured_wait_budget": {
+    "single_iteration_ms": 4100,
+    "formula": "100 + 4*1000, excluding TCP Close, queue management, conversion, and OS/LabVIEW scheduling",
+    "missed_stop_poll_may_require_two_iterations_ms": 8200,
+    "hard_wall_clock_bound_proven": false,
+    "main_worker_join_or_done_signal_present_in_transport": false,
+    "static_parallel_caller_join_is_not_independently_time_bounded": true
+  },
+  "private_error_paths": {
+    "DefaultErrorHandling": 1,
+    "unwired_error_outputs": [
+      {
+        "node": 495,
+        "term": 532,
+        "operation": "Obtain stop queue"
+      },
+      {
+        "node": 397,
+        "term": 745,
+        "operation": "Dequeue stop queue"
+      },
+      {
+        "node": 664,
+        "term": 673,
+        "operation": "Variant To Data(String)"
+      }
+    ],
+    "Variant_To_Data_outside_network_case": true,
+    "Variant_To_Data_has_no_source_level_idle_or_error_guard": true,
+    "automatic_error_prompt_or_suspension_not_runtime_tested": true
+  },
+  "cleanup": {
+    "worker_releases_both_own_refs_after_loop": true,
+    "worker_release_force_destroy_inputs_unwired_default_false": true,
+    "worker_release_error_inputs_unwired": true,
+    "release_errors_drive_private_FP_indicators": true,
+    "no_public_worker_inputs_or_outputs_all_seven_FP_conNum_minus1": true
+  },
+  "main_required_lifecycle": [
+    "Prior worker and producers must have finished; fixed named queues are not RunStamp-scoped.",
+    "Begin once per main run; share that exact RunStamp with camera and NI6602 observation.",
+    "Before starting workers/producers, obtain correctly typed owner refs for both named queues, capacity1; flush BOTH queues. Retain owner refs across entire run.",
+    "Start transport and producer branches in parallel, after ordered initialization. Worker has no connector inputs, so use native structure/dataflow to gate launch.",
+    "Insert FrameTap inline before downstream mutable NI image writers: image input6/output4, original-error input5/output3. Preserve one common RunStamp.",
+    "Wait for ALL producer branches/copy attempts to finish; call End with same RunStamp. End does not flush the transport queue or stop the worker.",
+    "For discard-pending shutdown, flush raw-data queue after producer completion. Flush stop queue, then enqueue Boolean True with timeout0 and check private enqueue error.",
+    "Await actual worker return before deterministic owner-ref release; do not force-destroy active queues. A finite caller wait for a separate completion acknowledgement can report timeout, but cannot cancel or hard-bound a static blocking worker call.",
+    "Only after worker return release owner refs (force destroy False). A nonforced owner release alone does not invalidate remaining worker-owned refs.",
+    "Do not begin a new run on the same names while an old worker or old in-flight transaction remains."
+  ],
+  "hazards_requiring_main_or_native_runtime_resolution": [
+    "Stale True stop token can immediately terminate a newly started worker; stale Variant frame can be sent under a new main run unless initialization flush is ordered.",
+    "Owner refs prevent per-frame Obtain/Release helpers from creating and destroying their last queue ref before the worker has started. Existing queue capacity/type is not reset by Obtain; caller must establish correct ownership.",
+    "End only invalidates Epoch; queued/in-flight payloads and stop tokens are not RunStamp-scoped. Receiver acceptance is not validated by transport ACK handling.",
+    "A premature force destroy invalidates refs; data-Dequeue errors do not drive stop and there is no backoff, so repeated immediate errors can spin or invoke automatic error handling.",
+    "Unwired private error outputs with automatic error handling enabled prevent an unattended bounded-shutdown claim. Idle Variant conversion is outside the guarded network Case.",
+    "No hard worker-join deadline follows from the four1000ms constants; TCP Close/runtime scheduling and automatic error handling are outside that numeric budget."
+  ],
+  "NI_primary_sources": {
+    "TCP_read": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/tcp-read.html",
+    "TCP_open": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/tcp-open-connection.html",
+    "TCP_close": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/tcp-close-connection.html",
+    "dequeue": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/dequeue-element.html",
+    "release_queue": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/release-queue.html",
+    "InRangeCoerce": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/in-range-and-coerce.html"
+  },
+  "changes": {
+    "VI_bytes_written": false,
+    "VI_Run_or_Call": false,
+    "UI_or_hardware_operations": false,
+    "packet_or_guard_files_changed": false
+  }
+}

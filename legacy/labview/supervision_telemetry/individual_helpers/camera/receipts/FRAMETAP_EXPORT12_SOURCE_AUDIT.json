@@ -1,0 +1,256 @@
+{
+  "actual_native_saved_source_cases": 4000,
+  "original_matrix_cases": 6400,
+  "excluded_inconsistent_Epoch_valid_inputs": 2400,
+  "boundary": "Epoch valid implies matching nonzero run and run<=capture; haveCopy==haveFrame is inductive.",
+  "Boolean_selectors_and_original_image_error_identity": true,
+  "private_errors_consume_owned_attempt_budget": true,
+  "native_execution_proven": false,
+  "VI_bytes_written": false,
+  "source_filename": "SUP_Camera_FrameTap.vi",
+  "source_sha256": "a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c",
+  "source_bytes": 27855,
+  "native_version": {
+    "Major": "12",
+    "Minor": "0",
+    "Bugfix": "0",
+    "Stage": "release",
+    "Build": "4"
+  },
+  "flags": {
+    "BadNode": 0,
+    "BadSignal": 0,
+    "BadSubVILink": 0,
+    "BadSubVI": 0,
+    "BadCompile": 0,
+    "RunOnOpen": 0,
+    "IsReentrant": 0,
+    "PropTypesIssues": 1
+  },
+  "InlineIfPossible": 0,
+  "ShouldInline": 0,
+  "state_type": [
+    "MeasureData",
+    "MeasureData",
+    "NumUInt32",
+    "NumUInt32",
+    "Boolean",
+    "Boolean"
+  ],
+  "right_state_type": [
+    "MeasureData",
+    "MeasureData",
+    "NumUInt32",
+    "NumUInt32",
+    "Boolean",
+    "Boolean"
+  ],
+  "FP_terminals": 21,
+  "ports": {
+    "5": "142",
+    "6": "241",
+    "10": "616",
+    "3": "654",
+    "4": "856",
+    "11": "903",
+    "9": "959",
+    "7": "986",
+    "2": "1017",
+    "1": "2662",
+    "8": "2705",
+    "0": "2745"
+  },
+  "direct_subVI_calls": 2,
+  "one_iteration_while": 1,
+  "Boolean_cases": 2,
+  "source_graph_XML_files": {
+    "SUP_Camera_FrameTap.xml": "4a333b1620252f1c02c197a89577b4558b754fcd41a65f6a7b6141368093336c",
+    "SUP_Camera_FrameTap_BDHb.xml": "7694e2037f5f2ad8a637093e304a4aef74fd5493fed503c5b6e81964ebcc4163",
+    "SUP_Camera_FrameTap_FPHb.xml": "a5a6d0e659dd434b3b82de8193d9925b5fbc55bd0093093fcbc38ba16c28d6a1"
+  },
+  "native2012_Open_Save_verified": false,
+  "physical_camera_qualified": false,
+  "parser_limits": [
+    "Opaque NI image-reference typedefs are not decoded as ordinary scalars.",
+    "Read-only source graph and saved flags are inspected; compiled-code/runtime validity is not claimed."
+  ],
+  "native_insertion_constraint": "Inline FrameTap image/error identity outputs before downstream mutable NI image writers. In original main, replace ordered Grab15740 image15749 -> Rotate14726 input14771 edge19409 with FrameTap input6/output4 ordering; preserve original error via input5/output3. A parallel reference branch does not freeze image pixels.",
+  "native_export_receipt": {
+    "filename": "NATIVE_EXPORT_RECEIPT.json",
+    "sha256": "e36b5f18f3edcfb83127f5b9f14631021cee3e4f415b2107d2ea23a396147367",
+    "source_sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+    "export_requested_version": "12.0",
+    "warnings": "",
+    "source_unchanged": true,
+    "Run": false,
+    "RSRC_writer": false
+  },
+  "private_dependency_closure_complete": true,
+  "dependency_files": [
+    {
+      "path": "SUP_Camera_Epoch.vi",
+      "sha256": "84b78999901b37537f83c5c480777f22bee98a1f78d153ea93739e57738c8a3e",
+      "bytes": 29372,
+      "version": {
+        "Major": "12",
+        "Minor": "0",
+        "Bugfix": "0",
+        "Stage": "release",
+        "Build": "4"
+      },
+      "RunOnOpen": 0,
+      "direct_links": []
+    },
+    {
+      "path": "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+      "bytes": 26533,
+      "version": {
+        "Major": "12",
+        "Minor": "0",
+        "Bugfix": "0",
+        "Stage": "release",
+        "Build": "4"
+      },
+      "RunOnOpen": 0,
+      "direct_links": [
+        {
+          "target": "IMAQ ImageToArray",
+          "path_components": [
+            "<vilib>",
+            "vision",
+            "Basics.llb",
+            "IMAQ ImageToArray"
+          ],
+          "path_attributes": {
+            "Ident": "PTH0",
+            "TpVal": "0"
+          },
+          "call_uids": [
+            596
+          ]
+        },
+        {
+          "target": "SUP_Camera_Queue_Latest.vi",
+          "path_components": [
+            "",
+            "observer_v3",
+            "SUP_Camera_Queue_Latest.vi"
+          ],
+          "path_attributes": {
+            "Ident": "PTH0",
+            "TpVal": "1"
+          },
+          "call_uids": [
+            710
+          ]
+        }
+      ]
+    },
+    {
+      "path": "observer_v3/SUP_Camera_Queue_Latest.vi",
+      "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+      "bytes": 10059,
+      "version": {
+        "Major": "12",
+        "Minor": "0",
+        "Bugfix": "0",
+        "Stage": "release",
+        "Build": "4"
+      },
+      "RunOnOpen": 0,
+      "direct_links": []
+    }
+  ],
+  "FrameTap_relative_call_links": [
+    {
+      "target": "SUP_Camera_Epoch.vi",
+      "TpVal": 1,
+      "components": [
+        "",
+        "SUP_Camera_Epoch.vi"
+      ],
+      "package_relative_target": "SUP_Camera_Epoch.vi"
+    },
+    {
+      "target": "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "TpVal": 1,
+      "components": [
+        "",
+        "SUP_Camera_Observe_U8_UNCOMPILED.vi"
+      ],
+      "package_relative_target": "SUP_Camera_Observe_U8_UNCOMPILED.vi"
+    }
+  ],
+  "caller_callee_ABI_checks": [
+    {
+      "target": "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "all_12_caller_callee_port_shapes_equal": true,
+      "port_shapes": {
+        "0": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "1": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "2": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "3": "Void",
+        "4": "NumUInt32",
+        "5": "NumUInt32",
+        "6": "NumUInt32",
+        "7": "MeasureData",
+        "8": "MeasureData",
+        "9": "MeasureData",
+        "10": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "11": "Void"
+      },
+      "opaque_NI_image_type_boundary": "Void/corrupt-stub is not a full NI typedef decode; exact canonical files and genuine native call are pinned."
+    },
+    {
+      "target": "SUP_Camera_Epoch.vi",
+      "all_12_caller_callee_port_shapes_equal": true,
+      "port_shapes": {
+        "0": "Boolean",
+        "1": "NumUInt32",
+        "2": "MeasureData",
+        "3": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "4": "Void",
+        "5": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "6": "Void",
+        "7": "NumUInt32",
+        "8": "Boolean",
+        "9": "NumUInt32",
+        "10": "MeasureData",
+        "11": "NumUInt32"
+      },
+      "opaque_NI_image_type_boundary": "Void/corrupt-stub is not a full NI typedef decode; exact canonical files and genuine native call are pinned."
+    }
+  ],
+  "NI_vendor_dependency_required": "<vilib>/vision/Basics.llb/IMAQ ImageToArray",
+  "NI_vendor_files_included": false,
+  "native12_Open_Save_verified": false,
+  "audit_implementation_sha256": {
+    "audit_native_frametap_graph.py": "ed29adbefbb3c3d2c7eb7bedfa71313d4fee581a600608d97da915a5196c7cb9",
+    "tools/labview_camera_helper_model.py": "032c190d97d30a6862df222c5f83b1be274f617ae2b3f9966a06c122f150e4ed"
+  }
+}

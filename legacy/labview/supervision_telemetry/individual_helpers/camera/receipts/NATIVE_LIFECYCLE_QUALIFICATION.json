@@ -1,5 +1,5 @@
 {
-  "status": "NATIVE_SAVE_FRESH_STOPPED_FP_BD_NATIVE12_EXPORT_PASS",
+  "status": "EIGHT_NATIVE12_CAMERA_HELPER_FILES_OFFLINE_ONLY",
   "date": "2026-10-28",
   "helpers": {
     "SUP_Camera_Epoch.vi": {
@@ -228,13 +228,150 @@
         "source_cases": 256
       },
       "runtime_executed": false
+    },
+    "SUP_Camera_FrameTap.vi": {
+      "implemented": true,
+      "last_writer": "native_labview_export",
+      "native20_source_sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+      "native_save": {
+        "passed": true,
+        "stopped": true,
+        "last_writer": "native_labview_save",
+        "sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+        "bitness": 32,
+        "version": "20.0f1"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Native_FrameTap_Fresh_Proven_2020.lvproj",
+        "process_restart": false
+      },
+      "native_export": {
+        "passed": true,
+        "version": "12.0",
+        "last_writer": "native_labview_export",
+        "source_sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+        "sha256": "a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c",
+        "method": "guarded native COM SaveForPrevious"
+      },
+      "source_graph_audit": {
+        "path": "receipts/FRAMETAP_EXPORT12_SOURCE_AUDIT.json",
+        "sha256": "22dbcb4b80367847f36c533923ee0307980c8f6bce138d9c29a321d2e3e070f5"
+      },
+      "historical_note": "Native template lineage retained; new gate and connections authored by native editor; last source/output writers native.",
+      "inline_image_error_barrier_required": true,
+      "main_native_assembly_proven": false,
+      "runtime_executed": false
+    },
+    "SUP_Camera_Observe_U8_UNCOMPILED.vi": {
+      "implemented": true,
+      "qualification_mode": "retained_native12",
+      "last_writer": "native_labview_export",
+      "source_bytes_unchanged": true,
+      "existing_native12_artifact": {
+        "passed": true,
+        "version": "12.0",
+        "artifact_sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+        "receipt": "receipts/LEGACY_OBSERVER_PROOF.json",
+        "receipt_sha256": "8d27a36bf7d743f72687ca70d06f82175fce7680f3fdc34c92325546a5502775",
+        "history": "native20 Save then native12 export"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Native_FrameTap_Fresh_Proven_2020.lvproj",
+        "process_restart": false,
+        "Save": false,
+        "dirty_after_cross_version_load": true,
+        "source_bytes_unchanged": true
+      },
+      "no_fabricated_native20_source_or_new_export": true,
+      "runtime_executed": false
+    },
+    "observer_v3/SUP_Camera_Queue_Latest.vi": {
+      "implemented": true,
+      "qualification_mode": "retained_native12",
+      "last_writer": "native_labview_save",
+      "source_bytes_unchanged": true,
+      "existing_native12_artifact": {
+        "passed": true,
+        "version": "12.0",
+        "artifact_sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+        "receipt": "receipts/LEGACY_QUEUE_NATIVE12_OPEN_SAVE.json",
+        "receipt_sha256": "6e94050694daad6af7451fa626ede0b1eea76a1531ce692f555a6d6125d114d2",
+        "history": "native LabVIEW12 Open+Save"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Native_FrameTap_Fresh_Proven_2020.lvproj",
+        "process_restart": false,
+        "Save": false,
+        "dirty_after_cross_version_load": true,
+        "source_bytes_unchanged": true
+      },
+      "no_fabricated_native20_source_or_new_export": true,
+      "runtime_executed": false
+    },
+    "SUP_Camera_Transport.vi": {
+      "implemented": true,
+      "qualification_mode": "retained_native12",
+      "last_writer": "native_labview_save",
+      "source_bytes_unchanged": true,
+      "existing_native12_artifact": {
+        "passed": true,
+        "version": "12.0",
+        "artifact_sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+        "receipt": "receipts/LEGACY_TRANSPORT_NATIVE12_OPEN_SAVE.json",
+        "receipt_sha256": "4940f425caa91b48b094c8f17168941e74b1cd4cf406f6494aa14cffed2bfa62",
+        "history": "native LabVIEW12 Open+Save"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_01\\SUP_Native_Transport_Fresh_Proven_2020.lvproj",
+        "process_restart": false,
+        "Save": false,
+        "dirty_after_cross_version_load": true,
+        "source_bytes_unchanged": true
+      },
+      "no_fabricated_native20_source_or_new_export": true,
+      "runtime_executed": false,
+      "read_only_runtime_findings": {
+        "path": "receipts/TRANSPORT_4AB066_READONLY_FINDING.json",
+        "sha256": "9df0e70eb433ca92b1895ea8ab71c9db880fc9c1c5a4e72ca66a6719fb194988",
+        "automatic_error_handling": 1,
+        "unwired_private_error_terminals": [
+          532,
+          745,
+          673
+        ],
+        "invalid_ACK_length_rejected": false,
+        "hard_join_bound_proven": false,
+        "runtime_approved": false
+      }
     }
   },
   "native2012_runtime_proven": false,
   "hardware_accessed": false,
   "XP_deployed": false,
   "full_camera_pipeline_ready": false,
-  "FrameTap_implemented": false,
+  "FrameTap_implemented": true,
   "DFDS_reader_limitation": "lvkit does not decode native204-byte exported DFDS cache; no cache was rewritten",
-  "native_export_API_receipt": "docs/receipts/supervision_native_export_api_20261028.json"
+  "native_export_API_receipt": "docs/receipts/supervision_native_export_api_20261028.json",
+  "mutable_image_barrier": "Grab -> synchronous noninlined FrameTap image/error outputs -> Rotate; no independent mutable-reference bypass",
+  "transport_runtime_limits": "Artifact retention only. Automatic error handling1; unwired stop/Variant errors; ACK clamp without reject/validation; independent stop polling; no hard join bound. No Run or runtime approval."
 }

@@ -66,12 +66,41 @@ loading error. Epoch's FP and BD were also explicitly displayed there after it
 had already loaded as a callee. All source hashes remained unchanged. These
 checks used the existing process: no process restart or first-process-load claim.
 
-The four-helper native 12.0 lifecycle subset is now included under
+The native 12.0 lifecycle subset is included under
 ``legacy/labview/supervision_telemetry/individual_helpers/camera``. Exported
 Epoch/Setup/Begin/End source graphs passed 3,840/48/1,280/256 cases respectively;
 the standard-library verifier checks native event receipts and exact output
-hashes separately. FrameTap remains unfinished and excluded; the complete camera
-pipeline and LabVIEW 2012/XP execution remain unqualified.
+hashes separately.
+
+FrameTap was subsequently completed through the native editor, cleaned with
+Clean Up Diagram and saved as 28,451 bytes, SHA256
+``fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339``.
+Its exact copy displayed stopped FP and BD in a new native 2020 x86 project,
+without a dirty marker or MemoryFull. The guarded native API then exported
+27,855-byte version 12.0 output, SHA256
+``a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c``.
+Export warnings were empty; source bytes and stopped modification flags remained
+unchanged. Both saved diagrams passed 4,000 admissible actual-source cases.
+The case domain respects the Epoch contract and reachable stored-state
+invariants; it is not a claim about arbitrary malformed internal states.
+
+The saved FrameTap owns one nonreentrant check/copy-attempt/commit operation.
+Both rejected cases preserve the entire previous state. Accepted attempts
+commit the same pre-copy U32 tick supplied to the observer, even when the
+private copy or queue reports an error. Original image/error outputs retain
+identity. During later main assembly these outputs must feed the downstream
+image consumers: a separate input-to-Rotate branch would permit mutation of
+the same IMAQ image while ImageToArray copies it. A helper source audit alone
+cannot establish this caller-level ordering.
+
+Exact native12 observer ``c6387a4d...`` and queue ``bef72a8c...`` dependencies
+also displayed stopped FP and BD in that new project. Exact native12 transport
+``4ab066c4...`` displayed FP and BD in a separate new project. These cross-version
+loads showed in-memory dirty markers; no Save or Run occurred and all source
+hashes remained unchanged. Their earlier native Save/export provenance is
+retained separately. These observations establish a working native editor/load
+path, not a cold-process test or native 2012 execution. Complete camera pipeline,
+queue lifecycle, XP load/runtime and hardware behavior remain unqualified.
 
 The trusted native one-wire fixture is especially informative. Its Save changed
 13 resource sections: DFDS 1,977->1,989 bytes, CNST 40->48, SUID 100->108;
@@ -195,6 +224,24 @@ Lifecycle and integration invariants
 * SyncTap observes only the existing ``C10-11 NI6602`` control. Configured values
   and control-read errors are software observations, not NI write acknowledgments
   or measured physical waveforms.
+
+The retained native12 camera transport is not an unattended-runtime-qualified
+worker. Its actual source has 100 ms data dequeue, zero-timeout stop dequeue,
+and four network operations with 1000 ms timeouts each. The configured waiting
+sum is 4100 ms per iteration; a stop poll that has already missed a token can
+permit a second iteration. Neither 4100 nor 8200 ms is a hard join bound because
+close and runtime overhead are not measured. Stop polling runs in parallel
+with the data/network branch and does not suppress that iteration's send.
+
+That same retained source converts a Variant outside its data-timeout case.
+Conversion error output 673, stop-queue obtain error 532 and stop-dequeue error
+745 are unwired while DefaultErrorHandling is enabled. A default/invalid Variant
+or queue failure may therefore invoke native error handling; no idle/failed-queue
+execution test excludes a modal dialog. Its ACK length is clamped to 1..16384;
+the In Range result drives an indicator rather than rejecting invalid framing.
+ACK JSON, session identity and acceptance are not validated by this worker.
+These source findings require native correction/qualification before unattended
+operation; packaging its exact historic native bytes does not waive that work.
 
 Qualification and preservation
 -----------------------------

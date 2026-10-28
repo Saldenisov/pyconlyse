@@ -18,6 +18,41 @@ except ImportError:  # Direct python tools/... invocation.
     from verify_labview_sync_native12_package import _inside, vi_header
 
 
+# These are existing, independently native-saved/exported artifacts. This is
+# not a generic exception for generated candidates or unreviewed dependencies.
+RETAINED_NATIVE12 = {
+    "SUP_Camera_Observe_U8_UNCOMPILED.vi": (
+        "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+        26533,
+        "8d27a36bf7d743f72687ca70d06f82175fce7680f3fdc34c92325546a5502775",
+        "native_labview_export",
+    ),
+    "observer_v3/SUP_Camera_Queue_Latest.vi": (
+        "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+        10059,
+        "6e94050694daad6af7451fa626ede0b1eea76a1531ce692f555a6d6125d114d2",
+        "native_labview_save",
+    ),
+    "SUP_Camera_Transport.vi": (
+        "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+        19484,
+        "4940f425caa91b48b094c8f17168941e74b1cd4cf406f6494aa14cffed2bfa62",
+        "native_labview_save",
+    ),
+}
+
+
+def _fresh_evidence(fresh, source):
+    return (
+        fresh.get("passed") is True
+        and fresh.get("FP") is True
+        and fresh.get("BD") is True
+        and fresh.get("stopped") is True
+        and fresh.get("sha256") == source
+        and bool(fresh.get("project"))
+    )
+
+
 def read_json(path):
     with open(path, encoding="utf-8") as stream:
         return json.load(stream)
@@ -25,6 +60,26 @@ def read_json(path):
 
 def qualify_helper(row, evidence):
     """Require pinned native Save, stopped fresh FP/BD and native12 export."""
+    if evidence.get("qualification_mode") == "retained_native12":
+        pin = RETAINED_NATIVE12.get(row["path"])
+        prior = evidence.get("existing_native12_artifact", {})
+        if not (
+            pin
+            and row.get("sha256") == pin[0]
+            and row.get("bytes") == pin[1]
+            and evidence.get("last_writer") == pin[3]
+            and prior.get("receipt_sha256") == pin[2]
+            and prior.get("artifact_sha256") == pin[0]
+            and prior.get("passed") is True
+            and prior.get("version") == "12.0"
+            and evidence.get("implemented") is True
+            and evidence.get("source_bytes_unchanged") is True
+            and _fresh_evidence(evidence.get("fresh_project_load", {}), pin[0])
+        ):
+            raise ValueError(
+                "Unreviewed retained native12 artifact or missing fresh evidence"
+            )
+        return True
     if evidence.get("last_writer") != "native_labview_export":
         raise ValueError("Current VI last writer must be native LabVIEW export")
     if evidence.get("implemented") is not True:
@@ -43,14 +98,7 @@ def qualify_helper(row, evidence):
         and save.get("bitness") == 32
     ):
         raise ValueError("Pinned stopped native x86 Save evidence required")
-    if not (
-        fresh.get("passed") is True
-        and fresh.get("FP") is True
-        and fresh.get("BD") is True
-        and fresh.get("stopped") is True
-        and fresh.get("sha256") == source
-        and fresh.get("project")
-    ):
+    if not _fresh_evidence(fresh, source):
         raise ValueError("Pinned stopped fresh-project FP/BD evidence required")
     if not (
         export.get("passed") is True
@@ -66,6 +114,13 @@ def qualify_helper(row, evidence):
 def verify_component(root):
     root = os.path.abspath(root)
     manifest = read_json(os.path.join(root, "package_manifest.json"))
+    if (
+        manifest.get("full_camera_pipeline_ready") is True
+        or manifest.get("native2012_runtime_proven") is True
+    ):
+        raise ValueError(
+            "Offline helper packet cannot claim runtime/pipeline readiness"
+        )
     records = {}
     for row in manifest["files"]:
         relative = row["path"]
@@ -98,11 +153,76 @@ def verify_component(root):
         evidence_raw = stream.read()
     if hashlib.sha256(evidence_raw).hexdigest() != manifest["qualification_sha256"]:
         raise ValueError("Qualification receipt pin changed")
-    evidence = json.loads(evidence_raw.decode("utf-8"))["helpers"]
+    qualification = json.loads(evidence_raw.decode("utf-8"))
+    if (
+        qualification.get("full_camera_pipeline_ready") is True
+        or qualification.get("native2012_runtime_proven") is True
+    ):
+        raise ValueError("Qualification receipt cannot promote unexecuted runtime")
+    evidence = qualification["helpers"]
     if set(evidence) != expected:
         raise ValueError("Every included helper needs its own qualification")
+    allowed_files = set(records) | {
+        "package_manifest.json",
+        "README.md",
+        ".gitattributes",
+        "NATIVE_XP_CAMERA_LIFECYCLE_WORKSHEET.rst",
+        manifest["qualification_receipt"],
+    }
+    for proof in manifest.get("proof_receipts", []):
+        path = _inside(root, os.path.join(root, *proof["path"].split("/")))
+        with open(path, "rb") as stream:
+            if hashlib.sha256(stream.read()).hexdigest() != proof["sha256"]:
+                raise ValueError("Declared proof receipt pin changed")
+        allowed_files.add(proof["path"])
     for name in expected:
         qualify_helper(records[name], evidence[name])
+        prior = evidence[name].get("existing_native12_artifact")
+        if prior:
+            allowed_files.add(prior["receipt"])
+            proof = _inside(root, os.path.join(root, *prior["receipt"].split("/")))
+            with open(proof, "rb") as stream:
+                if hashlib.sha256(stream.read()).hexdigest() != prior["receipt_sha256"]:
+                    raise ValueError("Retained native12 original receipt changed")
+        review = evidence[name].get("read_only_runtime_findings")
+        if review:
+            allowed_files.add(review["path"])
+            path = _inside(root, os.path.join(root, *review["path"].split("/")))
+            with open(path, "rb") as stream:
+                if hashlib.sha256(stream.read()).hexdigest() != review["sha256"]:
+                    raise ValueError("Retained artifact runtime finding changed")
+    frametap = "SUP_Camera_FrameTap.vi"
+    implemented = frametap in expected
+    if bool(manifest.get("FrameTap_implemented")) != implemented:
+        raise ValueError(
+            "FrameTap declaration does not match admitted helper inventory"
+        )
+    if implemented:
+        proof = evidence[frametap]["source_graph_audit"]
+        allowed_files.add(proof["path"])
+        path = _inside(root, os.path.join(root, *proof["path"].split("/")))
+        with open(path, "rb") as stream:
+            raw = stream.read()
+        if hashlib.sha256(raw).hexdigest() != proof["sha256"]:
+            raise ValueError("FrameTap exported-source audit changed")
+        graph = json.loads(raw.decode("utf-8"))
+        if not (
+            graph.get("source_sha256") == records[frametap]["sha256"]
+            and graph.get("actual_native_saved_source_cases") == 4000
+            and graph.get("private_dependency_closure_complete") is True
+            and graph.get("InlineIfPossible") == 0
+            and graph.get("ShouldInline") == 0
+            and graph.get("flags", {}).get("IsReentrant") == 0
+            and graph.get("native_insertion_constraint")
+        ):
+            raise ValueError("FrameTap gate/barrier/nonreentrancy audit missing")
+    for parent, unused, files in os.walk(root):
+        for name in files:
+            relative = os.path.relpath(os.path.join(parent, name), root).replace(
+                "\\", "/"
+            )
+            if relative not in allowed_files:
+                raise ValueError("Unexpected component file: " + relative)
     system = set(manifest.get("system_dependencies", []))
     project_results = []
     for project in manifest["projects"]:
@@ -145,10 +265,11 @@ def verify_component(root):
         status="PASS",
         helpers=sorted(expected),
         native_event_evidence_verified=True,
+        qualification_scope="Offline native artifacts; runtime unapproved",
         projects=project_results,
         system_dependencies=sorted(system),
         system_dependencies_installed_verified=False,
-        FrameTap_implemented=False,
+        FrameTap_implemented=implemented,
         full_camera_pipeline_ready=False,
         native2012_runtime_proven=False,
         executed=False,

@@ -1,0 +1,15 @@
+{
+  "source_sha256": "fbaa1aaa1563f786c52871fa0407273e080efc62da4b96ca4a5bbba587724339",
+  "native_application": "LabVIEW2020x86",
+  "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_frametap_fresh_project_01\\SUP_Native_FrameTap_Fresh_Proven_2020.lvproj",
+  "front_panel_window": 38016268,
+  "block_diagram_window": 17763996,
+  "FP_open": true,
+  "BD_open": true,
+  "Run": false,
+  "Save": false,
+  "MemoryFull_observed": false,
+  "first_open_in_new_project": true,
+  "cold_process_restart": false,
+  "Run_arrow_unbroken": true
+}

@@ -1,4 +1,5 @@
 """Portable proof-bundle refusals; never load LabVIEW, NI, or live telemetry."""
+
 import ast
 import hashlib
 import io
@@ -103,6 +104,39 @@ class ObserverProofBundleTests(unittest.TestCase):
         manifest["proof_sha256"] = hashlib.sha256(changed).hexdigest()
         with io.open(manifest_path, "w", encoding="utf-8") as stream:
             stream.write(json.dumps(manifest))
+        self.assertRaises(verifier.BundleError, verifier.verify_bundle, self.root)
+
+    def test_registered_subpacket_manifest_tamper_refuses(self):
+        path = os.path.join(self.root, "individual_helpers", "package_manifest.json")
+        with open(path, "ab") as stream:
+            stream.write(b" ")
+        self.assertRaises(verifier.BundleError, verifier.verify_bundle, self.root)
+
+    def test_registered_subpacket_rejects_unlisted_non_VI_files(self):
+        for relative in ("extra.exe", "extra.py", "camera/extra.lvlps"):
+            path = os.path.join(self.root, "individual_helpers", *relative.split("/"))
+            with open(path, "wb") as stream:
+                stream.write(b"unexpected test payload; never executed")
+            self.assertRaises(verifier.BundleError, verifier.verify_bundle, self.root)
+            os.remove(path)
+
+    def test_subpacket_registration_is_explicit_and_validates_nested_helpers(self):
+        path = os.path.join(self.root, "manifest.json")
+        with io.open(path, encoding="utf-8") as stream:
+            manifest = json.load(stream)
+        original = manifest["registered_subpackets"]
+        manifest["registered_subpackets"] = []
+        with io.open(path, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(manifest))
+        self.assertRaises(verifier.BundleError, verifier.verify_bundle, self.root)
+        manifest["registered_subpackets"] = original
+        with io.open(path, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(manifest))
+        os.remove(
+            os.path.join(
+                self.root, "individual_helpers", "camera", "SUP_Camera_FrameTap.vi"
+            )
+        )
         self.assertRaises(verifier.BundleError, verifier.verify_bundle, self.root)
 
     def test_verifier_keeps_python34_grammar(self):
