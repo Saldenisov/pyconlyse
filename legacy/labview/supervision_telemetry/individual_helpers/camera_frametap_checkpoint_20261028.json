@@ -1,0 +1,146 @@
+{
+  "receipt_schema": 1,
+  "date": "2026-10-28",
+  "scope": "READ_ONLY_NATIVE_AUTHORING_CHECKPOINT_NOT_IMPLEMENTED",
+  "artifact": {
+    "filename": "SUP_Camera_FrameTap.vi",
+    "bytes": 18623,
+    "sha256": "ccfa8f7f08402c8bd35b69df6df96ad855bdb0e882a70bba4cc9dcf4366ac5cf",
+    "version_major": 20,
+    "authored_and_saved_in_native_UI_reported_by_root": true,
+    "native_execution_performed": false,
+    "native2012_export_verified": false,
+    "runtime_qualified": false
+  },
+  "bounded_source_checks": {
+    "front_panel_terminals": 21,
+    "FP_connector_UID_mapping_unchanged": true,
+    "one_while_loop": true,
+    "one_outer_boolean_case": true,
+    "epoch_call_uid": 442,
+    "epoch_Read2_wire_terms": [
+      665,
+      519
+    ],
+    "epoch_RunStamp_wire_terms": [
+      616,
+      516
+    ],
+    "direct_image_identity_terms": [
+      241,
+      856
+    ],
+    "direct_original_error_identity_terms": [
+      142,
+      654,
+      443
+    ],
+    "new_BD_label_texts": [],
+    "new_nonlabel_BD_text_payloads": [
+      "\" True \""
+    ],
+    "new_nonlabel_text_role": "native Boolean Case selector label",
+    "standalone_free_labels": [],
+    "direct_call_targets": [
+      "SUP_Camera_Epoch.vi",
+      "SUP_Camera_Observe_U8_UNCOMPILED.vi"
+    ],
+    "added_device_acquisition_or_card_calls": false,
+    "observer_call_uid": 713,
+    "observer_connectors": 12,
+    "observer_connected_connectors": 0
+  },
+  "saved_flags": {
+    "RunOnOpen": 0,
+    "BadNode": 1,
+    "BadCompile": 0,
+    "IsReentrant": 0,
+    "HasNoBD": 0,
+    "PropTypesIssues": 1
+  },
+  "saved_execution2_flags": {
+    "SourceOnly": 0,
+    "InlineIfPossible": 0,
+    "DefaultErrorHandling": 1
+  },
+  "unfinished_work": [
+    "Epoch reply outputs are unconnected; old capture/channel/valid widget autowires remain.",
+    "Observer has no connected terminals; outer Case selector remains unwired.",
+    "1Hz/new-FrameCount eligibility, UTC ordering, copy-attempt budget, private error sinks, and state-preserving Case outputs are not implemented.",
+    "Existing Bundle still writes seed zero/False values to the right shift register."
+  ],
+  "parser_limits": [
+    "DFDS Variant-default data not decoded by this parser.",
+    "VICD MCLVRTPatches not decoded by this parser.",
+    "Checks use saved source links, endpoint lists, labels, and flags; they do not prove execution."
+  ],
+  "exact_dependency_closure": [
+    {
+      "filename": "SUP_Camera_Epoch.vi",
+      "sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01",
+      "bytes": 30736
+    },
+    {
+      "filename": "SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+      "bytes": 26533
+    },
+    {
+      "filename": "observer_v3/SUP_Camera_Queue_Latest.vi",
+      "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+      "bytes": 10059
+    }
+  ],
+  "original_existing_array_finding": {
+    "main_sha256": "ef7d5e4a633a756dd8f641374c22715f3e593ae0e57b6f4fd8c00415a09d2873",
+    "signal_source_terms_with_type_mapping": 3798,
+    "array_source_wires": 125,
+    "U8_array_source_wires": 0,
+    "direct_IMAQ_ImageToArray_call": false,
+    "camera_loop_uid": 5841,
+    "profiles_call_uid": 1159,
+    "U32_2D_profile_history_outputs": [
+      {
+        "connector": 6,
+        "source_term": 12124,
+        "wire": 22317,
+        "label": "Tableau OUT X"
+      },
+      {
+        "connector": 15,
+        "source_term": 12261,
+        "wire": 22488,
+        "label": "Tableau OUT Y"
+      }
+    ],
+    "original_profile_member": {
+      "filename": "1_SUP_PROFILS XY.vi",
+      "sha256": "1afeed32c671255fc42238f007cfa94d531598a1800f1cb05fd6e2744b4541c6",
+      "bytes": 51332,
+      "UCRF_section": 43,
+      "unchanged_original_member": true,
+      "U8_outputs_are_rank1_GetRowCol_only": [
+        {
+          "call_uid": 378,
+          "source_term": 381,
+          "wire": 581
+        },
+        {
+          "call_uid": 959,
+          "source_term": 966,
+          "wire": 2313
+        }
+      ]
+    },
+    "conclusion": "No existing full-frame U8 wire can replace the producer snapshot. A queued NI image reference remains mutable. Worker serialization is separable; the owned snapshot remains producer-side.",
+    "boundary": "Simple numeric source types are mapped; NI image typedefs remain opaque. Profile-history buffers are not treated as raw full-frame pixels."
+  },
+  "evidence_scope": {
+    "VI_binary_included": false,
+    "VI_bytes_written": false,
+    "VI_loaded_by_audit": false,
+    "hardware_calls_performed": false,
+    "live_pixel_data_included": false,
+    "main_VI_or_vendor_library_included": false
+  }
+}
