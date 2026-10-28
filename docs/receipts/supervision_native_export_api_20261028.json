@@ -1,0 +1,79 @@
+{
+  "RSRC_writer": false,
+  "Run": false,
+  "SaveInstrument": false,
+  "after": {
+    "bd_modifications": 0,
+    "execution": 1,
+    "fp_modifications": 0,
+    "path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_setup_cold_review\\SUP_Camera_SetupObserve.vi",
+    "vi_modifications": 0
+  },
+  "application": {
+    "directory": "C:\\Program Files (x86)\\National Instruments\\LabVIEW 2020",
+    "process_id": 18488,
+    "version": "20.0f1"
+  },
+  "before": {
+    "bd_modifications": 0,
+    "execution": 1,
+    "fp_modifications": 0,
+    "path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_setup_cold_review\\SUP_Camera_SetupObserve.vi",
+    "vi_modifications": 0
+  },
+  "bytes": 22419,
+  "destination": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_com_export_setup_20261028\\SUP_Camera_SetupObserve.vi",
+  "native_warnings": "",
+  "output_header": {
+    "RunOnOpen": false,
+    "encoded_version": "12008004",
+    "major": 12,
+    "source_diagram": true
+  },
+  "output_version_and_dependencies_verified": false,
+  "output_version_verified": true,
+  "requested_version": "12.0",
+  "sha256": "4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e",
+  "source": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_setup_cold_review\\SUP_Camera_SetupObserve.vi",
+  "source_header": {
+    "RunOnOpen": false,
+    "encoded_version": "20008000",
+    "major": 20,
+    "source_diagram": true
+  },
+  "source_sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
+  "source_unchanged": true,
+  "date": "2026-10-28",
+  "utility_commit": "da77733b",
+  "verification": {
+    "python34_unittests": 20,
+    "python312_unittests": 20,
+    "ruff": "PASS",
+    "native_API_export": "PASS",
+    "native2012_runtime_executed": false,
+    "hardware_accessed": false
+  },
+  "retired_local_writer_entrypoints": [
+    {
+      "path": ".tmp\\supervision_native_candidates\\individual_camera_helpers_20261028\\build_camera_helpers.py",
+      "sha256": "74714813ffd7ea82377dfa91484d52cd69df5f2a5016c7a93a17ac685b916fa4",
+      "disabled_entrypoint_verified": true,
+      "test_exit_code": 1,
+      "output_created": false,
+      "code_retained_for_forensics": true
+    },
+    {
+      "path": ".tmp\\supervision_native_candidates\\individual_camera_helpers_20261028\\repack_helpers.py",
+      "sha256": "20f4a2d600ef216f07f8897585948eaebc3da7557ad74e0252a386e2cbde7ec5",
+      "disabled_entrypoint_verified": true,
+      "test_exit_code": 1,
+      "output_created": false,
+      "code_retained_for_forensics": true
+    }
+  ],
+  "unresolved": [
+    "Exact single corrupt field causing prior Memory is full is not isolated.",
+    "FrameTap native gate implementation remains unfinished.",
+    "Complete SuperVision Telemetry integration and XP runtime qualification remain unfinished."
+  ]
+}
