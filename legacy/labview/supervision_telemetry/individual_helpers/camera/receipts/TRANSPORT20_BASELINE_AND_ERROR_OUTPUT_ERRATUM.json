@@ -1,0 +1,397 @@
+{
+  "schema": 1,
+  "scope": "READ_ONLY_NATIVE20_BASELINE_AND_ERROR_OUTPUT_ERRATUM",
+  "baseline": {
+    "frozen_filename": "SUP_Camera_Transport.vi",
+    "sha256": "8f48e7ae30ff3d32b986f86bd606a2803669c8511c602ff2855d36fff74f6ffa",
+    "bytes": 20288,
+    "major": 20,
+    "native_byte_copy_frozen": true,
+    "source_file_not_overwritten": true
+  },
+  "compared_canonical": {
+    "filename": "SUP_Camera_Transport.vi",
+    "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+    "bytes": 19484,
+    "major": 12,
+    "packet_unchanged": true
+  },
+  "source_comparison": {
+    "wire_endpoint_lists_equal": 58,
+    "primitive_opcodes_equal": 19,
+    "primitive_port_UID_mappings_equal": true,
+    "literal_byte_payloads_equal": 15,
+    "typed_heap_objects_compared": 176,
+    "ordinary_resolved_type_shape_differences": [],
+    "FP_control_connector_UID_map_equal": true,
+    "FP_controls": 7,
+    "all_FP_conNum_minus1": true,
+    "Boolean_case_range_map_equal": true,
+    "execution_flag_differences": {
+      "Execution": {},
+      "Execution2": {}
+    },
+    "DefaultErrorHandling_old": 1,
+    "DefaultErrorHandling_new": 1,
+    "addresses_queue_names_timeouts_and_ACK_limits_unchanged": true,
+    "source_functionality_unchanged": true
+  },
+  "error_output_scan": {
+    "total_typed_primitive_error_outputs": 13,
+    "unwired_output_count": 4,
+    "unwired_outputs": [
+      {
+        "node": 495,
+        "primitive": 9108,
+        "term": 532,
+        "DCO": 533,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 65,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(558, 711, 590, 743)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 664,
+        "primitive": 8003,
+        "term": 677,
+        "DCO": 678,
+        "parmIndex": 3,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(59, 744, 91, 776)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 397,
+        "primitive": 9113,
+        "term": 745,
+        "DCO": 747,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(183, 934, 215, 966)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 310,
+        "primitive": 1164,
+        "term": 316,
+        "DCO": 317,
+        "parmIndex": 0,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(53, 54, 85, 86)",
+        "term_bounds": "(24, 24, 32, 32)"
+      }
+    ],
+    "all_error_outputs": [
+      {
+        "node": 1046,
+        "primitive": 9109,
+        "term": 1070,
+        "DCO": 1071,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 1091,
+        "node_bounds": "(662, 400, 694, 432)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 495,
+        "primitive": 9108,
+        "term": 532,
+        "DCO": 533,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 65,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(558, 711, 590, 743)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 1342,
+        "primitive": 9109,
+        "term": 1363,
+        "DCO": 1364,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 1637,
+        "node_bounds": "(347, 634, 379, 666)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 1072,
+        "primitive": 9108,
+        "term": 1095,
+        "DCO": 1096,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 1336,
+        "node_bounds": "(582, -313, 614, -281)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 664,
+        "primitive": 8003,
+        "term": 677,
+        "DCO": 678,
+        "parmIndex": 3,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(59, 744, 91, 776)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 397,
+        "primitive": 9113,
+        "term": 745,
+        "DCO": 747,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(183, 934, 215, 966)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 459,
+        "primitive": 1716,
+        "term": 465,
+        "DCO": 466,
+        "parmIndex": 0,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 676,
+        "node_bounds": "(86, 412, 118, 444)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 310,
+        "primitive": 1164,
+        "term": 316,
+        "DCO": 317,
+        "parmIndex": 0,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": null,
+        "node_bounds": "(53, 54, 85, 86)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 221,
+        "primitive": 1716,
+        "term": 227,
+        "DCO": 228,
+        "parmIndex": 0,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 540,
+        "node_bounds": "(101, 206, 133, 238)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 105,
+        "primitive": 1713,
+        "term": 111,
+        "DCO": 112,
+        "parmIndex": 0,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 875,
+        "node_bounds": "(86, 455, 118, 487)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 75,
+        "primitive": 1714,
+        "term": 81,
+        "DCO": 82,
+        "parmIndex": 0,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 415,
+        "node_bounds": "(101, 154, 133, 186)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 43,
+        "primitive": 1715,
+        "term": 51,
+        "DCO": 52,
+        "parmIndex": 0,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 210,
+        "node_bounds": "(101, 103, 133, 135)",
+        "term_bounds": "(24, 24, 32, 32)"
+      },
+      {
+        "node": 62,
+        "primitive": 9113,
+        "term": 1185,
+        "DCO": 1186,
+        "parmIndex": 11,
+        "type_label": "error out",
+        "type_shape": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "objFlags": 1,
+        "output_bit_0_set": true,
+        "wire": 1282,
+        "node_bounds": "(38, 200, 70, 232)",
+        "term_bounds": "(24, 24, 32, 32)"
+      }
+    ],
+    "incorrect_prior_candidate_673": {
+      "node": 664,
+      "term": 673,
+      "DCO": 674,
+      "type_label": "error in",
+      "type_shape": [
+        "Boolean",
+        "NumInt32",
+        "String"
+      ],
+      "objFlags": 65536,
+      "output_bit_0_set": false,
+      "direction": "input",
+      "term_bounds": "(24, 0, 32, 8)"
+    }
+  },
+  "erratum": {
+    "prior_finding_sha256": "9df0e70eb433ca92b1895ea8ab71c9db880fc9c1c5a4e72ca66a6719fb194988",
+    "prior_finding_retained_unchanged": true,
+    "prior_worksheet_sha256": "f8d6d18ddd0fb39997e4aac82615be5b49ca5b48154e4eb60b5ba2f5d7bbdde6",
+    "corrections": [
+      "VariantToData664 error OUT is677, not673. Term673 is error IN.",
+      "FlattenToString310 also has an unwired error OUT316.",
+      "Correct complete list of four unwired primitive error outputs is532,745,677,316."
+    ],
+    "unaffected_findings": [
+      "100ms data Dequeue,0ms stop poll, four1000ms TCP timeouts.",
+      "Parallel stop polling, ACK length clamp without JSON/session validation, no hard join bound.",
+      "Owner-ref lifecycle and inline mutable-image barrier requirements."
+    ]
+  },
+  "qualification": {
+    "Run_or_Call_performed": false,
+    "UI_or_hardware_actions": false,
+    "VI_serialized_or_modified": false,
+    "only_root_authorized_native_byte_copy_created": true,
+    "runtime_qualified": false,
+    "packet_or_guard_edited": false,
+    "parser_limit": "Compiled VICD patches are not decoded; source topology/literals/types/flags are compared."
+  },
+  "XML_sha256": {
+    "SUP_Camera_Transport.xml": "3acc08d6ec14929ab8709fa35a08f9090649566109fbe3ed0bee314b995a9d11",
+    "SUP_Camera_Transport_BDHb.xml": "bc992df892020242ff95cb8b16bab062e30c094fa482621af9e5bc70551976ba",
+    "SUP_Camera_Transport_FPHb.xml": "403e778b4096aa4cccf08ffb4c627e0cc7f2b666c4a7fa55adc12a865992eb56"
+  }
+}

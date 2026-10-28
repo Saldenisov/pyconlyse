@@ -5,9 +5,12 @@ Scope
 -----
 
 This worksheet describes the exact stopped ``SUP_Camera_Transport.vi`` artifact
-SHA256 ``4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03``
-(19,484 bytes, LabVIEW12). Native Open/Save was previously qualified. Queue/TCP
-execution and shutdown remain untested. This review changes no VI or packet guard.
+SHA256 ``d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4``
+(14,132 bytes, LabVIEW12). It follows native20 Save/fresh-project FP+BD and native
+export12 of source3035. Four native Unbundle sinks consume the previously unwired
+error clusters; all 13 primitive error outputs are now wired. The 58 original
+nets and all original operations, literals, connector mappings and worker logic
+are preserved. Queue/TCP execution and shutdown remain untested.
 
 Configured waits and actual stop behavior
 ----------------------------------------
@@ -81,8 +84,11 @@ queue. A deadline expiry cannot cancel a blocking static subVI call; an enclosin
 parallel frame still waits for that call. On an unconfirmed join, report shutdown
 pending, retain deterministic ownership, and do not start a new run on these names.
 
-``DefaultErrorHandling=1`` and three error outputs are unwired: stop Obtain532,
-stop Dequeue745, and VariantToData673. VariantToData664 is outside the guarded
+Historical4ab had four unwired outputs: stop Obtain532, stop Dequeue745,
+VariantToData677, and FlattenToString316. Current d807 wires each to a same-diagram
+Unbundle and discards its three scalar outputs. All 13 error clusters are consumed;
+``DefaultErrorHandling=1`` remains. VariantToData673 is the error input.
+VariantToData664 is outside the guarded
 network Case, so there is no source-level idle-conversion guard. Automatic error
 handling or suspension has not been tested. This requires explicit native runtime
 resolution before unattended operation can be claimed.
@@ -95,6 +101,13 @@ repeated immediate errors without a source backoff. `NI Dequeue documentation
 defines invalid-reference errors. Startup flushing, retained owner refs, prior-worker
 completion, and final release ordering are required caller responsibilities.
 
-Machine-readable evidence: ``TRANSPORT_4AB066_READONLY_FINDING.json``. Its source
-IDs and hash describe this retained artifact only; the receipt grants no runtime
-approval and does not change FrameTap admission.
+Current source evidence: ``receipts/TRANSPORT_NATIVE12_FOUR_SINKS_SOURCE_AUDIT.json``
+and ``receipts/TRANSPORT_NATIVE20_FOUR_SINKS_SOURCE_AUDIT.json``. These pin native
+Save/fresh-project/export lineage and the four sink additions; they prove no Run.
+Machine-readable historical evidence: ``TRANSPORT_4AB066_READONLY_FINDING.json``.
+Its original error-output mapping and count are superseded by
+``receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json`` and the exact note
+``receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst``. The earlier finding remains
+unchanged; this worksheet incorporates the corrected mapping. The correction
+describes the prior artifact, grants no runtime approval and does not change
+FrameTap admission.

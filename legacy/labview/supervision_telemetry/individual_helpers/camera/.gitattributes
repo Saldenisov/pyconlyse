@@ -1,2 +1,4 @@
 # Receipt/manifest hashes refer to exact bytes, including line endings.
 *.json -text whitespace=cr-at-eol
+# This explanatory note is copied byte-for-byte and pinned with its JSON audit.
+receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst -text whitespace=cr-at-eol

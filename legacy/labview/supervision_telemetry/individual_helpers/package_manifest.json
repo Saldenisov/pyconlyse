@@ -60,7 +60,7 @@
   "additional_components": [
     {
       "path": "camera",
-      "manifest_sha256": "1f26979e10091bf2dd28dcca4153c4cda4d7de727457628b0555db28140ff515"
+      "manifest_sha256": "3a375c6f260900af0e5ff21af89f33004ed1f090e1065d241f07f1b01448ed5c"
     }
   ],
   "helper_file_set_complete": true,

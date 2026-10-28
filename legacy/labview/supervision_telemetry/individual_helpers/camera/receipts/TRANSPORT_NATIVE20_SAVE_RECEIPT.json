@@ -1,0 +1,21 @@
+{
+  "path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_error_sinks_01\\SUP_Camera_Transport.vi",
+  "bytes": 20516,
+  "sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+  "saved_native_application": "LabVIEW2020x86",
+  "native_Save_observed": true,
+  "CtrlU_observed": true,
+  "FP_window": 18288158,
+  "BD_window": 7280754,
+  "Run": false,
+  "MemoryFull_observed": false,
+  "source_editor_clean_title_after_Save": true,
+  "previous_native20_sha256": "8f48e7ae30ff3d32b986f86bd606a2803669c8511c602ff2855d36fff74f6ffa",
+  "intended_added_sinks_for_outputs": [
+    532,
+    745,
+    677,
+    316
+  ],
+  "qualification": "PENDING_READONLY_SOURCE_AUDIT"
+}

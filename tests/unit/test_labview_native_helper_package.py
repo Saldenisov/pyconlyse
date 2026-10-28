@@ -49,6 +49,17 @@ class NativeHelperPackageTests(unittest.TestCase):
     def save_manifest(self):
         self.store("package_manifest.json", self.manifest)
 
+    def save_evidence(self):
+        name = self.manifest["qualification_receipt"]
+        self.store(name, self.evidence)
+        with open(os.path.join(self.root, *name.split("/")), "rb") as stream:
+            pin = hashlib.sha256(stream.read()).hexdigest()
+        self.manifest["qualification_sha256"] = pin
+        for proof in self.manifest["proof_receipts"]:
+            if proof["path"] == name:
+                proof["sha256"] = pin
+        self.save_manifest()
+
     def edit_project(self, transform):
         project = self.manifest["projects"][1]["path"]
         path = os.path.join(self.root, project)
@@ -68,6 +79,69 @@ class NativeHelperPackageTests(unittest.TestCase):
         self.assertFalse(result["native2012_runtime_proven"])
         self.assertFalse(result["full_camera_pipeline_ready"])
         self.assertTrue(result["FrameTap_implemented"])
+        self.assertTrue(result["transport_error_output_erratum_verified"])
+        self.assertTrue(result["transport_four_error_sinks_source_verified"])
+
+    def test_transport_erratum_corrects_four_outputs_and_keeps_input_direction(self):
+        review = self.evidence["helpers"]["SUP_Camera_Transport.vi"][
+            "historical_runtime_findings"
+        ]
+        self.assertEqual(
+            review["unwired_private_error_terminals"], [532, 745, 677, 316]
+        )
+        correction = self.read(review["mapping_erratum"]["path"])
+        scan = correction["error_output_scan"]
+        self.assertEqual(scan["total_typed_primitive_error_outputs"], 13)
+        self.assertEqual(scan["unwired_output_count"], 4)
+        self.assertEqual(scan["incorrect_prior_candidate_673"]["direction"], "input")
+        self.assertFalse(correction["qualification"]["runtime_qualified"])
+
+    def test_stale_transport_summary_cannot_repin_qualification(self):
+        review = self.evidence["helpers"]["SUP_Camera_Transport.vi"][
+            "historical_runtime_findings"
+        ]
+        for terminals in ([532, 745, 673], [532, 745, 677]):
+            review["unwired_private_error_terminals"] = terminals
+            self.save_evidence()
+            with self.assertRaises(ValueError):
+                verify_component(self.root)
+        review["unwired_private_error_terminals"] = [532, 745, 677, 316]
+        for field, wrong in (
+            ("unwired_output_count", 3),
+            ("incorrect_prior_terminal_673_direction", "output"),
+        ):
+            original = review[field]
+            review[field] = wrong
+            self.save_evidence()
+            with self.assertRaises(ValueError):
+                verify_component(self.root)
+            review[field] = original
+
+    def test_transport_erratum_documents_must_be_declared_and_exact(self):
+        paths = (
+            "receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json",
+            "receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst",
+        )
+        original = copy.deepcopy(self.manifest["proof_receipts"])
+        for path in paths:
+            self.manifest["proof_receipts"] = [
+                row for row in original if row["path"] != path
+            ]
+            self.save_manifest()
+            with self.assertRaises(ValueError):
+                verify_component(self.root)
+        self.manifest["proof_receipts"] = original
+        path = os.path.join(self.root, *paths[1].split("/"))
+        with open(path, "ab") as stream:
+            stream.write(b" ")
+        with open(path, "rb") as stream:
+            pin = hashlib.sha256(stream.read()).hexdigest()
+        for row in original:
+            if row["path"] == paths[1]:
+                row["sha256"] = pin
+        self.save_manifest()
+        with self.assertRaises(ValueError):
+            verify_component(self.root)
 
     def test_all_three_native_phases_are_required_even_with_models(self):
         for phase in ("native_save", "fresh_project_load", "native_export"):
@@ -155,11 +229,10 @@ class NativeHelperPackageTests(unittest.TestCase):
                 verify_component(self.root)
             os.remove(path)
 
-    def test_only_three_exact_retained_native12_dependencies_are_admitted(self):
+    def test_only_two_exact_retained_native12_dependencies_are_admitted(self):
         names = (
             "SUP_Camera_Observe_U8_UNCOMPILED.vi",
             "observer_v3/SUP_Camera_Queue_Latest.vi",
-            "SUP_Camera_Transport.vi",
         )
         for name in names:
             row = next(r for r in self.manifest["files"] if r["path"] == name)
@@ -182,6 +255,52 @@ class NativeHelperPackageTests(unittest.TestCase):
                     changed["fresh_project_load"]["sha256"] = "0" * 64
                 with self.assertRaises(ValueError):
                     qualify_helper(changed_row, changed)
+
+    def test_old_transport_retained_receipts_cannot_admit_replaced_payload(self):
+        transport = self.evidence["helpers"]["SUP_Camera_Transport.vi"]
+        prior = transport["history"]
+        with self.assertRaises(ValueError):
+            qualify_helper(prior["replaced_artifact"], prior["retained_qualification"])
+        row = next(
+            row
+            for row in self.manifest["files"]
+            if row["path"] == "SUP_Camera_Transport.vi"
+        )
+        self.assertTrue(qualify_helper(row, transport))
+        for phase in ("native_save", "fresh_project_load", "native_export"):
+            changed = copy.deepcopy(transport)
+            changed[phase]["passed"] = False
+            with self.assertRaises(ValueError):
+                qualify_helper(row, changed)
+
+    def test_current_transport_requires_all_thirteen_wired_and_exact_native_sinks(self):
+        transport = self.evidence["helpers"]["SUP_Camera_Transport.vi"]
+        reference = transport["source_graph_audit"]
+        original = self.read(reference["path"])
+        for change in ("unwired", "wrong_sink", "changed_old_net"):
+            audit = copy.deepcopy(original)
+            graph = audit["source_graph"]
+            if change == "unwired":
+                graph["unwired_error_output_count"] = 1
+                graph["typed_error_outputs"][0]["wire_ids"] = []
+            elif change == "wrong_sink":
+                graph["only_four_extra_nets_relative_to_original"][0]["sink_input"] = (
+                    999
+                )
+            else:
+                graph["all_58_original4ab_8f48_nets_exact"] = False
+            self.store(reference["path"], audit)
+            with open(
+                os.path.join(self.root, *reference["path"].split("/")), "rb"
+            ) as f:
+                pin = hashlib.sha256(f.read()).hexdigest()
+            reference["sha256"] = pin
+            for proof in self.manifest["proof_receipts"]:
+                if proof["path"] == reference["path"]:
+                    proof["sha256"] = pin
+            self.save_evidence()
+            with self.assertRaises(ValueError):
+                verify_component(self.root)
 
     def test_retained_original_receipt_tamper_refuses(self):
         queue = self.evidence["helpers"]["observer_v3/SUP_Camera_Queue_Latest.vi"]

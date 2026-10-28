@@ -13,13 +13,13 @@ Native main insertion, runtime, shutdown and hardware acceptance remain pending.
 | `SUP_Camera_FrameTap.vi` | 27855 | `a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c` |
 | `SUP_Camera_Observe_U8_UNCOMPILED.vi` | 26533 | `c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9` |
 | `observer_v3/SUP_Camera_Queue_Latest.vi` | 10059 | `bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7` |
-| `SUP_Camera_Transport.vi` | 19484 | `4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03` |
+| `SUP_Camera_Transport.vi` | 14132 | `d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4` |
 
-The five newly exported helpers have native LabVIEW 2020 x86 Save and stopped
+The six newly exported helpers have native LabVIEW 2020 x86 Save and stopped
 fresh-project FP/BD evidence. The checks used the existing process; Epoch was already loaded as a
 callee before its FP/BD were shown. No process restart or cold-process test is
 claimed. Their payloads were exported by native Save for Previous Version 12.0.
-Setup and FrameTap used the guarded native COM exporter.
+Setup, FrameTap and Transport used the guarded native COM exporter.
 
 The Epoch retains earlier generated-source history. The admitted source and
 payload bytes were last written by native LabVIEW Save/export. That history is
@@ -27,11 +27,12 @@ recorded rather than described as wholly native construction. A generated-only
 candidate cannot pass the release guard, even if graph/model tests pass.
 
 The observer retains its original native20 Save-to-native12 export proof. Queue
-and Transport retain their exact prior native LabVIEW12 Open/Save receipts.
+retains its exact prior native LabVIEW12 Open/Save receipt.
 Current fresh-project FP/BD evidence binds the actual retained native12 hashes,
 not a fictitious native20 source or new export. Those cross-version opens showed
 dirty markers in memory; no Save/Run occurred and disk bytes stayed unchanged.
-The guard accepts only these three exact retained names/hashes/original receipts.
+The guard accepts only these two exact retained names/hashes/original receipts.
+Current Transport follows the full native20 Save/fresh20/native12 export path.
 
 `SUP_Camera_Helpers_2012.lvproj` lists all eight helpers. The earlier four-helper
 `SUP_Camera_Lifecycle_2012.lvproj` adds Setup to the byte-identical native-exported
@@ -69,19 +70,32 @@ branch can mutate the same reference before the snapshot and is not acceptable.
 The original edge is Grab15740 output15749 -> Rotate14726 input14771, wire19409.
 The complete main has not been assembled or run by this packet work.
 
-Transport is retained as an inspected native artifact, not approved runnable
-behavior. Its 12 connector slots are Void: control is through named Variant
-data and Boolean stop queues, capacity1, TCP port8768 and a four-byte length
-prefix. Automatic error handling is enabled; stop Obtain532, stop Dequeue745
-and VariantToData673 error outputs are unwired. ACK length is clamped to
+Current Transport is the native12 export of native20 source3035 after four native
+Unbundle error sinks were added. All 13 primitive error outputs are wired:
+the four additions consume stop Obtain532, stop Dequeue745, VariantToData677
+and FlattenToString316. The Unbundle scalar outputs are discarded; no recovery
+or stop policy was added. All 58 original nets, 19 original primitive operations,
+15 literal payloads, seven FP controls and their unassigned connector mappings
+are preserved. `receipts/TRANSPORT_NATIVE12_FOUR_SINKS_SOURCE_AUDIT.json` pins the
+actual exported source; its native20 audit and three native event receipts are
+also portable. No Run or LabVIEW2012 runtime qualification is claimed.
+
+The 12 connector slots remain Void: control is through named Variant data and
+Boolean stop queues, capacity1, TCP port8768 and a four-byte length prefix.
+Automatic error handling remains enabled. ACK length is clamped to
 1..16384; its InRange result is only an indicator, not a reject branch. These
 are explicit runtime hazards for the next native review. TCP/ACK behavior,
 modal-free errors, stop-before-join, cleanup and bounded shutdown have not been
 executed or qualified. Configured waits sum to 4100 ms per iteration
 (100+4*1000), excluding Close, management and scheduling; a missed stop poll can
 span two iterations. That is not a wall-clock join deadline. The portable
-`receipts/TRANSPORT_4AB066_READONLY_FINDING.json` records exact nodes, timeouts
-and limits. Begin/End do not fix or own worker lifecycle. Producer
+`receipts/TRANSPORT_4AB066_READONLY_FINDING.json` remains byte-for-byte historical
+evidence for nodes, timeouts and limits. Its error-output mapping and count are
+superseded by `receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json`
+and the exact explanatory note `receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst`.
+The correction describes historical4ab and baseline8f48, whose four unwired
+outputs were corrected in current d807. It does not grant runtime qualification.
+Begin/End do not fix or own worker lifecycle. Producer
 exit must signal stop before the parallel worker join, then release queue refs.
 The separate `NATIVE_XP_CAMERA_LIFECYCLE_WORKSHEET.rst` records the proposed
 native integration ordering and its unresolved limits; it is not execution proof.

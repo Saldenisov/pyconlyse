@@ -33,13 +33,132 @@ RETAINED_NATIVE12 = {
         "6e94050694daad6af7451fa626ede0b1eea76a1531ce692f555a6d6125d114d2",
         "native_labview_save",
     ),
-    "SUP_Camera_Transport.vi": (
-        "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
-        19484,
-        "4940f425caa91b48b094c8f17168941e74b1cd4cf406f6494aa14cffed2bfa62",
-        "native_labview_save",
+}
+
+HISTORICAL_TRANSPORT_SHA256 = (
+    "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03"
+)
+
+TRANSPORT_ERRATUM_FILES = {
+    "receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json": (
+        "4f6990f803d3222c77d7bb9261d310649eb73c9cee1f8448e57199a8ae8b4420"
+    ),
+    "receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst": (
+        "aa3343a467a603860795099acbf386438ef9980bbe5f346477142226da805fc8"
     ),
 }
+
+
+def _verify_transport_erratum(root, review, proof_pins):
+    correction = review.get("mapping_erratum", {})
+    path = "receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json"
+    note = "receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst"
+    if not (
+        correction.get("path") == path
+        and correction.get("sha256") == TRANSPORT_ERRATUM_FILES[path]
+        and correction.get("note_path") == note
+        and correction.get("note_sha256") == TRANSPORT_ERRATUM_FILES[note]
+        and correction.get("prior_mapping_and_count_superseded") is True
+        and review.get("unwired_private_error_terminals") == [532, 745, 677, 316]
+        and review.get("unwired_output_count") == 4
+        and review.get("incorrect_prior_terminal_673_direction") == "input"
+        and all(proof_pins.get(p) == pin for p, pin in TRANSPORT_ERRATUM_FILES.items())
+    ):
+        raise ValueError("Pinned transport error-output erratum required")
+    erratum = read_json(os.path.join(root, *path.split("/")))
+    scan = erratum.get("error_output_scan", {})
+    wrong_input = scan.get("incorrect_prior_candidate_673", {})
+    if not (
+        erratum.get("compared_canonical", {}).get("sha256")
+        == HISTORICAL_TRANSPORT_SHA256
+        and erratum.get("erratum", {}).get("prior_finding_sha256")
+        == review.get("sha256")
+        and scan.get("total_typed_primitive_error_outputs") == 13
+        and scan.get("unwired_output_count") == 4
+        and set(row.get("term") for row in scan.get("unwired_outputs", []))
+        == {532, 745, 677, 316}
+        and wrong_input.get("term") == 673
+        and wrong_input.get("direction") == "input"
+        and erratum.get("qualification", {}).get("runtime_qualified") is False
+    ):
+        raise ValueError("Transport erratum direction/count/source mismatch")
+
+
+def _declared_json(root, reference, proof_pins):
+    if not reference.get("path") or (
+        proof_pins.get(reference.get("path")) != reference.get("sha256")
+    ):
+        raise ValueError("Native source/event proof must be declared and pinned")
+    return read_json(os.path.join(root, *reference["path"].split("/")))
+
+
+def _verify_transport_source(root, row, evidence, proof_pins):
+    history = evidence.get("historical_runtime_findings", {})
+    if not (
+        history.get("historical_only") is True
+        and history.get("artifact_sha256") == HISTORICAL_TRANSPORT_SHA256
+    ):
+        raise ValueError("Old transport findings must be explicitly historical")
+    _verify_transport_erratum(root, history, proof_pins)
+    source = _declared_json(root, evidence["native20_source_audit"], proof_pins)
+    exported = _declared_json(root, evidence["source_graph_audit"], proof_pins)
+    graph = exported.get("source_graph", {})
+    expected_sinks = {(532, 783), (745, 729), (677, 700), (316, 802)}
+    sinks = graph.get("only_four_extra_nets_relative_to_original", [])
+    error_outputs = graph.get("typed_error_outputs", [])
+    if not (
+        exported.get("artifact", {}).get("sha256") == row["sha256"]
+        and exported.get("native20_source", {}).get("sha256")
+        == evidence["native20_source_sha256"]
+        and source.get("artifact", {}).get("sha256")
+        == evidence["native20_source_sha256"]
+        and exported.get("native20_source_audit_sha256")
+        == evidence["native20_source_audit"]["sha256"]
+        and source.get("private_error_outputs", {}).get("wired_outputs") == 13
+        and source.get("private_error_outputs", {}).get("unwired_outputs") == 0
+        and graph.get("all_62_source3035_nets_exact") is True
+        and graph.get("all_58_original4ab_8f48_nets_exact") is True
+        and graph.get("all_19_old_primitive_opcodes_and_port_maps_preserved") is True
+        and graph.get("all_15_literal_payloads_preserved") is True
+        and graph.get("FP_and_ABI_mapping_unchanged") is True
+        and graph.get("all_13_primitive_error_outputs_consumed") is True
+        and graph.get("typed_error_output_count") == 13
+        and graph.get("unwired_error_output_count") == 0
+        and len(error_outputs) == 13
+        and all(output.get("wire_ids") for output in error_outputs)
+        and len(sinks) == 4
+        and {(s.get("source_error_output"), s.get("sink_input")) for s in sinks}
+        == expected_sinks
+        and all(
+            s.get("same_diagram") is True
+            and s.get("scalar_outputs_unwired") is True
+            and s.get("type_shape") == ["Boolean", "NumInt32", "String"]
+            for s in sinks
+        )
+        and graph.get("custom_subVI_dependencies") == []
+        and exported.get("qualification", {}).get("full_pipeline_runtime_qualified")
+        is False
+    ):
+        raise ValueError("Current transport native source/sink audit required")
+    save = _declared_json(root, evidence["native_save"]["receipt"], proof_pins)
+    fresh = _declared_json(root, evidence["fresh_project_load"]["receipt"], proof_pins)
+    export = _declared_json(root, evidence["native_export"]["receipt"], proof_pins)
+    if not (
+        save.get("sha256") == evidence["native20_source_sha256"]
+        and save.get("native_Save_observed") is True
+        and save.get("Run") is False
+        and fresh.get("sha256") == evidence["native20_source_sha256"]
+        and fresh.get("FP_open") is True
+        and fresh.get("BD_open") is True
+        and fresh.get("stopped") is True
+        and fresh.get("Run") is False
+        and export.get("source_sha256") == evidence["native20_source_sha256"]
+        and export.get("sha256") == row["sha256"]
+        and export.get("source_unchanged") is True
+        and export.get("native_warnings") == ""
+        and export.get("Run") is False
+    ):
+        raise ValueError("Current transport native event receipt mismatch")
 
 
 def _fresh_evidence(fresh, source):
@@ -169,12 +288,14 @@ def verify_component(root):
         "NATIVE_XP_CAMERA_LIFECYCLE_WORKSHEET.rst",
         manifest["qualification_receipt"],
     }
+    proof_pins = {}
     for proof in manifest.get("proof_receipts", []):
         path = _inside(root, os.path.join(root, *proof["path"].split("/")))
         with open(path, "rb") as stream:
             if hashlib.sha256(stream.read()).hexdigest() != proof["sha256"]:
                 raise ValueError("Declared proof receipt pin changed")
         allowed_files.add(proof["path"])
+        proof_pins[proof["path"]] = proof["sha256"]
     for name in expected:
         qualify_helper(records[name], evidence[name])
         prior = evidence[name].get("existing_native12_artifact")
@@ -184,13 +305,18 @@ def verify_component(root):
             with open(proof, "rb") as stream:
                 if hashlib.sha256(stream.read()).hexdigest() != prior["receipt_sha256"]:
                     raise ValueError("Retained native12 original receipt changed")
-        review = evidence[name].get("read_only_runtime_findings")
+        review = evidence[name].get("historical_runtime_findings")
         if review:
             allowed_files.add(review["path"])
             path = _inside(root, os.path.join(root, *review["path"].split("/")))
             with open(path, "rb") as stream:
                 if hashlib.sha256(stream.read()).hexdigest() != review["sha256"]:
                     raise ValueError("Retained artifact runtime finding changed")
+    transport = "SUP_Camera_Transport.vi"
+    if transport in expected:
+        _verify_transport_source(
+            root, records[transport], evidence[transport], proof_pins
+        )
     frametap = "SUP_Camera_FrameTap.vi"
     implemented = frametap in expected
     if bool(manifest.get("FrameTap_implemented")) != implemented:
@@ -272,6 +398,8 @@ def verify_component(root):
         FrameTap_implemented=implemented,
         full_camera_pipeline_ready=False,
         native2012_runtime_proven=False,
+        transport_error_output_erratum_verified=transport in expected,
+        transport_four_error_sinks_source_verified=transport in expected,
         executed=False,
     )
 

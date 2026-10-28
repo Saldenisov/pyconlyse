@@ -58,9 +58,9 @@
     },
     {
       "path": "SUP_Camera_Transport.vi",
-      "bytes": 19484,
-      "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
-      "retained_native12_sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03"
+      "bytes": 14132,
+      "sha256": "d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4",
+      "native20_source_sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442"
     },
     {
       "path": "SUP_Camera_Helpers_2012.lvproj",
@@ -70,7 +70,7 @@
     }
   ],
   "qualification_receipt": "receipts/NATIVE_LIFECYCLE_QUALIFICATION.json",
-  "qualification_sha256": "b50b4aa287308d5a837b0dc1b30acd0360d642860c462fea4abcd4a02d08d6eb",
+  "qualification_sha256": "70eb63f6a15a7a8e5973a88cb0af03ded80c2db6c072885e8d8734933802c7fe",
   "projects": [
     {
       "path": "SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
@@ -200,15 +200,43 @@
     },
     {
       "path": "receipts/NATIVE_LIFECYCLE_QUALIFICATION.json",
-      "sha256": "b50b4aa287308d5a837b0dc1b30acd0360d642860c462fea4abcd4a02d08d6eb"
+      "sha256": "70eb63f6a15a7a8e5973a88cb0af03ded80c2db6c072885e8d8734933802c7fe"
+    },
+    {
+      "path": "receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json",
+      "sha256": "4f6990f803d3222c77d7bb9261d310649eb73c9cee1f8448e57199a8ae8b4420"
     },
     {
       "path": "receipts/TRANSPORT_4AB066_READONLY_FINDING.json",
       "sha256": "9df0e70eb433ca92b1895ea8ab71c9db880fc9c1c5a4e72ca66a6719fb194988"
     },
     {
+      "path": "receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst",
+      "sha256": "aa3343a467a603860795099acbf386438ef9980bbe5f346477142226da805fc8"
+    },
+    {
+      "path": "receipts/TRANSPORT_FOUR_SINKS_FRESH_OPEN_RECEIPT.json",
+      "sha256": "9ad2301ae5ee7aa174f6a578c01d3ff0311305f9e6735ada17fd81d0636d94f5"
+    },
+    {
+      "path": "receipts/TRANSPORT_FOUR_SINKS_NATIVE_EXPORT_RECEIPT.json",
+      "sha256": "79581bb94abd517fc4cb7ce9be1af33934762e622a849c99898923401b9d7def"
+    },
+    {
       "path": "receipts/TRANSPORT_FRESH_OPEN_RECEIPT.json",
       "sha256": "464ed4633c78aaee276bb98b88fcb44464792dd70368ab25fa38e10a88985bfc"
+    },
+    {
+      "path": "receipts/TRANSPORT_NATIVE12_FOUR_SINKS_SOURCE_AUDIT.json",
+      "sha256": "3da17302d680b7a41d4b7450aed075712110450d89ad30fa608c58fa7ba80eeb"
+    },
+    {
+      "path": "receipts/TRANSPORT_NATIVE20_FOUR_SINKS_SOURCE_AUDIT.json",
+      "sha256": "b6915041b712cd5e2fadaac80d410e55c3bfa250a225f7c181ff5e0606c2fcb9"
+    },
+    {
+      "path": "receipts/TRANSPORT_NATIVE20_SAVE_RECEIPT.json",
+      "sha256": "c33337b47b90c6841a94ed8b8393ef5ce85e30f03f5c4aedf6f828343f35fb96"
     }
   ]
 }

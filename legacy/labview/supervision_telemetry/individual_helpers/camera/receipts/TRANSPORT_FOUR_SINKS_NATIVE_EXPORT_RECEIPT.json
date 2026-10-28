@@ -1,0 +1,46 @@
+{
+  "source": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_02\\SUP_Camera_Transport.vi",
+  "source_sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+  "destination": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\export2012_transport_four_error_sinks_native\\SUP_Camera_Transport.vi",
+  "bytes": 14132,
+  "sha256": "d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4",
+  "requested_version": "12.0",
+  "native_warnings": "",
+  "application": {
+    "directory": "C:\\Program Files (x86)\\National Instruments\\LabVIEW 2020",
+    "version": "20.0f1",
+    "process_id": 18488
+  },
+  "before": {
+    "path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_02\\SUP_Camera_Transport.vi",
+    "execution": 1,
+    "vi_modifications": 0,
+    "fp_modifications": 0,
+    "bd_modifications": 0
+  },
+  "after": {
+    "path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_02\\SUP_Camera_Transport.vi",
+    "execution": 1,
+    "vi_modifications": 0,
+    "fp_modifications": 0,
+    "bd_modifications": 0
+  },
+  "source_unchanged": true,
+  "Run": false,
+  "SaveInstrument": false,
+  "RSRC_writer": false,
+  "source_header": {
+    "major": 20,
+    "encoded_version": "20008000",
+    "RunOnOpen": false,
+    "source_diagram": true
+  },
+  "output_header": {
+    "major": 12,
+    "encoded_version": "12008004",
+    "RunOnOpen": false,
+    "source_diagram": true
+  },
+  "output_version_verified": true,
+  "output_version_and_dependencies_verified": false
+}

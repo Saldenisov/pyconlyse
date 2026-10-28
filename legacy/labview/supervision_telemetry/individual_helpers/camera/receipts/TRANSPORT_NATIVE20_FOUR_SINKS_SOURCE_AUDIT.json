@@ -1,0 +1,253 @@
+{
+  "schema": 1,
+  "scope": "NATIVE20_FOUR_ERROR_SINKS_SOURCE_AUDIT_NOT_RUNTIME_PROOF",
+  "artifact": {
+    "filename": "SUP_Camera_Transport.vi",
+    "sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+    "bytes": 20516,
+    "major": 20,
+    "exact_native_byte_copy_frozen": true
+  },
+  "baseline": {
+    "sha256": "8f48e7ae30ff3d32b986f86bd606a2803669c8511c602ff2855d36fff74f6ffa",
+    "bytes": 20288,
+    "major": 20,
+    "frozen_baseline_used": true
+  },
+  "source_preservation": {
+    "all_58_original_nets_exact": true,
+    "exactly_four_new_nets": [
+      {
+        "wire": 925,
+        "source_error_output": 316,
+        "sink_aggregate_input": 802,
+        "Unbundle_node": 796,
+        "same_parent_diagram": 1694,
+        "aggregate_type": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "three_scalar_outputs_unwired": true
+      },
+      {
+        "wire": 861,
+        "source_error_output": 745,
+        "sink_aggregate_input": 729,
+        "Unbundle_node": 717,
+        "same_parent_diagram": 297,
+        "aggregate_type": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "three_scalar_outputs_unwired": true
+      },
+      {
+        "wire": 839,
+        "source_error_output": 677,
+        "sink_aggregate_input": 700,
+        "Unbundle_node": 347,
+        "same_parent_diagram": 297,
+        "aggregate_type": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "three_scalar_outputs_unwired": true
+      },
+      {
+        "wire": 890,
+        "source_error_output": 532,
+        "sink_aggregate_input": 783,
+        "Unbundle_node": 776,
+        "same_parent_diagram": 3,
+        "aggregate_type": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "three_scalar_outputs_unwired": true
+      }
+    ],
+    "all_old_heap_object_UID_classes_retained": true,
+    "all_19_primitive_opcodes_and_port_UID_maps_equal": true,
+    "all_15_literal_byte_payloads_equal": true,
+    "all_176_old_type_shapes_equal": true,
+    "FP_control_connector_UID_mapping_equal": true,
+    "FP_controls": 7,
+    "all_FP_conNum_minus1": true,
+    "Boolean_case_range_mapping_equal": true,
+    "no_new_subVI_calls": true,
+    "address_queue_names_types_timeouts_TCP_framing_ACK_clamp_error_chains_and_lifecycle_logic_unchanged": true
+  },
+  "private_error_outputs": {
+    "total_typed_primitive_error_outputs": 13,
+    "wired_outputs": 13,
+    "unwired_outputs": 0,
+    "all_outputs": [
+      {
+        "node": 1046,
+        "primitive": 9109,
+        "term": 1070,
+        "type_label": "error out",
+        "wire_ids": [
+          1091
+        ]
+      },
+      {
+        "node": 495,
+        "primitive": 9108,
+        "term": 532,
+        "type_label": "error out",
+        "wire_ids": [
+          890
+        ]
+      },
+      {
+        "node": 1342,
+        "primitive": 9109,
+        "term": 1363,
+        "type_label": "error out",
+        "wire_ids": [
+          1637
+        ]
+      },
+      {
+        "node": 1072,
+        "primitive": 9108,
+        "term": 1095,
+        "type_label": "error out",
+        "wire_ids": [
+          1336
+        ]
+      },
+      {
+        "node": 664,
+        "primitive": 8003,
+        "term": 677,
+        "type_label": "error out",
+        "wire_ids": [
+          839
+        ]
+      },
+      {
+        "node": 397,
+        "primitive": 9113,
+        "term": 745,
+        "type_label": "error out",
+        "wire_ids": [
+          861
+        ]
+      },
+      {
+        "node": 459,
+        "primitive": 1716,
+        "term": 465,
+        "type_label": "error out",
+        "wire_ids": [
+          676
+        ]
+      },
+      {
+        "node": 310,
+        "primitive": 1164,
+        "term": 316,
+        "type_label": "error out",
+        "wire_ids": [
+          925
+        ]
+      },
+      {
+        "node": 221,
+        "primitive": 1716,
+        "term": 227,
+        "type_label": "error out",
+        "wire_ids": [
+          540
+        ]
+      },
+      {
+        "node": 105,
+        "primitive": 1713,
+        "term": 111,
+        "type_label": "error out",
+        "wire_ids": [
+          875
+        ]
+      },
+      {
+        "node": 75,
+        "primitive": 1714,
+        "term": 81,
+        "type_label": "error out",
+        "wire_ids": [
+          415
+        ]
+      },
+      {
+        "node": 43,
+        "primitive": 1715,
+        "term": 51,
+        "type_label": "error out",
+        "wire_ids": [
+          210
+        ]
+      },
+      {
+        "node": 62,
+        "primitive": 9113,
+        "term": 1185,
+        "type_label": "error out",
+        "wire_ids": [
+          1282
+        ]
+      }
+    ],
+    "DefaultErrorHandling": 1,
+    "correct_VariantToData_output677_consumed": true,
+    "Variant_error_input673_not_mistaken_for_output": true,
+    "Flatten_error_output316_consumed": true
+  },
+  "saved_execution_flags": {
+    "BadNode": 0,
+    "BadSignal": 0,
+    "BadSubVI": 0,
+    "BadSubVILink": 0,
+    "BadCompile": 0,
+    "RunOnOpen": 0,
+    "IsReentrant": 0,
+    "PropTypesIssues": 0
+  },
+  "native_UI_save_receipt": {
+    "filename": "NATIVE_FOUR_ERROR_SINKS_SAVE_RECEIPT.json",
+    "sha256": "c33337b47b90c6841a94ed8b8393ef5ce85e30f03f5c4aedf6f828343f35fb96",
+    "CtrlU_observed": true,
+    "native_Save_observed": true,
+    "Run": false,
+    "MemoryFull_observed": false
+  },
+  "remaining_runtime_limits": [
+    "Finite wait sums are configured budgets only, not a hard wall-clock join guarantee.",
+    "Stop polling remains parallel and cannot cancel the same iteration send.",
+    "ACK body length is clamped to1..16384; JSON/success/session/frame acceptance remains unvalidated.",
+    "Main must own/flush named queues, order producer completion and End/stop, await worker return, then release refs.",
+    "Owner lifecycle and inline mutable-image barrier obligations remain unchanged."
+  ],
+  "qualification": {
+    "Run_Call_or_hardware_executed": false,
+    "native20_fresh_reopen_verified_by_this_audit": false,
+    "native2012_export_verified": false,
+    "runtime_qualified": false,
+    "source_file_modified": false,
+    "RSRC_serializer_used": false,
+    "only_root_authorized_exact_native_byte_copy_created": true,
+    "parser_limit": "Compiled VICD patches are not decoded; conclusions concern actual saved source topology/types/literals/flags."
+  },
+  "XML_sha256": {
+    "SUP_Camera_Transport.xml": "03df87b1e5a5a08e09d41ae6b3b8f294a5d98c6b8a555ab938b4ab08ade17d66",
+    "SUP_Camera_Transport_BDHb.xml": "39ed0a6465b280060ef50e85f5674620bec5ca48e5ea29928b26834b7c032ae3",
+    "SUP_Camera_Transport_FPHb.xml": "10a4edf256b91e02cec0dcf317edbdccb13964b1a702d4b01f287cbc86077fe6"
+  },
+  "prior_port_mapping_erratum_sha256": "4f6990f803d3222c77d7bb9261d310649eb73c9cee1f8448e57199a8ae8b4420"
+}

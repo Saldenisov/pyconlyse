@@ -325,44 +325,169 @@
     },
     "SUP_Camera_Transport.vi": {
       "implemented": true,
-      "qualification_mode": "retained_native12",
-      "last_writer": "native_labview_save",
-      "source_bytes_unchanged": true,
-      "existing_native12_artifact": {
+      "last_writer": "native_labview_export",
+      "native20_source_sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+      "native_save": {
         "passed": true,
-        "version": "12.0",
-        "artifact_sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
-        "receipt": "receipts/LEGACY_TRANSPORT_NATIVE12_OPEN_SAVE.json",
-        "receipt_sha256": "4940f425caa91b48b094c8f17168941e74b1cd4cf406f6494aa14cffed2bfa62",
-        "history": "native LabVIEW12 Open+Save"
+        "stopped": true,
+        "last_writer": "native_labview_save",
+        "sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+        "bitness": 32,
+        "version": "20.0f1",
+        "receipt": {
+          "path": "receipts/TRANSPORT_NATIVE20_SAVE_RECEIPT.json",
+          "sha256": "c33337b47b90c6841a94ed8b8393ef5ce85e30f03f5c4aedf6f828343f35fb96"
+        }
       },
       "fresh_project_load": {
         "passed": true,
         "FP": true,
         "BD": true,
         "stopped": true,
-        "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
-        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_01\\SUP_Native_Transport_Fresh_Proven_2020.lvproj",
+        "sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_02\\SUP_Transport_Four_Sinks_Fresh_2020.lvproj",
         "process_restart": false,
         "Save": false,
-        "dirty_after_cross_version_load": true,
-        "source_bytes_unchanged": true
+        "source_bytes_unchanged": true,
+        "receipt": {
+          "path": "receipts/TRANSPORT_FOUR_SINKS_FRESH_OPEN_RECEIPT.json",
+          "sha256": "9ad2301ae5ee7aa174f6a578c01d3ff0311305f9e6735ada17fd81d0636d94f5"
+        }
       },
-      "no_fabricated_native20_source_or_new_export": true,
-      "runtime_executed": false,
-      "read_only_runtime_findings": {
+      "native_export": {
+        "passed": true,
+        "version": "12.0",
+        "last_writer": "native_labview_export",
+        "source_sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+        "sha256": "d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4",
+        "method": "SaveForPrevious via guarded forced32 native COM",
+        "receipt": {
+          "path": "receipts/TRANSPORT_FOUR_SINKS_NATIVE_EXPORT_RECEIPT.json",
+          "sha256": "79581bb94abd517fc4cb7ce9be1af33934762e622a849c99898923401b9d7def"
+        }
+      },
+      "native20_source_audit": {
+        "path": "receipts/TRANSPORT_NATIVE20_FOUR_SINKS_SOURCE_AUDIT.json",
+        "sha256": "b6915041b712cd5e2fadaac80d410e55c3bfa250a225f7c181ff5e0606c2fcb9"
+      },
+      "source_graph_audit": {
+        "path": "receipts/TRANSPORT_NATIVE12_FOUR_SINKS_SOURCE_AUDIT.json",
+        "sha256": "3da17302d680b7a41d4b7450aed075712110450d89ad30fa608c58fa7ba80eeb"
+      },
+      "actual_exported_source": {
+        "bytes": 14132,
+        "sha256": "d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4",
+        "FP_controls": 7,
+        "ABI_ports": 12,
+        "connector_slots": "Void",
+        "FP_conNum_all_minus1": true,
+        "primitive_error_outputs": 13,
+        "wired_error_outputs": 13,
+        "unwired_error_outputs": 0,
+        "same_diagram_Unbundle_sinks_added": 4,
+        "custom_dependencies": [],
+        "RunOnOpen": false
+      },
+      "historical_generated_source": true,
+      "historical_note": "Replaces retained native12 artifact4ab through native20 editor Save/fresh-project/native12 export. Earlier generated-source lineage is retained; no claim of wholly native historical construction.",
+      "history": {
+        "replaced_artifact": {
+          "path": "SUP_Camera_Transport.vi",
+          "bytes": 19484,
+          "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+          "retained_native12_sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03"
+        },
+        "retained_qualification": {
+          "implemented": true,
+          "qualification_mode": "retained_native12",
+          "last_writer": "native_labview_save",
+          "source_bytes_unchanged": true,
+          "existing_native12_artifact": {
+            "passed": true,
+            "version": "12.0",
+            "artifact_sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+            "receipt": "receipts/LEGACY_TRANSPORT_NATIVE12_OPEN_SAVE.json",
+            "receipt_sha256": "4940f425caa91b48b094c8f17168941e74b1cd4cf406f6494aa14cffed2bfa62",
+            "history": "native LabVIEW12 Open+Save"
+          },
+          "fresh_project_load": {
+            "passed": true,
+            "FP": true,
+            "BD": true,
+            "stopped": true,
+            "sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03",
+            "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_01\\SUP_Native_Transport_Fresh_Proven_2020.lvproj",
+            "process_restart": false,
+            "Save": false,
+            "dirty_after_cross_version_load": true,
+            "source_bytes_unchanged": true
+          },
+          "no_fabricated_native20_source_or_new_export": true,
+          "runtime_executed": false,
+          "read_only_runtime_findings": {
+            "path": "receipts/TRANSPORT_4AB066_READONLY_FINDING.json",
+            "sha256": "9df0e70eb433ca92b1895ea8ab71c9db880fc9c1c5a4e72ca66a6719fb194988",
+            "automatic_error_handling": 1,
+            "unwired_private_error_terminals": [
+              532,
+              745,
+              677,
+              316
+            ],
+            "invalid_ACK_length_rejected": false,
+            "hard_join_bound_proven": false,
+            "runtime_approved": false,
+            "unwired_output_count": 4,
+            "incorrect_prior_terminal_673_direction": "input",
+            "mapping_erratum": {
+              "path": "receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json",
+              "sha256": "4f6990f803d3222c77d7bb9261d310649eb73c9cee1f8448e57199a8ae8b4420",
+              "note_path": "receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst",
+              "note_sha256": "aa3343a467a603860795099acbf386438ef9980bbe5f346477142226da805fc8",
+              "prior_mapping_and_count_superseded": true,
+              "prior_finding_retained_unchanged": true,
+              "scope": "Port mapping/count correction only; transport bytes/runtime qualification unchanged"
+            }
+          }
+        }
+      },
+      "historical_runtime_findings": {
         "path": "receipts/TRANSPORT_4AB066_READONLY_FINDING.json",
         "sha256": "9df0e70eb433ca92b1895ea8ab71c9db880fc9c1c5a4e72ca66a6719fb194988",
         "automatic_error_handling": 1,
         "unwired_private_error_terminals": [
           532,
           745,
-          673
+          677,
+          316
         ],
         "invalid_ACK_length_rejected": false,
         "hard_join_bound_proven": false,
-        "runtime_approved": false
-      }
+        "runtime_approved": false,
+        "unwired_output_count": 4,
+        "incorrect_prior_terminal_673_direction": "input",
+        "mapping_erratum": {
+          "path": "receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json",
+          "sha256": "4f6990f803d3222c77d7bb9261d310649eb73c9cee1f8448e57199a8ae8b4420",
+          "note_path": "receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst",
+          "note_sha256": "aa3343a467a603860795099acbf386438ef9980bbe5f346477142226da805fc8",
+          "prior_mapping_and_count_superseded": true,
+          "prior_finding_retained_unchanged": true,
+          "scope": "Port mapping/count correction only; transport bytes/runtime qualification unchanged"
+        },
+        "historical_only": true,
+        "artifact_sha256": "4ab066c45cc6b15c2e0b0f95b2bcd8f239b9b8d6989d33c49b84843f39c28f03"
+      },
+      "current_source_limits": {
+        "DefaultErrorHandling": 1,
+        "Unbundle_scalar_outputs_discarded": true,
+        "new_recovery_or_stop_logic": false,
+        "invalid_ACK_length_rejected": false,
+        "ACK_JSON_success_session_frame_validated": false,
+        "stop_cancels_same_iteration_send": false,
+        "hard_join_bound_proven": false
+      },
+      "runtime_executed": false
     }
   },
   "native2012_runtime_proven": false,

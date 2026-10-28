@@ -1,0 +1,20 @@
+{
+  "checked_utc": "2026-10-28T21:06:02.165797+00:00",
+  "sha256": "3035f58f213df82b4d1a0d87311595cad8f87424ba6f094e6ebc02360c5ff442",
+  "bytes": 20516,
+  "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_transport_fresh_project_02\\SUP_Transport_Four_Sinks_Fresh_2020.lvproj",
+  "native_application": "LabVIEW2020x86",
+  "front_panel_window": 107288716,
+  "block_diagram_window": 7930624,
+  "FP_open": true,
+  "BD_open": true,
+  "Run_arrow_unbroken": true,
+  "dirty_marker": false,
+  "MemoryFull_observed": false,
+  "Run": false,
+  "Save": false,
+  "stopped": true,
+  "cold_process_restart": false,
+  "first_open_in_new_project": true,
+  "source_bytes_unchanged": true
+}

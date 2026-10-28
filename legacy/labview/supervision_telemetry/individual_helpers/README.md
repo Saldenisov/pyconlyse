@@ -44,7 +44,7 @@ subset is listed in `package_manifest.json`.
 | `SUP_Telemetry_End.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed | Pending |
 | `SUP_Camera_Observe_U8_UNCOMPILED.vi` | Yes, exact retained copy | Original native20 Save + current retained-native12 FP/BD | Original canonical export | Pending |
 | `SUP_Camera_Queue_Latest.vi` | Yes, exact retained copy | Original native12 Open/Save + current fresh FP/BD | Native12 artifact; no invented new export | Runtime pending |
-| `SUP_Camera_Transport.vi` | Yes, exact retained copy | Original native12 Open/Save + current fresh FP/BD | Native12 artifact; no invented new export | Error/ACK/lifecycle hazards remain |
+| `SUP_Camera_Transport.vi` | Yes, current four-sink export | Native20 Save + fresh FP/BD; 13/13 error outputs wired | Passed via guarded native API | Idle/error/ACK/lifecycle execution remains untested |
 
 Native export and offline checks do not establish LabVIEW 2012 execution or
 hardware behavior. No XP deployment or runtime test was performed for this

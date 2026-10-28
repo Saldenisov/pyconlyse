@@ -225,7 +225,7 @@ Lifecycle and integration invariants
   and control-read errors are software observations, not NI write acknowledgments
   or measured physical waveforms.
 
-The retained native12 camera transport is not an unattended-runtime-qualified
+The current native12 camera transport is not an unattended-runtime-qualified
 worker. Its actual source has 100 ms data dequeue, zero-timeout stop dequeue,
 and four network operations with 1000 ms timeouts each. The configured waiting
 sum is 4100 ms per iteration; a stop poll that has already missed a token can
@@ -234,10 +234,20 @@ close and runtime overhead are not measured. Stop polling runs in parallel
 with the data/network branch and does not suppress that iteration's send.
 
 That same retained source converts a Variant outside its data-timeout case.
-Conversion error output 673, stop-queue obtain error 532 and stop-dequeue error
-745 are unwired while DefaultErrorHandling is enabled. A default/invalid Variant
-or queue failure may therefore invoke native error handling; no idle/failed-queue
-execution test excludes a modal dialog. Its ACK length is clamped to 1..16384;
+Historical4ab left four outputs unwired: conversion677, stop-queue obtain532,
+stop-dequeue745 and Flatten To String316. Current native20 source3035 and its
+native12 export d807 consume all 13 primitive error outputs, adding four typed
+same-diagram Unbundle sinks. Their scalar outputs are discarded. The 58 original
+nets, 19 operations, 15 literals, seven FP controls and connector mappings remain
+intact; no recovery or lifecycle logic was added. Native20 Save, fresh-project
+FP+BD and native12 export passed; no Run is claimed. DefaultErrorHandling remains
+enabled. Conversion terminal673 is the error input.
+The packet's ``receipts/TRANSPORT20_BASELINE_AND_ERROR_OUTPUT_ERRATUM.json`` and
+``receipts/TRANSPORT_ERROR_OUTPUT_ERRATUM.rst`` supersede only the original
+finding's error-output mapping/count; its pinned historical bytes remain intact.
+The current packet also pins native20 and native12 four-sink source audits.
+No idle/failed-queue execution test establishes modal-free behavior. Its ACK
+length is clamped to 1..16384;
 the In Range result drives an indicator rather than rejecting invalid framing.
 ACK JSON, session identity and acceptance are not validated by this worker.
 These source findings require native correction/qualification before unattended
