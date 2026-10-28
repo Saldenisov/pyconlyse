@@ -1,0 +1,2 @@
+# Receipt/manifest hashes refer to exact bytes, including line endings.
+*.json -text whitespace=cr-at-eol

@@ -55,13 +55,23 @@ Discriminating observations
   state, external run/channel/setupOK and incoming error status. Public image
   and error identity remained intact. Native type pointers moved while their
   recursively resolved FP/connector types remained identical. This is source
-  validation; runtime and native 12.0 export remain pending. The tracked record
+  validation; executed runtime remains unproved. Native 12.0 export subsequently
+  passed. The tracked record
   is ``receipts/supervision_native_begin_source_20261028.json``.
 
 Setup has the fresh-project renamed-copy FP/BD evidence described above. Begin
-and End currently have native editor Save evidence; Begin also has Ctrl+U
-evidence. Fresh-project Begin/End reopens remain pending. These distinct checks
-must not be collapsed into a common cold-load qualification.
+and End subsequently displayed stopped FP and BD in the fresh-project exact
+copies under ``native_lifecycle_fresh_project_01``, without a dirty marker or
+loading error. Epoch's FP and BD were also explicitly displayed there after it
+had already loaded as a callee. All source hashes remained unchanged. These
+checks used the existing process: no process restart or first-process-load claim.
+
+The four-helper native 12.0 lifecycle subset is now included under
+``legacy/labview/supervision_telemetry/individual_helpers/camera``. Exported
+Epoch/Setup/Begin/End source graphs passed 3,840/48/1,280/256 cases respectively;
+the standard-library verifier checks native event receipts and exact output
+hashes separately. FrameTap remains unfinished and excluded; the complete camera
+pipeline and LabVIEW 2012/XP execution remain unqualified.
 
 The trusted native one-wire fixture is especially informative. Its Save changed
 13 resource sections: DFDS 1,977->1,989 bytes, CNST 40->48, SUID 100->108;
@@ -143,7 +153,18 @@ LabVIEW creates and maintains its own types, call fields, geometry and caches.
 The installed COM typelib exposes Application and VI orchestration interfaces,
 not NewVIObject/GObject/ConnectWire diagram interfaces. Python or LabVIEWCLI may
 invoke a previously native-created scripting VI; their presence does not provide
-a direct text-to-G compiler. No COM/CLI authoring operation was tested here.
+a direct text-to-G compiler.
+
+The native export alternative has now been demonstrated. The guarded
+``tools/labview_native_export.py`` adapter attached to the existing 32-bit
+LabVIEW 2020 process using a forced-32-bit COM context. It checked the stopped,
+unmodified source and invoked the native SaveForPrevious method directly. Setup
+exported twice to identical 22,419-byte native 12.0 output, SHA256
+``4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e``.
+Warnings were empty and source bytes remained unchanged. No Run, SaveInstrument,
+Quit or RSRC serializer was used. The concrete API proof and its limits are in
+``receipts/supervision_native_export_api_20261028.json``. This exports an already
+native-saved VI; it does not create a diagram or establish runtime behavior.
 
 Installed ``vi.lib\_script\XML Scripting`` helpers emit native XML command
 strings; these are not pylabview RSRC heap XML. The reviewed SubVI(Path), Wire(BD)
@@ -183,6 +204,16 @@ copy, and read-only validation of its actual saved connectors, constants, links,
 error identity, timestamp origins and RunOnOpen=False. Then export 12 natively
 and preserve the relative dependency tree and exact hashes. Offline source tests
 remain separate from native load/compile, executed behavior and XP integration.
+
+The release preflight in ``tools/verify_labview_native_helper_package.py``
+requires per-helper pinned evidence for native Save, stopped fresh-project FP
+and BD display, and native 12.0 export. Current lvkit/pylabview/RSRC writer
+provenance and unimplemented candidates are rejected even if model tests pass.
+Historical generated-source lineage is retained honestly when the admitted
+source and export were last written natively. A new process or a fictitious
+LabVIEW 2012 execution test is not required by this evidence gate. Native project
+URLs are checked from the project FILE, including the native-exported
+``../same_folder.vi`` convention; dependency search fallback cannot satisfy it.
 
 The existing three native 12.0 sync helpers under
 ``legacy/labview/supervision_telemetry/individual_helpers`` remain pinned by their

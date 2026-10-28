@@ -1,0 +1,240 @@
+{
+  "status": "NATIVE_SAVE_FRESH_STOPPED_FP_BD_NATIVE12_EXPORT_PASS",
+  "date": "2026-10-28",
+  "helpers": {
+    "SUP_Camera_Epoch.vi": {
+      "implemented": true,
+      "last_writer": "native_labview_export",
+      "native20_source_sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01",
+      "native_save": {
+        "passed": true,
+        "stopped": true,
+        "last_writer": "native_labview_save",
+        "sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01",
+        "bitness": 32,
+        "version": "20.0f1"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_lifecycle_fresh_project_01\\SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
+        "process_restart": false,
+        "first_process_load_claimed": false,
+        "Epoch_was_already_loaded_as_callee": true
+      },
+      "native_export": {
+        "passed": true,
+        "version": "12.0",
+        "last_writer": "native_labview_export",
+        "source_sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01",
+        "sha256": "84b78999901b37537f83c5c480777f22bee98a1f78d153ea93739e57738c8a3e",
+        "method": "Native GUI SaveForPrevious"
+      },
+      "historical_generated_source": true,
+      "historical_note": "Earlier generated-source lineage retained; current bytes last written by native Save/export. No claim of wholly native historical construction.",
+      "actual_exported_source": {
+        "bytes": 29372,
+        "sha256": "84b78999901b37537f83c5c480777f22bee98a1f78d153ea93739e57738c8a3e",
+        "header": {
+          "major": 12,
+          "encoded_version": "12008004",
+          "RunOnOpen": false,
+          "source_diagram": true
+        },
+        "FP_controls": 21,
+        "ABI_ports": 12,
+        "custom_links": [],
+        "RunOnOpen": false,
+        "DFDS_resource_bytes": 31,
+        "DFDS_uncompressed_bytes": 204,
+        "DFDS_decoded": false,
+        "source_cases": 3840
+      },
+      "runtime_executed": false
+    },
+    "SUP_Camera_SetupObserve.vi": {
+      "implemented": true,
+      "last_writer": "native_labview_export",
+      "native20_source_sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
+      "native_save": {
+        "passed": true,
+        "stopped": true,
+        "last_writer": "native_labview_save",
+        "sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
+        "bitness": 32,
+        "version": "20.0f1"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_setup_cold_review\\SUP_Native_Setup_Cold_Review_2020.lvproj",
+        "process_restart": false,
+        "first_process_load_claimed": false,
+        "Epoch_was_already_loaded_as_callee": false
+      },
+      "native_export": {
+        "passed": true,
+        "version": "12.0",
+        "last_writer": "native_labview_export",
+        "source_sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
+        "sha256": "4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e",
+        "method": "SaveForPrevious via guarded forced32 native COM"
+      },
+      "historical_generated_source": false,
+      "historical_note": "Earlier generated-source lineage retained; current bytes last written by native Save/export. No claim of wholly native historical construction.",
+      "actual_exported_source": {
+        "bytes": 22419,
+        "sha256": "4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e",
+        "header": {
+          "major": 12,
+          "encoded_version": "12008004",
+          "RunOnOpen": false,
+          "source_diagram": true
+        },
+        "FP_controls": 21,
+        "ABI_ports": 12,
+        "custom_links": [
+          [
+            "",
+            "SUP_Camera_Epoch.vi"
+          ]
+        ],
+        "RunOnOpen": false,
+        "DFDS_resource_bytes": 31,
+        "DFDS_uncompressed_bytes": 204,
+        "DFDS_decoded": false,
+        "source_cases": 48
+      },
+      "runtime_executed": false
+    },
+    "SUP_Telemetry_Begin.vi": {
+      "implemented": true,
+      "last_writer": "native_labview_export",
+      "native20_source_sha256": "c8550c31398e3d7e8a9037273cc778b43b13a64c1e44bc865fba2b63d55c0537",
+      "native_save": {
+        "passed": true,
+        "stopped": true,
+        "last_writer": "native_labview_save",
+        "sha256": "c8550c31398e3d7e8a9037273cc778b43b13a64c1e44bc865fba2b63d55c0537",
+        "bitness": 32,
+        "version": "20.0f1"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "c8550c31398e3d7e8a9037273cc778b43b13a64c1e44bc865fba2b63d55c0537",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_lifecycle_fresh_project_01\\SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
+        "process_restart": false,
+        "first_process_load_claimed": false,
+        "Epoch_was_already_loaded_as_callee": false
+      },
+      "native_export": {
+        "passed": true,
+        "version": "12.0",
+        "last_writer": "native_labview_export",
+        "source_sha256": "c8550c31398e3d7e8a9037273cc778b43b13a64c1e44bc865fba2b63d55c0537",
+        "sha256": "b6431ae4ac0497f8de9bb0b9cdc2f2c1c656b101f9642ea4c7d6748423a4e62d",
+        "method": "Native GUI SaveForPrevious"
+      },
+      "historical_generated_source": false,
+      "historical_note": "Earlier generated-source lineage retained; current bytes last written by native Save/export. No claim of wholly native historical construction.",
+      "actual_exported_source": {
+        "bytes": 22483,
+        "sha256": "b6431ae4ac0497f8de9bb0b9cdc2f2c1c656b101f9642ea4c7d6748423a4e62d",
+        "header": {
+          "major": 12,
+          "encoded_version": "12008004",
+          "RunOnOpen": false,
+          "source_diagram": true
+        },
+        "FP_controls": 21,
+        "ABI_ports": 12,
+        "custom_links": [
+          [
+            "",
+            "SUP_Camera_Epoch.vi"
+          ]
+        ],
+        "RunOnOpen": false,
+        "DFDS_resource_bytes": 31,
+        "DFDS_uncompressed_bytes": 204,
+        "DFDS_decoded": false,
+        "source_cases": 1280
+      },
+      "runtime_executed": false
+    },
+    "SUP_Telemetry_End.vi": {
+      "implemented": true,
+      "last_writer": "native_labview_export",
+      "native20_source_sha256": "f008064011b25e240b12cd777d34124a88cef64daeddb659e8327c4ed5ed22a7",
+      "native_save": {
+        "passed": true,
+        "stopped": true,
+        "last_writer": "native_labview_save",
+        "sha256": "f008064011b25e240b12cd777d34124a88cef64daeddb659e8327c4ed5ed22a7",
+        "bitness": 32,
+        "version": "20.0f1"
+      },
+      "fresh_project_load": {
+        "passed": true,
+        "FP": true,
+        "BD": true,
+        "stopped": true,
+        "sha256": "f008064011b25e240b12cd777d34124a88cef64daeddb659e8327c4ed5ed22a7",
+        "project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_lifecycle_fresh_project_01\\SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
+        "process_restart": false,
+        "first_process_load_claimed": false,
+        "Epoch_was_already_loaded_as_callee": false
+      },
+      "native_export": {
+        "passed": true,
+        "version": "12.0",
+        "last_writer": "native_labview_export",
+        "source_sha256": "f008064011b25e240b12cd777d34124a88cef64daeddb659e8327c4ed5ed22a7",
+        "sha256": "bf9cdf4865fe50c16768b5e7a0ca6ede3cc8a082a53d98652dab73e08b3884c3",
+        "method": "Native GUI SaveForPrevious"
+      },
+      "historical_generated_source": false,
+      "historical_note": "Earlier generated-source lineage retained; current bytes last written by native Save/export. No claim of wholly native historical construction.",
+      "actual_exported_source": {
+        "bytes": 22389,
+        "sha256": "bf9cdf4865fe50c16768b5e7a0ca6ede3cc8a082a53d98652dab73e08b3884c3",
+        "header": {
+          "major": 12,
+          "encoded_version": "12008004",
+          "RunOnOpen": false,
+          "source_diagram": true
+        },
+        "FP_controls": 21,
+        "ABI_ports": 12,
+        "custom_links": [
+          [
+            "",
+            "SUP_Camera_Epoch.vi"
+          ]
+        ],
+        "RunOnOpen": false,
+        "DFDS_resource_bytes": 31,
+        "DFDS_uncompressed_bytes": 204,
+        "DFDS_decoded": false,
+        "source_cases": 256
+      },
+      "runtime_executed": false
+    }
+  },
+  "native2012_runtime_proven": false,
+  "hardware_accessed": false,
+  "XP_deployed": false,
+  "full_camera_pipeline_ready": false,
+  "FrameTap_implemented": false,
+  "DFDS_reader_limitation": "lvkit does not decode native204-byte exported DFDS cache; no cache was rewritten",
+  "native_export_API_receipt": "docs/receipts/supervision_native_export_api_20261028.json"
+}

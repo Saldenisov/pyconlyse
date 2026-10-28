@@ -1,0 +1,96 @@
+{
+  "status": "NATIVE12_HEADER_GRAPH_AND_RELATIVE_CLOSURE_PASS",
+  "helpers": {
+    "SUP_Camera_Epoch.vi": {
+      "bytes": 29372,
+      "sha256": "84b78999901b37537f83c5c480777f22bee98a1f78d153ea93739e57738c8a3e",
+      "header": {
+        "major": 12,
+        "encoded_version": "12008004",
+        "RunOnOpen": false,
+        "source_diagram": true
+      },
+      "FP_controls": 21,
+      "ABI_ports": 12,
+      "custom_links": [],
+      "RunOnOpen": false,
+      "DFDS_resource_bytes": 31,
+      "DFDS_uncompressed_bytes": 204,
+      "DFDS_decoded": false,
+      "source_cases": 3840
+    },
+    "SUP_Camera_SetupObserve.vi": {
+      "bytes": 22419,
+      "sha256": "4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e",
+      "header": {
+        "major": 12,
+        "encoded_version": "12008004",
+        "RunOnOpen": false,
+        "source_diagram": true
+      },
+      "FP_controls": 21,
+      "ABI_ports": 12,
+      "custom_links": [
+        [
+          "",
+          "SUP_Camera_Epoch.vi"
+        ]
+      ],
+      "RunOnOpen": false,
+      "DFDS_resource_bytes": 31,
+      "DFDS_uncompressed_bytes": 204,
+      "DFDS_decoded": false,
+      "source_cases": 48
+    },
+    "SUP_Telemetry_Begin.vi": {
+      "bytes": 22483,
+      "sha256": "b6431ae4ac0497f8de9bb0b9cdc2f2c1c656b101f9642ea4c7d6748423a4e62d",
+      "header": {
+        "major": 12,
+        "encoded_version": "12008004",
+        "RunOnOpen": false,
+        "source_diagram": true
+      },
+      "FP_controls": 21,
+      "ABI_ports": 12,
+      "custom_links": [
+        [
+          "",
+          "SUP_Camera_Epoch.vi"
+        ]
+      ],
+      "RunOnOpen": false,
+      "DFDS_resource_bytes": 31,
+      "DFDS_uncompressed_bytes": 204,
+      "DFDS_decoded": false,
+      "source_cases": 1280
+    },
+    "SUP_Telemetry_End.vi": {
+      "bytes": 22389,
+      "sha256": "bf9cdf4865fe50c16768b5e7a0ca6ede3cc8a082a53d98652dab73e08b3884c3",
+      "header": {
+        "major": 12,
+        "encoded_version": "12008004",
+        "RunOnOpen": false,
+        "source_diagram": true
+      },
+      "FP_controls": 21,
+      "ABI_ports": 12,
+      "custom_links": [
+        [
+          "",
+          "SUP_Camera_Epoch.vi"
+        ]
+      ],
+      "RunOnOpen": false,
+      "DFDS_resource_bytes": 31,
+      "DFDS_uncompressed_bytes": 204,
+      "DFDS_decoded": false,
+      "source_cases": 256
+    }
+  },
+  "reader_limitation": "lvkit does not decode native204-byte exported DFDS cache; no cache was rewritten",
+  "native2012_runtime_proven": false,
+  "executed": false,
+  "VI_serializer_used": false
+}

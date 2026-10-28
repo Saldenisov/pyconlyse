@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "status": "PARTIAL_FOUR_NATIVE12_CAMERA_LIFECYCLE_HELPERS",
+  "files": [
+    {
+      "path": "SUP_Camera_Epoch.vi",
+      "bytes": 29372,
+      "sha256": "84b78999901b37537f83c5c480777f22bee98a1f78d153ea93739e57738c8a3e",
+      "native20_source_sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01"
+    },
+    {
+      "path": "SUP_Camera_SetupObserve.vi",
+      "bytes": 22419,
+      "sha256": "4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e",
+      "native20_source_sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c"
+    },
+    {
+      "path": "SUP_Telemetry_Begin.vi",
+      "bytes": 22483,
+      "sha256": "b6431ae4ac0497f8de9bb0b9cdc2f2c1c656b101f9642ea4c7d6748423a4e62d",
+      "native20_source_sha256": "c8550c31398e3d7e8a9037273cc778b43b13a64c1e44bc865fba2b63d55c0537"
+    },
+    {
+      "path": "SUP_Telemetry_End.vi",
+      "bytes": 22389,
+      "sha256": "bf9cdf4865fe50c16768b5e7a0ca6ede3cc8a082a53d98652dab73e08b3884c3",
+      "native20_source_sha256": "f008064011b25e240b12cd777d34124a88cef64daeddb659e8327c4ed5ed22a7"
+    },
+    {
+      "path": "SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
+      "bytes": 741,
+      "sha256": "1d0b434320acbbc1ed4524e27346d5dc66c8d1877b996adcd34d4a31e64bd2aa",
+      "role": "exact native export project"
+    },
+    {
+      "path": "SUP_Camera_Lifecycle_2012.lvproj",
+      "bytes": 829,
+      "sha256": "b76122d56eec5ac319c0a1d423fa680cce96ae9718a47e611922b22f2d826d49",
+      "role": "ordinary project XML adds exported Setup item; no VI serialization"
+    }
+  ],
+  "qualification_receipt": "receipts/NATIVE_LIFECYCLE_QUALIFICATION.json",
+  "qualification_sha256": "0e60806578668e1db66ab04fbc43241c752132ad5d4febb1de5808fe59fee7b6",
+  "projects": [
+    {
+      "path": "SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
+      "VI_members": [
+        "SUP_Camera_Epoch.vi",
+        "SUP_Telemetry_Begin.vi",
+        "SUP_Telemetry_End.vi"
+      ]
+    },
+    {
+      "path": "SUP_Camera_Lifecycle_2012.lvproj",
+      "VI_members": [
+        "SUP_Camera_Epoch.vi",
+        "SUP_Camera_SetupObserve.vi",
+        "SUP_Telemetry_Begin.vi",
+        "SUP_Telemetry_End.vi"
+      ]
+    }
+  ],
+  "system_dependencies": [
+    "/<vilib>/vision/Image Controls.llb/IMAQ Image.ctl"
+  ],
+  "custom_relative_links": [
+    {
+      "caller": "SUP_Camera_SetupObserve.vi",
+      "components": [
+        "",
+        "SUP_Camera_Epoch.vi"
+      ],
+      "target": "SUP_Camera_Epoch.vi"
+    },
+    {
+      "caller": "SUP_Telemetry_Begin.vi",
+      "components": [
+        "",
+        "SUP_Camera_Epoch.vi"
+      ],
+      "target": "SUP_Camera_Epoch.vi"
+    },
+    {
+      "caller": "SUP_Telemetry_End.vi",
+      "components": [
+        "",
+        "SUP_Camera_Epoch.vi"
+      ],
+      "target": "SUP_Camera_Epoch.vi"
+    }
+  ],
+  "FrameTap_implemented": false,
+  "full_camera_pipeline_ready": false,
+  "native2012_runtime_proven": false
+}

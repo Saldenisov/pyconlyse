@@ -96,7 +96,20 @@ def verify_package(root):
                 raise ValueError("Expected native12 VI with RunOnOpen0")
             records[row["path"]] = header
     actual = set()
-    for parent, unused, files in os.walk(root):
+    components = manifest.get("additional_components", [])
+    component_roots = set(
+        os.path.normcase(
+            os.path.realpath(_inside(root, os.path.join(root, *c["path"].split("/"))))
+        )
+        for c in components
+    )
+    for parent, dirs, files in os.walk(root):
+        dirs[:] = [
+            d
+            for d in dirs
+            if os.path.normcase(os.path.realpath(os.path.join(parent, d)))
+            not in component_roots
+        ]
         for name in files:
             if name.lower().endswith(".vi"):
                 actual.add(
@@ -128,6 +141,24 @@ def verify_package(root):
             raise ValueError("Pinned relative call-link closure changed")
         if link["target"] not in records:
             raise ValueError("Call dependency not in package")
+    component_results = []
+    for component in components:
+        component_root = _inside(
+            root, os.path.join(root, *component["path"].split("/"))
+        )
+        with open(
+            os.path.join(component_root, "package_manifest.json"), "rb"
+        ) as stream:
+            if (
+                hashlib.sha256(stream.read()).hexdigest()
+                != component["manifest_sha256"]
+            ):
+                raise ValueError("Additional component manifest pin changed")
+        try:
+            from tools.verify_labview_native_helper_package import verify_component
+        except ImportError:  # Direct python tools/... invocation.
+            from verify_labview_native_helper_package import verify_component
+        component_results.append(verify_component(component_root))
     return dict(
         status="PASS",
         native12_VIs=records,
@@ -135,6 +166,7 @@ def verify_package(root):
         pinned_relative_call_closure=True,
         executed=False,
         native_runtime_proved=False,
+        additional_components=component_results,
     )
 
 

@@ -1,6 +1,10 @@
 # Individual SuperVision helpers
 
-This packet contains **3 of the planned 11 helpers**. The three VIs and project
+This packet contains **7 of the planned 11 helpers**: the three synchronization
+helpers below and the four-helper [camera lifecycle subset](camera/README.md).
+FrameTap is unfinished; the complete camera pipeline remains unready.
+
+The three synchronization VIs and project
 are byte-identical copies of the native LabVIEW 2020 x86 **Save for Previous
 Version 12.0** output. No main VI or unfinished camera/lifecycle VI is included.
 Existing canonical observer and queue files outside this directory are unchanged.
@@ -32,11 +36,11 @@ subset is listed in `package_manifest.json`.
 | `SUP_SyncTap.vi` | Yes | FP+BD, Ctrl+U and Save passed; no Run | Passed | Pending |
 | `ACQ_SharedState_Queue_Latest.vi` | Yes | Project/dependency binding and export; prior source receipts retained | Passed | Pending for these exported bytes |
 | `ACQ_SharedState_Transport_Auto.vi` | Yes | Native project export; prior source receipts retained | Passed | Pending for these exported bytes |
-| `SUP_Camera_Epoch.vi` | No | External native snapshot/model proof only | Pending | Pending |
-| `SUP_Camera_SetupObserve.vi` | No | Source candidate; native-load repair pending | Pending | Pending |
+| `SUP_Camera_Epoch.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed | Pending |
+| `SUP_Camera_SetupObserve.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed via guarded native API | Pending |
 | `SUP_Camera_FrameTap.vi` | No | Native-call/gate authoring in progress | Pending | Pending |
-| `SUP_Telemetry_Begin.vi` | No | Source candidate; native-load repair pending | Pending | Pending |
-| `SUP_Telemetry_End.vi` | No | Source candidate; native-load repair pending | Pending | Pending |
+| `SUP_Telemetry_Begin.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed | Pending |
+| `SUP_Telemetry_End.vi` | Yes, camera subset | Native Save + stopped fresh-project FP/BD | Passed | Pending |
 | `SUP_Camera_Observe_U8_UNCOMPILED.vi` | No | Existing canonical receipts outside this subset | Existing canonical export; not copied here | Retain existing limits |
 | `SUP_Camera_Queue_Latest.vi` | No | Existing canonical receipts outside this subset | Existing canonical artifact; not copied here | Retain existing limits |
 | `SUP_Camera_Transport.vi` | No | Existing canonical receipts outside this subset | Existing canonical artifact; not copied here | Retain existing limits |
@@ -91,7 +95,7 @@ sync_lifecycle/
     ACQ_SharedState_Queue_Latest.vi
 ```
 
-Only the three included native12 files may be staged now. Future additions need
+The seven included native12 files form a partial packet. Future additions need
 their own native Open/BD/Save, post-save literal/state audits, native12 export,
 hashes and relative-link checks. Begin/End manage the observation epoch only;
 queue ownership and worker lifecycle stay in native assembly. FrameTap requires

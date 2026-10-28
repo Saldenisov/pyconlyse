@@ -12,7 +12,13 @@
     "unbroken_arrow": true,
     "dirty_marker_cleared": true,
     "Run": false,
-    "End_fresh_project_reload_reported": false
+    "End_fresh_project_reload_reported": true,
+    "fresh_project_reload_reported": true,
+    "fresh_project_FP": true,
+    "fresh_project_BD": true,
+    "fresh_project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_lifecycle_fresh_project_01\\SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
+    "process_restart": false,
+    "evidence_boundary": "Native editor Save plus stopped fresh-project FP/BD; same process, no Run"
   },
   "native_Setup_base": {
     "bytes": 20658,
@@ -76,11 +82,12 @@
     "path": ".tmp/supervision_camera_main_builder/individual_sync_helpers_20261028/native_end_saved_f008/native_End_source_audit.json",
     "sha256": "ede056051b4c95087d875257c31a7672438cc57f286b08e763991e798d5465e8"
   },
-  "native2012_export_verified": false,
+  "native2012_export_verified": true,
   "runtime_executed": false,
   "hardware_accessed": false,
   "XP_deployed": false,
   "original_sources_unchanged": true,
   "VI_resource_serializer_used": false,
-  "Begin_status": "Begin wrapper remains unqualified; native authoring is tracked separately"
+  "Begin_status": "Begin wrapper remains unqualified; native authoring is tracked separately",
+  "native12_export_sha256": "bf9cdf4865fe50c16768b5e7a0ca6ede3cc8a082a53d98652dab73e08b3884c3"
 }

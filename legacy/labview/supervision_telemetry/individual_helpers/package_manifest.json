@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "PARTIAL_3_OF_11_NATIVE2012_HELPERS",
+  "status": "PARTIAL_7_OF_11_NATIVE2012_HELPERS",
   "files": [
     {
       "path": "export2012_preparation/SUP_Sync_Export_Native_2020.lvproj",
@@ -56,5 +56,11 @@
   "excluded_source_UI_sidecars": [
     ".aliases",
     ".lvlps"
+  ],
+  "additional_components": [
+    {
+      "path": "camera",
+      "manifest_sha256": "e21dbbbf9543cddb5553ef5bf1f8a94386e1f16ae941d4a2c82fa9f719891109"
+    }
   ]
 }

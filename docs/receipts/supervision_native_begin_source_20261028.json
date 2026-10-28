@@ -11,9 +11,13 @@
     "unbroken_arrow": true,
     "dirty_marker_cleared": true,
     "Run": false,
-    "fresh_project_reload_reported": false,
+    "fresh_project_reload_reported": true,
     "stopped_native_CtrlU_Save": true,
-    "evidence_boundary": "Native editor Save only; fresh-project Begin reload pending"
+    "evidence_boundary": "Native editor Save plus stopped fresh-project FP/BD; same process, no Run",
+    "fresh_project_FP": true,
+    "fresh_project_BD": true,
+    "fresh_project": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\native_authoring\\native_lifecycle_fresh_project_01\\SUP_Native_Lifecycle_Fresh_Proven_2020.lvproj",
+    "process_restart": false
   },
   "native_Setup_base_sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
   "native_Epoch_callee": {
@@ -102,8 +106,9 @@
   },
   "original_source_unchanged": true,
   "VI_resource_serializer_used": false,
-  "native2012_export_verified": false,
+  "native2012_export_verified": true,
   "runtime_executed": false,
   "hardware_accessed": false,
-  "XP_deployed": false
+  "XP_deployed": false,
+  "native12_export_sha256": "b6431ae4ac0497f8de9bb0b9cdc2f2c1c656b101f9642ea4c7d6748423a4e62d"
 }
