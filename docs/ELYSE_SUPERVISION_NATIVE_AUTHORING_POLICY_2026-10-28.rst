@@ -45,6 +45,23 @@ Discriminating observations
   action literal and one edited numeric text flag. Evaluation of the actual End
   and Epoch graphs passed 256 End cases; no LabVIEW execution occurred. The
   tracked record is ``receipts/supervision_native_end_source_20261028.json``.
+* Native Begin was edited from the same Setup copy, then cleaned up and saved
+  as 20,775 bytes, SHA256
+  ``c8550c31398e3d7e8a9037273cc778b43b13a64c1e44bc865fba2b63d55c0537``.
+  Its single Get Date/Time In Seconds node (1303) drives both Epoch's run input
+  and the public timestamp output. The old external run input and Epoch capture
+  output no longer drive those terminals. Evaluation of the actual saved Begin
+  and Epoch graphs passed 1,280 cases, including changing UTC values, prior
+  state, external run/channel/setupOK and incoming error status. Public image
+  and error identity remained intact. Native type pointers moved while their
+  recursively resolved FP/connector types remained identical. This is source
+  validation; runtime and native 12.0 export remain pending. The tracked record
+  is ``receipts/supervision_native_begin_source_20261028.json``.
+
+Setup has the fresh-project renamed-copy FP/BD evidence described above. Begin
+and End currently have native editor Save evidence; Begin also has Ctrl+U
+evidence. Fresh-project Begin/End reopens remain pending. These distinct checks
+must not be collapsed into a common cold-load qualification.
 
 The trusted native one-wire fixture is especially informative. Its Save changed
 13 resource sections: DFDS 1,977->1,989 bytes, CNST 40->48, SUID 100->108;

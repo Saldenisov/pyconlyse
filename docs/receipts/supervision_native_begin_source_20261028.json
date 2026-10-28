@@ -1,0 +1,109 @@
+{
+  "status": "NATIVE2020_BEGIN_SAVE_AND_ACTUAL_SAVED_SOURCE_AUDIT_PASS",
+  "date": "2026-10-28",
+  "file": "SUP_Telemetry_Begin.vi",
+  "bytes": 20775,
+  "sha256": "c8550c31398e3d7e8a9037273cc778b43b13a64c1e44bc865fba2b63d55c0537",
+  "native_version": "20.0.0 release build0",
+  "authoring": "Native LabVIEW2020 x86 UI only; Setup byte-copy, action0 and one native UTC source, native wiring and CtrlU/Save",
+  "native_editor_evidence": {
+    "source": "native authoring report",
+    "unbroken_arrow": true,
+    "dirty_marker_cleared": true,
+    "Run": false,
+    "fresh_project_reload_reported": false,
+    "stopped_native_CtrlU_Save": true,
+    "evidence_boundary": "Native editor Save only; fresh-project Begin reload pending"
+  },
+  "native_Setup_base_sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
+  "native_Epoch_callee": {
+    "bytes": 30736,
+    "sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01",
+    "same_folder_dependency": true
+  },
+  "actual_saved_source_audit": {
+    "action": 0,
+    "native_action_hex": "0000000000",
+    "one_UTC_primitive": {
+      "primResID": 1303,
+      "node": 712,
+      "output": 733,
+      "type": "Timestamp",
+      "shared_wire": 745,
+      "endpoints": [
+        733,
+        516,
+        1017
+      ]
+    },
+    "Tick1300_absent": true,
+    "old_external_RunStamp_to_Epoch_removed": true,
+    "old_Epoch_capture_to_public_timestamp_removed": true,
+    "original_other_native_signals_preserved": 8,
+    "public_ABI_ports": 12,
+    "FP_controls": 21,
+    "raw_resource_comparison": {
+      "FPHb": true,
+      "FPTD": false,
+      "CONP": true,
+      "CPC2": false,
+      "LIbd": true,
+      "LIvi": true
+    },
+    "native_public_type_resolution": {
+      "FPTD": {
+        "original_global_index": 128,
+        "current_global_index": 127,
+        "complete_resolved_type_equal": true
+      },
+      "CPC2": {
+        "original_global_index": 129,
+        "current_global_index": 128,
+        "complete_resolved_type_equal": true
+      },
+      "CONP": {
+        "original_global_index": 2,
+        "current_global_index": 2,
+        "complete_resolved_type_equal": true
+      }
+    },
+    "source_graph_case_count": 1280,
+    "grid": {
+      "previous_state": 4,
+      "external_RunStamp": 4,
+      "UTC_value": 5,
+      "channel": [
+        0,
+        3,
+        4,
+        4294967295
+      ],
+      "original_error_status": 2,
+      "external_setup_OK": 2
+    },
+    "exactly_one_dynamic_UTC_origin": true,
+    "public_RunStamp_and_Epoch_run_share_same_value": true,
+    "Epoch_result": "(UTC,0,0,False)",
+    "public_RunStamp_is_not_cleared_Epoch_capture": true,
+    "external_RunStamp_channel_setupOK_do_not_alter_Begin_state": true,
+    "original_image_and_error_identity": true,
+    "channel_and_valid_Epoch_replies_preserved": true,
+    "RunOnOpen": false,
+    "SourceOnly": false,
+    "IsReentrant": false,
+    "BadCompile": false,
+    "BadNode": false,
+    "BadSubVI": false,
+    "native_execution_proven": false
+  },
+  "frozen_audit": {
+    "path": ".tmp/supervision_camera_main_builder/individual_sync_helpers_20261028/native_begin_saved/native_Begin_source_audit.json",
+    "sha256": "6db00e7781c4b1f256633a1934bf54b15ef6784a2d57475bcaa53f023b50a752"
+  },
+  "original_source_unchanged": true,
+  "VI_resource_serializer_used": false,
+  "native2012_export_verified": false,
+  "runtime_executed": false,
+  "hardware_accessed": false,
+  "XP_deployed": false
+}
