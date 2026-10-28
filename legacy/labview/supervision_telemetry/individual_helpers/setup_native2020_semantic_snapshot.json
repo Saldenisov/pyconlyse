@@ -1,0 +1,129 @@
+{
+  "call_ports": {
+    "0": "453",
+    "1": "456",
+    "10": "516",
+    "11": "519",
+    "2": "459",
+    "3": "462",
+    "4": "474",
+    "5": "483",
+    "6": "493",
+    "7": "504",
+    "8": "510",
+    "9": "513"
+  },
+  "constants": {
+    "2103": {
+      "data": "0000000000000000000000000000000000",
+      "width": 16
+    },
+    "575": {
+      "data": "00000001",
+      "width": 4
+    },
+    "665": {
+      "data": "00000002",
+      "width": 4
+    },
+    "718": {
+      "data": "00000003",
+      "width": 4
+    }
+  },
+  "kind": "SetupObserve",
+  "ports": {
+    "action": "903",
+    "capture": "1017",
+    "channel": "959",
+    "channel_out": "2662",
+    "error": "142",
+    "error_out": "654",
+    "frame": "986",
+    "image": "241",
+    "image_out": "856",
+    "run": "616",
+    "setup_ok": "2705",
+    "valid": "2745"
+  },
+  "provenance": {
+    "metadata_only_no_pixel_data": true,
+    "native2012_export_verified": false,
+    "native_UI_authored": true,
+    "native_open_save_verified": true,
+    "native_version": "LabVIEW2020 32-bit",
+    "native_vi_bytes": 20658,
+    "native_vi_execution_proven": false,
+    "native_vi_sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c"
+  },
+  "schema": 1,
+  "term_nodes": {
+    "873": {
+      "field": 0,
+      "input": "861",
+      "kind": "unbundle"
+    },
+    "880": {
+      "field": 1,
+      "input": "861",
+      "kind": "unbundle"
+    },
+    "945": {
+      "field": 2,
+      "input": "861",
+      "kind": "unbundle"
+    },
+    "971": {
+      "kind": "primitive",
+      "opcode": 1064,
+      "ports": {
+        "0": "971",
+        "1": "974"
+      }
+    }
+  },
+  "wires": [
+    [
+      "453",
+      "2745"
+    ],
+    [
+      "456",
+      "2662"
+    ],
+    [
+      "459",
+      "1017"
+    ],
+    [
+      "971",
+      "510"
+    ],
+    [
+      "873",
+      "974"
+    ],
+    [
+      "142",
+      "654",
+      "443",
+      "861"
+    ],
+    [
+      "959",
+      "513"
+    ],
+    [
+      "616",
+      "516"
+    ],
+    [
+      "575",
+      "519"
+    ],
+    [
+      "241",
+      "856"
+    ]
+  ]
+}
