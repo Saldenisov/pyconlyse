@@ -1,6 +1,6 @@
 """SuperVision VI/native telemetry in one application/publisher, Python 3.4.
 
-Existing 27-control XML stays on 127.0.0.1:8766. Optional typed observations
+Counter-only XML and legacy27 XML use 127.0.0.1:8766. Typed observations
 use 127.0.0.1:8768, four-byte big-endian length then strict UTF-8 JSON or the
 versioned fixed native camera cluster. Native
 LabVIEW producers still require authoring/qualification; no VI is generated.
@@ -20,7 +20,7 @@ from .federation_wire import (finite, hex_id, owner_frame, MAX_VIDEO_RAW_BYTES,
                               validate_counter_part, validate_video_frame)
 from .orchestrator_publisher import OwnerTelemetryPublisher
 from .protocol import recv_exact, send_message
-from .shared_state import decode_snapshot_xml
+from .shared_state import decode_supervision_snapshot_xml
 from .shared_state_receiver import SharedStateServer
 from .standard_banks import standard_packet, schemas, packet_age_seconds
 from .telemetry_relay import DeadlineSocket, canonical
@@ -314,7 +314,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
     def ingest(self, raw, peer):
         if peer != "127.0.0.1":
             raise ValueError("VI snapshot ingestion requires IPv4 loopback")
-        records = decode_snapshot_xml(raw, self.xml_encoding)
+        records = decode_supervision_snapshot_xml(raw, self.xml_encoding)
         with self.lock:
             self.last_vi_seen = self.clock()
         value = self._admit()
@@ -345,7 +345,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 self._publish_bridge(value)
                 self.vi_accepted += 1
                 self.last_vi_receipt, self.last_error = stamp, ""
-                return dict(accepted=True, bank_count=27, forwarded_owner="supervision",
+                return dict(accepted=True, bank_count=len(records), forwarded_owner="supervision",
                     sequence=self.sequence, hardware_writes=False, acknowledged_on="xp_ram_not_everest")
         finally:
             self.runtime._lock.release()

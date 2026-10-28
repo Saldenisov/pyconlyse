@@ -181,6 +181,20 @@ def _decode(node, depth=0):
 
 
 def decode_snapshot_xml(raw, xml_encoding="utf-8"):
+    """Decode the unchanged Acquisition profile: exactly 27 ordered banks."""
+    return _decode_snapshot_profiles(raw, xml_encoding, (BANKS,))
+
+
+def decode_supervision_snapshot_xml(raw, xml_encoding="utf-8"):
+    """Decode passive Sup counter only, retaining legacy 27-bank compatibility.
+
+    The one-bank profile is local to SuperVision. Acquisition admission above
+    remains exactly 27 banks. Neither profile performs hardware operations.
+    """
+    return _decode_snapshot_profiles(raw, xml_encoding, (("C1011NI6602",), BANKS))
+
+
+def _decode_snapshot_profiles(raw, xml_encoding, profiles):
     if type(raw) is not bytes or not 1 <= len(raw) <= MAX_XML_BYTES:
         raise ValueError("snapshot XML byte limit exceeded")
     if xml_encoding not in ("utf-8", "cp1252"):
@@ -201,8 +215,15 @@ def decode_snapshot_xml(raw, xml_encoding="utf-8"):
         raise ValueError("snapshot must be an outer LabVIEW variant")
     values, datatype = _decode(root)
     contained = datatype.get("contained_type")
-    if not contained or contained["type"] != "Array" or len(values) != len(BANKS):
-        raise ValueError("snapshot must contain exactly 27 bank records")
+    profile = None
+    if contained and contained["type"] == "Array" and isinstance(values, list):
+        profile = next((p for p in profiles if len(values) == len(p)), None)
+    if not contained or contained["type"] != "Array" or profile is None:
+        if profiles == (BANKS,):
+            raise ValueError("snapshot must contain exactly 27 bank records")
+        raise ValueError(
+            "SuperVision snapshot must contain one counter or 27 legacy bank records"
+        )
     records = []
     for value, shape in zip(values, contained["elements"]):
         fields = shape.get("fields", [])
@@ -214,7 +235,7 @@ def decode_snapshot_xml(raw, xml_encoding="utf-8"):
             raise ValueError("invalid bank record type")
         bank, data, error = value
         bank = "C1011NI6602" if bank == "C10-11 NI6602" else bank
-        if bank not in BANKS:
+        if bank not in profile:
             raise ValueError("unknown shared-state bank")
         if len(error) != 3 or [f["type"] for f in fields[2].get("fields", [])] != [
             "Boolean",
@@ -230,8 +251,16 @@ def decode_snapshot_xml(raw, xml_encoding="utf-8"):
                 error=dict(status=error[0], code=error[1], source=error[2]),
             )
         )
-    if tuple(record["publication"] for record in records) != BANKS:
+    if tuple(record["publication"] for record in records) != profile:
         raise ValueError("duplicate, reordered or missing shared-state banks")
+    if len(profile) == 1 and records[0]["error"]["status"] is False:
+        record = records[0]
+        shape = record["lv_type"].get("contained_type") or {}
+        fields = shape.get("fields", [])
+        if (shape.get("type") != "Cluster" or len(fields) != 33
+                or any(field.get("type") != "DBL" for field in fields)
+                or not isinstance(record["data"], list) or len(record["data"]) != 33):
+            raise ValueError("SuperVision counter must preserve original 33 DBL cluster")
     return records
 
 
