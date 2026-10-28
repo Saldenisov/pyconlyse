@@ -1,0 +1,34 @@
+{
+  "connector_ports": 12,
+  "custom_dependency": "observer_v3/SUP_Camera_Queue_Latest.vi",
+  "executed": false,
+  "exported_current_cache": {
+    "fpdcoTableTMI": -1,
+    "nDCOs": 0
+  },
+  "files": {
+    "SUP_Camera_Observe_U8_UNCOMPILED.vi": {
+      "bytes": 26533,
+      "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9"
+    },
+    "observer_v3/SUP_Camera_Queue_Latest.vi": {
+      "bytes": 10059,
+      "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7"
+    }
+  },
+  "header_bytes": 95,
+  "main_integration": "NOT_RUNTIME_QUALIFIED_MEMORY_FULL",
+  "native2012_export_verified": true,
+  "native2012_open_save_verified": false,
+  "native2020x86_open_save_verified": true,
+  "offline_guard_cases": 13450,
+  "physical_camera_verified": false,
+  "proof_sha256": "8d27a36bf7d743f72687ca70d06f82175fce7680f3fdc34c92325546a5502775",
+  "schema_version": 1,
+  "source_interface_controls": 17,
+  "status": "NOT_RUNTIME_QUALIFIED",
+  "system_dependencies": [
+    "<vilib>/vision/Basics.llb/IMAQ ImageToArray",
+    "<vilib>/vision/Image Controls.llb/IMAQ Image.ctl"
+  ]
+}
