@@ -1,0 +1,86 @@
+{
+  "status": "NATIVE2020_END_SAVE_AND_ACTUAL_SAVED_SOURCE_AUDIT_PASS",
+  "date": "2026-10-28",
+  "file": "SUP_Telemetry_End.vi",
+  "bytes": 20657,
+  "sha256": "f008064011b25e240b12cd777d34124a88cef64daeddb659e8327c4ed5ed22a7",
+  "native_version": "20.0.0 release build0",
+  "authoring": "Native LabVIEW2020 x86 UI only; original byte-copy from native Setup1de, action1->3 native edit",
+  "native_editor_evidence": {
+    "source": "root report",
+    "stopped_save": true,
+    "unbroken_arrow": true,
+    "dirty_marker_cleared": true,
+    "Run": false,
+    "End_fresh_project_reload_reported": false
+  },
+  "native_Setup_base": {
+    "bytes": 20658,
+    "sha256": "1de01a7e5d18fa231866dfe257dc268b067de58e4eefa54a9b10438682cf202c",
+    "renamed_copy_fresh_project_FP_BD_open": true
+  },
+  "native_Epoch_callee": {
+    "bytes": 30736,
+    "sha256": "f6bb97d1eab2f87ca932391219fefb04e88e089db9057445f814b1d981ebcc01",
+    "same_folder_dependency": true
+  },
+  "actual_saved_source_audit": {
+    "action_constant_u32_hex": "00000003",
+    "run_wire_endpoints": [
+      616,
+      516
+    ],
+    "unchanged_native_signal_endpoint_lists": 10,
+    "actual_BD_deltas": [
+      "ConstValue00000001 ->00000003",
+      "one numeric textRec flags512 added during native edit"
+    ],
+    "matching_original_resource_bytes": {
+      "FPHb": true,
+      "FPTD": true,
+      "CONP": true,
+      "CPC2": true,
+      "LIbd": true,
+      "LIvi": true
+    },
+    "case_count": 256,
+    "grid": {
+      "previous_state": 4,
+      "run": 4,
+      "channel": [
+        0,
+        3,
+        4,
+        4294967295
+      ],
+      "original_error_status": 2,
+      "external_setup_OK": 2
+    },
+    "same_run_End_invalidates_only": true,
+    "zero_or_stale_run_preserves_state": true,
+    "channel_and_setupOK_do_not_change_state_reply_or_clock": true,
+    "no_clock": true,
+    "original_image_and_error_identity": true,
+    "Epoch_reply_outputs_preserved": true,
+    "additional_Epoch_Begin_ignored_extra_input_cases": 256,
+    "Begin_wrapper_qualified": false,
+    "RunOnOpen": false,
+    "SourceOnly": false,
+    "IsReentrant": false,
+    "BadCompile": false,
+    "BadNode": false,
+    "BadSubVI": false,
+    "native_execution_proven": false
+  },
+  "frozen_audit": {
+    "path": ".tmp/supervision_camera_main_builder/individual_sync_helpers_20261028/native_end_saved_f008/native_End_source_audit.json",
+    "sha256": "ede056051b4c95087d875257c31a7672438cc57f286b08e763991e798d5465e8"
+  },
+  "native2012_export_verified": false,
+  "runtime_executed": false,
+  "hardware_accessed": false,
+  "XP_deployed": false,
+  "original_sources_unchanged": true,
+  "VI_resource_serializer_used": false,
+  "Begin_status": "Begin wrapper remains unqualified; native authoring is tracked separately"
+}
