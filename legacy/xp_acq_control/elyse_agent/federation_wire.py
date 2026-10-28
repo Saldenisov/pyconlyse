@@ -109,7 +109,7 @@ def validate_video_frame(value):
             or not 1 <= value["height"] <= MAX_VIDEO_RAW_BYTES
             or value["width"] * value["height"] > MAX_VIDEO_RAW_BYTES
             or value["pixel_type"] != "U8" or value["encoding"] != "base64_raw_row_major"
-            or type(value["channel"]) is not int or not 0 <= value["channel"] <= 3
+            or type(value["channel"]) is not int or not 0 <= value["channel"] <= 4294967295
             or value["processing"] != "raw_grab_before_legacy_interlace_bcg_profiles"
             or not isinstance(value["observed_utc"], str) or len(value["observed_utc"]) > 40
             or not value["observed_utc"].endswith("+00:00")

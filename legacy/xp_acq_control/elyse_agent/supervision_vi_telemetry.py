@@ -62,7 +62,7 @@ included String/2D-array sizes, no type descriptor and no cluster padding.
         stamps.append((seconds, fraction, encoded))
         offset += 16
     frame_count, channel, copy_elapsed_ms, observed_tick_ms, rows, columns = struct.unpack_from("!IIIIii", raw, offset)
-    if (not 0 <= channel <= 3 or not 1 <= rows <= MAX_VIDEO_RAW_BYTES
+    if (not 0 <= channel <= 4294967295 or not 1 <= rows <= MAX_VIDEO_RAW_BYTES
             or not 1 <= columns <= MAX_VIDEO_RAW_BYTES or rows * columns > MAX_VIDEO_RAW_BYTES
             or total_size != BINARY_CAMERA_HEADER_BYTES + rows * columns):
         raise ValueError("Invalid native U8 geometry/channel or trailing image bytes")

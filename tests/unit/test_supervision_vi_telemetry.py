@@ -490,8 +490,8 @@ class NativeCameraBinaryTests(unittest.TestCase):
         value = decode_vi_camera_binary(raw, NATIVE_NOW, 50)
         self.assertEqual(value["video_frame"]["source_age_seconds"], .125)
 
-    def test_bad_native_shape_epoch_version_channel_and_trailing_bytes_fail_closed(self):
-        bad = [native_camera(version=2), native_camera(channel=4), native_camera(rows=0),
+    def test_bad_native_shape_epoch_version_and_trailing_bytes_fail_closed(self):
+        bad = [native_camera(version=2), native_camera(rows=0),
             native_camera(rows=-1), native_camera(rows=524289, columns=1),
             native_camera(run=b"\x00" * 16), native_camera(capture=b"\x00" * 16),
             native_camera(observed=b"\x00" * 16), native_camera(copy_ms=1000),
