@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "status": "PARTIAL_3_OF_11_NATIVE2012_HELPERS",
+  "files": [
+    {
+      "path": "export2012_preparation/SUP_Sync_Export_Native_2020.lvproj",
+      "bytes": 707,
+      "sha256": "afb794aa915805c9502fda67e6ff09417ca939d9b605a5f489ecea2f1913169d",
+      "source": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\export2012_sync_native\\export2012_preparation\\SUP_Sync_Export_Native_2020.lvproj"
+    },
+    {
+      "path": "sync_lifecycle/ACQ_SharedState_Transport_Auto.vi",
+      "bytes": 13750,
+      "sha256": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357",
+      "source": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\export2012_sync_native\\sync_lifecycle\\ACQ_SharedState_Transport_Auto.vi"
+    },
+    {
+      "path": "sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi",
+      "bytes": 7988,
+      "sha256": "7762e5753c1064c41fb270f2cb756ac73ba1c0f7ca6c387c1458b58c9e6834fc",
+      "source": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\export2012_sync_native\\sync_lifecycle\\counter_only_candidate\\ACQ_SharedState_Queue_Latest.vi"
+    },
+    {
+      "path": "sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi",
+      "bytes": 8071,
+      "sha256": "c81604493a62a6137d78a10913e2f17eb76272e86556a949025d8d4f61d999ce",
+      "source": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\export2012_sync_native\\sync_lifecycle\\counter_only_candidate\\SUP_SyncTap.vi"
+    }
+  ],
+  "project": "export2012_preparation/SUP_Sync_Export_Native_2020.lvproj",
+  "project_sha256": "afb794aa915805c9502fda67e6ff09417ca939d9b605a5f489ecea2f1913169d",
+  "custom_relative_links": [
+    {
+      "caller": "sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi",
+      "components": [
+        "",
+        "ACQ_SharedState_Queue_Latest.vi"
+      ],
+      "target": "sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi"
+    }
+  ],
+  "source_receipt": "receipts/SYNC_NATIVE2012_EXPORT_SOURCE.json",
+  "native_save_previous12": true,
+  "native2020_SyncTap_FP_BD_CtrlU_Save": true,
+  "native2012_OpenSave": false,
+  "runtime_executed": false,
+  "hardware_accessed": false,
+  "XP_deployed": false,
+  "receiver_required_commits": [
+    "2edbf8a4",
+    "334ae78d"
+  ],
+  "no_main": true,
+  "no_unqualified_camera_or_lifecycle_candidates": true,
+  "no_existing_canonical_files_overwritten": true,
+  "excluded_source_UI_sidecars": [
+    ".aliases",
+    ".lvlps"
+  ]
+}

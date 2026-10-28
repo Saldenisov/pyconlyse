@@ -1,0 +1,136 @@
+{
+  "status": "NATIVE_SAVE_FOR_PREVIOUS12_AND_OFFLINE_CLOSURE_PASS",
+  "native_event": "Root/user completed SaveForPreviousVersion12 in LabVIEW2020x86; noRun",
+  "export_root": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\export2012_sync_native",
+  "project": "export2012_preparation/SUP_Sync_Export_Native_2020.lvproj",
+  "project_version": "12008004",
+  "project_sha256": "afb794aa915805c9502fda67e6ff09417ca939d9b605a5f489ecea2f1913169d",
+  "project_references": [
+    {
+      "name": "ACQ_SharedState_Queue_Latest.vi",
+      "URL": "../../sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi",
+      "resolved": "sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi"
+    },
+    {
+      "name": "ACQ_SharedState_Transport_Auto.vi",
+      "URL": "../../sync_lifecycle/ACQ_SharedState_Transport_Auto.vi",
+      "resolved": "sync_lifecycle/ACQ_SharedState_Transport_Auto.vi"
+    },
+    {
+      "name": "SUP_SyncTap.vi",
+      "URL": "../../sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi",
+      "resolved": "sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi"
+    }
+  ],
+  "files": [
+    {
+      "file": "sync_lifecycle/ACQ_SharedState_Transport_Auto.vi",
+      "bytes": 13750,
+      "sha256": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357",
+      "version": {
+        "Major": "12",
+        "Minor": "0",
+        "Bugfix": "0",
+        "Stage": "release",
+        "Build": "4"
+      },
+      "RunOnOpen": false,
+      "BadCompile": "0",
+      "BadNode": "0",
+      "BadSubVI": "0",
+      "SourceOnly": "0",
+      "links": []
+    },
+    {
+      "file": "sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi",
+      "bytes": 7988,
+      "sha256": "7762e5753c1064c41fb270f2cb756ac73ba1c0f7ca6c387c1458b58c9e6834fc",
+      "version": {
+        "Major": "12",
+        "Minor": "0",
+        "Bugfix": "0",
+        "Stage": "release",
+        "Build": "4"
+      },
+      "RunOnOpen": false,
+      "BadCompile": "0",
+      "BadNode": "0",
+      "BadSubVI": "0",
+      "SourceOnly": "0",
+      "links": []
+    },
+    {
+      "file": "sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi",
+      "bytes": 8071,
+      "sha256": "c81604493a62a6137d78a10913e2f17eb76272e86556a949025d8d4f61d999ce",
+      "version": {
+        "Major": "12",
+        "Minor": "0",
+        "Bugfix": "0",
+        "Stage": "release",
+        "Build": "4"
+      },
+      "RunOnOpen": false,
+      "BadCompile": "0",
+      "BadNode": "0",
+      "BadSubVI": "0",
+      "SourceOnly": "0",
+      "links": [
+        {
+          "resource": "LIbd",
+          "kind": "IUVI",
+          "name": "ACQ_SharedState_Queue_Latest.vi",
+          "path_type": "1",
+          "parts": [
+            "",
+            "ACQ_SharedState_Queue_Latest.vi"
+          ],
+          "scope": "closed_custom_relative",
+          "target": "sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi",
+          "target_sha256": "7762e5753c1064c41fb270f2cb756ac73ba1c0f7ca6c387c1458b58c9e6834fc"
+        }
+      ]
+    }
+  ],
+  "inventory": [
+    {
+      "file": "export2012_preparation/SUP_Sync_Export_Native_2020.aliases",
+      "sha256": "56d553e8b9337bbe6ab6e40e87bd31464e63b3cebf27cd6d35111129fbc38ed9"
+    },
+    {
+      "file": "export2012_preparation/SUP_Sync_Export_Native_2020.lvlps",
+      "sha256": "f0f432873ac7984faa9b59b7801638b5529bdb26e3381f42781cb87ca6565695"
+    },
+    {
+      "file": "export2012_preparation/SUP_Sync_Export_Native_2020.lvproj",
+      "sha256": "afb794aa915805c9502fda67e6ff09417ca939d9b605a5f489ecea2f1913169d"
+    },
+    {
+      "file": "sync_lifecycle/ACQ_SharedState_Transport_Auto.vi",
+      "sha256": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357"
+    },
+    {
+      "file": "sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi",
+      "sha256": "7762e5753c1064c41fb270f2cb756ac73ba1c0f7ca6c387c1458b58c9e6834fc"
+    },
+    {
+      "file": "sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi",
+      "sha256": "c81604493a62a6137d78a10913e2f17eb76272e86556a949025d8d4f61d999ce"
+    }
+  ],
+  "all3_VI_versions_major12": true,
+  "all_RunOnOpen0": true,
+  "custom_relative_dependency_closure": true,
+  "standard_NI_dependencies": [],
+  "single_control_whitelist": [
+    "C10-11 NI6602"
+  ],
+  "no_main_or_camera_helpers_in_export": true,
+  "export_bytes_unchanged_by_audit": true,
+  "native2012_OpenSave_verified": false,
+  "runtime_executed": false,
+  "hardware_accessed": false,
+  "XP_changed": false,
+  "source_and_open_VIs_modified": false,
+  "qualification_limit": "Native20SavePrevious12 artifact/relativeclosure proved; actualLabVIEW2012Open/compile/runtime not yet qualified"
+}
