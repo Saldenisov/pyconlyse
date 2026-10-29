@@ -1,0 +1,23 @@
+.vacuum-layout { margin: 12px 0 18px; padding: 12px; border: 1px solid #8c9ba8; background: #b3b3b3; box-shadow: inset 1px 1px #e9edf0; color: #19344f; }
+.vacuum-layout__heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.vacuum-layout__heading h3 { margin: 0; font-size: 14px; color: #19344f; }
+.vacuum-layout__heading > span { font-size: 10px; color: #3b5267; }
+.vacuum-layout__scroll { overflow-x: auto; padding-bottom: 4px; }
+.vacuum-layout__canvas { position: relative; width: 100%; min-width: 620px; height: 292px; }
+.vacuum-layout__pressure { position: absolute; box-sizing: border-box; height: 86px; padding: 7px; border: 1px solid #a3b3c1; border-radius: 5px; background: #e3e8ed; box-shadow: 0 1px 2px #34485b18; }
+.vacuum-layout__pressure--fresh { background: #f5f8fa; }
+.vacuum-layout__pressure--stale, .vacuum-layout__pressure--read_error, .vacuum-layout__pressure--unavailable { background: #fff2e1; border-color: #b39369; }
+.vacuum-layout__label { display: block; min-height: 25px; font-size: 10px; line-height: 1.2; color: #3a5268; }
+.vacuum-layout__pressure .elyse-pressure__reading { margin: 0 0 4px; gap: 3px; }
+.vacuum-layout__pressure output { font: 500 17px 'Segoe UI', Arial, sans-serif; font-variant-numeric: tabular-nums; color: #163d67; white-space: nowrap; }
+.vacuum-layout__pressure .elyse-pressure__power { font-size: 11px; }
+.vacuum-layout__pressure .elyse-pressure__power sup { font-size: 9px; }
+.vacuum-layout__pressure .elyse-pressure__unit { font-size: 8px; }
+.vacuum-layout__pressure > small { display: block; font-size: 8px; line-height: 1.2; color: #65798b; }
+.vacuum-layout__instant { font-size: 7px; }
+.elyse-pressure__reading--negative output { color: #9b4814; }
+.vacuum-layout__valve { position: absolute; box-sizing: border-box; min-height: 39px; border: 1px solid #73816c; border-radius: 2px; box-shadow: inset 1px 1px 2px #ffffff55; padding: 4px 2px; text-align: center; white-space: pre-line; color: #111; font-size: 8px; line-height: 1.15; }
+.vacuum-layout__note { margin: 6px 0 10px; font-size: 10px; line-height: 1.5; color: #344d62; }
+.vacuum-layout__sources { background: #dce3ea; color: #273e58; padding: 7px; font-size: 10px; }
+.vacuum-layout__sources summary { cursor: pointer; }
+.vacuum-layout__sources > div { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin: 10px 0; }

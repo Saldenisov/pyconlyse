@@ -1,0 +1,13 @@
+.sup-sync { color: #163149; font-size: 11px; }
+.sup-sync__actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.sup-sync__actions button { padding: 4px 7px; font-size: 11px; }
+.sup-sync__notice { margin: 6px 0; font-size: 10px; color: #4a6073; }
+.sup-sync__columns { display: grid; grid-template-columns: 1.25fr 1fr; gap: 10px; }
+.sup-sync fieldset { min-width: 0; padding: 7px; border: 1px solid #8a9baa; }
+.sup-sync legend { width: auto; margin-bottom: 2px; font-size: 12px; color: #002481; }
+.sup-sync__field { display: grid; grid-template-columns: minmax(100px, 1fr) 65px 20px 78px; gap: 5px; align-items: center; min-height: 25px; }
+.sup-sync__field output { text-align: right; font-variant-numeric: tabular-nums; }
+.sup-sync__field input { min-width: 0; width: 100%; padding: 2px 4px; font-size: 11px; }
+.sup-sync fieldset:last-child .sup-sync__field { grid-template-columns: minmax(110px, 1fr) 70px 20px; }
+.sup-sync fieldset p { font-size: 10px; }
+@media (max-width: 1000px) { .sup-sync__columns { grid-template-columns: 1fr; } }

@@ -1,0 +1,316 @@
+{
+  "source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "palette_scope": "SAVED_FRONT_PANEL_NOT_HARDWARE_SAFETY",
+  "runtime_transitions_observed": false,
+  "hardware_commands": false,
+  "fields": {
+    "0": {
+      "control_uid": "50906",
+      "field": 0,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Focale 1\nKlystron\""
+    },
+    "1": {
+      "control_uid": "28137",
+      "field": 1,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Focale 2\nKlystron\""
+    },
+    "2": {
+      "control_uid": "31583",
+      "field": 2,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Focale 3\nKlystron\""
+    },
+    "3": {
+      "control_uid": "25711",
+      "field": 3,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Chauffage\nKlystron\""
+    },
+    "4": {
+      "control_uid": "42467",
+      "field": 4,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"V Chauffage\nKlystron\""
+    },
+    "5": {
+      "control_uid": "37606",
+      "field": 5,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"V Klystron\""
+    },
+    "6": {
+      "control_uid": "75059",
+      "field": 6,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Klystron\""
+    },
+    "7": {
+      "control_uid": "35088",
+      "field": 7,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Contact\nPerche de masse\""
+    },
+    "8": {
+      "control_uid": "75247",
+      "field": 8,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Sécurité\nThyratron\""
+    },
+    "9": {
+      "control_uid": "28042",
+      "field": 9,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Contact\nPorte Cabine\""
+    },
+    "10": {
+      "control_uid": "25796",
+      "field": 10,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Temporisation\""
+    },
+    "11": {
+      "control_uid": "61238",
+      "field": 11,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Ventilation\nThyratron\""
+    },
+    "12": {
+      "control_uid": "46727",
+      "field": 12,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Résistivité\""
+    },
+    "13": {
+      "control_uid": "38812",
+      "field": 13,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Contact capot\ncuve Klystron\""
+    },
+    "14": {
+      "control_uid": "29382",
+      "field": 14,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Niveau d'huile\nCuve Klystron\""
+    },
+    "15": {
+      "control_uid": "41653",
+      "field": 15,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"EAU focale\nKlystron\""
+    },
+    "16": {
+      "control_uid": "32692",
+      "field": 16,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"EAU corps\nKlystron\""
+    },
+    "17": {
+      "control_uid": "37091",
+      "field": 17,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"EAU collecteur\nKlystron\""
+    },
+    "18": {
+      "control_uid": "51449",
+      "field": 18,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"EAU Cuve\nKlystron\""
+    },
+    "19": {
+      "control_uid": "74156",
+      "field": 19,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"EAU CANON\""
+    },
+    "20": {
+      "control_uid": "25681",
+      "field": 20,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Vide Klystron\""
+    },
+    "24": {
+      "control_uid": "70029",
+      "field": 24,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Mesure V LAR\""
+    },
+    "25": {
+      "control_uid": "46171",
+      "field": 25,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Fin de ligne\""
+    },
+    "26": {
+      "control_uid": "48033",
+      "field": 26,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Thyratron\""
+    },
+    "27": {
+      "control_uid": "58529",
+      "field": 27,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"V Chauffage\nThyratron\""
+    },
+    "28": {
+      "control_uid": "59943",
+      "field": 28,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Chauffage\nThyratron\""
+    },
+    "29": {
+      "control_uid": "31022",
+      "field": 29,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"I Réservoir\nThyratron\""
+    },
+    "30": {
+      "control_uid": "60946",
+      "field": 30,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"Courant de\nPrémagnétisation\""
+    },
+    "31": {
+      "control_uid": "65448",
+      "field": 31,
+      "saved_format": "%.1f"
+    },
+    "32": {
+      "control_uid": "91296",
+      "field": 32,
+      "saved_format": "%.1g"
+    },
+    "33": {
+      "control_uid": "93007",
+      "field": 33,
+      "saved_format": "%.2g"
+    },
+    "34": {
+      "control_uid": "54725",
+      "field": 34,
+      "saved_format": "%.2f"
+    },
+    "35": {
+      "control_uid": "54744",
+      "field": 35,
+      "saved_format": "%.2f"
+    },
+    "36": {
+      "control_uid": "93275",
+      "field": 36,
+      "saved_format": "%.1g"
+    },
+    "37": {
+      "control_uid": "54757",
+      "field": 37,
+      "saved_format": "%.1g"
+    },
+    "38": {
+      "control_uid": "71851",
+      "field": 38,
+      "saved_format": "%.1g"
+    },
+    "39": {
+      "control_uid": "71870",
+      "field": 39,
+      "saved_format": "%.1g"
+    },
+    "40": {
+      "control_uid": "37594",
+      "field": 40,
+      "saved_format": "%.1g"
+    },
+    "41": {
+      "control_uid": "37625",
+      "field": 41,
+      "saved_format": "%.1g"
+    },
+    "42": {
+      "control_uid": "75784",
+      "field": 42,
+      "saved_format": "%.2f"
+    },
+    "43": {
+      "control_uid": "76080",
+      "field": 43,
+      "saved_format": "%.2f"
+    },
+    "44": {
+      "control_uid": "77818",
+      "field": 44,
+      "saved_format": "%.2f"
+    },
+    "45": {
+      "control_uid": "2950",
+      "field": 45,
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "saved_text_buffer": "(1)\"EAU SECTION\""
+    },
+    "54": {
+      "control_uid": "1843",
+      "field": 54,
+      "false_color": "#1E4B00",
+      "true_color": "#64FF00",
+      "saved_text_buffer": null
+    },
+    "55": {
+      "control_uid": "60312",
+      "field": 55,
+      "false_color": "#1E4B00",
+      "true_color": "#64FF00",
+      "saved_text_buffer": "(4)\"OFF\"\"ON\"\"OFF\"\"ON\""
+    },
+    "56": {
+      "control_uid": "62220",
+      "field": 56,
+      "false_color": "#1E4B00",
+      "true_color": "#64FF00",
+      "saved_text_buffer": "(4)\"OFF\"\"ON\"\"OFF\"\"ON\""
+    },
+    "57": {
+      "control_uid": "67711",
+      "field": 57,
+      "false_color": "#1E4B00",
+      "true_color": "#64FF00",
+      "saved_text_buffer": "(4)\"OFF\"\"ON\"\"OFF\"\"ON\""
+    },
+    "58": {
+      "control_uid": "70116",
+      "field": 58,
+      "false_color": "#1E4B00",
+      "true_color": "#64FF00",
+      "saved_text_buffer": "(4)\"OFF\"\"ON\"\"OFF\"\"ON\""
+    }
+  }
+}

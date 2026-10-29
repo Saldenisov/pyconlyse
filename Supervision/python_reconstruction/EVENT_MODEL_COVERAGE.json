@@ -1,0 +1,384 @@
+{
+  "event_structure_uid": 5909,
+  "bounded_event_indices": 34,
+  "main_event_indices": 34,
+  "verified_whole_vi_replacements": 0,
+  "implementation_allowed": false,
+  "events": [
+    {
+      "event_index": 0,
+      "label": "Timeout",
+      "bounded_models": [
+        "timeout_events"
+      ],
+      "boundary": "14 PSP read intents, counter selection/reset/publish, 66 UI patches and ROI/date/motor selector modeled in timeout_events; scheduling, freshness, coercions/defaults and all external effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 1,
+      "label": "Fréquence machine: value change",
+      "bounded_models": [
+        "machine_frequency"
+      ],
+      "boundary": "machine-frequency cluster replacement and fan-out intent modeled in machine_frequency; PSP execution blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 2,
+      "label": "AXE H, GAP H: value change",
+      "bounded_models": [
+        "slit_position"
+      ],
+      "boundary": "AXE H/GAP H arithmetic and C9NI6703 patch modeled in slit_position; PSP execution blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 3,
+      "label": "Translateurs: value change",
+      "bounded_models": [
+        "translator_stop",
+        "translator_selection"
+      ],
+      "boundary": "Arrêt topology/neutral loop expression modeled in translator_stop; Laser/T1/T2/T3 C5 true-only patches/color/2000 ms intents modeled in translator_selection; native stop-loop direction unresolved, all PSP/timing/hardware effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 4,
+      "label": "Faraday: value change",
+      "bounded_models": [
+        "digital_command_events"
+      ],
+      "boundary": "Faraday/slit-supply/laser digital patches, empty branches, frame order/color/reset modeled in digital_command_events; waits are intents only, all PSP/hardware effects blocked, states unproven",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 5,
+      "label": "Fentes: value change",
+      "bounded_models": [
+        "digital_command_events"
+      ],
+      "boundary": "Faraday/slit-supply/laser digital patches, empty branches, frame order/color/reset modeled in digital_command_events; waits are intents only, all PSP/hardware effects blocked, states unproven",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 6,
+      "label": "Page Synchronisation: value change",
+      "bounded_models": [
+        "synchronisation_events"
+      ],
+      "boundary": "33-DBL OldVal-minus-NewVal selection, fresh-local fan-out, busy discard/300 ms/property/result modeled in synchronisation_events; binary decoding, error aggregation/formatting and all counter/PSP/UI effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 7,
+      "label": "Position diagnostique T1: value change",
+      "bounded_models": [
+        "diagnostic_events"
+      ],
+      "boundary": "T1/T2/T3 constants, C9NI6703 patch/x10 display modeled in diagnostic_events; native default corrected from Print, unsupported selectors and all PSP/motion effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 8,
+      "label": "Position Miroir Laser: value change",
+      "bounded_models": [
+        "digital_command_events"
+      ],
+      "boundary": "Faraday/slit-supply/laser digital patches, empty branches, frame order/color/reset modeled in digital_command_events; waits are intents only, all PSP/hardware effects blocked, states unproven",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 9,
+      "label": "Position Faraday 1: value change",
+      "bounded_models": [
+        "digital_command_events"
+      ],
+      "boundary": "Faraday/slit-supply/laser digital patches, empty branches, frame order/color/reset modeled in digital_command_events; waits are intents only, all PSP/hardware effects blocked, states unproven",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 10,
+      "label": "Position Faraday 2: value change",
+      "bounded_models": [
+        "digital_command_events"
+      ],
+      "boundary": "Faraday/slit-supply/laser digital patches, empty branches, frame order/color/reset modeled in digital_command_events; waits are intents only, all PSP/hardware effects blocked, states unproven",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 11,
+      "label": "Position Faraday 3: value change",
+      "bounded_models": [
+        "digital_command_events"
+      ],
+      "boundary": "Faraday/slit-supply/laser digital patches, empty branches, frame order/color/reset modeled in digital_command_events; waits are intents only, all PSP/hardware effects blocked, states unproven",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 12,
+      "label": "Position diagnostique T2: value change",
+      "bounded_models": [
+        "diagnostic_events"
+      ],
+      "boundary": "T1/T2/T3 constants, C9NI6703 patch/x10 display modeled in diagnostic_events; native default corrected from Print, unsupported selectors and all PSP/motion effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 13,
+      "label": "Position diagnostique T3: value change",
+      "bounded_models": [
+        "diagnostic_events"
+      ],
+      "boundary": "T1/T2/T3 constants, C9NI6703 patch/x10 display modeled in diagnostic_events; native default corrected from Print, unsupported selectors and all PSP/motion effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 14,
+      "label": "Page Fluides: value change",
+      "bounded_models": [
+        "parameter_page_events"
+      ],
+      "boundary": "Fluides/HT/HF 20 arrow rules, limits, 9 DPS flags, busy-bypassing arrow guard, quirks, UI base/reset and timing intents modeled in parameter_page_events; multi-bit no-op, unordered sinks, binary/PSP/hardware effects and modern safety policy blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 15,
+      "label": "Page HT: value change",
+      "bounded_models": [
+        "parameter_page_events"
+      ],
+      "boundary": "Fluides/HT/HF 20 arrow rules, limits, 9 DPS flags, busy-bypassing arrow guard, quirks, UI base/reset and timing intents modeled in parameter_page_events; multi-bit no-op, unordered sinks, binary/PSP/hardware effects and modern safety policy blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 16,
+      "label": "Page HF: value change",
+      "bounded_models": [
+        "parameter_page_events"
+      ],
+      "boundary": "Fluides/HT/HF 20 arrow rules, limits, 9 DPS flags, busy-bypassing arrow guard, quirks, UI base/reset and timing intents modeled in parameter_page_events; multi-bit no-op, unordered sinks, binary/PSP/hardware effects and modern safety policy blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 17,
+      "label": "Page Alimentations: value change",
+      "bounded_models": [
+        "page_command_events"
+      ],
+      "boundary": "Alimentations/modulator NewVal fields, whole-DPS busy discard, unordered fan-out, TER and outside-guard Wait(200/0) modeled in page_command_events; binary decoding, acknowledgements, current ownership and all runtime effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 18,
+      "label": "Page Modulateur: value change",
+      "bounded_models": [
+        "page_command_events"
+      ],
+      "boundary": "Alimentations/modulator NewVal fields, whole-DPS busy discard, unordered fan-out, TER and outside-guard Wait(200/0) modeled in page_command_events; binary decoding, acknowledgements, current ownership and all runtime effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 19,
+      "label": "Voie directe: value change",
+      "bounded_models": [
+        "beamline_commands"
+      ],
+      "boundary": "four-frame direct/diverted setpoint arithmetic/controller intent modeled in beamline_commands; all PSP/hardware effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 20,
+      "label": "Voie déviée: value change",
+      "bounded_models": [
+        "beamline_commands"
+      ],
+      "boundary": "four-frame direct/diverted setpoint arithmetic/controller intent modeled in beamline_commands; all PSP/hardware effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 21,
+      "label": "Outils vidéo: value change",
+      "bounded_models": [
+        "video_events"
+      ],
+      "boundary": "mask/zoom/ROI, camera sequences, dead density branch and cancellation-aware TIFF intents modeled in video_events; image identity, camera/property results and external effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 22,
+      "label": "LOAD: value change",
+      "bounded_models": [
+        "load_events"
+      ],
+      "boundary": "load/cache/dialog/tree/display modeled in load_events; event 23 discards ten file-read outputs, applies no equipment preset; file format, conversions and all filesystem/UI effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 23,
+      "label": "VALIDER LOAD: value change",
+      "bounded_models": [
+        "load_events"
+      ],
+      "boundary": "load/cache/dialog/tree/display modeled in load_events; event 23 discards ten file-read outputs, applies no equipment preset; file format, conversions and all filesystem/UI effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 24,
+      "label": "Seuil BLANC (V), Seuil NOIR (V): mouse up",
+      "bounded_models": [
+        "video_events"
+      ],
+      "boundary": "mask/zoom/ROI, camera sequences, dead density branch and cancellation-aware TIFF intents modeled in video_events; image identity, camera/property results and external effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 25,
+      "label": "Voies NI1409: value change",
+      "bounded_models": [
+        "video_events"
+      ],
+      "boundary": "mask/zoom/ROI, camera sequences, dead density branch and cancellation-aware TIFF intents modeled in video_events; image identity, camera/property results and external effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 26,
+      "label": "Moyenne CxCy: value change",
+      "bounded_models": [
+        "diagnostic_events"
+      ],
+      "boundary": "Init moy CxCy True -> 200 ms -> False modeled in diagnostic_events; no mutation/sleep, reader observation/buffer reset unproven",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 27,
+      "label": "Initialisation: value change",
+      "bounded_models": [
+        "motion_events"
+      ],
+      "boundary": "motor/camera discovery, four-axis zeroing, signed jog/poll/abort and error-journal intents modeled in motion_events; no NewVal guard/timeout invented; units, limits/protocol/drivers blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 28,
+      "label": "Move forward X, Move forward Y: value change",
+      "bounded_models": [
+        "motion_events"
+      ],
+      "boundary": "motor/camera discovery, four-axis zeroing, signed jog/poll/abort and error-journal intents modeled in motion_events; no NewVal guard/timeout invented; units, limits/protocol/drivers blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 29,
+      "label": "Move reverse X, Move reverse Y: value change",
+      "bounded_models": [
+        "motion_events"
+      ],
+      "boundary": "motor/camera discovery, four-axis zeroing, signed jog/poll/abort and error-journal intents modeled in motion_events; no NewVal guard/timeout invented; units, limits/protocol/drivers blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 30,
+      "label": "autotune: value change",
+      "bounded_models": [
+        "autotune_events"
+      ],
+      "boundary": "motor/camera eight-frame switches, four centroid stages, 249..251 decisions/asymmetric connectors/Y-only stop modeled in autotune_events; freshness, defaults, error/unlimited convergence semantics and all runtime effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 31,
+      "label": "Tree: value change",
+      "bounded_models": [
+        "load_events"
+      ],
+      "boundary": "load/cache/dialog/tree/display modeled in load_events; event 23 discards ten file-read outputs, applies no equipment preset; file format, conversions and all filesystem/UI effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 32,
+      "label": "Densité optique: value change",
+      "bounded_models": [
+        "video_events"
+      ],
+      "boundary": "mask/zoom/ROI, camera sequences, dead density branch and cancellation-aware TIFF intents modeled in video_events; image identity, camera/property results and external effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    },
+    {
+      "event_index": 33,
+      "label": "Save img0: value change",
+      "bounded_models": [
+        "video_events"
+      ],
+      "boundary": "mask/zoom/ROI, camera sequences, dead density branch and cancellation-aware TIFF intents modeled in video_events; image identity, camera/property results and external effects blocked",
+      "coverage": "BOUNDED_PURE_MODEL",
+      "complete_event_qualification": false,
+      "runtime_execution_allowed": false
+    }
+  ]
+}

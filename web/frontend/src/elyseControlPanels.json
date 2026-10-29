@@ -1,0 +1,641 @@
+{
+  "source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "hardware_commands": false,
+  "palette_scope": "SAVED_FRONT_PANEL_NOT_HARDWARE_SAFETY",
+  "saved_values_used_as_telemetry": false,
+  "pages": {
+    "radioprotection": {
+      "control_uid": "28035",
+      "fields": {
+        "0": {
+          "control_uid": "67387",
+          "label": "Porte lourde",
+          "false_color": "#FF3333",
+          "true_color": "#00C82D",
+          "false_text": "PORTE LOURDE\nOUVERTE",
+          "true_text": "PORTE LOURDE\nFERMEE"
+        },
+        "1": {
+          "control_uid": "18377",
+          "label": "Porte légére",
+          "false_color": "#FF3333",
+          "true_color": "#00C82D",
+          "false_text": "PORTE LEGERE\nOUVERTE",
+          "true_text": "PORTE LEGERE\nFERMEE"
+        },
+        "2": {
+          "control_uid": "19097",
+          "label": "Porte de Secours",
+          "false_color": "#FF3333",
+          "true_color": "#00C82D",
+          "false_text": "PORTE SECOURS\nOUVERTE",
+          "true_text": "PORTE SECOURS\nFERMEE"
+        },
+        "3": {
+          "control_uid": "19573",
+          "label": "Porte Laser",
+          "false_color": "#FF3333",
+          "true_color": "#00C82D",
+          "false_text": "PORTE LASER\nOUVERTE",
+          "true_text": "PORTE LASER\nFERMEE"
+        },
+        "4": {
+          "control_uid": "22562",
+          "label": "Rondiers",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "RONDIERS\nFERMES",
+          "true_text": "RONDIERS\nOUVERTS"
+        },
+        "5": {
+          "control_uid": "414",
+          "label": "Occulteur LASER",
+          "false_color": "#FF3333",
+          "true_color": "#00C82D",
+          "false_text": "Occulteur LASER\nFERME",
+          "true_text": "Occulteur LASER\nOUVERT"
+        },
+        "6": {
+          "control_uid": "29656",
+          "label": "BACO-TIR EN/HORS",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "BACO de TIR\nEN",
+          "true_text": "BACO de TIR\nHORS"
+        },
+        "7": {
+          "control_uid": "415",
+          "label": "BACO PA/MOD",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "BACO\nMODULATEUR",
+          "true_text": "BACO\nPA"
+        },
+        "8": {
+          "control_uid": "63197",
+          "label": "RONDIER 1",
+          "false_color": "#B3B3B3",
+          "true_color": "#B3B3B3",
+          "false_text": "RONDIER 1",
+          "true_text": "RONDIER 1"
+        },
+        "9": {
+          "control_uid": "54468",
+          "label": "RONDIER 2",
+          "false_color": "#B3B3B3",
+          "true_color": "#B3B3B3",
+          "false_text": "RONDIER 2",
+          "true_text": "RONDIER 2"
+        },
+        "10": {
+          "control_uid": "57674",
+          "label": "RONDIER 3",
+          "false_color": "#B3B3B3",
+          "true_color": "#B3B3B3",
+          "false_text": "RONDIER 3",
+          "true_text": "RONDIER 3"
+        },
+        "11": {
+          "control_uid": "63206",
+          "label": "ARRETS D'URGENCE",
+          "false_color": "#FF3333",
+          "true_color": "#00C82D",
+          "false_text": "ARRETS\nD'URGENCE",
+          "true_text": "ARRETS\nD'URGENCE"
+        }
+      }
+    },
+    "ht": {
+      "control_uid": "54878",
+      "fields": {
+        "0": {
+          "control_uid": "72173",
+          "label": "Vide SECTION bis",
+          "false_color": "#FF3333",
+          "true_color": "#00C82D",
+          "false_text": "SECTION",
+          "true_text": "SECTION"
+        },
+        "1": {
+          "control_uid": "72499",
+          "label": "Lec Vide SECTION",
+          "saved_format": "%.2e"
+        },
+        "2": {
+          "control_uid": "42017",
+          "label": "Mesure I HT",
+          "saved_format": "%.1g"
+        },
+        "3": {
+          "control_uid": "41998",
+          "label": "Mesure V HT",
+          "saved_format": "%.1f"
+        },
+        "4": {
+          "control_uid": "34194",
+          "label": "V HT",
+          "false_color": "#00C82D",
+          "true_color": "#FF0000",
+          "false_text": "Mesure V HT",
+          "true_text": "Mesure V HT"
+        },
+        "5": {
+          "control_uid": "37516",
+          "label": "I HT",
+          "false_color": "#00C82D",
+          "true_color": "#FF0000",
+          "false_text": "Mesure I HT",
+          "true_text": "Mesure I HT"
+        },
+        "6": {
+          "control_uid": "83288",
+          "label": "Radioprotection",
+          "false_color": "#00C82D",
+          "true_color": "#FF0000",
+          "false_text": "RADIOPROTECTION\nCOUPURE HT",
+          "true_text": "RADIOPROTECTION\nCOUPURE HT"
+        },
+        "7": {
+          "control_uid": "65439",
+          "label": "Relais 2 HT",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "RELAIS 2 HT\nFERME",
+          "true_text": "RELAIS 2 HT\nOUVERT"
+        },
+        "8": {
+          "control_uid": "31238",
+          "label": "Relais 1 HT",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "RELAIS 1 HT\nFERME",
+          "true_text": "RELAIS 1 HT\nOUVERT"
+        },
+        "9": {
+          "control_uid": "68",
+          "label": "Reset HT",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "RESET",
+          "true_text": "EN COURS"
+        },
+        "10": {
+          "control_uid": "91062",
+          "label": "Marche HT",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "MARCHE",
+          "true_text": "EN COURS"
+        },
+        "11": {
+          "control_uid": "91070",
+          "label": "Arrêt HT",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "ARRET",
+          "true_text": "EN COURS"
+        },
+        "12": {
+          "control_uid": "25586",
+          "label": "Consigne HT",
+          "saved_format": "%.1f"
+        },
+        "13": {
+          "control_uid": "26466",
+          "label": "< HT",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<",
+          "true_text": "<"
+        },
+        "14": {
+          "control_uid": "28014",
+          "label": "> HT",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">",
+          "true_text": ">"
+        },
+        "15": {
+          "control_uid": "39414",
+          "label": "<< HT",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<<",
+          "true_text": "<<"
+        },
+        "16": {
+          "control_uid": "40817",
+          "label": ">> HT",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">>",
+          "true_text": ">>"
+        },
+        "17": {
+          "control_uid": "38253",
+          "label": "Lecture HT",
+          "saved_format": "%.1g"
+        },
+        "18": {
+          "control_uid": "6277",
+          "label": "Consigne préampli",
+          "saved_format": "%.0f"
+        },
+        "19": {
+          "control_uid": "40027",
+          "label": "< Préampli",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<",
+          "true_text": "<"
+        },
+        "20": {
+          "control_uid": "40039",
+          "label": "> Préampli",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">",
+          "true_text": ">"
+        },
+        "21": {
+          "control_uid": "40051",
+          "label": "<< Préampli",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<<",
+          "true_text": "<<"
+        },
+        "22": {
+          "control_uid": "40063",
+          "label": ">> Préampli",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">>",
+          "true_text": ">>"
+        },
+        "23": {
+          "control_uid": "40075",
+          "label": "Lecture Préampli",
+          "saved_format": "%.0f"
+        },
+        "24": {
+          "control_uid": "435",
+          "label": "Arrêt pulse MOD",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "ARRET",
+          "true_text": "EN COURS"
+        },
+        "25": {
+          "control_uid": "27464",
+          "label": "Marche pulse MOD",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "MARCHE",
+          "true_text": "EN COURS"
+        },
+        "26": {
+          "control_uid": "3040",
+          "label": "HT en défaut",
+          "false_color": "#B3B3B3",
+          "true_color": "#FF3333",
+          "false_text": "ALIMENTATION HT\nAUCUN DEFAUT",
+          "true_text": "ALIMENTATION HT\nEN DEFAUT"
+        },
+        "27": {
+          "control_uid": "51485",
+          "label": "HT en marche",
+          "false_color": "#00C82D",
+          "true_color": "#B3B3B3",
+          "false_text": "ALIMENTATION HT\nEN MARCHE",
+          "true_text": "ALIMENTATION HT\nEN MARCHE"
+        }
+      }
+    },
+    "hf": {
+      "control_uid": "36888",
+      "fields": {
+        "0": {
+          "control_uid": "62703",
+          "label": "Lec Atténuateur HF",
+          "saved_format": "%.2f"
+        },
+        "1": {
+          "control_uid": "62690",
+          "label": ">> Att HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">>",
+          "true_text": ">>"
+        },
+        "2": {
+          "control_uid": "62678",
+          "label": "<< Att HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<<",
+          "true_text": "<<"
+        },
+        "3": {
+          "control_uid": "62666",
+          "label": "> Att HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">",
+          "true_text": ">"
+        },
+        "4": {
+          "control_uid": "62654",
+          "label": "< Att HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<",
+          "true_text": "<"
+        },
+        "5": {
+          "control_uid": "60803",
+          "label": "Cons Atténuateur HF",
+          "saved_format": "%.2f"
+        },
+        "6": {
+          "control_uid": "30654",
+          "label": "Arrêt att./déph.",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "ARRET",
+          "true_text": "EN COURS"
+        },
+        "7": {
+          "control_uid": "30669",
+          "label": "Marche att./déph.",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "MARCHE",
+          "true_text": "EN COURS"
+        },
+        "8": {
+          "control_uid": "30683",
+          "label": "Pression SF6",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "PRESSION SF6",
+          "true_text": "PRESSION SF6"
+        },
+        "9": {
+          "control_uid": "30702",
+          "label": "Vide injection",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "VIDE INJECTION",
+          "true_text": "VIDE INJECTION"
+        },
+        "10": {
+          "control_uid": "30714",
+          "label": "Incident HF Canon",
+          "false_color": "#00C82D",
+          "true_color": "#FF0000",
+          "false_text": "INCIDENT HF\nCANON",
+          "true_text": "INCIDENT HF\nCANON"
+        },
+        "11": {
+          "control_uid": "30726",
+          "label": "Incident HF Section",
+          "false_color": "#00C82D",
+          "true_color": "#FF0000",
+          "false_text": "INCIDENT HF\nSECTION",
+          "true_text": "INCIDENT HF\nSECTION"
+        },
+        "12": {
+          "control_uid": "83852",
+          "label": "Lecture déphaseur HF",
+          "saved_format": "%.1f"
+        },
+        "13": {
+          "control_uid": "83870",
+          "label": ">> déphaseur HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">>",
+          "true_text": ">>"
+        },
+        "14": {
+          "control_uid": "83882",
+          "label": "<< déphaseur HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<<",
+          "true_text": "<<"
+        },
+        "15": {
+          "control_uid": "83894",
+          "label": "> déphaseur HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": ">",
+          "true_text": ">"
+        },
+        "16": {
+          "control_uid": "83906",
+          "label": "< déphaseur HF",
+          "false_color": "#BCBCBC",
+          "true_color": "#0041DC",
+          "false_text": "<",
+          "true_text": "<"
+        },
+        "17": {
+          "control_uid": "83918",
+          "label": "Consigne déphaseur HF",
+          "saved_format": "%.1f"
+        },
+        "18": {
+          "control_uid": "52903",
+          "label": "Atténuateur butée MIN",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "ATTENUATEUR\nBUTEE MIN",
+          "true_text": "ATTENUATEUR\nBUTEE MIN"
+        },
+        "19": {
+          "control_uid": "56237",
+          "label": "Atténuateur butée MAX",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "ATTENUATEUR\nBUTEE MAX",
+          "true_text": "ATTENUATEUR\nBUTEE MAX"
+        },
+        "20": {
+          "control_uid": "59310",
+          "label": "Déphaseur butée MAX",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "DEPHASEUR\nBUTEE MAX",
+          "true_text": "DEPHASEUR\nBUTEE MAX"
+        },
+        "21": {
+          "control_uid": "60804",
+          "label": "Déphaseur butée MIN",
+          "false_color": "#00C82D",
+          "true_color": "#FF3333",
+          "false_text": "DEPHASEUR\nBUTEE MIN",
+          "true_text": "DEPHASEUR\nBUTEE MIN"
+        },
+        "22": {
+          "control_uid": "83842",
+          "label": "Lec déphaseur manuel",
+          "saved_format": "%.1f"
+        },
+        "23": {
+          "control_uid": "80560",
+          "label": "Lec HF Canon",
+          "saved_format": "%.2f"
+        },
+        "24": {
+          "control_uid": "83377",
+          "label": "lec HF Section",
+          "saved_format": "%.2f"
+        },
+        "25": {
+          "control_uid": "53770",
+          "label": "Incident HF Section 2",
+          "false_color": "#00C82D",
+          "true_color": "#FF0000",
+          "false_text": "RADIOPROTECTION\nCOUPURE HF",
+          "true_text": "RADIOPROTECTION\nCOUPURE HF"
+        }
+      }
+    },
+    "alimentations": {
+      "control_uid": "29896",
+      "fields": {
+        "0": {
+          "control_uid": "24975",
+          "label": "Graph Alimentations"
+        },
+        "1": {
+          "control_uid": "18444",
+          "label": "Gph Choix V1"
+        },
+        "2": {
+          "control_uid": "278",
+          "label": "Aimants. en marche",
+          "false_color": "#BCBCBC",
+          "true_color": "#BCBCBC",
+          "false_text": "ALIMENTATIONS\nA L'ARRET",
+          "true_text": "ALIMENTATIONS\nA L'ARRET"
+        },
+        "3": {
+          "control_uid": "13279",
+          "label": "Arrêt Aimants",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "ARRET",
+          "true_text": "EN COURS"
+        },
+        "4": {
+          "control_uid": "14754",
+          "label": "Marche Aimants.",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "MARCHE",
+          "true_text": "EN COURS"
+        },
+        "5": {
+          "control_uid": "22278",
+          "label": "Aimants en défaut",
+          "false_color": "#BCBCBC",
+          "true_color": "#FF3333",
+          "false_text": "ALIMENTATIONS\nAUCUN DEFAUT",
+          "true_text": "ALIMENTATIONS\nEN DEFAUT"
+        },
+        "6": {
+          "control_uid": "951",
+          "label": "Gph Choix V2"
+        },
+        "7": {
+          "control_uid": "13109",
+          "label": "Gph Choix V3"
+        },
+        "8": {
+          "control_uid": "70909",
+          "label": "Gph Choix V4"
+        },
+        "9": {
+          "control_uid": "74169",
+          "label": "Save Graph Aimants",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "SAUVEGARDE",
+          "true_text": "EN COURS"
+        },
+        "10": {
+          "control_uid": "47683",
+          "label": "Save Graph Aimants 2"
+        },
+        "11": {
+          "control_uid": "37604",
+          "label": "Durée graphique"
+        },
+        "12": {
+          "control_uid": "51546",
+          "label": "Aimant 0V",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "0V",
+          "true_text": "EC"
+        },
+        "13": {
+          "control_uid": "59929",
+          "label": "Aimant RUN",
+          "false_color": "#BCBCBC",
+          "true_color": "#3399FF",
+          "false_text": "Run",
+          "true_text": "EC"
+        }
+      }
+    }
+  },
+  "power_state": {
+    "bank": "C3_IN_DIO96",
+    "indices": [
+      31,
+      28,
+      35,
+      37,
+      39,
+      41,
+      12,
+      14,
+      43,
+      45,
+      24,
+      26,
+      20,
+      47,
+      49,
+      53
+    ],
+    "states": [
+      {
+        "color": "#BCBCBC",
+        "text": "ALIMENTATIONS\nA L'ARRET"
+      },
+      {
+        "color": "#EE9A28",
+        "text": "ALIMENTATIONS\nDEFAUTS SOFT"
+      },
+      {
+        "color": "#EE9A28",
+        "text": "ALIMENTATIONS\nEN MARCHE"
+      },
+      {
+        "color": "#64FF00",
+        "text": "ALIMENTATIONS\nEN MARCHE"
+      }
+    ],
+    "expression": "AND(NOT bits) + 2 * OR(NOT bits)",
+    "inputs_inverted": true,
+    "temporal_equivalence": false,
+    "permission_decision": false
+  }
+}

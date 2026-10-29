@@ -1,0 +1,36 @@
+.elyse-live { padding: 12px; text-align: left; color: #10243a; font-size: 13px; }
+.elyse-live__alarm { border-left: 4px solid #b44848; padding: 8px 12px; background: #ffe7e7; color: #8c2929; font-weight: 600; }
+.elyse-live__group { margin: 16px 0; }
+.elyse-live__group h3 { margin: 0 0 9px; font-size: 14px; }
+.elyse-live__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.elyse-live__card { min-width: 0; padding: 12px; border: 1px solid #c4cdd5; border-radius: 5px; background: #f7fafc; overflow-wrap: anywhere; }
+.elyse-live__label { display: block; min-height: 32px; font-weight: 600; }
+.elyse-live__card output { font: 600 23px Consolas, monospace; color: #163d67; }
+.elyse-live__card small { display: block; font-size: 11px; color: #4c5d6d; }
+.elyse-live__card details { margin-top: 8px; font: 11px Consolas, monospace; }
+.elyse-live__card summary, .elyse-live__provenance summary { cursor: pointer; }
+.elyse-live__card--stale, .elyse-live__card--read_error, .elyse-live__card--unavailable { background: #fff2e1; border-color: #b39369; }
+.elyse-live__group--vacuum > h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: #243e54; }
+.elyse-pressure__heading-note { font-size: 10px; font-weight: 400; color: #647687; white-space: nowrap; }
+.elyse-live__group--vacuum .elyse-live__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.elyse-live__card--pressure { padding: 10px 11px 8px; border-radius: 6px; }
+.elyse-live__card--pressure.elyse-live__card--fresh { border-color: #c9d3dc; background: #f5f8fa; }
+.elyse-live__card--pressure .elyse-live__label { font-size: 11px; font-weight: 500; color: #445d72; min-height: 29px; line-height: 1.3; }
+.elyse-pressure__reading { display: flex; align-items: baseline; gap: 5px; margin: 3px 0 7px; white-space: nowrap; }
+.elyse-live__card--pressure output { font: 500 18px 'Segoe UI', Arial, sans-serif; font-variant-numeric: tabular-nums; color: #163d67; }
+.elyse-pressure__power { font-size: 12px; color: #395974; }
+.elyse-pressure__power sup { font-size: 10px; position: relative; top: -.15em; }
+.elyse-pressure__unit { font-size: 10px; color: #607486; }
+.elyse-live__card--pressure small { font-size: 10px; color: #647687; line-height: 1.4; }
+.elyse-live__card--pressure details { border-top: 1px solid #e0e7ed; padding-top: 5px; margin-top: 7px; font-size: 9px; color: #738494; }
+.elyse-live__card--pressure summary { width: fit-content; }
+@media (max-width: 700px) { .elyse-live__group--vacuum .elyse-live__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 360px) { .elyse-live__group--vacuum .elyse-live__grid { grid-template-columns: 1fr; } }
+.elyse-live__limits { padding: 10px; background: #fff2cf; border-left: 3px solid #ba8b2a; line-height: 1.5; }
+.elyse-live__provenance { padding: 10px; font-size: 12px; background: #e6edf3; }
+.elyse-live-toggle { display: flex; gap: 5px; margin-top: 5px; }
+.elyse-live-toggle button { border: 1px solid #8097af; border-radius: 3px; background: #dce6f0; color: #132d49; padding: 3px 8px; cursor: pointer; }
+.elyse-live-toggle button[aria-pressed=true] { background: #f4fbff; font-weight: bold; }
+.elyse-workspace.elyse-workspace--live { grid-template-rows: 39px minmax(0, 1fr); }
+.elyse-console__layout.elyse-console__layout--live { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 900px) { .elyse-workspace.elyse-workspace--live { grid-template-rows: 60px minmax(500px, 1fr); } }
