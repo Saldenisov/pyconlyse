@@ -1,0 +1,56 @@
+{
+  "python": "3.12.14",
+  "bits": 64,
+  "fixtures": [
+    {
+      "fixture": "synthetic repetitive ramp",
+      "simulated": true,
+      "geometry": [
+        768,
+        576
+      ],
+      "frames": 125,
+      "requested_hz": 25,
+      "acknowledged": 125,
+      "rejected_new": 0,
+      "elapsed_seconds": 4.969000000040978,
+      "acknowledged_hz": 25.155966995163848,
+      "fifo_peak_frames": 2,
+      "enqueue_max_ms": 16.00000006146729,
+      "enqueue_p95_ms": 0.0,
+      "sample_encoded_bytes": 4079,
+      "estimated_mbit_s_at_25hz": 0.8158,
+      "source_sha256": "f35417451de124c3558ec943503a49f09078c66ccbf577e786e3d22817d235db",
+      "destination": "127.0.0.1 only",
+      "database_writes": 0,
+      "hardware_calls": 0,
+      "ni_grab_qualification": false
+    },
+    {
+      "fixture": "synthetic 8-bit entropy",
+      "simulated": true,
+      "geometry": [
+        768,
+        576
+      ],
+      "frames": 125,
+      "requested_hz": 25,
+      "acknowledged": 125,
+      "rejected_new": 0,
+      "elapsed_seconds": 4.969000000040978,
+      "acknowledged_hz": 25.155966995163848,
+      "fifo_peak_frames": 2,
+      "enqueue_max_ms": 31.00000007543713,
+      "enqueue_p95_ms": 0.0,
+      "sample_encoded_bytes": 442893,
+      "estimated_mbit_s_at_25hz": 88.5786,
+      "source_sha256": "375bf5ccbfa0c4dec88a20a8b3c350ea3d21da1e3bf87db43d46554ea0ba4a8a",
+      "destination": "127.0.0.1 only",
+      "database_writes": 0,
+      "hardware_calls": 0,
+      "ni_grab_qualification": false
+    }
+  ],
+  "xp_ni_and_lan_measured": false,
+  "module_sha256": "ee7e5926e32a3b200e19d3ca112c2fb4e9d1cf0f1bdcce397451b6809b384a1a"
+}

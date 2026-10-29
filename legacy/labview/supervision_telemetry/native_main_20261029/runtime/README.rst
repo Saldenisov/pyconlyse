@@ -58,3 +58,25 @@ One real frame compressed losslessly with zlib level 1 to 178403 bytes,
 equivalent to 35.6806 Mbit/s at 25 frames/s for that particular content.
 Compression performance on XP and a continuous full-frame transport remain
 unqualified. The current sampled channel does not deliver every Grab frame.
+
+Operator handoff and independent camera transport
+------------------------------------------------
+
+The test VI was normally stopped at the user's request and its changed items
+saved; original desktop SuperVision is running again. The ``Supervision
+Telemetry`` shortcut now has the original shortcut's icon and points to the
+saved telemetry entry. No new telemetry-VI test was started after the handoff.
+
+``CAMERA_FULL_FRAME_PLAN.rst`` records the exact integration boundary and the
+prepared separate binary FIFO. Eleven transport tests pass on CPython3.4 x86;
+the combined Everest archive/federation/transport suite passes 50 tests.
+Both interpreters delivered all125 full-size synthetic frames fed at25Hz in
+loopback. This does not qualify XP/native camera throughput. The native
+one-second gate and latest-only queue still require replacement in a future
+copy; the separate stream is not deployed or connected to the current VI.
+
+The Everest archive now excludes pixels from new spool entries and from old
+pending entries delivered to PostgreSQL. It preserves synchronization state
+and original retry identities. The actual 16-value control-memory record at
+08:12:54 Paris was read back from PostgreSQL without pixels. Historical
+PostgreSQL rows were not rewritten. The older backlog is still draining.
