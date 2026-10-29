@@ -1,6 +1,13 @@
 Prepared source wiring in the one SuperVision host
 =================================================
 
+Update 2026-10-29: the native FIFO patch is now prepared separately in
+``../../realtime_fifo_20261029``. It removes the copy gate and changes all three
+camera queue size inputs to 128, with ordinary Enqueue/timeout0. Its stopped
+entry requires complete LabVIEW 2012 dependency loading/compilation before Run.
+No XP installation or 25 Hz qualification has been performed. The paragraphs
+below describe the existing Python preparation and deployed-source boundary.
+
 This is source/package preparation on Everest, not an XP deployment. The
 running original SuperVision and NI ownership were not changed. The optional
 camera source path is now wired into accepted typed VI observations; it is no

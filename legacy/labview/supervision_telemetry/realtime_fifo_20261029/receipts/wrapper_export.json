@@ -1,0 +1,24 @@
+{
+  "before": {
+    "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\wrapper\\START_Supervision_Telemetry_Camera_NATIVE_HELPERS_UNCOMPILED.vi",
+    "execution": 0,
+    "vi_modifications": 0,
+    "fp_modifications": 0,
+    "bd_modifications": 0
+  },
+  "after": {
+    "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\wrapper\\START_Supervision_Telemetry_Camera_NATIVE_HELPERS_UNCOMPILED.vi",
+    "execution": 0,
+    "vi_modifications": 0,
+    "fp_modifications": 0,
+    "bd_modifications": 0
+  },
+  "header": {
+    "major": 12,
+    "encoded_version": "12008004",
+    "RunOnOpen": false,
+    "source_diagram": true
+  },
+  "warnings": "",
+  "Run": false
+}

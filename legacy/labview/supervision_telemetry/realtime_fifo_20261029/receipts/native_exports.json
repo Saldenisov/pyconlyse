@@ -1,0 +1,89 @@
+[
+  {
+    "source": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\SUP_Camera_FrameTap.vi",
+    "source_sha256": "62ba446d5e76ceb4dfca0e3b8836e836a28f48311cb67e32d234927a558c50a1",
+    "destination": "C:\\dev\\sup_vi_realtime_20261029\\native2012\\camera\\SUP_Camera_FrameTap.vi",
+    "sha256": "cfa95d2cd11c69bb01602d57c7a450c3840dab5ed7bd347be47ed9807274576b",
+    "header": {
+      "major": 12,
+      "encoded_version": "12008004",
+      "RunOnOpen": false,
+      "source_diagram": true
+    },
+    "before": {
+      "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\SUP_Camera_FrameTap.vi",
+      "execution": 1,
+      "vi_modifications": 0,
+      "fp_modifications": 0,
+      "bd_modifications": 0
+    },
+    "after": {
+      "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\SUP_Camera_FrameTap.vi",
+      "execution": 1,
+      "vi_modifications": 0,
+      "fp_modifications": 0,
+      "bd_modifications": 0
+    },
+    "warnings": "",
+    "Run": false,
+    "RSRC_writer": false
+  },
+  {
+    "source": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\observer_v3\\SUP_Camera_Queue_Latest.vi",
+    "source_sha256": "2d1401ee7fef2b96a63644f2f958afdfaac02373d3e62ccf3335a54734bfebf7",
+    "destination": "C:\\dev\\sup_vi_realtime_20261029\\native2012\\camera\\observer_v3\\SUP_Camera_Queue_Latest.vi",
+    "sha256": "965152fdef593c01d8372e7148951f2f67d75b442cc5c3c0fccc260c4bcf0c5d",
+    "header": {
+      "major": 12,
+      "encoded_version": "12008004",
+      "RunOnOpen": false,
+      "source_diagram": true
+    },
+    "before": {
+      "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\observer_v3\\SUP_Camera_Queue_Latest.vi",
+      "execution": 1,
+      "vi_modifications": 0,
+      "fp_modifications": 0,
+      "bd_modifications": 0
+    },
+    "after": {
+      "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\observer_v3\\SUP_Camera_Queue_Latest.vi",
+      "execution": 1,
+      "vi_modifications": 0,
+      "fp_modifications": 0,
+      "bd_modifications": 0
+    },
+    "warnings": "",
+    "Run": false,
+    "RSRC_writer": false
+  },
+  {
+    "source": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\SUP_Camera_Transport.vi",
+    "source_sha256": "5cc2cc7f761d21c69007d31acf733793341a2f05f4078105f126e4a9f0294fb6",
+    "destination": "C:\\dev\\sup_vi_realtime_20261029\\native2012\\camera\\SUP_Camera_Transport.vi",
+    "sha256": "7504af1603dddfd343b2f03e59b337038e07e6700c69f21f813e026db1a5a1f1",
+    "header": {
+      "major": 12,
+      "encoded_version": "12008004",
+      "RunOnOpen": false,
+      "source_diagram": true
+    },
+    "before": {
+      "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\SUP_Camera_Transport.vi",
+      "execution": 1,
+      "vi_modifications": 0,
+      "fp_modifications": 0,
+      "bd_modifications": 0
+    },
+    "after": {
+      "path": "C:\\dev\\sup_vi_realtime_20261029\\authoring\\camera\\SUP_Camera_Transport.vi",
+      "execution": 1,
+      "vi_modifications": 0,
+      "fp_modifications": 0,
+      "bd_modifications": 0
+    },
+    "warnings": "",
+    "Run": false,
+    "RSRC_writer": false
+  }
+]

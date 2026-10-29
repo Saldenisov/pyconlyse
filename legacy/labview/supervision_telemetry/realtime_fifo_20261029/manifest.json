@@ -1,0 +1,108 @@
+{
+  "kind": "NATIVE_CAMERA_FIFO_PREPARATION",
+  "date": "2026-10-29",
+  "queue_capacity": 128,
+  "enqueue_timeout_ms": 0,
+  "copy_gate_ms": 0,
+  "xp_deployed": false,
+  "runtime_25Hz_qualified": false,
+  "native12_complete_dependency_load_pending": true,
+  "entry_saved_BadNode_due_unloaded_callees": true,
+  "hardware_commands_sent": false,
+  "original_xp_archive_modified": false,
+  "native_binary_writer": "LabVIEW 2020 x86 SaveInstrument + SaveForPrevious 12.0",
+  "artifacts": [
+    {
+      "path": "camera/SUP_Camera_FrameTap.vi",
+      "bytes": 27843,
+      "sha256": "cfa95d2cd11c69bb01602d57c7a450c3840dab5ed7bd347be47ed9807274576b"
+    },
+    {
+      "path": "camera/observer_v3/SUP_Camera_Queue_Latest.vi",
+      "bytes": 8043,
+      "sha256": "965152fdef593c01d8372e7148951f2f67d75b442cc5c3c0fccc260c4bcf0c5d"
+    },
+    {
+      "path": "camera/SUP_Camera_Transport.vi",
+      "bytes": 14148,
+      "sha256": "7504af1603dddfd343b2f03e59b337038e07e6700c69f21f813e026db1a5a1f1"
+    },
+    {
+      "path": "entry/START_Supervision_Telemetry_Camera_FIFO.vi",
+      "bytes": 15588,
+      "sha256": "fc0192c33acec37f90a7d86ea9a856ff4ac0eb5d152d6d6910458fb1b372383f"
+    }
+  ],
+  "preserved_repo_files": [
+    {
+      "path": "legacy/labview/supervision_telemetry/native_main_20261029/artifacts/ACQ_SharedState_Transport_Auto.vi",
+      "bytes": 20442,
+      "sha256": "156bdd968267435c6be0bfee46b1536903d543fc433d68940b98270fce800cfa"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/native_main_20261029/artifacts/SUPERVISION.llb",
+      "bytes": 2245507,
+      "sha256": "87c73e3e3a1634461f27f1cafbbcb0f476d2cbc2663cf485079342a24f3d05c9"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/observer_v3/SUP_Camera_Queue_Latest.vi",
+      "bytes": 10059,
+      "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_Epoch.vi",
+      "bytes": 29372,
+      "sha256": "84b78999901b37537f83c5c480777f22bee98a1f78d153ea93739e57738c8a3e"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_FrameTap.vi",
+      "bytes": 27855,
+      "sha256": "a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "bytes": 26533,
+      "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_SetupObserve.vi",
+      "bytes": 22419,
+      "sha256": "4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_Transport.vi",
+      "bytes": 14132,
+      "sha256": "d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Telemetry_Begin.vi",
+      "bytes": 22483,
+      "sha256": "b6431ae4ac0497f8de9bb0b9cdc2f2c1c656b101f9642ea4c7d6748423a4e62d"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Telemetry_End.vi",
+      "bytes": 22389,
+      "sha256": "bf9cdf4865fe50c16768b5e7a0ca6ede3cc8a082a53d98652dab73e08b3884c3"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/sync_lifecycle/ACQ_SharedState_Transport_Auto.vi",
+      "bytes": 13750,
+      "sha256": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi",
+      "bytes": 7988,
+      "sha256": "7762e5753c1064c41fb270f2cb756ac73ba1c0f7ca6c387c1458b58c9e6834fc"
+    },
+    {
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi",
+      "bytes": 8071,
+      "sha256": "c81604493a62a6137d78a10913e2f17eb76272e86556a949025d8d4f61d999ce"
+    }
+  ],
+  "source_audit": {
+    "path": "receipts/source_audit.json",
+    "bytes": 6962,
+    "sha256": "641d01dbc3b9e51dd63453fcfd40bcc1ca0eae0a6c6a3f9e36196cc02231a9e1"
+  }
+}
