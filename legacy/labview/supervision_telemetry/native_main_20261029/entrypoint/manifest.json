@@ -1,0 +1,43 @@
+{
+  "VI_or_EXE_binaries_in_receipt_directory": false,
+  "XP_executable_hash_known": true,
+  "external_native_entry": {
+    "RunOnOpen": 1,
+    "bytes": 21433,
+    "filename": "Supervision Telemetry.vi",
+    "header": "12.0.0 release build4",
+    "sha256": "477860f5505ffd1094ac185b802a96c8a4e3ddbfd3986a5d2be492176c9ee34e"
+  },
+  "files": {
+    "README.rst": {
+      "bytes": 5136,
+      "sha256": "a88b49839ee206661ed43f14c9a5cf08f688f35441b2e0bd384a43937d7ad218"
+    },
+    "source_audit.json": {
+      "bytes": 21505,
+      "sha256": "5f8e92a208fe8fa6dba0aa41f2710e2bd373020a3bd9295970d4a26915cb93db"
+    },
+    "xp_executable_readback.json": {
+      "bytes": 1417,
+      "sha256": "54dad8f9b2d8b4177f206919248a64cd180036fbad9fbf9e04bfb2e1de2524cc"
+    }
+  },
+  "git_staged_or_committed_by_auditor": false,
+  "observed_XP_executable": {
+    "FileVersion": "12.0.1f2",
+    "ProductVersion": "12.0.1f2",
+    "architecture": "PE32 I386/x86",
+    "bytes": 38663232,
+    "executable_loaded_or_run": false,
+    "local_PE_and_version_resources_verified": true,
+    "observed_XP_file_copy": true,
+    "path": "C:\\Program Files\\National Instruments\\LabVIEW 2012\\LabVIEW.exe",
+    "provenance_receipt": "xp_executable_readback.json",
+    "qualification": "Observed file identity only; no runtime proof",
+    "remote_running_process_identity_verified": false,
+    "sha256": "5c894a31a084e9e26f9491b697f02e069c760dde26ba46686d7144f41e13ff8c",
+    "verified_XP_LabVIEW_2012_file_identity": true
+  },
+  "schema_version": 1,
+  "status": "NATIVE_XP_ENTRY_SOURCE_AUDITED_NOT_RUNTIME_QUALIFIED"
+}

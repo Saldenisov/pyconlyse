@@ -1,0 +1,25 @@
+{
+  "VI_binaries_in_receipt_directory": false,
+  "external_native_worker": {
+    "RunOnOpen": 0,
+    "bytes": 20442,
+    "filename": "ACQ_SharedState_Transport_Auto.vi",
+    "header": "12.0.0 release build4",
+    "sha256": "156bdd968267435c6be0bfee46b1536903d543fc433d68940b98270fce800cfa"
+  },
+  "files": {
+    "README.rst": {
+      "bytes": 3081,
+      "sha256": "76cd6f6b37ee4670e08ccce9b0a63bfc97243e7696f64aac5ab951d5c7ce094a"
+    },
+    "source_audit.json": {
+      "bytes": 8349,
+      "sha256": "025fe964ebc3d4fdb4022a45cd8761112d237d76803874991de89ffa96b2cba8"
+    }
+  },
+  "git_staged_or_committed_by_auditor": false,
+  "historical_reference_sha256": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357",
+  "runtime_qualified": false,
+  "schema_version": 1,
+  "status": "NATIVE_XP_XML_DIAGNOSTIC_SOURCE_AUDITED_NOT_RUNTIME_QUALIFIED"
+}

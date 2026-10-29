@@ -1,0 +1,25 @@
+{
+  "external_native_archive": {
+    "archive_bytes": 2245507,
+    "archive_filename": "SUPERVISION.llb",
+    "archive_sha256": "87c73e3e3a1634461f27f1cafbbcb0f476d2cbc2663cf485079342a24f3d05c9",
+    "binary_delivery": "Existing frozen checkpoint; proof directory contains text only",
+    "member": "0_SUP_ELYSE.vi",
+    "member_bytes": 1154839,
+    "member_sha256": "0fb75ecf887677adcf62506cfd5224dc29a786e1d315e8520c8904377b29bea0"
+  },
+  "files": {
+    "README.rst": {
+      "bytes": 5358,
+      "sha256": "139fff4dab30e928382c440a04764a73d1aed3ca04314786235abd52dd904442"
+    },
+    "source_audit.json": {
+      "bytes": 22190,
+      "sha256": "98a5542b285c460a94cbb27ecb363615f13776325a9149f1c001d2be22c1c030"
+    }
+  },
+  "git_committed": false,
+  "git_staged": false,
+  "schema_version": 1,
+  "status": "NATIVE_XP_SOURCE_AUDITED_NOT_RUNTIME_QUALIFIED"
+}

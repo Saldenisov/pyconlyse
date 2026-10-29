@@ -1,0 +1,872 @@
+{
+  "XP_LabVIEW_executable_identity": {
+    "FileVersion": "12.0.1f2",
+    "ProductVersion": "12.0.1f2",
+    "architecture": "PE32 I386/x86",
+    "bytes": 38663232,
+    "executable_loaded_or_run": false,
+    "local_PE_and_version_resources_verified": true,
+    "observed_XP_file_copy": true,
+    "path": "C:\\Program Files\\National Instruments\\LabVIEW 2012\\LabVIEW.exe",
+    "provenance_receipt": "xp_executable_readback.json",
+    "qualification": "Observed file identity only; no runtime proof",
+    "remote_running_process_identity_verified": false,
+    "sha256": "5c894a31a084e9e26f9491b697f02e069c760dde26ba46686d7144f41e13ff8c",
+    "verified_XP_LabVIEW_2012_file_identity": true
+  },
+  "callees": [
+    {
+      "caller_relative_path": "../SUPERVISION.llb/0_SUP_ELYSE.vi",
+      "saved_PTH0_TpVal": 1,
+      "saved_components": [
+        "",
+        "SUPERVISION.llb",
+        "0_SUP_ELYSE.vi"
+      ],
+      "target_name": "0_SUP_ELYSE.vi",
+      "uid": "230"
+    },
+    {
+      "caller_relative_path": "../../SUP_Telemetry_Helpers_88fd4200/sync_lifecycle/ACQ_SharedState_Transport_Auto.vi",
+      "saved_PTH0_TpVal": 1,
+      "saved_components": [
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "sync_lifecycle",
+        "ACQ_SharedState_Transport_Auto.vi"
+      ],
+      "target_name": "ACQ_SharedState_Transport_Auto.vi",
+      "uid": "1049"
+    },
+    {
+      "caller_relative_path": "../../SUP_Telemetry_Helpers_88fd4200/camera/SUP_Camera_Transport.vi",
+      "saved_PTH0_TpVal": 1,
+      "saved_components": [
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_Transport.vi"
+      ],
+      "target_name": "SUP_Camera_Transport.vi",
+      "uid": "2471"
+    }
+  ],
+  "case": {
+    "Error_diagram": "2626",
+    "Error_executable_nodes": 0,
+    "NoError_diagram": "2632",
+    "parallel_branches": [
+      "XML1049",
+      "main230_then_stopEnqueues1095+2509",
+      "camera2471"
+    ],
+    "uid": "2618"
+  },
+  "comparison": {
+    "FP_labels_types_order_identical": true,
+    "all64_signal_endpoint_lists_identical": true,
+    "all_checked_operation_constant_call_local_structure_signatures_identical": true,
+    "callee_path_components_identical": true,
+    "execution_property_changes": [
+      {
+        "after": "1",
+        "before": "0",
+        "group": "Execution",
+        "property": "RunOnOpen"
+      }
+    ],
+    "reference_wrapper_sha256": "fa2c035f708dcb54c6cb1bb2f97923efd6553ed88b545a420c8c40c7349056e0",
+    "typed_terminals_preserved": 185
+  },
+  "copied_main_archive_sha256": "87c73e3e3a1634461f27f1cafbbcb0f476d2cbc2663cf485079342a24f3d05c9",
+  "enqueues": [
+    {
+      "element": {
+        "hex": "01",
+        "path": [
+          "1104",
+          "1246"
+        ],
+        "source": "1246",
+        "type": "Boolean",
+        "value": true
+      },
+      "error_indicator": {
+        "fp_uid": "5030",
+        "label": "\"Telemetry stop enqueue error 2\"",
+        "sink": "5032",
+        "source": "1119",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      "node": "1095",
+      "stop_ref_source": {
+        "endpoint": {
+          "dco_class": "parm",
+          "dco_objFlags": 1,
+          "dco_uid": "530",
+          "owner": {
+            "class": "prim",
+            "name": null,
+            "uid": "517"
+          },
+          "term": "529",
+          "type": {
+            "children": [
+              "Boolean"
+            ],
+            "dimensions": [],
+            "type": "Refnum"
+          }
+        },
+        "path": [
+          "1101",
+          "1134",
+          "1138",
+          "2666",
+          "2667",
+          "968",
+          "969",
+          "980",
+          "976",
+          "529"
+        ],
+        "term": "529"
+      },
+      "timed_out_indicator": {
+        "fp_uid": "6171",
+        "label": "\"Telemetry stop enqueue timed out 2\"",
+        "sink": "6173",
+        "source": "1116",
+        "type": "Boolean"
+      },
+      "timeout_ms": {
+        "hex": "0000000000",
+        "path": [
+          "1107",
+          "1161"
+        ],
+        "source": "1161",
+        "type": "NumInt32",
+        "value": 0
+      }
+    },
+    {
+      "element": {
+        "hex": "01",
+        "path": [
+          "2512",
+          "2534"
+        ],
+        "source": "2534",
+        "type": "Boolean",
+        "value": true
+      },
+      "error_indicator": {
+        "fp_uid": "4402",
+        "label": "\"Telemetry stop enqueue error 1\"",
+        "sink": "4404",
+        "source": "2522",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      "node": "2509",
+      "stop_ref_source": {
+        "endpoint": {
+          "dco_class": "parm",
+          "dco_objFlags": 1,
+          "dco_uid": "2363",
+          "owner": {
+            "class": "prim",
+            "name": null,
+            "uid": "2357"
+          },
+          "term": "2362",
+          "type": {
+            "children": [
+              "Boolean"
+            ],
+            "dimensions": [],
+            "type": "Refnum"
+          }
+        },
+        "path": [
+          "2510",
+          "2525",
+          "2506",
+          "2654",
+          "2655",
+          "2547",
+          "2468",
+          "2354",
+          "2450",
+          "2362"
+        ],
+        "term": "2362"
+      },
+      "timed_out_indicator": {
+        "fp_uid": "6127",
+        "label": "\"Telemetry stop enqueue timed out 1\"",
+        "sink": "6129",
+        "source": "2520",
+        "type": "Boolean"
+      },
+      "timeout_ms": {
+        "hex": "0000000000",
+        "path": [
+          "2514",
+          "2526"
+        ],
+        "source": "2526",
+        "type": "NumInt32",
+        "value": 0
+      }
+    }
+  ],
+  "entry": {
+    "RunOnOpen": 1,
+    "bytes": 21433,
+    "filename": "Supervision Telemetry.vi",
+    "header": "12.0.0 release build4",
+    "sha256": "477860f5505ffd1094ac185b802a96c8a4e3ddbfd3986a5d2be492176c9ee34e"
+  },
+  "flags": {
+    "Execution": {
+      "AllowAutoPrealloc": "0",
+      "BadCompile": "0",
+      "BadDDO": "0",
+      "BadNode": "0",
+      "BadSignal": "0",
+      "BadSubVI": "0",
+      "BadSubVILink": "0",
+      "BrokenPolyVI": "0",
+      "CloseAfterCall": "0",
+      "CompilerBug": "0",
+      "CtlChanged": "0",
+      "DSRecord": "0",
+      "DynamicDispatch": "0",
+      "EvalWatermark": "0",
+      "HasInsaneItems": "0",
+      "HasNoBD": "0",
+      "HasSetBP": "0",
+      "IsReentrant": "0",
+      "IsSubroutine": "0",
+      "LibIssuesNoRun": "0",
+      "LoadFP": "0",
+      "NotReservable": "0",
+      "PooledReentrancy": "0",
+      "PrefExecSyst": "-1",
+      "Priority": "1",
+      "PropTypesIssues": "0",
+      "RunOnOpen": "1",
+      "SaveParallel": "0",
+      "ShowFPOnCall": "0",
+      "ShowFPOnLoad": "0",
+      "State": "1",
+      "StdntWatermark": "0",
+      "StrictTypeDefVI": "0",
+      "TypeDefVI": "0"
+    },
+    "Execution2": {
+      "AllowPolyTypeAdapt": "0",
+      "AlwaysCallsParent": "0",
+      "ClearIndMask": "0",
+      "DefaultErrorHandling": "1",
+      "DefaultGrownView": "0",
+      "DoNotClone": "0",
+      "DrawInstanceIcon": "0",
+      "EvalOnlyMask": "0",
+      "HideInstanceVICaption": "0",
+      "InlinableDiagram": "1",
+      "InlineIfPossible": "0",
+      "InstanceVI": "0",
+      "IsPrivateDataForUDClass": "0",
+      "MarkForPolyVI": "0",
+      "RecalcFPDSOs": "0",
+      "RemotePanel": "0",
+      "SSEOptiMask": "0",
+      "ShouldInline": "0",
+      "ShowPolySelector": "0",
+      "SourceOnly": "0",
+      "StudentOnlyMask": "0",
+      "SuppressInstanceHalo": "0",
+      "SuppressXaction": "0",
+      "SystemVI": "0",
+      "TaggedAndNotEdited": "0",
+      "TemplateMask": "0",
+      "TransactionFailing": "0",
+      "UndoRedoChangedNoTypes": "0",
+      "UndoRedoInProgress": "0",
+      "VICanPassLVClassToDLL": "0",
+      "VisibleVI": "0",
+      "XDebugWindowVI": "0"
+    },
+    "Version": {
+      "Bugfix": "0",
+      "Build": "4",
+      "Major": "12",
+      "Minor": "0",
+      "Stage": "release"
+    }
+  },
+  "main_iUse_objFlags": "8389248",
+  "merge": {
+    "input_count": 4,
+    "node": "2671",
+    "output": "2680",
+    "selector_origin": {
+      "endpoint": {
+        "dco_class": "mergeErrorsDCO",
+        "dco_objFlags": 1,
+        "dco_uid": "2681",
+        "owner": {
+          "class": "mergeErrors",
+          "name": null,
+          "uid": "2671"
+        },
+        "term": "2680",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      "path": [
+        "2642",
+        "2782",
+        "2785",
+        "2800",
+        "2796",
+        "2680"
+      ],
+      "term": "2680"
+    },
+    "startup_indicator": {
+      "label": "\"Telemetry startup error\"",
+      "sink": "2879",
+      "source": "2680"
+    }
+  },
+  "merge_error_consumed": true,
+  "mode": "READ_ONLY_NATIVE_SAVED_SOURCE",
+  "native_source_limit": "No serialization/runtime byte equality, camera/device execution, ACK success or numeric hard join deadline is established",
+  "original_main_archive_sha256": "d427b2ba8544e4ffd6868f4e2ef74762363c7c713e30b2ff151e5f5ad168bcf4",
+  "qualification": {
+    "actual_loaded_dependency_hashes_proved": false,
+    "automatic_launch_authorized_by_receipt": false,
+    "fresh_process_start_qualified": false,
+    "native_XP_save_reported": true,
+    "native_load_or_run_by_auditor": false,
+    "runtime_qualified": false,
+    "static_source_pass": true,
+    "vi_written_or_copied": false
+  },
+  "release_order": "Outer native flat-sequence frame2 waits for frame1 Case and all three branch nodes to return; numeric hard join deadline not established",
+  "releases": [
+    {
+      "error_indicator": {
+        "fp_uid": "612",
+        "label": "\"Queue cleanup error\"",
+        "sink": "614",
+        "source": "641",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      "error_input": "unwired/defaultNoError",
+      "force_destroy_input": "unwired/defaultFalse",
+      "node": "624",
+      "outer_frame": 2,
+      "outside_case": true,
+      "ref_origin": {
+        "endpoint": {
+          "dco_class": "parm",
+          "dco_objFlags": 1,
+          "dco_uid": "1279",
+          "owner": {
+            "class": "prim",
+            "name": null,
+            "uid": "1271"
+          },
+          "term": "1281",
+          "type": {
+            "children": [
+              "LVVariant"
+            ],
+            "dimensions": [],
+            "type": "Refnum"
+          }
+        },
+        "path": [
+          "626",
+          "881",
+          "884",
+          "899",
+          "895",
+          "908",
+          "909",
+          "920",
+          "916",
+          "1281"
+        ],
+        "term": "1281"
+      }
+    },
+    {
+      "error_indicator": {
+        "fp_uid": "4166",
+        "label": "\"Camera data queue cleanup error\n\"",
+        "sink": "4168",
+        "source": "2580",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      "error_input": "unwired/defaultNoError",
+      "force_destroy_input": "unwired/defaultFalse",
+      "node": "2569",
+      "outer_frame": 2,
+      "outside_case": true,
+      "ref_origin": {
+        "endpoint": {
+          "dco_class": "parm",
+          "dco_objFlags": 1,
+          "dco_uid": "1245",
+          "owner": {
+            "class": "prim",
+            "name": null,
+            "uid": "1232"
+          },
+          "term": "1248",
+          "type": {
+            "children": [
+              "LVVariant"
+            ],
+            "dimensions": [],
+            "type": "Refnum"
+          }
+        },
+        "path": [
+          "2570",
+          "2587",
+          "2551",
+          "2462",
+          "2544",
+          "2545",
+          "2464",
+          "2352",
+          "2449",
+          "1248"
+        ],
+        "term": "1248"
+      }
+    },
+    {
+      "error_indicator": {
+        "fp_uid": "4284",
+        "label": "\"Camera stop queue cleanup error\"",
+        "sink": "4286",
+        "source": "2567",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      "error_input": "unwired/defaultNoError",
+      "force_destroy_input": "unwired/defaultFalse",
+      "node": "2556",
+      "outer_frame": 2,
+      "outside_case": true,
+      "ref_origin": {
+        "endpoint": {
+          "dco_class": "parm",
+          "dco_objFlags": 1,
+          "dco_uid": "2363",
+          "owner": {
+            "class": "prim",
+            "name": null,
+            "uid": "2357"
+          },
+          "term": "2362",
+          "type": {
+            "children": [
+              "Boolean"
+            ],
+            "dimensions": [],
+            "type": "Refnum"
+          }
+        },
+        "path": [
+          "2557",
+          "2588",
+          "2553",
+          "2466",
+          "2546",
+          "2547",
+          "2468",
+          "2354",
+          "2450",
+          "2362"
+        ],
+        "term": "2362"
+      }
+    },
+    {
+      "error_indicator": {
+        "fp_uid": "772",
+        "label": "\"Queue cleanup error 2\"",
+        "sink": "774",
+        "source": "801",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      "error_input": "unwired/defaultNoError",
+      "force_destroy_input": "unwired/defaultFalse",
+      "node": "784",
+      "outer_frame": 2,
+      "outside_case": true,
+      "ref_origin": {
+        "endpoint": {
+          "dco_class": "parm",
+          "dco_objFlags": 1,
+          "dco_uid": "530",
+          "owner": {
+            "class": "prim",
+            "name": null,
+            "uid": "517"
+          },
+          "term": "529",
+          "type": {
+            "children": [
+              "Boolean"
+            ],
+            "dimensions": [],
+            "type": "Refnum"
+          }
+        },
+        "path": [
+          "786",
+          "941",
+          "944",
+          "959",
+          "955",
+          "968",
+          "969",
+          "980",
+          "976",
+          "529"
+        ],
+        "term": "529"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "startup": [
+    {
+      "capacity": {
+        "hex": "00000001",
+        "path": [
+          "164",
+          "181"
+        ],
+        "source": "181",
+        "type": "NumInt32",
+        "value": 1
+      },
+      "create_if_missing": {
+        "hex": "01",
+        "path": [
+          "158",
+          "207"
+        ],
+        "source": "207",
+        "type": "Boolean",
+        "value": true
+      },
+      "flush": "1271",
+      "flush_error_to_merge": [
+        "1287",
+        "2683"
+      ],
+      "obtain": "150",
+      "obtain_error_to_flush": [
+        "173",
+        "1278"
+      ],
+      "obtain_ref_to_flush": [
+        "167",
+        "1275"
+      ],
+      "queue": "ELYSE_ACQ_SHARED_STATE_LATEST_V1"
+    },
+    {
+      "capacity": {
+        "hex": "00000001",
+        "path": [
+          "2394",
+          "2403"
+        ],
+        "source": "2403",
+        "type": "NumInt32",
+        "value": 1
+      },
+      "create_if_missing": {
+        "hex": "01",
+        "path": [
+          "2390",
+          "2419"
+        ],
+        "source": "2419",
+        "type": "Boolean",
+        "value": true
+      },
+      "flush": "1232",
+      "flush_error_to_merge": [
+        "1255",
+        "2708"
+      ],
+      "obtain": "2385",
+      "obtain_error_to_flush": [
+        "2400",
+        "1243"
+      ],
+      "obtain_ref_to_flush": [
+        "2396",
+        "1237"
+      ],
+      "queue": "ELYSE_SUP_CAMERA_RAW_LATEST_V1"
+    },
+    {
+      "capacity": {
+        "hex": "00000001",
+        "path": [
+          "2377",
+          "2427"
+        ],
+        "source": "2427",
+        "type": "NumInt32",
+        "value": 1
+      },
+      "create_if_missing": {
+        "hex": "01",
+        "path": [
+          "2373",
+          "2443"
+        ],
+        "source": "2443",
+        "type": "Boolean",
+        "value": true
+      },
+      "flush": "2357",
+      "flush_error_to_merge": [
+        "2366",
+        "2720"
+      ],
+      "obtain": "2368",
+      "obtain_error_to_flush": [
+        "2383",
+        "2360"
+      ],
+      "obtain_ref_to_flush": [
+        "2379",
+        "2358"
+      ],
+      "queue": "ELYSE_SUP_CAMERA_STOP_V1"
+    },
+    {
+      "capacity": {
+        "hex": "00000001",
+        "path": [
+          "332",
+          "347"
+        ],
+        "source": "347",
+        "type": "NumInt32",
+        "value": 1
+      },
+      "create_if_missing": {
+        "hex": "01",
+        "path": [
+          "326",
+          "371"
+        ],
+        "source": "371",
+        "type": "Boolean",
+        "value": true
+      },
+      "flush": "517",
+      "flush_error_to_merge": [
+        "535",
+        "2686"
+      ],
+      "obtain": "318",
+      "obtain_error_to_flush": [
+        "341",
+        "526"
+      ],
+      "obtain_ref_to_flush": [
+        "335",
+        "523"
+      ],
+      "queue": "ELYSE_ACQ_TELEMETRY_STOP_V1"
+    }
+  ],
+  "typed_primitive_error_outputs": 14,
+  "typed_primitive_errors_consumed": 14,
+  "xml_diagnostic_derivative": {
+    "diagnostics": [
+      {
+        "fp_uid": "776",
+        "label": "\"Telemetry stop queue obtain error\"",
+        "sink": "779",
+        "source": "532",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      {
+        "fp_uid": "958",
+        "label": "\"Telemetry stop queue dequeue error\"",
+        "sink": "961",
+        "source": "745",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      },
+      {
+        "fp_uid": "1206",
+        "label": "\"Telemetry packet flatten error\"",
+        "sink": "1211",
+        "source": "316",
+        "type": {
+          "children": [
+            "Boolean",
+            "NumInt32",
+            "String"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        }
+      }
+    ],
+    "native_save_polymorphic_input_type_cache_correction": {
+      "changes": [
+        {
+          "new": "LVVariant",
+          "old": {
+            "children": [
+              "NumInt32",
+              "NumInt32",
+              "NumInt32",
+              "NumInt32",
+              "NumInt32",
+              "NumInt32",
+              "NumInt32",
+              "NumInt32",
+              "NumInt32"
+            ],
+            "dimensions": [],
+            "type": "Cluster"
+          },
+          "term": "670"
+        }
+      ],
+      "input_wire_unchanged": [
+        "1179",
+        "670"
+      ],
+      "interpretation": "Native compiled input type now matches its already-Variant source; serialized runtime output byte equality is not proved",
+      "node": "343",
+      "operation": "FlattenToXML",
+      "output_wire_unchanged": [
+        "667",
+        "1781"
+      ],
+      "primResID": 8400,
+      "same_upstream_term": "1179",
+      "upstream_type_before_and_after": "LVVariant"
+    },
+    "new_edges": [
+      [
+        "316",
+        "1211"
+      ],
+      [
+        "532",
+        "779"
+      ],
+      [
+        "745",
+        "961"
+      ]
+    ],
+    "new_signal_count": 3,
+    "old_signal_endpoint_lists_preserved": 57,
+    "original_packet_sha256_reconfirmed": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357",
+    "runtime_qualified": false,
+    "source": {
+      "bytes": 20442,
+      "native_load_or_run": false,
+      "sha256": "156bdd968267435c6be0bfee46b1536903d543fc433d68940b98270fce800cfa",
+      "source_path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\review_88fd4200\\xp_wrapper_xml_20261029_0340\\ACQ_SharedState_Transport_Auto.vi",
+      "vi_written": false
+    },
+    "typed_error_outputs_consumed": 12
+  }
+}

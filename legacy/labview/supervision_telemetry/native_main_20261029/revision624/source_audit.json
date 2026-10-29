@@ -1,0 +1,889 @@
+{
+  "archive_preservation": {
+    "changed_members": [
+      "0_SUP_ELYSE.vi"
+    ],
+    "member_count": 43,
+    "other42_members_byte_identical": true
+  },
+  "artifact": {
+    "archive_bytes": 2245507,
+    "archive_filename": "SUPERVISION.llb",
+    "archive_sha256": "87c73e3e3a1634461f27f1cafbbcb0f476d2cbc2663cf485079342a24f3d05c9",
+    "binary_delivery": "Existing frozen checkpoint; proof directory contains text only",
+    "member": "0_SUP_ELYSE.vi",
+    "member_bytes": 1154839,
+    "member_sha256": "0fb75ecf887677adcf62506cfd5224dc29a786e1d315e8520c8904377b29bea0"
+  },
+  "evidence_receipts": {
+    "ARCHIVE_MEMBER_PRESERVATION.json": {
+      "bytes": 18251,
+      "sha256": "28de04fc5382277af50d4ea458400112e7ee8adc64e06c794f32088336220791"
+    },
+    "CAMERA_INSERTION_CHECKS.json": {
+      "bytes": 35091,
+      "sha256": "5494d64f0f7904970386b8642a3b2b5d0413697e2232fea7789ef18fcbfd59b6"
+    },
+    "ORIGINAL_SOURCE_COMPARISON.json": {
+      "bytes": 42845,
+      "sha256": "283692893747dd0ba1cebe5d984f40bbe1e8115b8912698eef7ec7303b46574d"
+    },
+    "ORIGINAL_TERM_TYPE_AND_PARAMETER_AUDIT.json": {
+      "bytes": 188,
+      "sha256": "92dc7a2df3897deb611fcd6cd780ec5a53313192fbad7e65550f9bd8be3d49ed"
+    },
+    "PRODUCER_AND_LIFECYCLE_CHECKS.json": {
+      "bytes": 35307,
+      "sha256": "29eee23878305d2eb7f59d34c9fa5959e6dd591e9738a6b30fa53e7883d6b1c7"
+    }
+  },
+  "frame_tap": {
+    "ancestors": [
+      {
+        "class": "diag",
+        "sibling_index": 0,
+        "uid": "20537"
+      },
+      {
+        "class": "sequence",
+        "uid": "18881"
+      },
+      {
+        "class": "diag",
+        "sibling_index": 0,
+        "uid": "6027"
+      },
+      {
+        "class": "whileLoop",
+        "uid": "5841"
+      },
+      {
+        "class": "diag",
+        "sibling_index": 2,
+        "uid": "5902"
+      },
+      {
+        "class": "sequence",
+        "uid": "988"
+      },
+      {
+        "class": "diag",
+        "sibling_index": 0,
+        "uid": "3"
+      }
+    ],
+    "error3_into_rotate": true,
+    "framecount21792_into7": true,
+    "framecount_error21789_into5": true,
+    "grab_image_into6": true,
+    "image4_into_rotate": true,
+    "original_error_bypass_present": false,
+    "original_image_bypass_present": false,
+    "run_origin": {
+      "endpoint": {
+        "dco_class": "gRefDCO",
+        "dco_objFlags": 1,
+        "dco_uid": "274310",
+        "local_reference": {
+          "fp_label": "\"__Telemetry_RunStamp\"",
+          "fp_uid": "77769",
+          "gRef": "274298",
+          "ordinal": 251
+        },
+        "owner": {
+          "class": "gRef",
+          "name": null,
+          "uid": "274298"
+        },
+        "term": "274308",
+        "type": "MeasureData"
+      },
+      "path": [
+        "260649",
+        "274308"
+      ],
+      "term": "274308"
+    },
+    "uid": "260614"
+  },
+  "frame_tap_connected_ports": {
+    "10": {
+      "term": "260649",
+      "type": "MeasureData",
+      "wire_endpoints": [
+        [
+          "274308",
+          "260649"
+        ]
+      ]
+    },
+    "3": {
+      "term": "260628",
+      "type": {
+        "children": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "dimensions": [],
+        "type": "Cluster"
+      },
+      "wire_endpoints": [
+        [
+          "260628",
+          "14755"
+        ]
+      ]
+    },
+    "4": {
+      "term": "260631",
+      "type": "Void",
+      "wire_endpoints": [
+        [
+          "260631",
+          "14771"
+        ]
+      ]
+    },
+    "5": {
+      "term": "260634",
+      "type": {
+        "children": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "dimensions": [],
+        "type": "Cluster"
+      },
+      "wire_endpoints": [
+        [
+          "21789",
+          "260634"
+        ]
+      ]
+    },
+    "6": {
+      "term": "260637",
+      "type": "Void",
+      "wire_endpoints": [
+        [
+          "15749",
+          "260637"
+        ]
+      ]
+    },
+    "7": {
+      "term": "260640",
+      "type": "NumUInt32",
+      "wire_endpoints": [
+        [
+          "21792",
+          "5310",
+          "260640"
+        ]
+      ]
+    }
+  },
+  "lifecycle": {
+    "begin_frame": 0,
+    "begin_outer_sequence": "988",
+    "begin_output_term": "73243",
+    "begin_uid": "73228",
+    "end_frame": 4,
+    "end_outer_sequence": "988",
+    "end_run_input_term": "306265",
+    "end_run_source_term": "308819",
+    "end_same_run_stamp_fp_uid": "77769",
+    "end_uid": "306228",
+    "producer_outer_frame": 2,
+    "run_stamp_fp_uid": "77769",
+    "run_stamp_label": "__Telemetry_RunStamp"
+  },
+  "main_flags": {
+    "Execution": {
+      "AllowAutoPrealloc": "0",
+      "BadCompile": "0",
+      "BadDDO": "0",
+      "BadNode": "0",
+      "BadSignal": "0",
+      "BadSubVI": "0",
+      "BadSubVILink": "0",
+      "BrokenPolyVI": "0",
+      "CloseAfterCall": "0",
+      "CompilerBug": "0",
+      "CtlChanged": "0",
+      "DSRecord": "1",
+      "DynamicDispatch": "0",
+      "EvalWatermark": "0",
+      "HasInsaneItems": "0",
+      "HasNoBD": "0",
+      "HasSetBP": "0",
+      "IsReentrant": "0",
+      "IsSubroutine": "0",
+      "LibIssuesNoRun": "0",
+      "LoadFP": "1",
+      "NotReservable": "0",
+      "PooledReentrancy": "0",
+      "PrefExecSyst": "-1",
+      "Priority": "1",
+      "PropTypesIssues": "1",
+      "RunOnOpen": "1",
+      "SaveParallel": "0",
+      "ShowFPOnCall": "0",
+      "ShowFPOnLoad": "0",
+      "State": "1",
+      "StdntWatermark": "0",
+      "StrictTypeDefVI": "0",
+      "TypeDefVI": "0"
+    },
+    "Execution2": {
+      "AllowPolyTypeAdapt": "0",
+      "AlwaysCallsParent": "0",
+      "ClearIndMask": "0",
+      "DefaultErrorHandling": "1",
+      "DefaultGrownView": "0",
+      "DoNotClone": "0",
+      "DrawInstanceIcon": "0",
+      "EvalOnlyMask": "0",
+      "HideInstanceVICaption": "0",
+      "InlinableDiagram": "0",
+      "InlineIfPossible": "0",
+      "InstanceVI": "0",
+      "IsPrivateDataForUDClass": "0",
+      "MarkForPolyVI": "0",
+      "RecalcFPDSOs": "0",
+      "RemotePanel": "0",
+      "SSEOptiMask": "0",
+      "ShouldInline": "0",
+      "ShowPolySelector": "0",
+      "SourceOnly": "0",
+      "StudentOnlyMask": "0",
+      "SuppressInstanceHalo": "0",
+      "SuppressXaction": "0",
+      "SystemVI": "0",
+      "TaggedAndNotEdited": "0",
+      "TemplateMask": "0",
+      "TransactionFailing": "0",
+      "UndoRedoChangedNoTypes": "0",
+      "UndoRedoInProgress": "0",
+      "VICanPassLVClassToDLL": "0",
+      "VisibleVI": "0",
+      "XDebugWindowVI": "0"
+    },
+    "Version": {
+      "Bugfix": "0",
+      "Build": "4",
+      "Major": "12",
+      "Minor": "0",
+      "Stage": "release"
+    }
+  },
+  "original": {
+    "archive_bytes": 2232683,
+    "archive_sha256": "d427b2ba8544e4ffd6868f4e2ef74762363c7c713e30b2ff151e5f5ad168bcf4",
+    "hash_reconfirmed_after_audit": true,
+    "member_sha256": "b7b79636e77d7756a5896edd132f7e3b24301394a04893d9a73938073c210a7b",
+    "revision_reported": 613,
+    "xp_path": "C:\\PILOTAGE_ELYSE_SUP\\SUPERVISION.llb"
+  },
+  "qualification": {
+    "actual_xp_helper_byte_pins_verified": false,
+    "fresh_process_open_qualified": false,
+    "hardware_runtime_qualified": false,
+    "main_auto_cold_open_allowed": false,
+    "native_run_during_audit": false,
+    "native_xp_authoring_and_save_reported": true,
+    "startup_wrapper_qualified": false,
+    "static_source_audit_pass": true,
+    "vi_binary_written_or_copied_by_auditor": false,
+    "vi_resource_writer_used": false
+  },
+  "remaining_work": [
+    "Independent startup-wrapper source and queue/stop/join lifecycle review",
+    "Verify actual XP helper byte pins",
+    "Explicit confirmation before cold open or launch because RunOnOpen remains1",
+    "Physical camera/NI6602/transport runtime qualification"
+  ],
+  "required_helper_packet_name": "SUP_Telemetry_Helpers_88fd4200",
+  "revision_number_provenance": "Root reports native saved revision624; source header independently parsed as12.0f4",
+  "saved_helper_link_paths": {
+    "108062": {
+      "name": "SUP_Camera_SetupObserve.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_SetupObserve.vi"
+      ]
+    },
+    "127540": {
+      "name": "SUP_Camera_SetupObserve.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_SetupObserve.vi"
+      ]
+    },
+    "158269": {
+      "name": "SUP_Camera_SetupObserve.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_SetupObserve.vi"
+      ]
+    },
+    "207252": {
+      "name": "SUP_Camera_SetupObserve.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_SetupObserve.vi"
+      ]
+    },
+    "226131": {
+      "name": "SUP_Camera_SetupObserve.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_SetupObserve.vi"
+      ]
+    },
+    "244846": {
+      "name": "SUP_Camera_SetupObserve.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_SetupObserve.vi"
+      ]
+    },
+    "260614": {
+      "name": "SUP_Camera_FrameTap.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Camera_FrameTap.vi"
+      ]
+    },
+    "285124": {
+      "name": "SUP_SyncTap.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "sync_lifecycle",
+        "counter_only_candidate",
+        "SUP_SyncTap.vi"
+      ]
+    },
+    "306228": {
+      "name": "SUP_Telemetry_End.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Telemetry_End.vi"
+      ]
+    },
+    "73228": {
+      "name": "SUP_Telemetry_Begin.vi",
+      "path_components": [
+        "",
+        "",
+        "",
+        "SUP_Telemetry_Helpers_88fd4200",
+        "camera",
+        "SUP_Telemetry_Begin.vi"
+      ]
+    }
+  },
+  "schema_version": 1,
+  "setup_observers": [
+    {
+      "bypass_consumers": [],
+      "channel_origin": {
+        "endpoint": {
+          "dco_class": "gRefDCO",
+          "dco_objFlags": 1,
+          "dco_uid": "51293",
+          "local_reference": {
+            "fp_label": "\"Voies NI1409\"",
+            "fp_uid": "19558",
+            "gRef": "30150",
+            "ordinal": 111
+          },
+          "owner": {
+            "class": "gRef",
+            "name": null,
+            "uid": "30150"
+          },
+          "term": "51294",
+          "type": "NumUInt16"
+        },
+        "path": [
+          "18931",
+          "51294"
+        ],
+        "term": "51294"
+      },
+      "error_source_path": [
+        "108084",
+        "18915"
+      ],
+      "helper_channel_path": [
+        "108096",
+        "51294"
+      ],
+      "helper_error_input": "108084",
+      "helper_error_output": "108078",
+      "helper_output_consumers": [
+        "11722"
+      ],
+      "helper_uid": "108062",
+      "insertion_point_source": [
+        "18915"
+      ],
+      "original_error_output": "18915",
+      "original_setup_uid": "18912",
+      "preserved_original_error_consumers": [
+        "11722"
+      ],
+      "run_stamp_fp_uid": "77769",
+      "run_stamp_source": "102284",
+      "run_stamp_term": "108099",
+      "same_actual_channel_source": true
+    },
+    {
+      "bypass_consumers": [],
+      "channel_origin": {
+        "endpoint": {
+          "dco_class": "gRefDCO",
+          "dco_objFlags": 1,
+          "dco_uid": "60607",
+          "local_reference": {
+            "fp_label": "\"Voies NI1409\"",
+            "fp_uid": "19558",
+            "gRef": "60595",
+            "ordinal": 111
+          },
+          "owner": {
+            "class": "gRef",
+            "name": null,
+            "uid": "60595"
+          },
+          "term": "60606",
+          "type": "NumUInt16"
+        },
+        "path": [
+          "36549",
+          "60606"
+        ],
+        "term": "60606"
+      },
+      "error_source_path": [
+        "127564",
+        "36534"
+      ],
+      "helper_channel_path": [
+        "127576",
+        "60606"
+      ],
+      "helper_error_input": "127564",
+      "helper_error_output": "127558",
+      "helper_output_consumers": [
+        "20864"
+      ],
+      "helper_uid": "127540",
+      "insertion_point_source": [
+        "36534"
+      ],
+      "original_error_output": "36534",
+      "original_setup_uid": "36531",
+      "preserved_original_error_consumers": [
+        "20864"
+      ],
+      "run_stamp_fp_uid": "77769",
+      "run_stamp_source": "141752",
+      "run_stamp_term": "127579",
+      "same_actual_channel_source": true
+    },
+    {
+      "bypass_consumers": [],
+      "channel_origin": {
+        "endpoint": {
+          "dco_class": "gRefDCO",
+          "dco_objFlags": 1,
+          "dco_uid": "185834",
+          "local_reference": {
+            "fp_label": "\"Voies NI1409\"",
+            "fp_uid": "19558",
+            "gRef": "185825",
+            "ordinal": 111
+          },
+          "owner": {
+            "class": "gRef",
+            "name": null,
+            "uid": "185825"
+          },
+          "term": "185835",
+          "type": "NumUInt16"
+        },
+        "path": [
+          "92460",
+          "185835"
+        ],
+        "term": "185835"
+      },
+      "error_source_path": [
+        "158289",
+        "92381",
+        "92382",
+        "92375",
+        "92378",
+        "92444"
+      ],
+      "helper_channel_path": [
+        "158301",
+        "161048",
+        "161052",
+        "161036",
+        "161033",
+        "185835"
+      ],
+      "helper_error_input": "158289",
+      "helper_error_output": "158283",
+      "helper_output_consumers": [
+        "92632"
+      ],
+      "helper_uid": "158269",
+      "insertion_point_source": [
+        "92381"
+      ],
+      "original_error_output": "92444",
+      "original_setup_uid": "92441",
+      "preserved_original_error_consumers": [
+        "92632"
+      ],
+      "run_stamp_fp_uid": "77769",
+      "run_stamp_source": "163775",
+      "run_stamp_term": "158304",
+      "same_actual_channel_source": true
+    },
+    {
+      "bypass_consumers": [],
+      "channel_origin": {
+        "endpoint": {
+          "dco_class": "gRefDCO",
+          "dco_objFlags": 1,
+          "dco_uid": "69960",
+          "local_reference": {
+            "fp_label": "\"Voies NI1409\"",
+            "fp_uid": "19558",
+            "gRef": "69859",
+            "ordinal": 111
+          },
+          "owner": {
+            "class": "gRef",
+            "name": null,
+            "uid": "69859"
+          },
+          "term": "69886",
+          "type": "NumUInt16"
+        },
+        "path": [
+          "43395",
+          "69886"
+        ],
+        "term": "69886"
+      },
+      "error_source_path": [
+        "207273",
+        "34775",
+        "34778",
+        "34517",
+        "34766",
+        "38588"
+      ],
+      "helper_channel_path": [
+        "207285",
+        "210010",
+        "210014",
+        "209998",
+        "209995",
+        "69886"
+      ],
+      "helper_error_input": "207273",
+      "helper_error_output": "207267",
+      "helper_output_consumers": [
+        "113686"
+      ],
+      "helper_uid": "207252",
+      "insertion_point_source": [
+        "34775"
+      ],
+      "original_error_output": "38588",
+      "original_setup_uid": "38132",
+      "preserved_original_error_consumers": [
+        "113686"
+      ],
+      "run_stamp_fp_uid": "77769",
+      "run_stamp_source": "212732",
+      "run_stamp_term": "207288",
+      "same_actual_channel_source": true
+    },
+    {
+      "bypass_consumers": [],
+      "channel_origin": {
+        "endpoint": {
+          "dco_class": "gRefDCO",
+          "dco_objFlags": 1,
+          "dco_uid": "71931",
+          "local_reference": {
+            "fp_label": "\"Voies NI1409\"",
+            "fp_uid": "19558",
+            "gRef": "71927",
+            "ordinal": 111
+          },
+          "owner": {
+            "class": "gRef",
+            "name": null,
+            "uid": "71927"
+          },
+          "term": "71930",
+          "type": "NumUInt16"
+        },
+        "path": [
+          "71810",
+          "71930"
+        ],
+        "term": "71930"
+      },
+      "error_source_path": [
+        "226151",
+        "71751",
+        "71752",
+        "71742",
+        "71746",
+        "71788"
+      ],
+      "helper_channel_path": [
+        "226163",
+        "228889",
+        "228893",
+        "228877",
+        "228874",
+        "71930"
+      ],
+      "helper_error_input": "226151",
+      "helper_error_output": "226145",
+      "helper_output_consumers": [
+        "133266"
+      ],
+      "helper_uid": "226131",
+      "insertion_point_source": [
+        "71751"
+      ],
+      "original_error_output": "71788",
+      "original_setup_uid": "71781",
+      "preserved_original_error_consumers": [
+        "133266"
+      ],
+      "run_stamp_fp_uid": "77769",
+      "run_stamp_source": "231600",
+      "run_stamp_term": "226166",
+      "same_actual_channel_source": true
+    },
+    {
+      "bypass_consumers": [],
+      "channel_origin": {
+        "endpoint": {
+          "dco_class": "bDConstDCO",
+          "dco_objFlags": 0,
+          "dco_uid": "25744",
+          "owner": {
+            "class": "sRN",
+            "name": null,
+            "uid": "21971"
+          },
+          "term": "25746",
+          "type": "NumInt32"
+        },
+        "path": [
+          "25720",
+          "25746"
+        ],
+        "term": "25746"
+      },
+      "error_source_path": [
+        "244866",
+        "25702"
+      ],
+      "helper_channel_path": [
+        "244878",
+        "25746"
+      ],
+      "helper_error_input": "244866",
+      "helper_error_output": "244860",
+      "helper_output_consumers": [
+        "19627",
+        "22255"
+      ],
+      "helper_uid": "244846",
+      "insertion_point_source": [
+        "25702"
+      ],
+      "original_error_output": "25702",
+      "original_setup_uid": "21387",
+      "preserved_original_error_consumers": [
+        "19627",
+        "22255"
+      ],
+      "run_stamp_fp_uid": "77769",
+      "run_stamp_source": "250081",
+      "run_stamp_term": "244881",
+      "same_actual_channel_source": true
+    }
+  ],
+  "source_preservation": {
+    "checked_original_primitive_call_constant_local_and_structure_signature_changes": 0,
+    "checkpoint_directed_edges": 4333,
+    "missing_original_edges_after_identity_substitution": [],
+    "new_direct_calls": {
+      "108062": "SUP_Camera_SetupObserve.vi",
+      "127540": "SUP_Camera_SetupObserve.vi",
+      "158269": "SUP_Camera_SetupObserve.vi",
+      "207252": "SUP_Camera_SetupObserve.vi",
+      "226131": "SUP_Camera_SetupObserve.vi",
+      "244846": "SUP_Camera_SetupObserve.vi",
+      "260614": "SUP_Camera_FrameTap.vi",
+      "285124": "SUP_SyncTap.vi",
+      "306228": "SUP_Telemetry_End.vi",
+      "73228": "SUP_Telemetry_Begin.vi"
+    },
+    "new_primitives": {},
+    "original_directed_edges": 4301,
+    "original_edges_exact": 4292,
+    "original_edges_preserved_via_known_helper_identity": [
+      [
+        "15749",
+        "14771"
+      ],
+      [
+        "18915",
+        "11722"
+      ],
+      [
+        "21789",
+        "14755"
+      ],
+      [
+        "25702",
+        "19627"
+      ],
+      [
+        "25702",
+        "22255"
+      ],
+      [
+        "34775",
+        "113686"
+      ],
+      [
+        "36534",
+        "20864"
+      ],
+      [
+        "71751",
+        "133266"
+      ],
+      [
+        "92381",
+        "92632"
+      ]
+    ],
+    "original_fp_label_type_changes": 0,
+    "original_fp_ordinal_prefix_preserved": true,
+    "original_typed_terminal_class_type_parameter_changes": 0,
+    "original_typed_terminal_count": 11404,
+    "signature_limits": [
+      "Diagram layout and compiled caches excluded",
+      "Source relationships do not demonstrate execution or hardware behavior"
+    ]
+  },
+  "subject": "Native XP main revision624",
+  "sync_tap": {
+    "ancestors": [
+      {
+        "class": "diag",
+        "sibling_index": 0,
+        "uid": "6047"
+      },
+      {
+        "class": "whileLoop",
+        "uid": "5846"
+      },
+      {
+        "class": "diag",
+        "sibling_index": 2,
+        "uid": "5902"
+      },
+      {
+        "class": "sequence",
+        "uid": "988"
+      },
+      {
+        "class": "diag",
+        "sibling_index": 0,
+        "uid": "3"
+      }
+    ],
+    "inside_periodic_while5846": true,
+    "inside_sequence9424": false,
+    "private_error_connector": 0,
+    "private_error_edge": [
+      "285131",
+      "296716"
+    ],
+    "private_indicator_caption": "sortie d'erreur",
+    "private_indicator_fp_uid": "296714",
+    "private_indicator_label": "__Telemetry_SyncError",
+    "source_vi_connector": 5,
+    "this_vi_reference": {
+      "class": "ctlRefConst",
+      "label": "ce VI",
+      "oMId": 2572,
+      "sink": "285146",
+      "term": "291536",
+      "type": "Refnum",
+      "uid": "291529"
+    },
+    "uid": "285124"
+  },
+  "worker_calls_in_main": {
+    "camera": 0,
+    "sync": 0
+  }
+}

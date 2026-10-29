@@ -1,0 +1,375 @@
+{
+  "all_FP_conNum": -1,
+  "diagnostics": [
+    {
+      "fp_uid": "776",
+      "label": "\"Telemetry stop queue obtain error\"",
+      "sink": "779",
+      "source": "532",
+      "type": {
+        "children": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "dimensions": [],
+        "type": "Cluster"
+      }
+    },
+    {
+      "fp_uid": "958",
+      "label": "\"Telemetry stop queue dequeue error\"",
+      "sink": "961",
+      "source": "745",
+      "type": {
+        "children": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "dimensions": [],
+        "type": "Cluster"
+      }
+    },
+    {
+      "fp_uid": "1206",
+      "label": "\"Telemetry packet flatten error\"",
+      "sink": "1211",
+      "source": "316",
+      "type": {
+        "children": [
+          "Boolean",
+          "NumInt32",
+          "String"
+        ],
+        "dimensions": [],
+        "type": "Cluster"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "class": "prim",
+      "node": "1046",
+      "term": "1070",
+      "wires": [
+        {
+          "terms": [
+            "1070",
+            "1036"
+          ],
+          "uid": "1091"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "495",
+      "term": "532",
+      "wires": [
+        {
+          "terms": [
+            "532",
+            "779"
+          ],
+          "uid": "790"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "1342",
+      "term": "1363",
+      "wires": [
+        {
+          "terms": [
+            "1363",
+            "1626"
+          ],
+          "uid": "1637"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "1072",
+      "term": "1095",
+      "wires": [
+        {
+          "terms": [
+            "1095",
+            "1333"
+          ],
+          "uid": "1336"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "397",
+      "term": "745",
+      "wires": [
+        {
+          "terms": [
+            "745",
+            "961"
+          ],
+          "uid": "977"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "459",
+      "term": "465",
+      "wires": [
+        {
+          "terms": [
+            "465",
+            "117"
+          ],
+          "uid": "676"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "310",
+      "term": "316",
+      "wires": [
+        {
+          "terms": [
+            "316",
+            "1211"
+          ],
+          "uid": "1235"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "221",
+      "term": "227",
+      "wires": [
+        {
+          "terms": [
+            "227",
+            "477"
+          ],
+          "uid": "540"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "105",
+      "term": "111",
+      "wires": [
+        {
+          "terms": [
+            "111",
+            "864"
+          ],
+          "uid": "875"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "75",
+      "term": "81",
+      "wires": [
+        {
+          "terms": [
+            "81",
+            "239"
+          ],
+          "uid": "415"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "43",
+      "term": "51",
+      "wires": [
+        {
+          "terms": [
+            "51",
+            "90"
+          ],
+          "uid": "210"
+        }
+      ]
+    },
+    {
+      "class": "prim",
+      "node": "62",
+      "term": "1185",
+      "wires": [
+        {
+          "terms": [
+            "1185",
+            "1794"
+          ],
+          "uid": "1282"
+        }
+      ]
+    }
+  ],
+  "flags": {
+    "Execution": {
+      "AllowAutoPrealloc": "0",
+      "BadCompile": "0",
+      "BadDDO": "0",
+      "BadNode": "0",
+      "BadSignal": "0",
+      "BadSubVI": "0",
+      "BadSubVILink": "0",
+      "BrokenPolyVI": "0",
+      "CloseAfterCall": "0",
+      "CompilerBug": "0",
+      "CtlChanged": "0",
+      "DSRecord": "0",
+      "DynamicDispatch": "0",
+      "EvalWatermark": "0",
+      "HasInsaneItems": "0",
+      "HasNoBD": "0",
+      "HasSetBP": "0",
+      "IsReentrant": "0",
+      "IsSubroutine": "0",
+      "LibIssuesNoRun": "0",
+      "LoadFP": "0",
+      "NotReservable": "0",
+      "PooledReentrancy": "0",
+      "PrefExecSyst": "-1",
+      "Priority": "1",
+      "PropTypesIssues": "0",
+      "RunOnOpen": "0",
+      "SaveParallel": "0",
+      "ShowFPOnCall": "0",
+      "ShowFPOnLoad": "0",
+      "State": "1",
+      "StdntWatermark": "0",
+      "StrictTypeDefVI": "0",
+      "TypeDefVI": "0"
+    },
+    "Execution2": {
+      "AllowPolyTypeAdapt": "0",
+      "AlwaysCallsParent": "0",
+      "ClearIndMask": "0",
+      "DefaultErrorHandling": "1",
+      "DefaultGrownView": "0",
+      "DoNotClone": "0",
+      "DrawInstanceIcon": "0",
+      "EvalOnlyMask": "0",
+      "HideInstanceVICaption": "0",
+      "InlinableDiagram": "1",
+      "InlineIfPossible": "0",
+      "InstanceVI": "0",
+      "IsPrivateDataForUDClass": "0",
+      "MarkForPolyVI": "0",
+      "RecalcFPDSOs": "0",
+      "RemotePanel": "0",
+      "SSEOptiMask": "0",
+      "ShouldInline": "0",
+      "ShowPolySelector": "0",
+      "SourceOnly": "0",
+      "StudentOnlyMask": "0",
+      "SuppressInstanceHalo": "0",
+      "SuppressXaction": "0",
+      "SystemVI": "0",
+      "TaggedAndNotEdited": "0",
+      "TemplateMask": "0",
+      "TransactionFailing": "0",
+      "UndoRedoChangedNoTypes": "0",
+      "UndoRedoInProgress": "0",
+      "VICanPassLVClassToDLL": "0",
+      "VisibleVI": "0",
+      "XDebugWindowVI": "0"
+    },
+    "Version": {
+      "Bugfix": "0",
+      "Build": "4",
+      "Major": "12",
+      "Minor": "0",
+      "Stage": "release"
+    }
+  },
+  "historical_helper_packet_modified": false,
+  "mode": "READ_ONLY_NATIVE_SOURCE",
+  "native_save_polymorphic_input_type_cache_correction": {
+    "changes": [
+      {
+        "new": "LVVariant",
+        "old": {
+          "children": [
+            "NumInt32",
+            "NumInt32",
+            "NumInt32",
+            "NumInt32",
+            "NumInt32",
+            "NumInt32",
+            "NumInt32",
+            "NumInt32",
+            "NumInt32"
+          ],
+          "dimensions": [],
+          "type": "Cluster"
+        },
+        "term": "670"
+      }
+    ],
+    "input_wire_unchanged": [
+      "1179",
+      "670"
+    ],
+    "interpretation": "Native compiled input type now matches its already-Variant source; serialized runtime output byte equality is not proved",
+    "node": "343",
+    "operation": "FlattenToXML",
+    "output_wire_unchanged": [
+      "667",
+      "1781"
+    ],
+    "primResID": 8400,
+    "same_upstream_term": "1179",
+    "upstream_type_before_and_after": "LVVariant"
+  },
+  "new_FP_error_indicators": 3,
+  "new_edges": [
+    [
+      "316",
+      "1211"
+    ],
+    [
+      "532",
+      "779"
+    ],
+    [
+      "745",
+      "961"
+    ]
+  ],
+  "new_signal_count": 3,
+  "old_signal_endpoint_lists_preserved": 57,
+  "original_FP_controls_preserved": 7,
+  "original_packet_sha256_reconfirmed": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357",
+  "original_primitive_call_constant_local_structure_signature_changes": {},
+  "original_typed_terminals_checked": 147,
+  "passed_current_source": true,
+  "portable_text_only": true,
+  "queue_names_timeouts_old_operations_and_literals": "preserved by original source signatures and original 57 endpoint lists",
+  "runtime_qualified": false,
+  "runtime_target_saved_in_entry": "../../SUP_Telemetry_Helpers_88fd4200/sync_lifecycle/ACQ_SharedState_Transport_Auto.vi",
+  "schema_version": 1,
+  "source": {
+    "bytes": 20442,
+    "native_load_or_run": false,
+    "sha256": "156bdd968267435c6be0bfee46b1536903d543fc433d68940b98270fce800cfa",
+    "source_path": "C:\\dev\\sup_vi_camera_20261027\\individual_helpers_20261028\\review_88fd4200\\xp_wrapper_xml_20261029_0340\\ACQ_SharedState_Transport_Auto.vi",
+    "vi_written": false
+  },
+  "typed_error_outputs_consumed": 12,
+  "typed_primitive_error_outputs": 12,
+  "vi_mutation": false
+}

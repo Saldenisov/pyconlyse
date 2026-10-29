@@ -1,0 +1,126 @@
+{
+  "artifacts": [
+    {
+      "bytes": 21433,
+      "path": "artifacts/Supervision Telemetry.vi",
+      "sha256": "477860f5505ffd1094ac185b802a96c8a4e3ddbfd3986a5d2be492176c9ee34e",
+      "xp_target": "C:\\SUPERVISION_TELEMETRY_20261028\\Supervision Telemetry.vi"
+    },
+    {
+      "bytes": 2245507,
+      "path": "artifacts/SUPERVISION.llb",
+      "sha256": "87c73e3e3a1634461f27f1cafbbcb0f476d2cbc2663cf485079342a24f3d05c9",
+      "xp_target": "C:\\SUPERVISION_TELEMETRY_20261028\\SUPERVISION.llb"
+    },
+    {
+      "bytes": 20442,
+      "path": "artifacts/ACQ_SharedState_Transport_Auto.vi",
+      "sha256": "156bdd968267435c6be0bfee46b1536903d543fc433d68940b98270fce800cfa",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\sync_lifecycle\\ACQ_SharedState_Transport_Auto.vi"
+    }
+  ],
+  "binaries_byte_copied_not_rewritten": true,
+  "entry_RunOnOpen": 1,
+  "hardware_commands_sent": false,
+  "kind": "ELYSE_NATIVE_XP_ASSEMBLED_SOURCE_INVENTORY",
+  "native_runtime_qualified": false,
+  "new_vi_executed": false,
+  "original_xp_archive": {
+    "modified": false,
+    "path": "C:\\PILOTAGE_ELYSE_SUP\\SUPERVISION.llb",
+    "sha256": "d427b2ba8544e4ffd6868f4e2ef74762363c7c713e30b2ff151e5f5ad168bcf4"
+  },
+  "receipt_manifests": [
+    {
+      "bytes": 886,
+      "path": "revision624/manifest.json",
+      "sha256": "6371fa43c6b3145574bd85918c12d8f70fa166477f362f8af4513ee8ee452e3b"
+    },
+    {
+      "bytes": 1629,
+      "path": "entrypoint/manifest.json",
+      "sha256": "6ab60d7ac8d2426db5f16d50b980a3d3bfd4021f5c0c699d1c6f8b4b2470e071"
+    },
+    {
+      "bytes": 885,
+      "path": "xml_error_sinks/manifest.json",
+      "sha256": "e79f449d46cfb7d61010ab355c9ad197554cda935a16abb19be0c412968548e1"
+    }
+  ],
+  "schema_version": 1,
+  "status": "SOURCE_AUDITED_RUNTIME_PENDING",
+  "unchanged_helpers": [
+    {
+      "bytes": 10059,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/observer_v3/SUP_Camera_Queue_Latest.vi",
+      "sha256": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\observer_v3\\SUP_Camera_Queue_Latest.vi"
+    },
+    {
+      "bytes": 29372,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_Epoch.vi",
+      "sha256": "84b78999901b37537f83c5c480777f22bee98a1f78d153ea93739e57738c8a3e",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\SUP_Camera_Epoch.vi"
+    },
+    {
+      "bytes": 27855,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_FrameTap.vi",
+      "sha256": "a08bced9a9c7115b7faf1626a4cd44b17c711c8cba63c4b533d5f5e9e19b4c1c",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\SUP_Camera_FrameTap.vi"
+    },
+    {
+      "bytes": 26533,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_Observe_U8_UNCOMPILED.vi",
+      "sha256": "c6387a4d2d5f41ded7829ed154c89c89faa840b2aa844c1f0803d76b04c235e9",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\SUP_Camera_Observe_U8_UNCOMPILED.vi"
+    },
+    {
+      "bytes": 22419,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_SetupObserve.vi",
+      "sha256": "4317fdaefa8e1d20950db20fc84724f50d5dee5770884d78eed9590040c2e61e",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\SUP_Camera_SetupObserve.vi"
+    },
+    {
+      "bytes": 14132,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Camera_Transport.vi",
+      "sha256": "d807d598753d48c4ac6c9d38f4068ebc394eedb923e574c1a15786e2a11797f4",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\SUP_Camera_Transport.vi"
+    },
+    {
+      "bytes": 22483,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Telemetry_Begin.vi",
+      "sha256": "b6431ae4ac0497f8de9bb0b9cdc2f2c1c656b101f9642ea4c7d6748423a4e62d",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\SUP_Telemetry_Begin.vi"
+    },
+    {
+      "bytes": 22389,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/camera/SUP_Telemetry_End.vi",
+      "sha256": "bf9cdf4865fe50c16768b5e7a0ca6ede3cc8a082a53d98652dab73e08b3884c3",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\camera\\SUP_Telemetry_End.vi"
+    },
+    {
+      "bytes": 7988,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/sync_lifecycle/counter_only_candidate/ACQ_SharedState_Queue_Latest.vi",
+      "sha256": "7762e5753c1064c41fb270f2cb756ac73ba1c0f7ca6c387c1458b58c9e6834fc",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\sync_lifecycle\\counter_only_candidate\\ACQ_SharedState_Queue_Latest.vi"
+    },
+    {
+      "bytes": 8071,
+      "path": "legacy/labview/supervision_telemetry/individual_helpers/sync_lifecycle/counter_only_candidate/SUP_SyncTap.vi",
+      "sha256": "c81604493a62a6137d78a10913e2f17eb76272e86556a949025d8d4f61d999ce",
+      "xp_target": "C:\\SUP_Telemetry_Helpers_88fd4200\\sync_lifecycle\\counter_only_candidate\\SUP_SyncTap.vi"
+    }
+  ],
+  "xml_reference_override": {
+    "current_sha256": "156bdd968267435c6be0bfee46b1536903d543fc433d68940b98270fce800cfa",
+    "historical_sha256": "f24df3c61e67a0c0a31d28cf891ef1e619e4b3a0c842522409e06cde9dd6d357"
+  },
+  "xp_labview_executable": {
+    "architecture": "PE32 I386/x86",
+    "bytes": 38663232,
+    "distributed": false,
+    "path": "C:\\Program Files\\National Instruments\\LabVIEW 2012\\LabVIEW.exe",
+    "sha256": "5c894a31a084e9e26f9491b697f02e069c760dde26ba46686d7144f41e13ff8c",
+    "version": "12.0.1f2"
+  }
+}

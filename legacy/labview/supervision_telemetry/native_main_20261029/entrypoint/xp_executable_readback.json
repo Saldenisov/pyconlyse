@@ -1,0 +1,41 @@
+{
+  "PE": {
+    "DOS_signature": "MZ",
+    "IMAGE_FILE_32BIT_MACHINE": true,
+    "IMAGE_FILE_DLL": false,
+    "Machine": "0x14c",
+    "PE_signature_hex": "50450000",
+    "architecture": "x86/I386",
+    "characteristics": "0x123",
+    "e_lfanew": 264,
+    "number_of_sections": 4,
+    "optional_header_kind": "PE32",
+    "optional_header_magic": "0x10b",
+    "subsystem": 2
+  },
+  "artifact": "Observed XP LabVIEW executable readback",
+  "bytes": 38663232,
+  "copy_method_reported": "Root observed RDP Explorer copy to local audit folder",
+  "executable_loaded_or_run": false,
+  "read_only_version_resource_API": "GetFileVersionInfo/VerQueryValue",
+  "remote_process_identity_verified": false,
+  "runtime_qualified": false,
+  "schema_version": 1,
+  "sha256": "5c894a31a084e9e26f9491b697f02e069c760dde26ba46686d7144f41e13ff8c",
+  "source_copy_unchanged_after_read": true,
+  "version_resource": [
+    {
+      "codepage": 1252,
+      "language": "0x409",
+      "values": {
+        "CompanyName": "National Instruments Corporation",
+        "FileDescription": "LabVIEW 12.0.1f2 Development System",
+        "FileVersion": "12.0.1f2",
+        "OriginalFilename": "labview.exe",
+        "ProductName": "National Instruments LabVIEW",
+        "ProductVersion": "12.0.1f2"
+      }
+    }
+  ],
+  "xp_path_reported": "C:\\Program Files\\National Instruments\\LabVIEW 2012\\LabVIEW.exe"
+}

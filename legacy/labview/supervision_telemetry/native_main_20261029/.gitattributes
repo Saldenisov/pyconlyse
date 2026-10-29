@@ -1,0 +1,4 @@
+artifacts/*.vi binary
+artifacts/*.llb binary
+*.json -text whitespace=cr-at-eol
+*.rst text eol=lf
