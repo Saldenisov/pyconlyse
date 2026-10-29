@@ -10,7 +10,8 @@ from legacy.xp_acq_control.elyse_agent.supervision_runtime import SupervisionRun
 from legacy.xp_acq_control.elyse_agent.supervision_vi_telemetry import SupervisionTelemetryPublisher
 from legacy.xp_acq_control.elyse_agent.camera_stream_publisher import (
     CameraStreamPublisher, validate_camera_stream_configuration)
-from tests.unit.test_supervision_vi_telemetry import KEYS, image, observation, encoded, part
+from tests.unit.test_supervision_vi_telemetry import (KEYS, image, observation, encoded, part,
+    native_camera, native_timestamp, NATIVE_NOW, decode_vi_camera_binary)
 
 
 def configuration(**changes):
@@ -41,6 +42,16 @@ class SupervisionCameraStreamTests(unittest.TestCase):
         while self.publisher.camera_stream.process_once():
             pass
 
+    def native(self, seq, size=768 * 576):
+        self.now = seq / 25.
+        self.publisher.wall_clock = lambda: NATIVE_NOW + self.now
+        self.publisher.tick_clock = lambda: 100125 + int(self.now * 1000)
+        observed = NATIVE_NOW + self.now - .125
+        whole = int(observed)
+        return native_camera(frame_count=seq, rows=1, columns=size, pixels=b'x' * size,
+            observed=native_timestamp(whole, int((observed - whole) * (1 << 64))),
+            observed_tick=100000 + int(self.now * 1000))
+
     def source_frames(self):
         values = []
         queue = self.publisher.camera_stream.queue
@@ -68,6 +79,62 @@ class SupervisionCameraStreamTests(unittest.TestCase):
         self.assertIsNone(self.publisher.camera_stream.sender.thread)
         self.assertIsNone(self.runtime._thread)
         self.assertIsNone(self.publisher.status()['raw_video_period_seconds'])
+
+    def test_native_pixels_never_take_a_base64_roundtrip_or_compress_during_receipt(self):
+        raw = self.native(1)
+        with patch('base64.b64encode', side_effect=AssertionError('Native pixels encoded')):
+            with patch('base64.b64decode', side_effect=AssertionError('Native pixels decoded')):
+                with patch('legacy.xp_acq_control.elyse_agent.camera_stream.zlib.compress',
+                           side_effect=AssertionError('Compression ran in admission')):
+                    result = self.publisher.ingest_observation(raw, '127.0.0.1')
+                    self.drain()
+        self.assertTrue(result['independent_camera_staged'])
+        frames = self.source_frames()
+        self.assertEqual(frames[0][1], b'x' * (768 * 576))
+        self.assertEqual(frames[0][0]['sequence'], 2)
+        self.assertEqual(self.publisher.camera_stream.status()['staging']['native_pixels_accepted'], 1)
+        self.assertIsNone(self.publisher.outbox.peek()['packet']['video_frame'])
+
+    def test_repeated_camera_receipts_do_not_build_27_bank_packets(self):
+        self.publisher.ingest_observation(self.native(1), '127.0.0.1')
+        old_publication = self.publisher.sequence
+        with patch('legacy.xp_acq_control.elyse_agent.supervision_vi_telemetry.standard_packet',
+                   side_effect=AssertionError('27 banks built on image receipt')):
+            for seq in range(2, 6):
+                self.publisher.ingest_observation(self.native(seq), '127.0.0.1')
+        self.assertEqual(self.publisher.typed_accepted, 5)
+        self.assertEqual(self.publisher.sequence, old_publication)
+        self.assertTrue(self.publisher.publish_once())
+        self.assertGreater(self.publisher.sequence, old_publication)
+        self.drain()
+        self.assertEqual(len(self.source_frames()), 5)
+
+    def test_native_and_equivalent_json_retry_share_immutable_observation_identity(self):
+        raw = self.native(1)
+        self.publisher.ingest_observation(raw, '127.0.0.1')
+        video = decode_vi_camera_binary(raw, NATIVE_NOW + self.now, 100125 + int(self.now * 1000))
+        result = self.publisher.ingest_observation(encoded(video), '127.0.0.1')
+        self.assertTrue(result['duplicate'])
+        self.drain()
+        self.assertEqual(len(self.source_frames()), 1)
+
+    def test_native_bounds_and_clock_failures_are_not_deferred_to_stage(self):
+        raw = self.native(1)
+        self.publisher.wall_clock = lambda: NATIVE_NOW - 1
+        self.assertRaises(ValueError, self.publisher.ingest_observation, raw, '127.0.0.1')
+        self.publisher.wall_clock = lambda: NATIVE_NOW + self.now
+        self.assertRaises(ValueError, self.publisher.ingest_observation, raw + b'x', '127.0.0.1')
+        self.assertEqual(self.publisher.camera_stream.status()['staging']['accepted'], 0)
+
+    def test_native_queue_preserves_real_age_and_bounds_owned_pixels(self):
+        self.publisher.ingest_observation(self.native(1), '127.0.0.1')
+        self.now += .5
+        self.drain()
+        metadata, pixels = self.source_frames()[0]
+        self.assertAlmostEqual(metadata['source_age_seconds'], .625, places=5)
+        self.assertEqual(len(pixels), 768 * 576)
+        self.assertRaises(ValueError, self.publisher.camera_stream.submit_native_video,
+                          image(), self.now)
 
     def test_decoding_compression_network_never_run_in_typed_admission(self):
         with patch('legacy.xp_acq_control.elyse_agent.camera_stream.zlib.compress',

@@ -84,8 +84,8 @@ def _windows_tick_count():
     return int(function())
 
 
-def decode_vi_camera_binary(raw, now_seconds=None, now_ticks=None):
-    """Normalize a bounded native owned-byte observation into unchanged JSON.
+def _decode_vi_camera_pixels(raw, now_seconds=None, now_ticks=None):
+    """Validate native clocks/geometry and retain owned pixels without JSON.
 
 Run/capture IDs preserve exact native Timestamp128 bytes. Age includes VI queue
     and loopback transfer on this SAME XP host. Wall and Win32 tick ages must
@@ -134,11 +134,34 @@ closed; neither new receipt time nor a repeated FrameCount freshens an image.
             capture_session_id=capture_id, observed_utc=observed_utc,
             sample_elapsed_seconds=copy_elapsed, source_age_seconds=age,
             width=header["columns"], height=header["rows"], pixel_type="U8",
-            encoding="base64_raw_row_major", data=base64.b64encode(raw[BINARY_CAMERA_HEADER_BYTES:]).decode("ascii"),
+            encoding="base64_raw_row_major", data=raw[BINARY_CAMERA_HEADER_BYTES:],
             channel=header["channel"], processing="raw_grab_before_legacy_interlace_bcg_profiles",
             hardware_acknowledged=False))
+    return value
+
+
+def decode_vi_camera_binary(raw, now_seconds=None, now_ticks=None):
+    """Public legacy normalization retains its exact validated JSON schema."""
+    value = _decode_vi_camera_pixels(raw, now_seconds, now_ticks)
+    video = value['video_frame']
+    video['data'] = base64.b64encode(video['data']).decode('ascii')
     validate_vi_observation(value)
     return value
+
+
+def _observation_digest(observation):
+    """Same identity for native bytes and their equivalent legacy JSON form."""
+    immutable = copy.deepcopy(observation)
+    pixels = b''
+    for name in ('counter_part', 'video_frame'):
+        part = immutable[name]
+        if part is not None:
+            part.pop('source_age_seconds')
+            if name == 'video_frame':
+                pixels = part.pop('data')
+                if type(pixels) is str:
+                    pixels = base64.b64decode(pixels.encode('ascii'), validate=True)
+    return hashlib.sha256(canonical(immutable) + b'\x00' + hashlib.sha256(pixels).digest()).hexdigest()
 
 
 def validate_vi_observation(value):
@@ -452,15 +475,16 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
     def ingest_observation(self, raw, peer):
         if peer != "127.0.0.1":
             raise ValueError("VI observation ingestion requires IPv4 loopback")
-        observation = (decode_vi_camera_binary(raw, self.wall_clock(), self.tick_clock())
-                       if type(raw) is bytes and raw.startswith(BINARY_CAMERA_PREFIX) else decode_vi_observation(raw))
+        native = type(raw) is bytes and raw.startswith(BINARY_CAMERA_PREFIX)
+        native_pixels = native and self.camera_stream is not None
+        if native:
+            decode = _decode_vi_camera_pixels if native_pixels else decode_vi_camera_binary
+            observation = decode(raw, self.wall_clock(), self.tick_clock())
+        else:
+            observation = decode_vi_observation(raw)
         decoded_at = self.clock()
         # Canonical image hashing is outside runtime/publisher admission locks.
-        immutable = copy.deepcopy(observation)
-        for name in ("counter_part", "video_frame"):
-            if immutable[name] is not None:
-                immutable[name].pop("source_age_seconds")
-        digest = hashlib.sha256(canonical(immutable)).hexdigest()
+        digest = _observation_digest(observation)
         with self.lock:
             self.last_vi_seen = self.clock()
         value = self._admit()
@@ -476,7 +500,8 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                         raise ValueError("VI observation identity reused with different data")
                     self.typed_duplicates += 1
                 else:
-                    if session != self._typed_session:
+                    new_source = session != self._typed_session
+                    if new_source:
                         if not any(observation[name] is not None and observation[name]["source_age_seconds"] < 2
                                    for name in ("counter_part", "video_frame")):
                             raise ValueError("New VI source requires a current independent observation")
@@ -500,12 +525,20 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                     self._vi_video = video
                     self._typed_session, self._typed_sequence, self._typed_digest = session, sequence, digest
                     self._bridge_generation += 1
-                    self._publish_bridge(value)
+                    # Independent camera RAM admission must not rebuild and
+                    # validate all 27 banks for every image. The existing owner
+                    # publisher observes the changed generation separately.
+                    # Counter observations and first-source publication keep
+                    # their synchronous metadata behavior.
+                    if self.camera_stream is None or observation['counter_part'] is not None or new_source:
+                        self._publish_bridge(value)
                     self.typed_accepted += 1
                     if stream_new:
                         # Only bounded immutable descriptor staging under these
                         # locks; decode/compression/socket work is independent.
-                        staged = self.camera_stream.submit_video(observation['video_frame'], decoded_at)
+                        submit = (self.camera_stream.submit_native_video if native_pixels
+                                  else self.camera_stream.submit_video)
+                        staged = submit(observation['video_frame'], decoded_at)
                 self._last_typed_receipt, self.last_vi_receipt, self.last_error = self.clock(), self.clock(), ""
                 result = dict(accepted=True, duplicate=duplicate, source_session_id=session,
                     source_sequence=sequence, sequence=self.sequence, hardware_writes=False,

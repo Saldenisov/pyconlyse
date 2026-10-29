@@ -11,7 +11,7 @@ import math
 import threading
 import time
 
-from .camera_stream import CameraFrameQueue, CameraFrameAdmission, CameraFrameSender
+from .camera_stream import CameraFrameQueue, CameraFrameAdmission, CameraFrameSender, validate_frame
 from .federation_wire import validate_video_frame
 
 
@@ -53,16 +53,26 @@ class CameraStreamPublisher(object):
         self.lock = threading.Lock()
         self.staging = deque()
         self.staging_bytes = self.received = self.staging_rejected = self.errors = 0
+        self.native_received = 0
         self.last_error = ''
         self.wake, self.stop = threading.Event(), threading.Event()
         self.worker = None
 
     def submit_video(self, video, received_at):
         """O(1) descriptor append: no base64/JSON decode, compression or network."""
+        return self._submit(video, received_at, False)
+
+    def submit_native_video(self, video, received_at):
+        """Only the validated native decoder supplies this internal byte form."""
+        if video is not None and type(video.get('data')) is not bytes:
+            raise ValueError('Native staging requires immutable owned pixels')
+        return self._submit(video, received_at, True)
+
+    def _submit(self, video, received_at, native_pixels):
         if video is None:
             return False
-        # The caller already validated the exact VI video schema. Its fields
-        # are immutable strings/numbers/Booleans, so a shallow dict owns it.
+        # Caller validated the JSON schema or fixed native header/clocks.
+        # Pixel bytes and scalar/string fields are immutable.
         descriptor = dict(video)
         size = len(descriptor['data'])
         with self.lock:
@@ -70,9 +80,10 @@ class CameraStreamPublisher(object):
                     or self.staging_bytes + size > self.config['max_bytes']):
                 self.staging_rejected += 1
                 return False
-            self.staging.append((descriptor, received_at, size))
+            self.staging.append((descriptor, received_at, size, native_pixels))
             self.staging_bytes += size
             self.received += 1
+            self.native_received += int(native_pixels)
             self.wake.set()
             return True
 
@@ -81,18 +92,22 @@ class CameraStreamPublisher(object):
             if not self.staging:
                 self.wake.clear()
                 return False
-            video, at, size = self.staging.popleft()
+            video, at, size, native_pixels = self.staging.popleft()
             self.staging_bytes -= size
             if not self.staging:
                 self.wake.clear()
         try:
-            validate_video_frame(video)
             if video['source'] != 'labview_supervision_ni1409':
                 raise ValueError('Typed VI camera requires the actual LabVIEW source run')
             metadata = {name: video[name] for name in ('source_session_id', 'capture_session_id',
                 'sequence', 'observed_utc', 'width', 'height', 'channel', 'source_age_seconds')}
             metadata['source_age_seconds'] += max(0., self.clock() - at)
-            pixels = base64.b64decode(video['data'].encode('ascii'), validate=True)
+            if native_pixels:
+                pixels = video['data']
+                validate_frame(metadata, pixels)
+            else:
+                validate_video_frame(video)
+                pixels = base64.b64decode(video['data'].encode('ascii'), validate=True)
             self.admission.offer(metadata, pixels)
             with self.lock:
                 self.last_error = ''
@@ -131,6 +146,7 @@ class CameraStreamPublisher(object):
         with self.lock:
             staging = dict(pending=len(self.staging), pending_bytes=self.staging_bytes,
                 accepted=self.received, rejected_new=self.staging_rejected,
+                native_pixels_accepted=self.native_received,
                 errors=self.errors, last_error=self.last_error,
                 oldest_age_seconds=None if not self.staging else max(0., self.clock() - self.staging[0][1]))
         return dict(enabled=True, transport='independent_binary_camera_v2',
