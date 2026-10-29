@@ -68,4 +68,34 @@ The same local profiled workload decreased from 5.150 to 0.267 seconds. It
 excludes NI, native VI scheduling, compression and sockets, and does not prove
 any live XP frame rate. Python3.4: 64 tests, 3 modern-only skips. Python3.12:
 the same 64 tests plus 10 camera-ingress/two-orchestrator integration tests
-passed. Live qualification of this additional correction remains pending.
+passed.
+
+The first live correction received 1232 frames in 120 seconds (10.27 frames/s),
+at approximately 14.9--16.3 Mbit/s of compressed payload. The sender FIFO still
+contained approximately 124 frames and observations arrived 11.6--12.2 seconds
+old. These were stale frames, not qualified real-time delivery. The native
+staging worker reported no processing errors; the downstream FIFO explicitly
+counted rejected new frames at its capacity. A bounded FIFO alone cannot make
+an overloaded sender lossless or fresh.
+
+Second transport candidate
+--------------------------
+
+The independent-image bridge now constructs its existing owner-scoped C12 bank
+and synchronization-counter wire directly. It no longer builds and validates
+an empty 27-bank scaffold for periodic or XML metadata publication. The shared
+Everest Device Server still merges and exposes all 27 public banks. The legacy
+sampled-image path is unchanged.
+
+The camera sender uses stored DEFLATE (zlib level 0) inside the same authenticated
+lossless ``zlib_u8_v1`` envelope. This trades XP compression CPU for bandwidth;
+the encoder's public default remains level 1. Full 768x576 U8 at 25 frames/s
+requires 88.47 Mbit/s of raw pixels before protocol overhead. Sender status now
+reports compression level and the last envelope-encoding duration. Geometry,
+authentication, bounded decompression, real observation age and FIFO limits
+remain enforced. No camera pixels enter the Acquisition telemetry database.
+
+Python3.4: 67 tests passed with 3 modern-only skips. Python3.12: all 77 camera,
+owner-telemetry and ingress/integration tests passed. The second candidate's
+XP deployment and live throughput/freshness qualification are pending the
+Windows execution warning. No 25Hz result is claimed.

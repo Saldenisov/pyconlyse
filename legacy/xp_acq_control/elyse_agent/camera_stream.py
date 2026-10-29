@@ -71,11 +71,13 @@ def validate_frame(metadata, pixels):
         raise ValueError('Immutable owned U8 row-major bytes required')
 
 
-def encode_frame(metadata, pixels, stream_id, message_id, nonce, key):
+def encode_frame(metadata, pixels, stream_id, message_id, nonce, key, compression_level=1):
     validate_frame(metadata, pixels)
     if not _hex(stream_id) or not _hex(nonce) or type(message_id) is not int or not 1 <= message_id <= MAX_SEQUENCE:
         raise ValueError('Bounded stream identity required')
-    payload = zlib.compress(pixels, 1)
+    if type(compression_level) is not int or compression_level not in (0, 1):
+        raise ValueError('Explicit bounded lossless compression level required')
+    payload = zlib.compress(pixels, compression_level)
     header = canonical(dict(frame=metadata, stream_id=stream_id, message_id=message_id,
                             nonce=nonce, codec='zlib_u8_v1'))
     if len(header) > MAX_METADATA or len(payload) > MAX_PAYLOAD:
@@ -253,13 +255,18 @@ class CameraFrameAdmission(object):
 
 class CameraFrameSender(object):
     """One independently started worker, persistent TCP, no successful-send sleep."""
-    def __init__(self, queue, address, key, timeout=2., retry_seconds=.1):
+    def __init__(self, queue, address, key, timeout=2., retry_seconds=.1, compression_level=0):
         if (type(address) is not tuple or len(address) != 2 or type(address[0]) is not str
                 or not address[0] or type(address[1]) is not int or not 1 <= address[1] <= 65535
                 or not 0 < timeout <= 10 or not 0 < retry_seconds <= 60):
             raise ValueError('Explicit bounded camera endpoint/deadlines required')
+        if type(compression_level) is not int or compression_level not in (0, 1):
+            raise ValueError('Explicit bounded lossless compression level required')
         self.queue, self.address, self.key = queue, address, validate_key(key)
         self.timeout, self.retry_seconds = timeout, retry_seconds
+        # Stored DEFLATE keeps the existing lossless wire codec while avoiding
+        # XP CPU compression work. Network capacity must be measured live.
+        self.compression_level, self.last_encode_seconds = compression_level, None
         self.stop_event, self.thread = threading.Event(), None
         self.connection, self.last_error = None, 'Not started'
         self.receiver_id, self.receiver_changes = None, 0
@@ -276,7 +283,10 @@ class CameraFrameSender(object):
         message, metadata, pixels = item
         nonce = uuid.uuid4().hex
         # Compression and sockets run outside the queue's producer lock.
-        payload = encode_frame(metadata, pixels, self.queue.stream_id, message, nonce, self.key)
+        begin = time.monotonic()
+        payload = encode_frame(metadata, pixels, self.queue.stream_id, message, nonce, self.key,
+                               compression_level=self.compression_level)
+        self.last_encode_seconds = time.monotonic() - begin
         try:
             if self.connection is None:
                 self.connection = socket.create_connection(self.address, timeout=self.timeout)

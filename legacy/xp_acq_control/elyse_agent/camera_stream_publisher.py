@@ -152,6 +152,8 @@ class CameraStreamPublisher(object):
         return dict(enabled=True, transport='independent_binary_camera_v2',
             destination='{}:{}'.format(self.config['host'], self.config['port']),
             source_admission=self.admission.status(), staging=staging, fifo=self.queue.status(),
+            compression_level=self.sender.compression_level,
+            last_encode_seconds=self.sender.last_encode_seconds,
             sender_error=self.sender.last_error, receiver_session_id=self.sender.receiver_id,
             receiver_session_changes=self.sender.receiver_changes,
             started=self.worker is not None, durable=False, images_archived=False,

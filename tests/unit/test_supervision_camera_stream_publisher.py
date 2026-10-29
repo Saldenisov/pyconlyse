@@ -11,7 +11,7 @@ from legacy.xp_acq_control.elyse_agent.supervision_vi_telemetry import Supervisi
 from legacy.xp_acq_control.elyse_agent.camera_stream_publisher import (
     CameraStreamPublisher, validate_camera_stream_configuration)
 from tests.unit.test_supervision_vi_telemetry import (KEYS, image, observation, encoded, part,
-    native_camera, native_timestamp, NATIVE_NOW, decode_vi_camera_binary)
+    native_camera, native_timestamp, NATIVE_NOW, decode_vi_camera_binary, xml)
 
 
 def configuration(**changes):
@@ -117,6 +117,34 @@ class SupervisionCameraStreamTests(unittest.TestCase):
         self.assertTrue(result['duplicate'])
         self.drain()
         self.assertEqual(len(self.source_frames()), 1)
+
+    def test_independent_bridge_publishes_owned_wire_without_building_empty_banks(self):
+        with patch('legacy.xp_acq_control.elyse_agent.supervision_vi_telemetry.standard_packet',
+                   side_effect=AssertionError('Empty 27-bank scaffold built')):
+            self.submit(1, counter=part())
+            self.now += 1.
+            self.submit(2)
+            self.assertTrue(self.publisher.publish_once())
+        packet = self.publisher.outbox.peek()['packet']
+        self.assertEqual(packet['owner'], 'supervision')
+        self.assertEqual([bank['publication'] for bank in packet['banks']], ['C12NI1409'])
+        self.assertEqual(packet['counter_part']['values'], part()['values'])
+        self.assertIsNone(packet['video_frame'])
+        self.assertEqual(packet['source_mode'], 'LABVIEW_BRIDGE')
+        self.assertEqual(packet['source_identity']['sequence'], 2)
+        self.assertGreaterEqual(packet['counter_part']['source_age_seconds'], 1.)
+
+    def test_vi_xml_counter_uses_same_owned_wire_when_images_are_independent(self):
+        with patch('legacy.xp_acq_control.elyse_agent.supervision_vi_telemetry.standard_packet',
+                   side_effect=AssertionError('Empty 27-bank scaffold built')):
+            result = self.publisher.ingest(xml(), '127.0.0.1')
+        packet = self.publisher.outbox.peek()['packet']
+        self.assertTrue(result['accepted'])
+        self.assertEqual(packet['counter_part']['values'], part()['values'])
+        self.assertEqual([bank['publication'] for bank in packet['banks']], ['C12NI1409'])
+        self.assertEqual(packet['banks'][0]['data'], 'img-fixture')
+        self.assertIsNone(packet['video_frame'])
+        self.assertNotIn('source_identity', packet)
 
     def test_native_bounds_and_clock_failures_are_not_deferred_to_stage(self):
         raw = self.native(1)

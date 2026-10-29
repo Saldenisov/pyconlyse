@@ -331,6 +331,11 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
             mode = "PYTHON_NATIVE" if projection.get("resource_count") else "UNAVAILABLE"
             return json.dumps(owner_frame("supervision", packet["session_id"], packet["sequence"], records,
                 mode, counter_part=counter, video_frame=video), allow_nan=False, separators=(",", ":"))
+        frame = self._bridge_frame(packet['session_id'], packet['sequence'])
+        return json.dumps(frame, allow_nan=False, separators=(",", ":"))
+
+    def _bridge_frame(self, session_id, sequence):
+        """The existing SuperVision wire contains its own bank and counter only."""
         records = {}
         record = self._aged(self._vi_string)
         if record is not None:
@@ -345,18 +350,23 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 # Pending snapshots can be replaced before transport selects
                 # one. Keep the current image eligible until a matching ACK;
                 # enqueueing alone must not spend the one-second video budget.
-        frame = owner_frame("supervision", packet["session_id"], packet["sequence"], records,
+        return owner_frame("supervision", session_id, sequence, records,
             "LABVIEW_BRIDGE", self._aged(self._vi_counter), video_frame=video,
             source_identity=(dict(source="labview_supervision_typed_local", session_id=self._typed_session,
                 sequence=self._typed_sequence) if self._typed_session is not None else None))
-        return json.dumps(frame, allow_nan=False, separators=(",", ":"))
 
     def _publish_bridge(self, value):
-        packet = standard_packet(value, self.sequence + 1)
-        packet["producer_kind"] = "copied_acquisition"
-        packet["data"].update(capture_kind="sequential_local_controls",
-                               timestamp_origin="xp_receipt_not_card_sample")
-        self._enqueue(packet, projection=value)
+        if self.camera_stream is not None:
+            frame = self._bridge_frame(value['session_id'], self.sequence + 1)
+            self.outbox.enqueue(json.dumps(frame, allow_nan=False, separators=(',', ':')),
+                datetime.datetime.now(datetime.timezone.utc).isoformat())
+            self.sequence, self.error = frame['sequence'], ''
+        else:
+            packet = standard_packet(value, self.sequence + 1)
+            packet["producer_kind"] = "copied_acquisition"
+            packet["data"].update(capture_kind="sequential_local_controls",
+                                   timestamp_origin="xp_receipt_not_card_sample")
+            self._enqueue(packet, projection=value)
         self._published_generation = self._bridge_generation
         self.identity = self._identity(value)
         self.mode, self.owner_state_current = "LABVIEW_BRIDGE", True

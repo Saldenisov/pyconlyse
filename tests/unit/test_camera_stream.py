@@ -162,6 +162,22 @@ class CameraStreamTests(unittest.TestCase):
                 receive_frame(BytesSocket(MAGIC + struct.pack('!II', 5000, 1)), KEY)
             self.assertEqual(unpack.call_count, 0)
 
+    def test_stored_deflate_preserves_full_pixels_and_existing_authenticated_codec(self):
+        pixels = b'x' * (768 * 576)
+        raw = encode_frame(metadata(width=768, height=576), pixels,
+                           'b' * 32, 1, 'c' * 32, KEY, compression_level=0)
+        header, result = receive_frame(BytesSocket(raw), KEY)
+        self.assertEqual(result, pixels)
+        self.assertEqual(header['codec'], 'zlib_u8_v1')
+        self.assertGreater(len(raw), len(pixels))
+        for level in (-1, 2, True, .0):
+            with self.assertRaises(ValueError):
+                encode_frame(metadata(), b'abcd', 'b' * 32, 1, 'c' * 32, KEY,
+                             compression_level=level)
+            with self.assertRaises(ValueError):
+                CameraFrameSender(CameraFrameQueue(), ('127.0.0.1', 8769), KEY,
+                                  compression_level=level)
+
     def test_authenticated_compression_cannot_expand_past_raw_limit(self):
         raw = encode_frame(metadata(), b'abcd', 'b' * 32, 1, 'c' * 32, KEY)
         header_size, unused = struct.unpack('!II', raw[len(MAGIC):len(MAGIC) + 8])
@@ -242,6 +258,8 @@ class CameraStreamTests(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertEqual([row[0] for row in seen], list(range(1, 101)))
         self.assertEqual(q.status()['acknowledged'], 100)
+        self.assertEqual(sender.compression_level, 0)
+        self.assertGreaterEqual(sender.last_encode_seconds, 0.)
 
     def test_lost_ack_retries_head_without_duplicate_consume(self):
         listener = self._listener()
