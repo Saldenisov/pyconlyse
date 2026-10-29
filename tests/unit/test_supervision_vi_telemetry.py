@@ -211,6 +211,39 @@ class SupervisionVITests(unittest.TestCase):
         self.assertAlmostEqual(self.publisher._aged(self.publisher._vi_video)["source_age_seconds"], 1.2)
         self.assertAlmostEqual(packet["counter_part"]["source_age_seconds"], 1.3)
 
+    def test_xml_replacement_cannot_spend_video_budget_before_matching_ack(self):
+        self.publisher.ingest(xml(), "127.0.0.1")
+        old = self.publisher.outbox.peek()  # A counter-only message is in flight.
+        self.submit(observation(video=image()))
+        for index in range(5):
+            self.now += .1
+            self.publisher.ingest(xml(), "127.0.0.1")
+        self.assertIsNone(self.publisher._bridge_video_sent_at)
+        self.assertRaises(ValueError, self.publisher.outbox.acknowledge,
+                          old["relay_id"], old["message_id"] + 1)
+        self.assertIsNone(self.publisher._bridge_video_sent_at)
+        self.publisher.outbox.acknowledge(old["relay_id"], old["message_id"])
+        self.assertIsNone(self.publisher._bridge_video_sent_at)
+        delivered = self.take()["packet"]
+        self.assertEqual(delivered["video_frame"]["sequence"], 1)
+        self.assertAlmostEqual(delivered["video_frame"]["source_age_seconds"], .6)
+        self.assertEqual(self.publisher._bridge_video_sent_at, self.now)
+        self.now = .6
+        self.submit(observation(sequence=2, video=image(sequence=2)))
+        self.assertIsNone(self.take()["packet"]["video_frame"])
+        self.now = 1.6
+        self.publisher.ingest(xml(), "127.0.0.1")
+        self.assertEqual(self.take()["packet"]["video_frame"]["sequence"], 2)
+
+    def test_late_old_source_video_ack_cannot_throttle_new_vi_source(self):
+        self.submit(observation(video=image()))
+        old = self.publisher.outbox.peek()
+        self.submit(observation(video=image(source="d" * 32), source="d" * 32))
+        self.publisher.outbox.acknowledge(old["relay_id"], old["message_id"])
+        self.assertIsNone(self.publisher._bridge_video_sent_at)
+        self.publisher.ingest(xml(), "127.0.0.1")
+        self.assertEqual(self.take()["packet"]["video_frame"]["source_session_id"], "d" * 32)
+
     def test_vi_source_and_camera_replays_are_rejected_without_cache_mutation(self):
         self.submit(observation(video=image()))
         self.take()

@@ -46,7 +46,9 @@ test('repeated sequence cannot refresh a frozen image, while a new capture may r
   expect(screen.getByRole('status')).toHaveTextContent('Image récente');
   await advance(1000);
   expect(screen.getByRole('status')).toHaveTextContent('Image périmée');
-  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toBeInTheDocument();
+  expect(screen.getByRole('img')).toHaveAccessibleName('Dernière image caméra SuperVision');
+  expect(context.putImageData).toHaveBeenCalledTimes(1);
   client.video.mockResolvedValue(payload(1, 'd'.repeat(32)));
   await advance(1000);
   expect(screen.getByRole('status')).toHaveTextContent('Image récente');
@@ -54,19 +56,22 @@ test('repeated sequence cannot refresh a frozen image, while a new capture may r
   unmount();
 });
 
-test('lost read or explicit unavailable response removes current pixels immediately', async () => {
+test('lost read and unavailable response retain last pixels with explicit source status', async () => {
   const client = { video: jest.fn().mockResolvedValueOnce(payload()).mockRejectedValueOnce(new Error('receiver absent'))
     .mockResolvedValue({ schema_version: 1, owner: 'supervision', available: false, frame: null }) };
   const { unmount } = render(<AcquisitionVideo client={client} />);
   await flush();
-  expect(screen.getByRole('img')).toBeInTheDocument();
+  const canvas = screen.getByRole('img');
   await advance(1000);
   expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
-  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toBe(canvas);
+  expect(screen.getByRole('status')).toHaveTextContent('dernière image conservée');
   expect(screen.getByRole('alert')).toHaveTextContent('receiver absent');
   await advance(1000);
   expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toBe(canvas);
+  expect(context.putImageData).toHaveBeenCalledTimes(1);
   unmount();
 });
 
@@ -78,7 +83,7 @@ test('one slow in-flight request cannot cause overlapping reads; HTTP delay cons
   expect(client.video).toHaveBeenCalledTimes(1);
   await act(async () => { finish(payload()); });
   expect(screen.getByRole('status')).toHaveTextContent('Image périmée');
-  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toBeInTheDocument();
   unmount();
 });
 
@@ -102,10 +107,12 @@ test('same capture sequence regression and malformed frames never display as cur
   await flush();
   await advance(1000);
   expect(screen.getByRole('alert')).toHaveTextContent('Séquence vidéo antérieure');
-  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toBeInTheDocument();
+  expect(screen.getByText(/U8 brut/)).toHaveTextContent('observation 2');
   await advance(1000);
   expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
-  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toBeInTheDocument();
+  expect(screen.getByText(/U8 brut/)).toHaveTextContent('observation 2');
   unmount();
 });
 
@@ -115,5 +122,24 @@ test('disabled viewer does not request pixels', async () => {
   await flush();
   expect(client.video).not.toHaveBeenCalled();
   expect(screen.getByRole('status')).toHaveTextContent('Vidéo indisponible');
+  unmount();
+});
+
+test('expired source keeps canvas mounted until next valid image replaces pixels', async () => {
+  const client = { video: jest.fn().mockResolvedValueOnce(payload(1))
+    .mockResolvedValueOnce({ schema_version: 1, owner: 'supervision', available: false,
+      stale: true, sequence: 1, age_seconds: 3, frame: null })
+    .mockResolvedValue(payload(2)) };
+  const { unmount } = render(<AcquisitionVideo client={client} />);
+  await flush();
+  const canvas = screen.getByRole('img');
+  await advance(1000);
+  expect(screen.getByRole('status')).toHaveTextContent('Image périmée');
+  expect(screen.getByRole('img')).toBe(canvas);
+  expect(screen.getByText(/U8 brut/)).toHaveTextContent('observation 1');
+  await advance(1000);
+  expect(screen.getByRole('img')).toBe(canvas);
+  expect(screen.getByText(/U8 brut/)).toHaveTextContent('observation 2');
+  expect(context.putImageData).toHaveBeenCalledTimes(2);
   unmount();
 });

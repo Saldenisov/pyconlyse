@@ -20,7 +20,7 @@ from .federation_wire import (finite, hex_id, owner_frame, MAX_VIDEO_RAW_BYTES,
                               validate_counter_part, validate_video_frame)
 from .orchestrator_publisher import OwnerTelemetryPublisher
 from .protocol import recv_exact, send_message
-from .shared_state import decode_supervision_snapshot_xml
+from .shared_state import decode_supervision_snapshot_xml, LatestSnapshotOutbox
 from .shared_state_receiver import SharedStateServer
 from .standard_banks import standard_packet, schemas, packet_age_seconds
 from .telemetry_relay import DeadlineSocket, canonical
@@ -226,6 +226,19 @@ class SupervisionVIServer(SharedStateServer):
         socketserver.TCPServer.__init__(self, address, _TypedHandler)
 
 
+class _VideoDeliveryOutbox(LatestSnapshotOutbox):
+    """Notify only after matching ACK; release the queue lock before callback."""
+    def __init__(self, on_delivered, **options):
+        LatestSnapshotOutbox.__init__(self, **options)
+        self.on_delivered = on_delivered
+
+    def acknowledge(self, relay_id, message_id):
+        with self._lock:
+            packet = json.loads(self._inflight[1]) if self._inflight is not None else None
+            LatestSnapshotOutbox.acknowledge(self, relay_id, message_id)
+        self.on_delivered(packet)
+
+
 class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
     def __init__(self, runtime, address, key, period=.2, role="supervision",
                  vi_address=VI_ADDRESS, wall_clock=None, tick_clock=None, **options):
@@ -244,6 +257,23 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
         self._bridge_generation, self._published_generation = 0, -1
         self._native_video_sent_at = None
         self.typed_accepted, self.typed_duplicates = 0, 0
+        self.outbox = _VideoDeliveryOutbox(self._video_delivered, clock=self.clock,
+                                         max_encoded_bytes=900 * 1024)
+        self.relay.outbox = self.outbox  # No relay thread has started yet.
+
+    def _video_delivered(self, packet):
+        video = packet.get("video_frame")
+        if video is None:
+            return
+        with self.lock:
+            if packet["source_mode"] == "LABVIEW_BRIDGE":
+                if video["source_session_id"] != self._typed_session:
+                    return  # An ACK from a retired VI cannot suppress its successor.
+                self._video_identity_sent = (video["source_session_id"],
+                    video["capture_session_id"], video["sequence"])
+                self._bridge_video_sent_at = self.clock()
+            elif packet["source_mode"] == "PYTHON_NATIVE" and self._typed_session is None:
+                self._native_video_sent_at = self.clock()
 
     def _aged(self, item):
         if item is None:
@@ -266,7 +296,6 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                     video = copy.deepcopy(video)
                     video.pop("age_seconds", None)
                     video.pop("owner_session_id", None)
-                    self._native_video_sent_at = self.clock()
             mode = "PYTHON_NATIVE" if projection.get("resource_count") else "UNAVAILABLE"
             return json.dumps(owner_frame("supervision", packet["session_id"], packet["sequence"], records,
                 mode, counter_part=counter, video_frame=video), allow_nan=False, separators=(",", ":"))
@@ -281,7 +310,9 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
             if (identity != self._video_identity_sent and (self._bridge_video_sent_at is None
                     or self.clock() - self._bridge_video_sent_at >= 1.)):
                 video = candidate
-                self._video_identity_sent, self._bridge_video_sent_at = identity, self.clock()
+                # Pending snapshots can be replaced before transport selects
+                # one. Keep the current image eligible until a matching ACK;
+                # enqueueing alone must not spend the one-second video budget.
         frame = owner_frame("supervision", packet["session_id"], packet["sequence"], records,
             "LABVIEW_BRIDGE", self._aged(self._vi_counter), video_frame=video,
             source_identity=(dict(source="labview_supervision_typed_local", session_id=self._typed_session,
