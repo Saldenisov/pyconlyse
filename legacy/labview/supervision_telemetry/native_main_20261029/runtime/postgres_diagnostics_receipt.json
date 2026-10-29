@@ -1,0 +1,24 @@
+{
+  "hardware_calls": 0,
+  "production_fixture_rows": 0,
+  "schema": "codex_camera_fixture_97c7dbfdfcf74f78bbc07e36b77a60da",
+  "started_utc": "2026-10-29T09:18:49.610642+00:00",
+  "result": "PASS",
+  "fixture_counts": {
+    "sup_camera_observations": 2,
+    "sup_camera_references": 2,
+    "sup_camera_modes": 1
+  },
+  "latest_reference_revision": 2,
+  "mode_survives_restart": true,
+  "no_image_columns": true,
+  "stale_revision_rejected": true,
+  "isolated_fixture_schema_removed": true,
+  "production_tables": {
+    "sup_camera_state": 0,
+    "sup_camera_observations": 0,
+    "sup_camera_references": 0,
+    "sup_camera_modes": 0
+  },
+  "verified_utc": "2026-10-29T09:18:54.063666+00:00"
+}

@@ -33,18 +33,21 @@ class DS_AcqTelemetry(Device):
     archive_config_file = device_property(dtype=str, default_value="")
     federation_config_file = device_property(dtype=str, default_value="")
     supervision_migration_config_file = device_property(dtype=str, default_value="")
+    camera_stream_config_file = device_property(dtype=str, default_value="")
 
     def init_device(self):
         self._closing = True
-        if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive', '_store', '_cooling')):
+        if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive', '_store', '_cooling', '_camera')):
             self.delete_device()
-            if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive', '_store', '_cooling')):
+            if any(getattr(self, name, None) is not None for name in ('_server', '_bridge', '_archive', '_store', '_cooling', '_camera')):
                 raise RuntimeError("Previous telemetry owner did not exit; replacement refused")
         self._server = self._store = self._thread = None
         self._bridge = self._client = None
         self._bridges, self._clients = {}, {}
         self._archive = None
         self._cooling = None
+        self._camera = None
+        self._camera_error = ''
         super().init_device()
         # PyTango loads device properties in the base initialization. Reading
         # them earlier selects class defaults on a real first server boot.
@@ -127,6 +130,23 @@ class DS_AcqTelemetry(Device):
                 self._clients["supervision"] = client
                 self._bridges["supervision"] = ControlBridge(client)
                 self._bridges["supervision"].start()
+            if self.camera_stream_config_file:
+                # The auxiliary image path must not take down the independent
+                # Acquisition27-bank ingress when a camera port/config fails.
+                try:
+                    from DeviceServers.control.elyse_acq.camera_ingress import (
+                        CameraIngress, load_camera_configuration,
+                    )
+                    camera_config = load_camera_configuration(self.camera_stream_config_file)
+                    if camera_config is not None:
+                        if camera_config['listen_port'] == self.listen_port:
+                            raise ValueError('Camera stream must have its independent configured port')
+                        self._camera = CameraIngress(camera_config)
+                        self._camera.start()
+                except Exception as error:
+                    self._camera_error = type(error).__name__ + ': ' + str(error)[:180]
+                    if self._camera is not None and self._camera.close(timeout=3):
+                        self._camera = None
             self._closing = False
             self.set_state(DevState.ON)
             self.set_status("Standard 27-bank telemetry; exclusive source={0}; named commands={1}. "
@@ -286,10 +306,60 @@ class DS_AcqTelemetry(Device):
 
     @attribute(dtype=str)
     def video_json(self):
+        if getattr(self, '_camera_error', ''):
+            return json.dumps(dict(schema_version=1, owner='supervision', available=False, stale=True,
+                frame=None, transport='independent_binary_camera_v2',
+                reason='CAMERA_STREAM_START_FAILED', error=self._camera_error,
+                hardware_acknowledged=False, read_only=True))
+        camera = getattr(self, '_camera', None)
+        if camera is not None:
+            return json.dumps(camera.frame_snapshot(), allow_nan=False)
         if not (getattr(self, "_federated", False) or getattr(self, "_migration", False)) or self._store is None:
             return json.dumps(dict(available=False, owner="supervision", frame=None,
                                    reason="FEDERATED_RAW_VIDEO_NOT_CONFIGURED"))
         return json.dumps(self._store.video_snapshot(), allow_nan=False)
+
+    @attribute(dtype=str)
+    def camera_stream_json(self):
+        if getattr(self, '_camera_error', ''):
+            return json.dumps(dict(schema_version=1, owner='supervision', enabled=False, configured=True,
+                transport='independent_binary_camera_v2', channel_ids=[], channels={}, selected_channel=None,
+                reason='CAMERA_STREAM_START_FAILED', error=self._camera_error,
+                images_archived=False, hardware_commands_sent=False))
+        camera = getattr(self, '_camera', None)
+        if camera is not None:
+            return json.dumps(camera.status(), allow_nan=False)
+        # Expose only the actual single legacy channel, without copying pixels.
+        video = json.loads(self.video_json())
+        frame = video.pop('frame', None)
+        channel = video.get('channel')
+        return json.dumps(dict(schema_version=1, enabled=False, owner='supervision',
+            transport='legacy_sampled_owner_video', images_archived=False,
+            channel_ids=[channel] if type(channel) is int else [],
+            selected_channel=channel, channels={str(channel): video} if type(channel) is int else {},
+            hardware_commands_sent=False), allow_nan=False)
+
+    @command(dtype_in=str, dtype_out=str)
+    def ReadCameraFrame(self, channel):
+        """Passive RAM getter; never routes an XP command or switches NI input."""
+        if type(channel) is not str or len(channel) > 10 or channel and not channel.isascii():
+            raise ValueError('Unsigned decimal camera channel required')
+        if channel and (not channel.isdecimal() or not 0 <= int(channel) <= 0xFFFFFFFF):
+            raise ValueError('Unsigned decimal camera channel required')
+        requested = int(channel) if channel else None
+        if getattr(self, '_camera_error', ''):
+            value = json.loads(self.video_json())
+            value['channel'] = requested
+            return json.dumps(value, allow_nan=False)
+        camera = getattr(self, '_camera', None)
+        if camera is not None:
+            return json.dumps(camera.frame_snapshot(requested), allow_nan=False)
+        value = json.loads(self.video_json())
+        if requested is not None and value.get('channel') != requested:
+            value = dict(schema_version=1, owner='supervision', available=False, stale=True,
+                frame=None, channel=requested, reason='CHANNEL_NOT_OBSERVED',
+                read_only=True, hardware_acknowledged=False)
+        return json.dumps(value, allow_nan=False)
 
     @attribute(dtype=str)
     def supervision_counter_json(self):
@@ -358,6 +428,12 @@ class DS_AcqTelemetry(Device):
 
     def delete_device(self):
         self._closing = True
+        camera = getattr(self, '_camera', None)
+        if camera is not None:
+            if not camera.close(timeout=3):
+                self.warn_stream('Camera stream listener still owned; replacement refused')
+                return
+            self._camera = None
         bridges = getattr(self, "_bridges", {})
         for owner, reader in list(bridges.items()):
             if not reader.stop(3):

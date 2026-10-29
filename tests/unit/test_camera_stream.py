@@ -12,7 +12,7 @@ import zlib
 from unittest.mock import patch
 
 from legacy.xp_acq_control.elyse_agent.camera_stream import (
-    CameraFrameQueue, CameraFrameSender, CameraFrameReceiver, MAX_RAW,
+    CameraFrameQueue, CameraFrameAdmission, CameraFrameSender, CameraFrameReceiver, MAX_RAW,
     encode_frame, receive_frame, MAGIC)
 from legacy.xp_acq_control.elyse_agent.telemetry_relay import DeadlineSocket, sign
 from legacy.xp_acq_control.elyse_agent.protocol import send_message
@@ -35,6 +35,114 @@ class BytesSocket(object):
 
 
 class CameraStreamTests(unittest.TestCase):
+    def test_explicit_full_source_admission_preserves_every_original_sequence(self):
+        queue = CameraFrameQueue()
+        admission = CameraFrameAdmission(queue, every_n=1)
+        for sequence in (10, 11, 13):
+            self.assertTrue(admission.offer(dict(metadata(sequence), source_session_id='e' * 32), b'abcd'))
+        actual = []
+        while queue.peek():
+            message, frame, pixels = queue.peek()
+            actual.append(frame['sequence'])
+            self.assertEqual(frame['observed_utc'], metadata()['observed_utc'])
+            queue.acknowledge(message)
+        self.assertEqual(actual, [10, 11, 13])
+        self.assertEqual(admission.status()['intentional_decimated'], 0)
+
+    def test_half_admission_is_per_channel_and_duplicates_replays_do_not_advance_phase(self):
+        queue = CameraFrameQueue()
+        admission = CameraFrameAdmission(queue, every_n=2)
+        def offer(channel, sequence):
+            return admission.offer(dict(metadata(sequence), channel=channel, source_session_id='e' * 32), b'abcd')
+        self.assertTrue(offer(2, 5))
+        self.assertTrue(offer(3, 5))
+        self.assertFalse(offer(2, 5))  # Duplicate must not consume the second phase.
+        self.assertFalse(offer(2, 4))  # Replayed observation must not consume it either.
+        self.assertFalse(offer(2, 6))
+        self.assertFalse(offer(3, 6))
+        self.assertTrue(offer(2, 7))
+        self.assertTrue(offer(3, 7))
+        actual = []
+        while queue.peek():
+            message, frame, pixels = queue.peek()
+            actual.append((frame['channel'], frame['sequence']))
+            queue.acknowledge(message)
+        self.assertEqual(actual, [(2, 5), (3, 5), (2, 7), (3, 7)])
+        state = admission.status()
+        self.assertEqual(state['observed_unique'], 6)
+        self.assertEqual(state['intentional_decimated'], 2)
+        self.assertEqual(state['duplicates'], 1)
+        self.assertEqual(state['replays'], 1)
+
+    def test_source_decimation_and_fifo_rejection_have_distinct_counters(self):
+        queue = CameraFrameQueue(capacity=1)
+        admission = CameraFrameAdmission(queue, every_n=2)
+        offer = lambda seq: admission.offer(dict(metadata(seq), source_session_id='e' * 32), b'abcd')
+        self.assertTrue(offer(1))
+        self.assertFalse(offer(2))
+        self.assertFalse(offer(3))
+        self.assertFalse(offer(4))
+        queue.acknowledge(1)
+        self.assertTrue(offer(5))
+        state = admission.status()
+        self.assertEqual(state['intentional_decimated'], 2)
+        self.assertEqual(state['queue_rejected'], 1)
+        self.assertEqual(queue.status()['rejected_new'], 1)
+        self.assertEqual(state['enqueued'], 2)
+
+    def test_source_epoch_restart_resets_half_phase_and_old_epoch_cannot_return(self):
+        admission = CameraFrameAdmission(CameraFrameQueue(), every_n=2)
+        first = dict(metadata(), source_session_id='e' * 32)
+        next_capture = dict(first, capture_session_id='f' * 32)
+        self.assertTrue(admission.offer(first, b'abcd'))
+        self.assertFalse(admission.offer(dict(first, sequence=2), b'abcd'))
+        self.assertTrue(admission.offer(next_capture, b'abcd'))
+        self.assertFalse(admission.offer(dict(first, sequence=3), b'abcd'))
+        self.assertFalse(admission.offer(dict(next_capture, sequence=2), b'abcd'))
+        self.assertEqual(admission.status()['replays'], 1)
+        self.assertEqual(admission.status()['intentional_decimated'], 2)
+
+    def test_source_admission_state_and_errors_are_bounded(self):
+        admission = CameraFrameAdmission(CameraFrameQueue(), max_channels=1, max_retired_captures=1)
+        first = dict(metadata(), source_session_id='e' * 32)
+        self.assertTrue(admission.offer(first, b'abcd'))
+        with self.assertRaises(ValueError):
+            admission.offer(dict(first, channel=3), b'abcd')
+        self.assertTrue(admission.offer(dict(first, capture_session_id='f' * 32), b'abcd'))
+        with self.assertRaises(ValueError):
+            admission.offer(dict(first, capture_session_id='c' * 32), b'abcd')
+        with self.assertRaises(ValueError):
+            admission.offer(metadata(), b'abcd')
+        self.assertEqual(admission.status()['errors'], 3)
+        self.assertEqual(admission.status()['channel_ids'], [2])
+        for invalid in (0, 3, True):
+            with self.assertRaises(ValueError):
+                CameraFrameAdmission(CameraFrameQueue(), every_n=invalid)
+
+    def test_optional_actual_source_run_survives_binary_transport(self):
+        meta = dict(metadata(), source_session_id='e' * 32)
+        raw = encode_frame(meta, b'abcd', 'b' * 32, 1, 'c' * 32, KEY)
+        header, pixels = receive_frame(BytesSocket(raw), KEY)
+        self.assertEqual(header['frame']['source_session_id'], 'e' * 32)
+        with self.assertRaises(ValueError):
+            encode_frame(dict(meta, source_session_id='invalid'), b'abcd', 'b' * 32, 1, 'c' * 32, KEY)
+
+    def test_envelope_callback_exposes_transport_identity_separately_from_source_run(self):
+        meta = dict(metadata(), source_session_id='e' * 32)
+        raw = encode_frame(meta, b'abcd', 'b' * 32, 1, 'c' * 32, KEY)
+        seen = []
+        class AckSocket(BytesSocket):
+            def sendall(self, data):
+                self.ack = data
+        connection = AckSocket(raw)
+        receiver = CameraFrameReceiver(KEY, lambda frame, pixels, envelope:
+            seen.append((frame, pixels, envelope)), with_envelope=True)
+        receiver.receive_once(connection)
+        self.assertEqual(seen[0][0]['source_session_id'], 'e' * 32)
+        self.assertEqual(seen[0][2]['stream_id'], 'b' * 32)
+        self.assertEqual(seen[0][2]['message_id'], 1)
+        self.assertTrue(connection.ack)
+
     def test_lossless_full_geometry_compressed_binary_roundtrip(self):
         pixels = bytes(bytearray((i * 17) % 256 for i in range(768 * 576)))
         raw = encode_frame(metadata(width=768, height=576), pixels, 'b' * 32, 1, 'c' * 32, KEY)

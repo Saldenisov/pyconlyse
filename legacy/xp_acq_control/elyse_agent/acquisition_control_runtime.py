@@ -52,6 +52,7 @@ CONTROL_MODULES += ("card_service.py", "card_process_owner.py", "card_observatio
 CONTROL_MODULES += ("federation_wire.py", "orchestrator_publisher.py", "synchronization_profiles.py",
                     "supervision_cards.py", "supervision_imaq.py", "supervision_service.py",
                     "supervision_runtime.py", "supervision_gui.py", "supervision_vi_telemetry.py")
+CONTROL_MODULES += ("camera_stream.py", "camera_stream_publisher.py")
 
 
 def control_identity(root=None):

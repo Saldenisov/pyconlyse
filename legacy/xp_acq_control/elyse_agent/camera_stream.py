@@ -43,8 +43,10 @@ def _age(value):
 
 
 def validate_frame(metadata, pixels):
-    if type(metadata) is not dict or set(metadata) != FIELDS:
+    if type(metadata) is not dict or set(metadata) not in (FIELDS, FIELDS | {'source_session_id'}):
         raise ValueError('Exact U8 camera metadata required')
+    if 'source_session_id' in metadata and not _hex(metadata['source_session_id']):
+        raise ValueError('Actual camera source-run identity required')
     if not _hex(metadata['capture_session_id']):
         raise ValueError('Capture session required')
     if type(metadata['sequence']) is not int or not 1 <= metadata['sequence'] <= MAX_SEQUENCE:
@@ -161,6 +163,94 @@ class CameraFrameQueue(object):
                 overflow_policy='reject_new_report_loss', durable=False)
 
 
+class CameraFrameAdmission(object):
+    """Explicit source-side full/half admission; never a browser display control.
+
+    Select every first/second unique observation independently per actual
+    channel and source/capture. Preserve original sequence and UTC. Duplicate
+    or replayed observations do not advance phase. No sleeps or network I/O.
+    Pixels are already owned here; this reduces transfer, not native copy work.
+    """
+    def __init__(self, queue, every_n=1, max_channels=4, max_retired_captures=64):
+        if (type(every_n) is not int or every_n not in (1, 2)
+                or type(max_channels) is not int or not 1 <= max_channels <= 4
+                or type(max_retired_captures) is not int or not 1 <= max_retired_captures <= 64):
+            raise ValueError('Explicit full/half rate and bounded channel/capture limits required')
+        self.queue, self.every_n = queue, every_n
+        self.max_channels, self.max_retired = max_channels, max_retired_captures
+        self.lock, self.channels = threading.Lock(), {}
+        self.observed = self.enqueued = self.decimated = self.duplicates = self.replays = self.queue_rejected = 0
+        self.errors = 0
+
+    @staticmethod
+    def _stamp(label):
+        value = label.replace('Z', '+00:00')
+        try:
+            return datetime.datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+        except ValueError:
+            return datetime.datetime.strptime(value, '%Y-%m-%dT%H:%M:%S+00:00')
+
+    def offer(self, metadata, pixels):
+        try:
+            frozen = copy.deepcopy(metadata)
+            validate_frame(frozen, pixels)
+            if 'source_session_id' not in frozen:
+                raise ValueError('Source-side admission requires actual source_session_id')
+            channel = frozen['channel']
+            epoch = frozen['source_session_id'], frozen['capture_session_id']
+            sequence, stamp = frozen['sequence'], self._stamp(frozen['observed_utc'])
+        except Exception:
+            with self.lock:
+                self.errors += 1
+            raise
+        with self.lock:
+            prior = self.channels.get(channel)
+            if prior is None:
+                if len(self.channels) >= self.max_channels:
+                    self.errors += 1
+                    raise ValueError('Source admission channel bound reached')
+                prior = dict(epoch=epoch, sequence=0, phase=0, retired=set(), stamp=stamp)
+                self.channels[channel] = prior
+            elif epoch in prior['retired']:
+                self.replays += 1
+                return False
+            elif epoch != prior['epoch']:
+                if stamp < prior['stamp']:
+                    self.replays += 1
+                    return False
+                if len(prior['retired']) >= self.max_retired:
+                    self.errors += 1
+                    raise ValueError('Source admission capture history bound reached')
+                prior['retired'].add(prior['epoch'])
+                prior.update(epoch=epoch, sequence=0, phase=0)
+            if sequence <= prior['sequence']:
+                if sequence == prior['sequence']:
+                    self.duplicates += 1
+                else:
+                    self.replays += 1
+                return False
+            prior.update(sequence=sequence, stamp=stamp, phase=prior['phase'] + 1)
+            self.observed += 1
+            if (prior['phase'] - 1) % self.every_n:
+                self.decimated += 1
+                return False
+            if not self.queue.enqueue(frozen, pixels):
+                self.queue_rejected += 1
+                return False
+            self.enqueued += 1
+            return True
+
+    def status(self):
+        with self.lock:
+            return dict(every_n=self.every_n, channel_ids=sorted(self.channels),
+                max_channels=self.max_channels, observed_unique=self.observed,
+                enqueued=self.enqueued, intentional_decimated=self.decimated,
+                duplicates=self.duplicates, replays=self.replays,
+                queue_rejected=self.queue_rejected, errors=self.errors,
+                rate_basis='Fraction of unique source observations; not a hardware frame-rate promise',
+                modifies_source_frame_identity=False)
+
+
 class CameraFrameSender(object):
     """One independently started worker, persistent TCP, no successful-send sleep."""
     def __init__(self, queue, address, key, timeout=2., retry_seconds=.1):
@@ -253,8 +343,11 @@ class CameraFrameReceiver(object):
     unknown prior ACK history is counted explicitly, never described as lossless
     delivery across receiver restart. Its signed epoch is visible to the sender.
     """
-    def __init__(self, key, consume):
+    def __init__(self, key, consume, with_envelope=False):
+        if type(with_envelope) is not bool:
+            raise ValueError('Explicit callback envelope mode required')
         self.key, self.consume = validate_key(key), consume
+        self.with_envelope = with_envelope
         self.lock = threading.Lock()
         self.streams = {}
         self.receiver_id = uuid.uuid4().hex
@@ -278,7 +371,11 @@ class CameraFrameReceiver(object):
             else:
                 if prior is not None and message != prior[0] + 1:
                     raise ValueError('Camera transport sequence discontinuity')
-                self.consume(copy.deepcopy(header['frame']), pixels)
+                if self.with_envelope:
+                    self.consume(copy.deepcopy(header['frame']), pixels, dict(
+                        stream_id=stream, message_id=message, receiver_id=self.receiver_id))
+                else:
+                    self.consume(copy.deepcopy(header['frame']), pixels)
                 if prior is None and message != 1:
                     self.unknown_prefix_streams += 1
                 self.streams[stream] = message, digest

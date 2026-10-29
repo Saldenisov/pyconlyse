@@ -1,0 +1,17 @@
+{
+  "simulated": true,
+  "environment": "Everest only",
+  "python": "3.12.14",
+  "frames": 125,
+  "geometry": [
+    768,
+    576
+  ],
+  "analysis_mean_ms": 10.79092640336603,
+  "analysis_p95_ms": 13.74619989655912,
+  "analysis_max_ms": 15.800499939359725,
+  "pending": 125,
+  "database_calls": 0,
+  "hardware_calls": 0,
+  "pixels_stored": false
+}

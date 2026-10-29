@@ -102,7 +102,7 @@ export function decodeSupervisionVideo(payload) {
     || (frame.sourceSessionId !== null && payload.source_session_id !== frame.sourceSessionId)) {
     throw new Error('Identité externe de l’image SuperVision incompatible.');
   }
-  const stream = `${payload.session_id}:${frame.captureSessionId}:${frame.source}:${frame.sourceSessionId || ''}`;
+  const stream = `${payload.session_id}:${frame.captureSessionId}:${frame.source}:${frame.sourceSessionId || ''}:${frame.channel}`;
   const age = Math.max(payload.age_seconds, payload.frame.source_age_seconds);
   return { state: age < VIDEO_STALE_SECONDS ? 'CURRENT' : 'STALE', frame, age, stream,
     identity: `${stream}:${frame.sequence}` };

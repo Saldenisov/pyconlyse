@@ -1,0 +1,38 @@
+{
+  "result": "VERIFIED",
+  "activated_utc": "2026-10-29T10:02:53.803464+00:00",
+  "web_pid": 23084,
+  "ds_pid": 44228,
+  "processes_restarted": false,
+  "xp_changed": false,
+  "hardware_commands_sent": false,
+  "files": [
+    {
+      "path": "src/components/AcquisitionVideo.css",
+      "before": "3dbe825c56e47682d809f49fb88df9f44be6aae21e7a3d9d10d3609fe4fc94b9",
+      "after": "3dbe825c56e47682d809f49fb88df9f44be6aae21e7a3d9d10d3609fe4fc94b9"
+    },
+    {
+      "path": "src/components/SupervisionDiagnostics.css",
+      "before": "a7a3e6b86091c6f679129fe7c5e007493bce0240ef1551d4e80a69cd938084dd",
+      "after": "44a6fe81a2e01e406c118cdde1f63df225980fe21856631bd5a0fcfbbc0bb618"
+    },
+    {
+      "path": "src/components/SupervisionDiagnostics.js",
+      "before": "059962f6f70375647b603e63c79195bd86c9f71735246c4d58cbb2609fa673c4",
+      "after": "f521e130023ef563eaf56da46fc0d5ca199ac6f1146d1b0b1133d524fd6d6134"
+    },
+    {
+      "path": "src/components/SupervisionDiagnostics.test.js",
+      "before": "006740b996e94575c9d2bc72eb0d1d582513f685da60ec91d83874d5ecc73dca",
+      "after": "337187fbfb4b7adbe3a528a5b219ad2f59643c01a5649267afc06ef477561781"
+    },
+    {
+      "path": "src/AcquisitionCommands.js",
+      "before": "295888e9204ecf8752124c89546cf9fcbe6aba97c3ad2300959c4c2bb9487fb7",
+      "after": "295888e9204ecf8752124c89546cf9fcbe6aba97c3ad2300959c4c2bb9487fb7"
+    }
+  ],
+  "index_sha256": "4d354d4a07f6ef8fde65d35632d6adb378edaee20b10d71c984f43766e0321b0",
+  "backup": "F:\\ELYSE_Orchestrators\\supervision_vi_20261027\\web_compact_20261029T100252Z"
+}

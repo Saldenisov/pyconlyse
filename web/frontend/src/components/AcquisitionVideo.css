@@ -9,8 +9,47 @@
 .acquisition-video__status--waiting { color: #383d41; background: #e2e3e5; }
 .acquisition-video__error { color: #721c24; }
 .acquisition-video figure { margin: 0; }
+.acquisition-video__image { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }
+.acquisition-video__overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.acquisition-video__reference circle { fill: transparent; stroke: #ffe34f; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.acquisition-video__reference path { fill: none; stroke: #ffe34f; stroke-width: 1.5; }
+.acquisition-video__reference--inside circle { fill: rgba(50, 210, 110, .15); stroke: #36e876; stroke-dasharray: none; }
+.acquisition-video__centroid { fill: #4ce8ff; stroke: #062e3b; stroke-width: 1; }
+.acquisition-video__reference-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 14px; }
+.acquisition-video__reference-controls p, .acquisition-video__reference-controls output,
+.acquisition-video__reference-controls small { flex-basis: 100%; margin: 0; }
+.acquisition-video__reference-controls label { display: flex; align-items: center; gap: 8px; }
+.acquisition-video__reference-controls input { width: 80px; }
+.acquisition-video__reference-controls button { border: 1px solid #315b90; border-radius: 4px; padding: 7px 12px; color: #fff; background: #245690; }
+.acquisition-video__reference-controls button:disabled { opacity: .55; cursor: not-allowed; }
 .acquisition-video canvas { display: block; width: auto; height: auto; max-width: 100%; max-height: 420px;
   background: #000; image-rendering: pixelated; }
 .acquisition-video figcaption { margin-top: 8px; }
 .acquisition-video__empty { min-height: 120px; display: flex; align-items: center;
   justify-content: center; background: #f8f9fa; color: #495057; text-align: center; padding: 16px; }
+
+/* Compact native panel; do not inherit the site's large dark header. */
+.acquisition-video { border-color: #a4afb8; border-radius: 2px; padding: 6px; margin: 6px 0; color: #183047; background: #e0e3e6; font: 11px/1.25 Arial, Helvetica, sans-serif; text-align: left; }
+.acquisition-video > header {
+  position: static; inset: auto; z-index: auto; display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: 3px 8px; width: auto; height: auto; min-height: 0; max-height: none;
+  margin: -6px -6px 5px; padding: 4px 6px; border: 0; border-bottom: 1px solid #8f9aa4; border-radius: 0;
+  color: #073b68; background: linear-gradient(#e8eef3, #c0ccd6); box-shadow: none; text-align: left;
+}
+.acquisition-video > header h2 { font: 700 12px/16px Arial, Helvetica, sans-serif; color: #073b68; margin: 0; padding: 0; letter-spacing: normal; text-transform: none; text-shadow: none; background: transparent; }
+.acquisition-video > header span, .acquisition-video figcaption { color: #45596c; font: 10px/13px Arial, Helvetica, sans-serif; margin: 0; padding: 0; }
+.acquisition-video .acquisition-video__status { padding: 3px 5px; margin: 0 0 5px; border-radius: 2px; font-size: 11px; line-height: 14px; }
+.acquisition-video .acquisition-video__error { margin: 3px 0; padding: 0; color: #721c24; font-size: 11px; line-height: 14px; }
+.acquisition-video figure { margin: 0; padding: 0; }
+.acquisition-video__reference circle, .acquisition-video__reference path, .acquisition-video__centroid { vector-effect: non-scaling-stroke; }
+.acquisition-video__reference-controls { gap: 4px 8px; margin-top: 6px; }
+.acquisition-video .acquisition-video__reference-controls p,
+.acquisition-video .acquisition-video__reference-controls output,
+.acquisition-video .acquisition-video__reference-controls small { flex-basis: 100%; margin: 0; padding: 0; color: #34495c; font-size: 10px; line-height: 13px; background: transparent; }
+.acquisition-video__reference-controls label { gap: 5px; margin: 0; font-size: 11px; line-height: 15px; }
+.acquisition-video__reference-controls input { width: 54px; min-width: 0; height: 21px; padding: 1px 3px; font: 11px/15px Arial, Helvetica, sans-serif; }
+.acquisition-video__reference-controls button { min-height: 23px; height: auto; border-radius: 2px; padding: 2px 7px; font: 11px/16px Arial, Helvetica, sans-serif; }
+.acquisition-video canvas { max-height: 200px; }
+.acquisition-video figcaption { margin-top: 4px; }
+.acquisition-video__empty { min-height: 68px; background: #d4d9de; color: #45596c; padding: 7px; font-size: 11px; line-height: 14px; }
+@media(min-height: 900px) { .acquisition-video canvas { max-height: 280px; } }

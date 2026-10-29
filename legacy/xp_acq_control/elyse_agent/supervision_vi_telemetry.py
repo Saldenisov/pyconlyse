@@ -241,7 +241,8 @@ class _VideoDeliveryOutbox(LatestSnapshotOutbox):
 
 class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
     def __init__(self, runtime, address, key, period=.2, role="supervision",
-                 vi_address=VI_ADDRESS, wall_clock=None, tick_clock=None, **options):
+                 vi_address=VI_ADDRESS, wall_clock=None, tick_clock=None,
+                 camera_stream_configuration=None, **options):
         if role != "supervision" or vi_address != VI_ADDRESS:
             raise ValueError("Fixed SuperVision role and loopback typed ingress required")
         OwnerTelemetryPublisher.__init__(self, runtime, address, key, period, role, **options)
@@ -260,6 +261,14 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
         self.outbox = _VideoDeliveryOutbox(self._video_delivered, clock=self.clock,
                                          max_encoded_bytes=900 * 1024)
         self.relay.outbox = self.outbox  # No relay thread has started yet.
+        self.camera_stream = None
+        self._stream_videos, self._stream_retired = {}, {}
+        self._stream_stale_capture_skipped = 0
+        if camera_stream_configuration is not None:
+            from .camera_stream_publisher import CameraStreamPublisher, validate_camera_stream_configuration
+            stream_config = validate_camera_stream_configuration(camera_stream_configuration)
+            if stream_config is not None:
+                self.camera_stream = CameraStreamPublisher(stream_config, key, clock=self.clock)
 
     def _video_delivered(self, packet):
         video = packet.get("video_frame")
@@ -304,7 +313,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
         if record is not None:
             records["C12NI1409"] = record
         video = None
-        if self._vi_video is not None:
+        if self.camera_stream is None and self._vi_video is not None:
             candidate = self._aged(self._vi_video)
             identity = (candidate["source_session_id"], candidate["capture_session_id"], candidate["sequence"])
             if (identity != self._video_identity_sent and (self._bridge_video_sent_at is None
@@ -407,22 +416,58 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 self._retired_captures.add(previous)
         return (candidate, stamp)
 
+    def _retain_stream_video(self, video, stamp):
+        """Separate channel replay state; camera2 must not retire camera1."""
+        channel = video['channel']
+        if channel not in self._stream_videos and len(self._stream_videos) >= self.camera_stream.config['max_channels']:
+            raise ValueError('Independent VI camera channel bound reached')
+        candidate = copy.deepcopy(video)
+        capture = candidate['source_session_id'], candidate['capture_session_id']
+        retired = self._stream_retired.setdefault(channel, set())
+        if capture in retired:
+            raise ValueError('Retired independent VI camera capture cannot return')
+        prior = self._aged(self._stream_videos.get(channel))
+        if prior is not None:
+            previous = prior['source_session_id'], prior['capture_session_id']
+            if capture == previous:
+                if candidate['sequence'] < prior['sequence']:
+                    raise ValueError('Independent VI camera sequence regressed')
+                if candidate['sequence'] == prior['sequence']:
+                    before, after = dict(prior), dict(candidate)
+                    before.pop('source_age_seconds')
+                    after.pop('source_age_seconds')
+                    if before != after:
+                        raise ValueError('Independent VI camera identity reused with different data')
+                    return False
+            else:
+                if len(retired) >= MAX_VI_SESSIONS:
+                    raise ValueError('Independent VI camera replay history bound reached')
+                if candidate['source_age_seconds'] >= 2:
+                    self._stream_stale_capture_skipped += 1
+                    return False
+                retired.add(previous)
+        self._stream_videos[channel] = candidate, stamp
+        return True
+
     def ingest_observation(self, raw, peer):
         if peer != "127.0.0.1":
             raise ValueError("VI observation ingestion requires IPv4 loopback")
         observation = (decode_vi_camera_binary(raw, self.wall_clock(), self.tick_clock())
                        if type(raw) is bytes and raw.startswith(BINARY_CAMERA_PREFIX) else decode_vi_observation(raw))
+        decoded_at = self.clock()
+        # Canonical image hashing is outside runtime/publisher admission locks.
+        immutable = copy.deepcopy(observation)
+        for name in ("counter_part", "video_frame"):
+            if immutable[name] is not None:
+                immutable[name].pop("source_age_seconds")
+        digest = hashlib.sha256(canonical(immutable)).hexdigest()
         with self.lock:
             self.last_vi_seen = self.clock()
         value = self._admit()
         try:
             with self.lock:
                 session, sequence = observation["source_session_id"], observation["sequence"]
-                immutable = copy.deepcopy(observation)
-                for name in ("counter_part", "video_frame"):
-                    if immutable[name] is not None:
-                        immutable[name].pop("source_age_seconds")
-                digest = hashlib.sha256(canonical(immutable)).hexdigest()
+                staged = None
                 duplicate = session == self._typed_session and sequence == self._typed_sequence
                 if session in self._retired_sources or session == self._typed_session and sequence < self._typed_sequence:
                     raise ValueError("Retired or regressed VI source observation")
@@ -440,9 +485,16 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                         if self._typed_session is not None:
                             self._retired_sources.add(self._typed_session)
                         self._vi_counter = self._vi_string = self._vi_video = None
+                        self._stream_videos, self._stream_retired = {}, {}
                     stamp = self.clock()
-                    video = (self._retain_video(observation["video_frame"], stamp)
-                             if observation["video_frame"] is not None else self._vi_video)
+                    stream_new = False
+                    if self.camera_stream is not None:
+                        if observation['video_frame'] is not None:
+                            stream_new = self._retain_stream_video(observation['video_frame'], stamp)
+                        video = None
+                    else:
+                        video = (self._retain_video(observation["video_frame"], stamp)
+                                 if observation["video_frame"] is not None else self._vi_video)
                     if observation["counter_part"] is not None:
                         self._vi_counter = (copy.deepcopy(observation["counter_part"]), stamp)
                     self._vi_video = video
@@ -450,10 +502,17 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                     self._bridge_generation += 1
                     self._publish_bridge(value)
                     self.typed_accepted += 1
+                    if stream_new:
+                        # Only bounded immutable descriptor staging under these
+                        # locks; decode/compression/socket work is independent.
+                        staged = self.camera_stream.submit_video(observation['video_frame'], decoded_at)
                 self._last_typed_receipt, self.last_vi_receipt, self.last_error = self.clock(), self.clock(), ""
-                return dict(accepted=True, duplicate=duplicate, source_session_id=session,
+                result = dict(accepted=True, duplicate=duplicate, source_session_id=session,
                     source_sequence=sequence, sequence=self.sequence, hardware_writes=False,
                     acknowledged_on="xp_ram_not_everest")
+                if self.camera_stream is not None:
+                    result.update(independent_camera_enabled=True, independent_camera_staged=staged)
+                return result
         finally:
             self.runtime._lock.release()
 
@@ -467,6 +526,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
             self._typed_session, self._typed_sequence, self._typed_digest = None, 0, None
             self._last_typed_receipt = None
             self._retired_captures = set()  # Retired source boots already fence their captures.
+            self._stream_videos, self._stream_retired = {}, {}
             self._video_identity_sent, self._bridge_video_sent_at = None, None
             self._bridge_generation += 1
 
@@ -522,6 +582,8 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
         self.vi_worker.daemon = True
         try:
             self.vi_worker.start()
+            if self.camera_stream is not None:
+                self.camera_stream.start()
             OwnerTelemetryPublisher.start(self)
         except Exception:
             self.close()
@@ -537,6 +599,8 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                     raise RuntimeError("SuperVision typed ingress remains owned")
             self.vi_server.server_close()
             self.vi_server = None
+        if self.camera_stream is not None and not self.camera_stream.close():
+            raise RuntimeError('Independent camera publisher remains owned')
         OwnerTelemetryPublisher.close(self)
 
     def status(self):
@@ -551,4 +615,11 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 vi_typed_age_seconds=None if self._last_typed_receipt is None else max(0., self.clock() - self._last_typed_receipt),
                 vi_producer_qualification="native_helper_not_authored_or_qualified",
                 vi_xml_counter_timestamp_origin="local_receipt_observed_control_memory")
+        if self.camera_stream is not None:
+            result.update(independent_camera=self.camera_stream.status(),
+                independent_camera_source='accepted_typed_labview_only',
+                independent_camera_stale_capture_skipped=self._stream_stale_capture_skipped,
+                raw_video_transport='independent_binary_camera_v2_for_vi',
+                raw_video_period_seconds=None, native_video_period_seconds=1.,
+                native_video_transport='unchanged_legacy_owner_video')
         return result

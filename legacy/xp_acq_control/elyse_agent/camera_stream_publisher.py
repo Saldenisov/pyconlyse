@@ -1,0 +1,142 @@
+"""Optional independent camera path for the one SuperVision host, Python3.4.
+
+Typed VI admission only appends bounded immutable descriptors. Decode/admission
+and compression/network execute on separate workers, without NI or publisher
+locks. No listener, thread, connection or hardware operation occurs on import.
+"""
+import base64
+from collections import deque
+import copy
+import math
+import threading
+import time
+
+from .camera_stream import CameraFrameQueue, CameraFrameAdmission, CameraFrameSender
+from .federation_wire import validate_video_frame
+
+
+def validate_camera_stream_configuration(value):
+    if value is None:
+        return None
+    if type(value) is not dict or type(value.get('enabled')) is not bool:
+        raise ValueError('Explicit camera_stream enabled policy required')
+    fields = {'enabled', 'source_mode', 'host', 'port', 'every_n', 'capacity', 'max_bytes',
+              'max_channels', 'timeout_seconds', 'retry_seconds'}
+    if set(value) - fields:
+        raise ValueError('Unknown independent camera configuration field')
+    if not value['enabled']:
+        return None
+    if (set(value) != fields or value['source_mode'] != 'LABVIEW_BRIDGE' or value['host'] != '10.20.30.202'
+            or type(value['port']) is not int or not 1024 <= value['port'] <= 65535 or value['port'] == 8767
+            or type(value['every_n']) is not int or value['every_n'] not in (1, 2)
+            or type(value['capacity']) is not int or not 1 <= value['capacity'] <= 128
+            or type(value['max_bytes']) is not int or not 524288 <= value['max_bytes'] <= 64 * 1024 * 1024
+            or type(value['max_channels']) is not int or not 1 <= value['max_channels'] <= 4):
+        raise ValueError('Bounded explicit Everest camera destination/rate/FIFO required')
+    for name, high in (('timeout_seconds', 5), ('retry_seconds', 60)):
+        item = value[name]
+        if type(item) not in (int, float) or not math.isfinite(item) or not .01 <= item <= high:
+            raise ValueError('Bounded camera transport time required: ' + name)
+    return copy.deepcopy(value)
+
+
+class CameraStreamPublisher(object):
+    def __init__(self, configuration, key, clock=None, sender_factory=None):
+        config = validate_camera_stream_configuration(configuration)
+        if config is None:
+            raise ValueError('Enabled independent camera configuration required')
+        self.config, self.clock = config, clock or time.monotonic
+        self.queue = CameraFrameQueue(config['capacity'], config['max_bytes'], clock=self.clock)
+        self.admission = CameraFrameAdmission(self.queue, every_n=config['every_n'], max_channels=config['max_channels'])
+        self.sender = (sender_factory or CameraFrameSender)(self.queue, (config['host'], config['port']), key,
+            timeout=config['timeout_seconds'], retry_seconds=config['retry_seconds'])
+        self.lock = threading.Lock()
+        self.staging = deque()
+        self.staging_bytes = self.received = self.staging_rejected = self.errors = 0
+        self.last_error = ''
+        self.wake, self.stop = threading.Event(), threading.Event()
+        self.worker = None
+
+    def submit_video(self, video, received_at):
+        """O(1) descriptor append: no base64/JSON decode, compression or network."""
+        if video is None:
+            return False
+        # The caller already validated the exact VI video schema. Its fields
+        # are immutable strings/numbers/Booleans, so a shallow dict owns it.
+        descriptor = dict(video)
+        size = len(descriptor['data'])
+        with self.lock:
+            if (self.stop.is_set() or len(self.staging) >= self.config['capacity']
+                    or self.staging_bytes + size > self.config['max_bytes']):
+                self.staging_rejected += 1
+                return False
+            self.staging.append((descriptor, received_at, size))
+            self.staging_bytes += size
+            self.received += 1
+            self.wake.set()
+            return True
+
+    def process_once(self):
+        with self.lock:
+            if not self.staging:
+                self.wake.clear()
+                return False
+            video, at, size = self.staging.popleft()
+            self.staging_bytes -= size
+            if not self.staging:
+                self.wake.clear()
+        try:
+            validate_video_frame(video)
+            if video['source'] != 'labview_supervision_ni1409':
+                raise ValueError('Typed VI camera requires the actual LabVIEW source run')
+            metadata = {name: video[name] for name in ('source_session_id', 'capture_session_id',
+                'sequence', 'observed_utc', 'width', 'height', 'channel', 'source_age_seconds')}
+            metadata['source_age_seconds'] += max(0., self.clock() - at)
+            pixels = base64.b64decode(video['data'].encode('ascii'), validate=True)
+            self.admission.offer(metadata, pixels)
+            with self.lock:
+                self.last_error = ''
+        except Exception as error:
+            with self.lock:
+                self.errors += 1
+                self.last_error = type(error).__name__ + ': ' + str(error)[:180]
+        return True
+
+    def _run(self):
+        while not self.stop.is_set():
+            if not self.process_once():
+                self.wake.wait(.1)
+
+    def start(self):
+        if self.worker is not None or self.stop.is_set():
+            raise RuntimeError('Independent camera publisher cannot start twice')
+        self.worker = threading.Thread(target=self._run, name='supervision-camera-admission')
+        self.worker.daemon = True
+        try:
+            self.sender.start()
+            self.worker.start()
+        except Exception:
+            self.close()
+            raise
+
+    def close(self):
+        self.stop.set()
+        self.wake.set()
+        if self.worker is not None and self.worker.is_alive():
+            self.worker.join(3)
+        sender_closed = self.sender.close()
+        return (self.worker is None or not self.worker.is_alive()) and sender_closed
+
+    def status(self):
+        with self.lock:
+            staging = dict(pending=len(self.staging), pending_bytes=self.staging_bytes,
+                accepted=self.received, rejected_new=self.staging_rejected,
+                errors=self.errors, last_error=self.last_error,
+                oldest_age_seconds=None if not self.staging else max(0., self.clock() - self.staging[0][1]))
+        return dict(enabled=True, transport='independent_binary_camera_v2',
+            destination='{}:{}'.format(self.config['host'], self.config['port']),
+            source_admission=self.admission.status(), staging=staging, fifo=self.queue.status(),
+            sender_error=self.sender.last_error, receiver_session_id=self.sender.receiver_id,
+            receiver_session_changes=self.sender.receiver_changes,
+            started=self.worker is not None, durable=False, images_archived=False,
+            local_ack_semantics='VI receipt/staging is separate from authenticated Everest RAM ACK')

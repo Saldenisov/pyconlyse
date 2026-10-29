@@ -27,6 +27,13 @@ test('decodes raw row-major U8 and maps black/midtones/white to opaque grayscale
   ]);
 });
 
+test('actual channels cannot share a pixel-cache identity even within one capture/sequence', () => {
+  const first = decodeSupervisionVideo(payload(frame()));
+  const second = decodeSupervisionVideo(payload({ ...frame(), channel: 1 }));
+  expect(second.stream).not.toBe(first.stream);
+  expect(second.identity).not.toBe(first.identity);
+});
+
 test('accepts the complete 512KiB boundary without recursive regex or hidden rescaling', () => {
   const bytes = Uint8Array.from({ length: MAX_U8_BYTES }, (_, index) => index % 256);
   const value = decodeSupervisionU8Frame({ ...frame(bytes), width: 1024, height: 512 });

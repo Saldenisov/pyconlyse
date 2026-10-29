@@ -1,0 +1,33 @@
+{
+  "python": "3.12.14",
+  "synthetic": true,
+  "destination": "127.0.0.1 only",
+  "source_fixture": "8bit entropy",
+  "geometry": [
+    768,
+    576
+  ],
+  "channels": [
+    2,
+    3
+  ],
+  "source_hz_per_channel": 25,
+  "admitted_hz_per_channel": 12.5,
+  "every_n": 2,
+  "intentional_decimated": 124,
+  "produced": 250,
+  "acknowledged": 126,
+  "rejected": 0,
+  "elapsed_seconds": 5.0,
+  "peak_pending": 2,
+  "ingress_received_bytes": 55811467,
+  "ingress_mbit_s_window": 90.361604,
+  "latest_sequence_per_channel": {
+    "2": 125,
+    "3": 125
+  },
+  "sql_writes": 0,
+  "ni_calls": 0,
+  "xp_or_lan_qualified": false,
+  "module_sha256": "890ae98c81990eb1b97f9c052501023c25f9fafbbe1f29d3bb679be0ebd35b9b"
+}

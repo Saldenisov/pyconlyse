@@ -1,68 +1,67 @@
-#!/usr/bin/env python3
-"""
-PYCONLYSE Web Server Startup Script - DEVELOPMENT MODE
-
-This script runs the server in DEVELOPMENT mode with debug=True.
-For PRODUCTION use, run: python start_production.py
-
-The server will be accessible at http://10.20.30.202:5001
-"""
+"""Run the development Flask/Socket.IO backend; React runs on port 3000."""
 
 import os
 import sys
 from pathlib import Path
 
-# Add the project root to Python path
-project_root = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(project_root))
 
-# Add backend directory to Python path
-backend_dir = Path(__file__).parent / 'backend'
-sys.path.insert(0, str(backend_dir))
+def configure_development_environment(environ=None):
+    environ = os.environ if environ is None else environ
+    environ["PYCONLYSE_PRODUCTION"] = "false"
+    environ.setdefault("PYCONLYSE_ENFORCE_DEVICE_AUTH", "false")
+    environ.setdefault("PYCONLYSE_JWT_COOKIE_SECURE", "false")
+    environ.setdefault("PYCONLYSE_WEB_HOST", "127.0.0.1")
+    environ.setdefault("PYCONLYSE_WEB_PORT", "5000")
+    environ.setdefault("PYCONLYSE_WEB_DEBUG", "true")
+    environ.setdefault(
+        "PYCONLYSE_TREATMENT_STATE_DB",
+        str(Path.home() / ".pyconlyse" / "treatment_state.sqlite3"),
+    )
+    if (
+        not environ.get("PYCONLYSE_TREATMENT_ROOT")
+        and not environ.get("PYCONLYSE_ALLOWED_ROOT")
+        and Path("E:/DATA_VD2").is_dir()
+    ):
+        environ["PYCONLYSE_TREATMENT_ROOT"] = "E:/DATA_VD2"
 
-# Import and run the Flask application from backend directory
-# Note: We don't change working directory to avoid issues with reloader
-original_cwd = os.getcwd()
-try:
-    os.chdir(backend_dir)
-    from app import socketio, app
-    from device_api import start_device_snapshot_monitor
-finally:
-    os.chdir(original_cwd)
 
-if __name__ == '__main__':
-    web_host = os.environ.get('PYCONLYSE_WEB_HOST', '127.0.0.1')
-    web_port = int(os.environ.get('PYCONLYSE_WEB_PORT', '5001'))
-    print("=" * 60)
-    print("PYCONLYSE Web Server - DEVELOPMENT MODE")
-    print("=" * 60)
-    print(f"Server will start on: http://{web_host}:{web_port}")
-    print(f"Main page:        http://{web_host}:{web_port}/")
-    print(f"iTest PSU page:   http://{web_host}:{web_port}/test_ds_itest_psu.html")
-    print(f"API devices:      http://{web_host}:{web_port}/api/devices")
-    print(f"TANGO_HOST:       {os.environ.get('TANGO_HOST', os.environ.get('PYCONLYSE_TANGO_HOST', '10.20.30.202:10000'))}")
-    print("=" * 60)
-    print("WARNING: Running in DEVELOPMENT mode (debug=True)")
-    print("For production, use: python start_production.py")
-    print("=" * 60)
-
-    start_device_snapshot_monitor()
-
+def main():
+    configure_development_environment()
+    project_root = Path(__file__).resolve().parents[1]
+    backend_dir = project_root / "web" / "backend"
+    sys.path[:0] = [str(project_root), str(backend_dir)]
+    original_cwd = os.getcwd()
     try:
-        # Run the server
-        socketio.run(
-            app, 
-            debug=True,   # Enable auto-reload on file changes
-            port=web_port, 
-            host=web_host,
-            allow_unsafe_werkzeug=True  # For development only
-        )
-    except KeyboardInterrupt:
-        print("\n\nServer stopped by user.")
-    except Exception as e:
-        print(f"\nError starting server: {e}")
-        print("\nTroubleshooting:")
-        print("1. Check if port 5001 is available")
-        print("2. Verify IP address 10.20.30.202 is correct")
-        print("3. Ensure Tango database is accessible")
-        print("4. Check devices are registered and running")
+        os.chdir(backend_dir)
+        from app import app, socketio
+        from device_api import start_device_snapshot_monitor
+        from folder_api import get_allowed_root
+    finally:
+        os.chdir(original_cwd)
+
+    web_host = os.environ["PYCONLYSE_WEB_HOST"]
+    web_port = int(os.environ["PYCONLYSE_WEB_PORT"])
+    debug_enabled = os.environ["PYCONLYSE_WEB_DEBUG"].lower() in (
+        "1", "true", "yes", "on"
+    )
+    print("PYCONLYSE Web Server - DEVELOPMENT MODE")
+    print(f"Backend: http://{web_host}:{web_port}")
+    print("React hot reload: http://127.0.0.1:3000")
+    print(f"Data Root: {get_allowed_root()}")
+    start_device_snapshot_monitor()
+    start_camera_monitor = app.extensions.get('start_supervision_monitor')
+    if start_camera_monitor:
+        start_camera_monitor()
+    socketio.run(
+        app,
+        debug=debug_enabled,
+        host=web_host,
+        port=web_port,
+        use_reloader=debug_enabled,
+        use_debugger=False,
+        allow_unsafe_werkzeug=True,
+    )
+
+
+if __name__ == "__main__":
+    main()

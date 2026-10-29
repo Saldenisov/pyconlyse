@@ -1,0 +1,25 @@
+{
+  "recorded_utc": "2026-10-29T10:01:58.198865+00:00",
+  "backend_transport": {
+    "python": "3.12.14",
+    "passed": 153
+  },
+  "frontend": {
+    "suites": 7,
+    "passed": 193
+  },
+  "xp_source_runtime": {
+    "python": "3.4.4 x86",
+    "passed": 74,
+    "skipped_modern_only": 3
+  },
+  "hardware_calls": 0,
+  "xp_deployment": false,
+  "live_auto_actuation": false,
+  "source_files": {
+    "DeviceServers/control/elyse_acq/DS_AcqTelemetry.py": "3bd3248f117f5526f7bdfb5548f2bb6a92baa962852fb06511e4b246f278a286",
+    "DeviceServers/control/elyse_acq/camera_ingress.py": "890ae98c81990eb1b97f9c052501023c25f9fafbbe1f29d3bb679be0ebd35b9b",
+    "legacy/xp_acq_control/elyse_agent/camera_stream.py": "075f9ef2c48a70ab343411468cf57660f3fc503c2cdce1967befbf08c22bd179",
+    "legacy/xp_acq_control/elyse_agent/camera_stream_publisher.py": "ccab5b4d8741eb4d8d2eeb4b7ac3a98475d260f6d9eaf71e78d76e16fd9d2074"
+  }
+}

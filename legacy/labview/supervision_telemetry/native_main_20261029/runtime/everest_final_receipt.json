@@ -1,0 +1,85 @@
+{
+  "verified_utc": "2026-10-29T10:03:45.972862+00:00",
+  "result": "PASS",
+  "acquisition_banks": 27,
+  "all_fresh": true,
+  "all_sequences_progressed": true,
+  "source_boots_preserved": true,
+  "state": "ON",
+  "processes": [
+    {
+      "pid": 23084,
+      "create_time": 1793266242.820197,
+      "argv": [
+        "C:\\Users\\elyse\\miniconda3\\envs\\pyconlyse312\\python.exe",
+        "-u",
+        "start_local.py"
+      ]
+    },
+    {
+      "pid": 44228,
+      "create_time": 1793265935.9739933,
+      "argv": [
+        "C:\\Users\\elyse\\miniconda3\\envs\\pyconlyse312\\python.exe",
+        "DS_AcqTelemetry.py",
+        "everest"
+      ]
+    }
+  ],
+  "archive": {
+    "enabled": true,
+    "backend": "postgresql",
+    "spool": "F:\\ELYSE_PostgreSQL\\spool\\ingress.sqlite3",
+    "pending": 4939,
+    "committed_this_process": 21792,
+    "last_commit_utc": "2026-10-29T10:03:44.618282+00:00",
+    "last_error": "",
+    "state": "RUNNING",
+    "durable_ingress": true,
+    "image_policy": "metadata_only_no_pixels"
+  },
+  "camera": {
+    "schema_version": 1,
+    "enabled": true,
+    "transport": "independent_binary_camera_v2",
+    "owner": "supervision",
+    "channel_ids": [],
+    "selected_channel": null,
+    "channels": {},
+    "accepted_frames": 0,
+    "duplicate_frames": 0,
+    "stale_frames_received": 0,
+    "channel_rejected": 0,
+    "max_channels": 2,
+    "stale_after_seconds": 2,
+    "images_archived": false,
+    "hardware_commands_sent": false,
+    "active_connections": 0,
+    "rejected_peers": 0,
+    "rejected_busy": 0,
+    "ingress_errors": 0,
+    "last_error": "",
+    "transport_accepted": 0,
+    "transport_duplicates": 0,
+    "receiver_session_id": "45bdeff9096645cc94d2df0c5d55e45e",
+    "unknown_ack_prefix_streams": 0,
+    "received_bytes": 0,
+    "sent_ack_bytes": 0,
+    "ingress_mbit_s_window": 0.0,
+    "bandwidth_window_seconds": 2.0,
+    "listening": true
+  },
+  "routes": {
+    "/api/elyse/acquisition/telemetry/video/channels": {
+      "status": 200,
+      "camera_count": 0
+    },
+    "/api/elyse/supervision/diagnostics?camera_id=ni1409:2": {
+      "status": 200,
+      "camera_count": 1
+    }
+  },
+  "xp_contacted": false,
+  "hardware_commands_sent": false,
+  "test_images_in_live_source": false
+}

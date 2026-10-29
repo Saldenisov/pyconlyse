@@ -12,6 +12,8 @@ from flask_jwt_extended import verify_jwt_in_request
 from flask_jwt_extended.exceptions import JWTExtendedException
 from jwt.exceptions import PyJWTError
 
+from audit_log import mark_authenticated_mutation
+
 UNSAFE_HTTP_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
@@ -55,4 +57,5 @@ def install_mutation_auth(blueprint, protected_get_endpoints=()):
                     jsonify({"msg": "Missing or invalid authentication credentials"}),
                     401,
                 )
+            mark_authenticated_mutation()
         return None

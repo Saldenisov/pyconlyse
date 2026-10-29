@@ -41,12 +41,13 @@ def snapshot():
 
 
 @pytest.fixture
-def setup_api(monkeypatch):
+def setup_api(monkeypatch, tmp_path):
     monkeypatch.delenv('ELYSE_TELEMETRY_ARCHIVE_CONFIG', raising=False)
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "false")
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "false")
     app = Flask(__name__)
-    app.config.update(TESTING=True, JWT_SECRET_KEY="test-only-telemetry-read-secret")
+    app.config.update(TESTING=True, JWT_SECRET_KEY="test-only-telemetry-read-secret",
+                      ELYSE_WORKSPACE_DB=str(tmp_path / 'workspace.sqlite3'))
     JWTManager(app)
     app.register_blueprint(api.acq_telemetry_api)
     calls = []

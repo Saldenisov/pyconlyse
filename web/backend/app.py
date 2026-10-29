@@ -112,7 +112,7 @@ def configure_security(flask_app):
 
 _load_project_env(str(Path(__file__).resolve().parents[1] / ".env"))
 
-from flask import Flask, jsonify, send_from_directory  # noqa: I001
+from flask import Flask, jsonify, redirect, send_from_directory  # noqa: I001
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from hardware_authorization import (
@@ -129,14 +129,23 @@ from pump_probe_v0_api import pump_probe_v0_api  # Pump-probe V0 emulator API
 from pump_probe_vd2_api import pump_probe_vd2_api  # VD2 streak-camera control API
 from auth import auth, configured_users  # Authentication endpoints
 from websocket_handler import init_socketio  # WebSocket support
+from audit_log import install_audit_log
+from elyse_supervision_api import elyse_supervision_api
 from acq_telemetry_api import acq_telemetry_api
 from acq_control_api import api as acq_control_api
+from supervision_workspace_api import workspace_api
 
-app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
+# Let the explicit SPA catch-all below serve both generated assets and
+# index.html. Flask's automatic static rule competes with /<path:path> when its
+# URL is empty, while mounting the whole build at /static would incorrectly map
+# /static/js/... to build/js/... instead of build/static/js/....
+FRONTEND_BUILD_DIR = str(Path(__file__).resolve().parents[1] / 'frontend' / 'build')
+app = Flask(__name__, static_folder=None)
 configure_security(app)
 if _env_bool("PYCONLYSE_PRODUCTION", False):
     configured_users(required=True)
 jwt = JWTManager(app)
+install_audit_log(app)
 
 # Register blueprints
 app.register_blueprint(routes)
@@ -145,9 +154,15 @@ app.register_blueprint(device_api)  # Add device API
 app.register_blueprint(treatment_api)  # Add treatment API
 app.register_blueprint(pump_probe_v0_api)  # Add pump-probe V0 emulator API
 app.register_blueprint(pump_probe_vd2_api)
+app.register_blueprint(elyse_supervision_api)
 app.register_blueprint(acq_telemetry_api)
 app.register_blueprint(acq_control_api)
-app.register_blueprint(auth)        # Add auth API
+app.register_blueprint(workspace_api)
+if authorization_required():
+    app.register_blueprint(auth)
+
+from supervision_camera_setup import configure_supervision_camera
+configure_supervision_camera(app)
 
 # Initialize WebSocket support
 socketio = init_socketio(app)
@@ -215,6 +230,11 @@ def basler_camera():
     return response
 
 # Catch-all route to serve your React app.
+@app.route('/login')
+def removed_login_page():
+    return redirect('/', code=302)
+
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
@@ -224,13 +244,13 @@ def serve(path):
     
     # If it's a static file (has extension) and exists, serve it
     if path != "" and "." in path:
-        file_path = os.path.join(app.static_folder, path)
+        file_path = os.path.join(FRONTEND_BUILD_DIR, path)
         if os.path.exists(file_path):
-            return send_from_directory(app.static_folder, path)
+            return send_from_directory(FRONTEND_BUILD_DIR, path)
     
     # For all other paths (including React routes), serve index.html with no-cache headers
     from flask import make_response
-    response = make_response(send_from_directory(app.static_folder, 'index.html'))
+    response = make_response(send_from_directory(FRONTEND_BUILD_DIR, 'index.html'))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'

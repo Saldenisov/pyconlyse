@@ -147,7 +147,13 @@ class SupervisionRuntimeTests(unittest.TestCase):
         self.assertEqual(receipt["outcome"], "QUEUED")
         self.wait(lambda: runtime.snapshot()["state"] == "EXECUTING")
         self.assertIsNone(runtime.counter_memory_part())
-        self.wait(lambda: runtime.video_frame_snapshot()["sequence"] >= before + 2)
+        # This read deliberately returns None during a concurrent runtime-lock
+        # capture. Wait for an actual advancing independent video observation;
+        # do not turn expected nonblocking contention into a TypeError.
+        def video_progressed():
+            frame = runtime.video_frame_snapshot()
+            return frame is not None and frame["sequence"] >= before + 2
+        self.wait(video_progressed)
         self.wait(lambda: any(r["outcome"] == "COMPLETED" for r in runtime.broker.snapshot()["results"]))
         self.wait(lambda: runtime.counter_memory_part() is not None
                   and runtime.counter_memory_part()["values"][4:6] == [1., 2.])

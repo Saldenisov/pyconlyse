@@ -4,7 +4,15 @@ export const VIDEO_READ_DEADLINE_MS = 5000;
 export const MAX_VIDEO_JSON_CHARS = 1024 * 1024;
 const VIDEO = '/api/elyse/acquisition/telemetry/video';
 
-async function video(signal) {
+const channelQuery = (channel) => {
+  if (channel === undefined || channel === null || channel === '') return '';
+  if (!Number.isInteger(channel) || channel < 0 || channel > 0xFFFFFFFF) {
+    throw new Error('Canal caméra entier non signé requis.');
+  }
+  return String(channel);
+};
+
+async function readJson(url, signal) {
   if (signal?.aborted) throw new DOMException('Lecture vidéo annulée', 'AbortError');
   const controller = new AbortController();
   let timer;
@@ -23,7 +31,7 @@ async function video(signal) {
     }, VIDEO_READ_DEADLINE_MS);
   });
   const exchange = async () => {
-    const response = await fetch(VIDEO, {
+    const response = await fetch(url, {
       method: 'GET', credentials: 'include', cache: 'no-store', signal: controller.signal,
     });
     const length = Number(response.headers?.get('Content-Length'));
@@ -43,4 +51,50 @@ async function video(signal) {
   finally { clearTimeout(timer); signal?.removeEventListener('abort', cancel); }
 }
 
-export const acqVideoClient = Object.freeze({ video });
+function video(signal, { channel } = {}) {
+  const selected = channelQuery(channel);
+  return readJson(VIDEO + (selected ? `?channel=${selected}` : ''), signal);
+}
+
+function channels(signal) { return readJson(`${VIDEO}/channels`, signal); }
+
+function subscribe({ onFrame, onError, signal, channel, targetFps = 25 } = {}) {
+  if (typeof EventSource !== 'function') throw new Error('Flux vidéo indisponible dans ce navigateur.');
+  if (typeof onFrame !== 'function' || ![25, 12.5].includes(targetFps)) {
+    throw new Error('Récepteur vidéo et fréquence25 ou12.5Hz requis.');
+  }
+  const selected = channelQuery(channel);
+  if (signal?.aborted) return () => {};
+  const query = new URLSearchParams({ fps: String(targetFps) });
+  if (selected !== '') query.set('channel', selected);
+  const source = new EventSource(`${VIDEO}/stream?${query}`, { withCredentials: true });
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    source.close();
+    source.removeEventListener('frame', receive);
+    source.removeEventListener('status', receive);
+    source.removeEventListener('error', failure);
+    signal?.removeEventListener('abort', close);
+  };
+  const failure = () => {
+    if (!closed) onError?.(new Error('Flux vidéo interrompu; reconnexion en cours.'));
+  };
+  const receive = (event) => {
+    if (closed) return;
+    try {
+      if (typeof event.data !== 'string' || event.data.length > MAX_VIDEO_JSON_CHARS) {
+        throw new Error('Réponse vidéo trop volumineuse.');
+      }
+      onFrame(JSON.parse(event.data));
+    } catch (error) { onError?.(error); }
+  };
+  source.addEventListener('frame', receive);
+  source.addEventListener('status', receive);
+  source.addEventListener('error', failure);
+  signal?.addEventListener('abort', close, { once: true });
+  return close;
+}
+
+export const acqVideoClient = Object.freeze({ video, channels, subscribe });

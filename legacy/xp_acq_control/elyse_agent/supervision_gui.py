@@ -39,7 +39,7 @@ def default_supervision_configuration():
 
 def validate_supervision_configuration(value):
     if (type(value) is not dict or not CONFIGURATION_FIELDS <= set(value)
-            or set(value) - CONFIGURATION_FIELDS - {"initial_sync_values_us", "vi_passive_shadow"} or value.get("schema_version") != 1):
+            or set(value) - CONFIGURATION_FIELDS - {"initial_sync_values_us", "vi_passive_shadow", "camera_stream"} or value.get("schema_version") != 1):
         raise ValueError("Exact versioned SuperVision host configuration required")
     if type(value.get("vi_passive_shadow", False)) is not bool:
         raise ValueError("Exact Boolean vi_passive_shadow policy required")
@@ -76,6 +76,11 @@ def validate_supervision_configuration(value):
         raise ValueError("Explicit fixed Everest telemetry configuration required")
     if telemetry["enabled"] and telemetry["wire"] != "federated_owner":
         raise ValueError("SuperVision cannot emit its local source into the old 27-bank receiver")
+    if 'camera_stream' in value:
+        from .camera_stream_publisher import validate_camera_stream_configuration
+        camera = validate_camera_stream_configuration(value['camera_stream'])
+        if camera is not None and not telemetry['enabled']:
+            raise ValueError('Independent VI camera requires the enabled unified telemetry publisher')
     return value
 
 
@@ -228,8 +233,11 @@ def main(entrypoint, argv=None, publisher_factory=None):
             if publisher_factory is None:
                 from .supervision_vi_telemetry import SupervisionTelemetryPublisher
                 publisher_factory = SupervisionTelemetryPublisher
+            publisher_options = dict(period=telemetry["period_seconds"], role="supervision")
+            if config.get('camera_stream') is not None:
+                publisher_options['camera_stream_configuration'] = config['camera_stream']
             publisher = publisher_factory(runtime, (telemetry["host"], telemetry["port"]), read_key,
-                period=telemetry["period_seconds"], role="supervision")
+                **publisher_options)
             runtime.telemetry_publisher = publisher
         runtime.start()
         view.start()

@@ -143,3 +143,53 @@ test('expired source keeps canvas mounted until next valid image replaces pixels
   expect(context.putImageData).toHaveBeenCalledTimes(2);
   unmount();
 });
+
+test('successful fallback polling requests the next image after40ms at25Hz and80ms at12.5Hz', async () => {
+  const client = { video: jest.fn().mockResolvedValue(payload()) };
+  const { unmount, rerender } = render(<AcquisitionVideo client={client} targetFps={25} />);
+  await flush();
+  await advance(39);
+  expect(client.video).toHaveBeenCalledTimes(1);
+  await advance(1);
+  expect(client.video).toHaveBeenCalledTimes(2);
+  rerender(<AcquisitionVideo client={client} targetFps={12.5} />);
+  await flush();
+  const before = client.video.mock.calls.length;
+  await advance(79);
+  expect(client.video).toHaveBeenCalledTimes(before);
+  await advance(1);
+  expect(client.video).toHaveBeenCalledTimes(before + 1);
+  unmount();
+});
+
+test('subscribed stream does not create polling reads and retains canvas through source status events', async () => {
+  let callbacks;
+  const unsubscribe = jest.fn();
+  const client = { video: jest.fn(), subscribe: jest.fn((options) => { callbacks = options; return unsubscribe; }) };
+  const { unmount } = render(<AcquisitionVideo client={client} channel={2} targetFps={25} />);
+  expect(client.subscribe).toHaveBeenCalledWith(expect.objectContaining({ channel: 2, targetFps: 25 }));
+  await act(async () => { callbacks.onFrame(payload(1)); });
+  const canvas = screen.getByRole('img');
+  await act(async () => { callbacks.onFrame(payload(2)); });
+  await act(async () => { callbacks.onError(new Error('stream disconnected')); });
+  expect(screen.getByRole('img')).toBe(canvas);
+  expect(screen.getByRole('status')).toHaveTextContent('dernière image conservée');
+  expect(client.video).not.toHaveBeenCalled();
+  unmount();
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
+  expect(callbacks.signal.aborted).toBe(true);
+  await act(async () => { callbacks.onFrame(payload(3)); });
+  expect(context.putImageData).toHaveBeenCalledTimes(2);
+});
+
+test('raw-channel mismatch cannot relabel an existing image and subscription absence uses serial fallback', async () => {
+  const client = { video: jest.fn().mockResolvedValue(payload()),
+    subscribe: jest.fn(() => { throw new Error('EventSource unavailable'); }) };
+  const { unmount } = render(<AcquisitionVideo client={client} channel={1} />);
+  await flush();
+  expect(screen.getByRole('alert')).toHaveTextContent('canal caméra demandé');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  expect(client.video).toHaveBeenCalledTimes(1);
+  expect(client.video).toHaveBeenCalledWith(expect.any(AbortSignal), { channel: 1 });
+  unmount();
+});
