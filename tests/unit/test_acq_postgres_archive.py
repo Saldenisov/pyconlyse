@@ -1,13 +1,17 @@
 """No hardware. Disk queue failure/replay and independent live view tests."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import MagicMock
+import zlib
 
-from DeviceServers.control.elyse_acq.telemetry_archive import DurableArchive, ingress_record
+from DeviceServers.control.elyse_acq.telemetry_archive import (
+    DurableArchive, PostgresStore, encoded, ingress_record, telemetry_only_record)
 from DeviceServers.control.elyse_acq.telemetry_sink import TelemetrySinkStore
 from tests.unit.test_acq_telemetry_sink import KEY, packet, request
 from legacy.xp_acq_agent.elyse_agent.telemetry_relay import TelemetryOutbox
@@ -133,6 +137,60 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(self.archive.status()['pending'], 0)
         self.assertTrue(self.archive.close())
         self.assertTrue(self.archive.close())
+
+    def test_camera_pixels_excluded_but_sync_memory_and_live_image_preserved(self):
+        from tests.unit.test_acq_federated_video import source, video
+        from tests.unit.test_acq_federated_telemetry import body
+        wire = body(source(image=video()))
+        original = copy.deepcopy(wire)
+        record = ingress_record(wire, 'receiver', 1, '2026-10-29T07:00:00+00:00')
+        self.assertEqual(wire, original)
+        self.assertNotIn('data', record['wire_body']['packet']['video_frame'])
+        self.assertEqual(record['wire_body']['packet']['counter_part'], wire['packet']['counter_part'])
+        self.archive.append(record)
+        payload = self.archive.db.execute('SELECT payload FROM pending').fetchone()[0]
+        saved = json.loads(zlib.decompress(payload))
+        self.assertNotIn('data', saved['wire_body']['packet']['video_frame'])
+        self.assertEqual(saved['wire_body']['packet']['counter_part']['values'], [1.] * 16)
+        self.assertEqual(saved['archive_image_policy'], 'metadata_only_no_pixels')
+        self.assertEqual(self.archive.status()['image_policy'], 'metadata_only_no_pixels')
+        self.assertEqual(telemetry_only_record(saved), saved)
+
+    def test_postgres_strips_legacy_spool_pixels_without_changing_retry_identity(self):
+        from tests.unit.test_acq_federated_video import source, video
+        from tests.unit.test_acq_federated_telemetry import body
+        wire = body(source(image=video()))
+        record = ingress_record(wire, 'receiver', 1, '2026-10-29T07:00:00+00:00')
+        # Model a row committed to the spool by an older version.
+        record['wire_body'] = copy.deepcopy(wire)
+        record.pop('archive_image_policy')
+        record['wire_body']['packet']['video_frame']['future_payload'] = 'must not persist'
+        original = copy.deepcopy(record)
+        for explicit in (False, True):
+            with self.subTest(explicit_identity=explicit):
+                candidate = copy.deepcopy(record)
+                if explicit:
+                    candidate['identity_digest'] = 'd' * 64
+                digest = candidate.get('identity_digest') or hashlib.sha256(encoded(candidate)).hexdigest()
+                store = object.__new__(PostgresStore)
+                store._known_types = {hashlib.sha256(encoded(row['lv_type'])).hexdigest()
+                    for row in candidate['snapshot']['publications'].values()}
+                store.Jsonb = lambda value: value
+                conn, cur = MagicMock(), MagicMock()
+                conn.__enter__.return_value = conn
+                conn.cursor.return_value.__enter__.return_value = cur
+                conn.execute.return_value.fetchall.return_value = []
+                cur.execute.return_value.fetchall.return_value = [(candidate['uid'], digest)]
+                store.connect = MagicMock(return_value=conn)
+                store._write_records_once([candidate])
+                frames = cur.executemany.call_args_list[0].args[1]
+                stored = json.loads(zlib.decompress(frames[0][5]))
+                image = stored['wire_body']['packet']['video_frame']
+                self.assertNotIn('data', image)
+                self.assertNotIn('future_payload', image)
+                self.assertEqual(frames[0][4], digest)
+                self.assertEqual(stored['wire_body']['packet']['counter_part'], wire['packet']['counter_part'])
+        self.assertEqual(record, original)
 
 
 if __name__ == '__main__':

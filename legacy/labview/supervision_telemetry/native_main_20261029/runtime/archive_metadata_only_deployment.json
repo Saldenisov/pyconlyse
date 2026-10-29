@@ -1,0 +1,44 @@
+{
+  "policy": "metadata_only_no_pixels",
+  "old_process": {
+    "pid": 932,
+    "create_time": 1793255207.7155724
+  },
+  "properties_unchanged": true,
+  "file": {
+    "path": "DeviceServers/control/elyse_acq/telemetry_archive.py",
+    "live_before_sha256": "5d7d8895b69d65a9ebfa6c3d02c3b30b98e29f88766ff26b292b53b41c804833",
+    "source_sha256": "1985693e6825cb21d7ef6cc953d585e7d1ff743a9b31e08abc07a6fc6bbc92b3"
+  },
+  "backup": "F:\\ELYSE_Telemetry_Server\\postgres_v3\\rollbacks\\archive_metadata_only_20261029T073531986998Z",
+  "hardware_commands_sent": false,
+  "new_process": {
+    "pid": 12416,
+    "create_time": 1793259339.167323,
+    "cmdline": [
+      "C:\\Users\\elyse\\miniconda3\\envs\\pyconlyse312\\python.exe",
+      "DS_AcqTelemetry.py",
+      "everest"
+    ],
+    "cwd": "F:\\ELYSE_Telemetry_Server\\postgres_v3\\DeviceServers\\control\\elyse_acq",
+    "stdout": "F:\\ELYSE_Orchestrators\\supervision_vi_20261027\\r20_wire_archive_metadata_only_20261029T073531986998Z.stdout.log",
+    "stderr": "F:\\ELYSE_Orchestrators\\supervision_vi_20261027\\r20_wire_archive_metadata_only_20261029T073531986998Z.stderr.log"
+  },
+  "verified_utc": "2026-10-29T07:35:45.052677+00:00",
+  "state": "ON",
+  "banks": 27,
+  "all_sequences_progressed": true,
+  "source_boot_preserved": true,
+  "archive": {
+    "enabled": true,
+    "backend": "postgresql",
+    "spool": "F:\\ELYSE_PostgreSQL\\spool\\ingress.sqlite3",
+    "pending": 82746,
+    "committed_this_process": 16,
+    "last_commit_utc": "2026-10-29T07:35:42.641235+00:00",
+    "last_error": "",
+    "state": "RUNNING",
+    "durable_ingress": true,
+    "image_policy": "metadata_only_no_pixels"
+  }
+}

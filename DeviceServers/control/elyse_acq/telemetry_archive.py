@@ -40,6 +40,32 @@ def timestamp(value):
     return result
 
 
+def telemetry_only_record(record):
+    """Copy camera metadata, never pixels, into the Acquisition archive.
+
+    Live authenticated input remains untouched. Keep its original identity
+    digest so a legacy spool retry still matches an already committed UID.
+    Applying this again at the database boundary also covers old spool rows.
+    Counter control memory and its quality/source fields are retained verbatim.
+    """
+    body = record.get('wire_body')
+    packet = body.get('packet') if isinstance(body, dict) else None
+    video = packet.get('video_frame') if isinstance(packet, dict) else None
+    if not isinstance(video, dict):
+        return record
+    result = copy.deepcopy(record)
+    # An allowlist excludes future encodings/payload fields as well as `data`.
+    names = ('source', 'source_session_id', 'simulated', 'sequence',
+             'sequence_interpretation', 'capture_session_id', 'observed_utc',
+             'sample_elapsed_seconds', 'source_age_seconds', 'width', 'height',
+             'pixel_type', 'encoding', 'channel', 'processing',
+             'hardware_acknowledged')
+    result['wire_body']['packet']['video_frame'] = {
+        name: video[name] for name in names if name in video}
+    result['archive_image_policy'] = 'metadata_only_no_pixels'
+    return result
+
+
 def ingress_record(body, receiver_session, receiver_count, observed_utc):
     packet = body['packet']
     federated = packet['publication'] == 'ELYSE_OWNER_SNAPSHOT'
@@ -62,12 +88,12 @@ def ingress_record(body, receiver_session, receiver_count, observed_utc):
     source = ('federated_orchestrators' if federated else
               'python_daqmx_acquisition' if packet['producer_kind'] == 'python_acquisition'
               else 'copied_labview_telemetry')
-    return dict(uid=identity, kind='snapshot', observed_utc=observed_utc,
+    return telemetry_only_record(dict(uid=identity, kind='snapshot', observed_utc=observed_utc,
                 provenance='live_ingress', receiver_session=receiver_session,
                 receiver_count=receiver_count, wire_body=body,
                 snapshot=dict(source=source, publications=banks,
                               receiver_session=receiver_session,
-                              received_this_process=receiver_count))
+                              received_this_process=receiver_count)))
 
 
 class PostgresStore:
@@ -128,8 +154,10 @@ class PostgresStore:
                                          ([record['uid'] for record in records],)).fetchall())
         frames, banks, definitions, expected = [], [], {}, {}
         for record in records:
+            # Compute legacy fallback identity before stripping old spool pixels.
+            digest = record.get('identity_digest') or hashlib.sha256(encoded(record)).hexdigest()
+            record = telemetry_only_record(record)
             raw = encoded(record)
-            digest = record.get('identity_digest') or hashlib.sha256(raw).hexdigest()
             if record['uid'] in existing:
                 if existing[record['uid']] != digest:
                     raise ValueError('Archived identity reused with different content')
@@ -241,7 +269,8 @@ class DurableArchive:
         pending = self.db.execute('SELECT count(*) FROM pending').fetchone()[0]
         self.cached = dict(enabled=True, backend='postgresql', spool=str(self.spool_path),
                            pending=pending, committed_this_process=0, last_commit_utc=None,
-                           last_error='', state='STARTING', durable_ingress=True)
+                           last_error='', state='STARTING', durable_ingress=True,
+                           image_policy='metadata_only_no_pixels')
         self.closed = False
         self.stop_event, self.wake = threading.Event(), threading.Event()
         self.thread = None
@@ -258,8 +287,11 @@ class DurableArchive:
         self.append(record)
 
     def append(self, record):
+        digest = record.get('identity_digest') or hashlib.sha256(encoded(record)).hexdigest()
+        record = telemetry_only_record(record)
+        if record.get('identity_digest') is None:
+            record = dict(record, identity_digest=digest)
         raw = encoded(record)
-        digest = record.get('identity_digest') or hashlib.sha256(raw).hexdigest()
         with self.lock:
             if self.closed:
                 raise RuntimeError('Archive spool closed')

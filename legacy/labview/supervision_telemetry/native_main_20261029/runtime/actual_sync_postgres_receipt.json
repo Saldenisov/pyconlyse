@@ -1,0 +1,36 @@
+{
+  "verified_utc": "2026-10-29T07:36:57.328908+00:00",
+  "uid": "live:supervision:7c66242c8ea445149797f57ace69f2a6:4834",
+  "observed_utc": "2026-10-29T07:12:54.269030+00:00",
+  "values": [
+    0.35,
+    0.35,
+    4691.200000000001,
+    100.0,
+    2000.4999999999995,
+    10.0,
+    2175.0,
+    10.0,
+    2175.0,
+    100.0,
+    1250.0,
+    500.0,
+    0.3,
+    10.0,
+    2175.0,
+    100.0
+  ],
+  "counter_source": "observed_labview_control_memory",
+  "source_age_seconds": 0.35899999999674037,
+  "source_identity": {
+    "sequence": 2577078126,
+    "session_id": "00000000e70898918400000000000000",
+    "source": "labview_supervision_typed_local"
+  },
+  "image_pixels_present": false,
+  "bounded_spool_rows_examined": 1,
+  "spool_rows_deleted": 0,
+  "already_committed": false,
+  "replayed_authenticated_record": true,
+  "hardware_commands_sent": false
+}
