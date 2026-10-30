@@ -6,6 +6,7 @@ live receiver, journal or experiment archive is opened or changed.
 import copy
 import hmac
 import socketserver
+import sys
 import threading
 import time
 import unittest
@@ -105,7 +106,7 @@ class CommandTelemetryPipelineTests(unittest.TestCase):
                 self.assertTrue(publisher.publish_once())
                 first = acknowledge(publisher)
                 self.assertTrue(records(first)["DPS"]["data"][2])
-                self.assertAlmostEqual(first["age_seconds_on_xp"], .05, delta=.1)
+                self.assertAlmostEqual(first["age_seconds_on_xp"], 0., delta=.1)
                 self.assertFalse(publisher.publish_once())
                 runtime.update_status(eps=((8, True),), dps=((2, False),))
                 self.assertTrue(publisher.publish_once())
@@ -144,9 +145,55 @@ class CommandTelemetryPipelineTests(unittest.TestCase):
         runtime.update_status(eps=((14, True),))
         publisher.publish_once()
         second = acknowledge(publisher)
-        self.assertAlmostEqual(second["age_seconds_on_xp"], .02, delta=.1)
+        self.assertAlmostEqual(second["age_seconds_on_xp"], 0., delta=.1)
         self.assertIsNone(records(second)["C2NI6071E"]["data"])
         self.assertTrue(records(second)["EPS"]["data"][14])
+
+    def test_persistent_literal_age_does_not_poison_fresh_published_inputs(self):
+        for dual in (False, True):
+            with self.subTest(dual=dual):
+                runtime, publisher = self.make(dual, image(.2, 64.))
+                publisher.outbox._clock = runtime._clock
+                self.assertTrue(publisher.publish_once())
+                first = publisher.outbox.peek()
+                self.assertAlmostEqual(first["age_seconds_on_xp"], .2)
+                self.assertEqual(sum(row["data"] is not None for row in records(first).values()), 14)
+                self.assertEqual(runtime.value["software_state_age_seconds"], 64.)
+                runtime.now += 3.
+                retained = acknowledge(publisher)
+                self.assertAlmostEqual(retained["age_seconds_on_xp"], 3.2)
+                self.assertEqual(retained["message_id"], first["message_id"])
+                runtime.value.update(age_seconds=3.2, stale=True, measurement_current=False,
+                                     sequence=8)
+                self.assertTrue(publisher.publish_once())
+                second = acknowledge(publisher)
+                for name in set(INPUTS) | set(COMMANDS):
+                    self.assertIsNone(records(second)[name]["data"])
+                self.assertIsNotNone(records(second)["EPS"]["data"])
+                self.assertAlmostEqual(second["age_seconds_on_xp"], 0.)
+
+    @unittest.skipIf(sys.version_info < (3, 7), "Everest receiver requires Python 3.7+")
+    def test_signed_ram_receiver_ages_actual_inputs_after_current_memory_projection(self):
+        from DeviceServers.control.elyse_acq.telemetry_sink import TelemetrySinkStore
+        runtime, publisher = self.make(True, image(.2, 64.))
+        publisher.outbox._clock = runtime._clock
+        now = [0.]
+        store = TelemetrySinkStore(KEY, clock=lambda: now[0],
+                                   permitted_producer_kind="unified_acquisition")
+        self.addCleanup(store.close)
+        self.assertTrue(publisher.publish_once())
+        signed = dict(body=publisher.outbox.peek(), nonce="b" * 32)
+        request = dict(signed, signature=sign(KEY, "ACQ-TELEMETRY-REQUEST-1", signed))
+        store.accept(request)
+        initial = store.snapshot()["publications"]
+        populated = [row for row in initial.values() if row["data"] is not None]
+        self.assertEqual(len(populated), 14)
+        self.assertTrue(all(not row["stale"] for row in populated))
+        self.assertAlmostEqual(initial["C1NI6071E"]["age_seconds"], .2)
+        now[0] = 2.
+        expired = store.snapshot()["publications"]
+        self.assertTrue(all(expired[name]["stale"] for name in set(INPUTS) | set(COMMANDS)))
+        self.assertAlmostEqual(expired["C1NI6071E"]["age_seconds"], 2.2)
 
     def test_busy_owner_invalidates_both_sources_without_waiting(self):
         runtime, publisher = self.make(value=image(.2, .1))

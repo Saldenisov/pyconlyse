@@ -228,9 +228,10 @@ def packet_age_seconds(runtime, packet):
     """Conservative age of populated categories in the fixed 27-bank frame.
 
     The unchanged wire envelope has one age, not independent per-bank clocks.
-    Use the oldest populated source category: status progress cannot freshen
-    an older AI/DI sample, and null/unknown hardware does not make a fresh
-    software-memory observation look like a fresh hardware measurement.
+    AI/DI and command images retain their actual sample age. Independently
+    attested software memory is observed by this current owner projection;
+    its literal change age is not a sample TTL. Outbox/transit time still
+    ages the whole frame, and status progress cannot freshen an AI/DI sample.
     """
     ages = []
     records = packet.get("data", {}).get("banks", ())
@@ -240,8 +241,12 @@ def packet_age_seconds(runtime, packet):
     if populated.intersection(set(INPUTS) | set(COMMANDS)):
         ages.append(runtime.get("age_seconds"))
     if populated.intersection(SOFTWARE_STATUSES):
-        ages.append(runtime.get("software_state_age_seconds")
-                    if "software_state" in runtime else runtime.get("age_seconds"))
+        if "software_state" in runtime:
+            if not _software_status_image(runtime, False):
+                raise ValueError("Populated software telemetry requires current owner memory")
+            ages.append(0.)
+        else:
+            ages.append(runtime.get("age_seconds"))
     if any(not _finite(age) or age < 0 for age in ages):
         raise ValueError("Populated native telemetry requires finite nonnegative source ages")
     return max(ages) if ages else 0.

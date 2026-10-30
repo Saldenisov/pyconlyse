@@ -121,15 +121,16 @@ class StatusProjectionTests(unittest.TestCase):
         self.assertEqual(actual["EPS"]["data"][8], True)
         self.assert_unavailable(actual["C1NI6071E"])
 
-    def test_wire_age_is_oldest_populated_category_never_progress_time(self):
+    def test_wire_age_preserves_sample_age_not_persistent_literal_change_age(self):
         runtime = attach_software(sample_runtime(), age=.1)
         runtime["age_seconds"] = .8
         self.assertEqual(packet_age_seconds(runtime, standard_packet(runtime, 1)), .8)
-        runtime["software_state_age_seconds"] = 1.2
-        self.assertEqual(packet_age_seconds(runtime, standard_packet(runtime, 1)), 1.2)
+        runtime["software_state_age_seconds"] = 64.
+        self.assertEqual(packet_age_seconds(runtime, standard_packet(runtime, 1)), .8)
+        self.assertEqual(runtime["software_state_age_seconds"], 64.)
         runtime.update(age_seconds=29., state="EXECUTING", stale=True)
         runtime["software_state_age_seconds"] = .2
-        self.assertEqual(packet_age_seconds(runtime, standard_packet(runtime, 1)), .2)
+        self.assertEqual(packet_age_seconds(runtime, standard_packet(runtime, 1)), 0.)
         self.assertEqual(runtime["age_seconds"], 29.)
         runtime.update(software_state_current=False)
         self.assertEqual(packet_age_seconds(runtime, standard_packet(runtime, 1)), 0.)
@@ -146,6 +147,28 @@ class StatusProjectionTests(unittest.TestCase):
         packet = standard_packet(runtime, 1)
         runtime["software_state_age_seconds"] = True
         self.assertRaises(ValueError, packet_age_seconds, runtime, packet)
+
+    def test_old_literal_current_owner_projection_preserves_all_source_gates(self):
+        runtime = attach_software(sample_runtime(), age=64.)
+        runtime.update(measurement_current=True, telemetry_view_current=True, age_seconds=.2)
+        actual = records(runtime)
+        self.assertEqual(sum(row["data"] is not None for row in actual.values()), 14)
+        self.assertEqual(packet_age_seconds(runtime, standard_packet(runtime, 1)), .2)
+        for change in (dict(age_seconds=2., stale=True, measurement_current=False),
+                       dict(latest={}), dict(measurement_current=False)):
+            stale = copy.deepcopy(runtime)
+            stale.update(change)
+            result = records(stale)
+            for name in set(INPUTS) | set(COMMANDS):
+                self.assert_unavailable(result[name])
+            self.assertEqual(result["EPS"]["data"][8], True)
+            self.assertEqual(packet_age_seconds(stale, standard_packet(stale, 1)), 0.)
+        for change in (dict(software_state_current=False), dict(telemetry_view_current=False)):
+            unavailable = copy.deepcopy(runtime)
+            unavailable.update(change)
+            result = records(unavailable)
+            for name in SOFTWARE_STATUSES:
+                self.assert_unavailable(result[name])
 
     def test_missing_wrong_type_and_partial_status_banks_are_not_synthetic_false(self):
         for name, (count, unused) in SOFTWARE_STATUSES.items():
