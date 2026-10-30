@@ -4,6 +4,8 @@ Counter-only XML and legacy27 XML use 127.0.0.1:8766. Typed observations
 use 127.0.0.1:8768, four-byte big-endian length then strict UTF-8 JSON or the
 versioned fixed native camera cluster. Native
 LabVIEW producers still require authoring/qualification; no VI is generated.
+Typed TCP connections accept ordered framed observations until EOF/idle/error;
+each observation and its local ACK retain an independent absolute deadline.
 Counter memory, opaque C12 String and raw images retain independent ages.
 """
 import copy
@@ -11,6 +13,7 @@ import base64
 import datetime
 import hashlib
 import json
+import socket
 import socketserver
 import struct
 import threading
@@ -40,6 +43,8 @@ FRACTION_SCALE = 1 << 64
 # 1--6ms ahead on this host. Admit only that bounded quantization window and
 # charge its full uncertainty to age; do not extend the two-second deadline.
 NATIVE_TICK_UNCERTAINTY_MS = 16
+VI_IDLE_TIMEOUT_SECONDS = 2.
+VI_FRAME_TIMEOUT_SECONDS = 2.
 
 
 def _binary_camera_header(raw, total_size):
@@ -213,35 +218,65 @@ def decode_vi_observation(raw):
 
 
 class _TypedHandler(socketserver.BaseRequestHandler):
-    def handle(self):
-        if self.client_address[0] != "127.0.0.1":
-            return
-        bounded = DeadlineSocket(self.request, time.monotonic() + 2)
-        try:
-            size = struct.unpack("!I", recv_exact(bounded, 4))[0]
-            if not 1 <= size <= MAX_VI_BYTES:
-                raise ValueError("Invalid SuperVision VI frame length")
-            prefix = recv_exact(bounded, min(size, len(BINARY_CAMERA_PREFIX)))
-            if prefix == BINARY_CAMERA_PREFIX:
-                if not BINARY_CAMERA_HEADER_BYTES < size <= MAX_BINARY_CAMERA_BYTES:
-                    raise ValueError("Native camera frame exceeds bounded payload")
-                header = prefix + recv_exact(bounded, BINARY_CAMERA_HEADER_BYTES - len(prefix))
-                _binary_camera_header(header, size)  # Reject bad dimensions before reading pixels.
-                raw = header + recv_exact(bounded, size - BINARY_CAMERA_HEADER_BYTES)
-            else:
-                raw = prefix + recv_exact(bounded, size - len(prefix))
-            result = self.server.store.ingest_observation(raw, self.client_address[0])
-            reply = dict(id="supervision-vi", ok=True, result=result)
-        except Exception as error:
-            with self.server.store.lock:
-                self.server.store.rejected += 1
-                self.server.store.last_error = str(error)[:300]
-            reply = dict(id="supervision-vi", ok=False,
-                error=dict(code="snapshot_rejected", message=str(error)[:300]))
+    def _read_frame(self, bounded, header):
+        """One framed observation; malformed framing cannot be resynchronized."""
+        header += recv_exact(bounded, 4 - len(header))
+        size = struct.unpack("!I", header)[0]
+        if not 1 <= size <= MAX_VI_BYTES:
+            raise ValueError("Invalid SuperVision VI frame length")
+        prefix = recv_exact(bounded, min(size, len(BINARY_CAMERA_PREFIX)))
+        if prefix != BINARY_CAMERA_PREFIX:
+            return prefix + recv_exact(bounded, size - len(prefix))
+        if not BINARY_CAMERA_HEADER_BYTES < size <= MAX_BINARY_CAMERA_BYTES:
+            raise ValueError("Native camera frame exceeds bounded payload")
+        header = prefix + recv_exact(bounded, BINARY_CAMERA_HEADER_BYTES - len(prefix))
+        _binary_camera_header(header, size)  # Reject bad dimensions before reading pixels.
+        return header + recv_exact(bounded, size - BINARY_CAMERA_HEADER_BYTES)
+
+    def _rejection(self, error):
+        with self.server.store.lock:
+            self.server.store.rejected += 1
+            self.server.store.last_error = str(error)[:300]
+        return dict(id="supervision-vi", ok=False,
+            error=dict(code="snapshot_rejected", message=str(error)[:300]))
+
+    def _send_reply(self, bounded, reply):
         try:
             send_message(bounded, reply, 16384)
         except Exception:
-            pass  # A local RAM ACK does not imply receipt or Everest durability.
+            return False  # A local RAM ACK does not imply receipt or Everest durability.
+        return True
+
+    def handle(self):
+        if self.client_address[0] != "127.0.0.1":
+            return
+        while not getattr(self.server, "_closing_handlers", False):
+            # Old one-frame clients may close after their ACK. An idle/closed
+            # connection has not submitted a new observation, so is not a loss.
+            idle = DeadlineSocket(self.request, time.monotonic() + VI_IDLE_TIMEOUT_SECONDS)
+            try:
+                header = idle.recv(4)
+            except (socket.timeout, OSError):
+                return
+            if not header or getattr(self.server, "_closing_handlers", False):
+                return
+            # Renew only at a frame boundary, never for each partial recv. Idle
+            # time between frames must not consume the next frame's deadline.
+            bounded = DeadlineSocket(self.request, time.monotonic() + VI_FRAME_TIMEOUT_SECONDS)
+            try:
+                raw = self._read_frame(bounded, header)
+            except Exception as error:
+                self._send_reply(bounded, self._rejection(error))
+                return  # Unread payload bytes cannot become the next length.
+            try:
+                result = self.server.store.ingest_observation(raw, self.client_address[0])
+                reply = dict(id="supervision-vi", ok=True, result=result)
+            except Exception as error:
+                # The complete frame was consumed: a rejected observation does
+                # not corrupt the boundary of the following framed observation.
+                reply = self._rejection(error)
+            if not self._send_reply(bounded, reply):
+                return
 
 
 class SupervisionVIServer(SharedStateServer):
@@ -255,6 +290,15 @@ class SupervisionVIServer(SharedStateServer):
         self._active_handlers, self._closing_handlers = 0, False
         self.handler_limit_rejections = 0
         socketserver.TCPServer.__init__(self, address, _TypedHandler)
+
+    def get_request(self):
+        connection, address = socketserver.TCPServer.get_request(self)
+        try:
+            connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except Exception:
+            connection.close()
+            raise
+        return connection, address
 
 
 class _VideoDeliveryOutbox(LatestSnapshotOutbox):

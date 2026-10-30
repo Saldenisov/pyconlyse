@@ -165,7 +165,7 @@ class PassiveShadowTests(unittest.TestCase):
             server.shutdown(); server.server_close(); worker.join(2.)
             self.assertFalse(worker.is_alive())
 
-    def test_production8768_handler_accepts_typed_shadow_export_on_private_ephemeral_port(self):
+    def test_production8768_persistent_handler_accepts_shadow_exports_on_private_ephemeral_port(self):
         from legacy.xp_acq_control.elyse_agent.supervision_vi_telemetry import (
             SupervisionTelemetryPublisher, SupervisionVIServer, MAX_VI_BYTES, VI_ADDRESS)
         from legacy.xp_acq_control.elyse_agent.protocol import recv_message, send_message
@@ -187,12 +187,18 @@ class PassiveShadowTests(unittest.TestCase):
             with socket.create_connection(server.server_address, timeout=2.) as connection:
                 send_message(connection, value, MAX_VI_BYTES)
                 reply = recv_message(connection, 16384)
+                self.assertTrue(reply["ok"])
+                value = observation(2, counter=part(), video=image(2))
+                send_message(connection, value, MAX_VI_BYTES)
+                reply = recv_message(connection, 16384)
             self.assertTrue(reply["ok"])
+            self.assertEqual(reply["result"]["source_sequence"], 2)
             packet = publisher.outbox.peek()["packet"]
             self.assertEqual(packet["source_mode"], "LABVIEW_BRIDGE")
             self.assertEqual(packet["counter_part"]["values"], value["counter_part"]["values"])
             self.assertEqual(packet["video_frame"]["data"], value["video_frame"]["data"])
             self.assertEqual(packet["video_frame"]["capture_session_id"], value["video_frame"]["capture_session_id"])
+            self.assertEqual(packet["video_frame"]["sequence"], 2)
             self.assertEqual(runtime.snapshot()["owner_mode"], "VI_PASSIVE_SHADOW")
             self.assertFalse(runtime.broker.enabled)
             self.assertEqual(constructed, [])
