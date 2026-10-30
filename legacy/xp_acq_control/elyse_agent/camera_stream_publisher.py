@@ -1,6 +1,6 @@
 """Optional independent camera path for the one SuperVision host, Python3.4.
 
-Typed VI admission only appends bounded immutable descriptors. Decode/admission
+VI/native-owner admission only appends bounded immutable descriptors. Decode/admission
 and compression/network execute on separate workers, without NI or publisher
 locks. No listener, thread, connection or hardware operation occurs on import.
 """
@@ -26,7 +26,7 @@ def validate_camera_stream_configuration(value):
         raise ValueError('Unknown independent camera configuration field')
     if not value['enabled']:
         return None
-    if (set(value) != fields or value['source_mode'] != 'LABVIEW_BRIDGE' or value['host'] != '10.20.30.202'
+    if (set(value) != fields or value['source_mode'] not in ('LABVIEW_BRIDGE', 'VI_OR_NATIVE') or value['host'] != '10.20.30.202'
             or type(value['port']) is not int or not 1024 <= value['port'] <= 65535 or value['port'] == 8767
             or type(value['every_n']) is not int or value['every_n'] not in (1, 2)
             or type(value['capacity']) is not int or not 1 <= value['capacity'] <= 128
@@ -54,6 +54,7 @@ class CameraStreamPublisher(object):
         self.staging = deque()
         self.staging_bytes = self.received = self.staging_rejected = self.errors = 0
         self.native_received = 0
+        self.python_received = 0
         self.last_error = ''
         self.wake, self.stop = threading.Event(), threading.Event()
         self.worker = None
@@ -68,7 +69,16 @@ class CameraStreamPublisher(object):
             raise ValueError('Native staging requires immutable owned pixels')
         return self._submit(video, received_at, True)
 
-    def _submit(self, video, received_at, native_pixels):
+    def submit_python_video(self, video, owner_session_id, received_at):
+        """Retained native owner's immutable IPC sample; no driver/network call."""
+        from .runtime_identity import valid_hex
+        if (self.config['source_mode'] != 'VI_OR_NATIVE'
+                or not valid_hex(owner_session_id, 32)
+                or type(video) is not dict or video.get('source') != 'python_supervision_ni1409'):
+            raise ValueError('Explicit current Python camera owner required')
+        return self._submit(video, received_at, False, owner_session_id)
+
+    def _submit(self, video, received_at, native_pixels, owner_session_id=None):
         if video is None:
             return False
         # Caller validated the JSON schema or fixed native header/clocks.
@@ -80,10 +90,11 @@ class CameraStreamPublisher(object):
                     or self.staging_bytes + size > self.config['max_bytes']):
                 self.staging_rejected += 1
                 return False
-            self.staging.append((descriptor, received_at, size, native_pixels))
+            self.staging.append((descriptor, received_at, size, native_pixels, owner_session_id))
             self.staging_bytes += size
             self.received += 1
             self.native_received += int(native_pixels)
+            self.python_received += int(owner_session_id is not None)
             self.wake.set()
             return True
 
@@ -92,15 +103,18 @@ class CameraStreamPublisher(object):
             if not self.staging:
                 self.wake.clear()
                 return False
-            video, at, size, native_pixels = self.staging.popleft()
+            video, at, size, native_pixels, owner_session_id = self.staging.popleft()
             self.staging_bytes -= size
             if not self.staging:
                 self.wake.clear()
         try:
-            if video['source'] != 'labview_supervision_ni1409':
-                raise ValueError('Typed VI camera requires the actual LabVIEW source run')
-            metadata = {name: video[name] for name in ('source_session_id', 'capture_session_id',
+            expected = ('python_supervision_ni1409' if owner_session_id is not None
+                        else 'labview_supervision_ni1409')
+            if video['source'] != expected:
+                raise ValueError('Camera source does not match its admitted owner')
+            metadata = {name: video[name] for name in ('capture_session_id',
                 'sequence', 'observed_utc', 'width', 'height', 'channel', 'source_age_seconds')}
+            metadata['source_session_id'] = owner_session_id or video['source_session_id']
             metadata['source_age_seconds'] += max(0., self.clock() - at)
             if native_pixels:
                 pixels = video['data']
@@ -147,6 +161,7 @@ class CameraStreamPublisher(object):
             staging = dict(pending=len(self.staging), pending_bytes=self.staging_bytes,
                 accepted=self.received, rejected_new=self.staging_rejected,
                 native_pixels_accepted=self.native_received,
+                python_frames_accepted=self.python_received,
                 errors=self.errors, last_error=self.last_error,
                 oldest_age_seconds=None if not self.staging else max(0., self.clock() - self.staging[0][1]))
         return dict(enabled=True, transport='independent_binary_camera_v2',
@@ -157,4 +172,4 @@ class CameraStreamPublisher(object):
             sender_error=self.sender.last_error, receiver_session_id=self.sender.receiver_id,
             receiver_session_changes=self.sender.receiver_changes,
             started=self.worker is not None, durable=False, images_archived=False,
-            local_ack_semantics='VI receipt/staging is separate from authenticated Everest RAM ACK')
+            local_ack_semantics='Local VI/native staging is separate from authenticated Everest RAM ACK')

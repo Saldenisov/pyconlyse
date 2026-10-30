@@ -80,7 +80,7 @@ def validate_supervision_configuration(value):
         from .camera_stream_publisher import validate_camera_stream_configuration
         camera = validate_camera_stream_configuration(value['camera_stream'])
         if camera is not None and not telemetry['enabled']:
-            raise ValueError('Independent VI camera requires the enabled unified telemetry publisher')
+            raise ValueError('Independent camera requires the enabled unified telemetry publisher')
     return value
 
 

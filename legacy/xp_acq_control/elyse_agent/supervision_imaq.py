@@ -48,6 +48,7 @@ class CtypesIMAQ(object):
     """Deferred installed-library binding. No arbitrary DLL path from requests."""
     def __init__(self):
         self.stdcall = self.cdecl = self.ctypes = None
+        self._grab_buffers = {}
 
     def _load(self):
         if self.stdcall is not None:
@@ -120,10 +121,19 @@ class CtypesIMAQ(object):
                 or rowpixels < width or width * height > maximum
                 or rowpixels * height > size.value or size.value > 4 * maximum):
             raise ValueError("Bounded U8 NI1409 geometry required before copying a buffer")
-        pointer = self.ctypes.c_void_p()
+        # Caller-owned destination: never pass NULL for every frame, which
+        # asks NI-IMAQ to allocate another output buffer on each imgGrab.
+        # Reuse one bounded buffer per session; resizing is based on the
+        # driver's current buffer requirement, before any native copy.
+        buffer = self._grab_buffers.get(session)
+        if buffer is None or self.ctypes.sizeof(buffer) != size.value:
+            buffer = self.ctypes.create_string_buffer(size.value)
+            self._grab_buffers[session] = buffer
+        address = self.ctypes.addressof(buffer)
+        pointer = self.ctypes.c_void_p(address)
         self._call("imgGrab", session, self.ctypes.byref(pointer), 1)
-        if not pointer.value:
-            raise ValueError("NI-IMAQ returned a null frame buffer")
+        if pointer.value != address:
+            raise ValueError("NI-IMAQ did not retain the caller-owned destination buffer")
         # Drop native row padding, retaining raw row order. The same owner is
         # the only caller and copies before its next grab; no borrowed pointer
         # crosses an IPC boundary.
@@ -136,6 +146,7 @@ class CtypesIMAQ(object):
 
     def close(self, handle):
         self._call("imgClose", handle, 1)
+        self._grab_buffers.pop(handle, None)  # Failed close retains its buffer.
 
 
 class SupervisionVideoCard(object):

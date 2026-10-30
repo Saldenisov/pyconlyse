@@ -272,9 +272,12 @@ class SupervisionCardAdapterTests(unittest.TestCase):
     def test_native_buffer_rows_are_copied_without_padding(self):
         class NativeFixture(CtypesIMAQ):
             def __init__(self):
+                CtypesIMAQ.__init__(self)
                 self.ctypes = ctypes
-                self.buffer = ctypes.create_string_buffer(b"abcXdefY")
+                self.pixels = b"abcXdefY"
+                self.addresses = []
                 self.trace = []
+                self.fail_close = False
 
             def get_u32(self, session, attribute):
                 return {ATTR_ROI_WIDTH: 3, ATTR_ROI_HEIGHT: 2, ATTR_ROWPIXELS: 4,
@@ -282,13 +285,38 @@ class SupervisionCardAdapterTests(unittest.TestCase):
 
             def _call(self, name, *args):
                 self.trace.append(name)
-                args[1]._obj.value = 8 if name == "imgSessionGetBufferSize" else ctypes.addressof(self.buffer)
+                if name == "imgSessionGetBufferSize":
+                    args[1]._obj.value = len(self.pixels)
+                elif name == "imgGrab":
+                    address = args[1]._obj.value
+                    if not address:
+                        raise AssertionError("Repeated NULL output-buffer allocation")
+                    self.addresses.append(address)
+                    ctypes.memmove(address, self.pixels, len(self.pixels))
+                elif name == "imgClose" and self.fail_close:
+                    raise IOError("injected native close failure")
         driver = NativeFixture()
-        self.assertEqual(driver.grab(102, 8), dict(width=3, height=2, data=b"abcdef", pixel_type="U8"))
+        first = driver.grab(102, 8)
+        self.assertEqual(first, dict(width=3, height=2, data=b"abcdef", pixel_type="U8"))
         self.assertEqual(driver.trace, ["imgSessionGetBufferSize", "imgGrab"])
+        driver.pixels = b"ghiXjklY"
+        second = driver.grab(102, 8)
+        self.assertEqual(first['data'], b"abcdef")  # Owned bytes survive the next grab.
+        self.assertEqual(second['data'], b"ghijkl")
+        self.assertEqual(driver.addresses[0], driver.addresses[1])
+        self.assertEqual(ctypes.sizeof(driver._grab_buffers[102]), 8)
+        driver.pixels += b"pad!"
+        self.assertEqual(driver.grab(102, 8)['data'], b"ghijkl")
+        self.assertEqual(ctypes.sizeof(driver._grab_buffers[102]), 12)
         driver.trace[:] = []
         self.assertRaises(ValueError, driver.grab, 102, 5)
         self.assertEqual(driver.trace, ["imgSessionGetBufferSize"])
+        driver.fail_close = True
+        self.assertRaises(IOError, driver.close, 102)
+        self.assertIn(102, driver._grab_buffers)
+        driver.fail_close = False
+        driver.close(102)
+        self.assertEqual(driver._grab_buffers, {})
 
     def test_video_largest_supported_frame_fits_existing_ipc_limit(self):
         driver = FakeVideo()

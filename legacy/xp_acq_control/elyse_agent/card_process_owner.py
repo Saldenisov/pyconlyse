@@ -85,10 +85,17 @@ class CardProcessEndpoint(object):
     def __init__(self, device, read_timeout=.5, period=.2, rpc_timeout=3., initialize_timeout=30.,
                  close_timeout=5., trusted_factory=None, client_factory=None, observer=None,
                  service_factory=CardService, service_options=None, expected_tasks=None,
-                 expected_started_counters=None):
+                 expected_started_counters=None, sample_sink=None, continuous_input=False):
         if (type(device) is not int and (type(device) is not str or not device or len(device) > 64)):
             raise ValueError("Explicit local card identity required")
         self.device = device
+        if sample_sink is not None and not callable(sample_sink):
+            raise TypeError("Trusted local nonblocking sample sink required")
+        if type(continuous_input) is not bool:
+            raise ValueError("Exact Boolean continuous input policy required")
+        self.sample_sink, self.continuous_input = sample_sink, continuous_input
+        self.sink_accepted = self.sink_rejected = self.sink_errors = 0
+        self.sink_last_error = ""
         self.read_timeout = _bounded(read_timeout, .01, 2, "read timeout")
         self.period = _bounded(period, .02, 10, "poll period")
         self.rpc_timeout = _bounded(rpc_timeout, .05, 30, "card RPC timeout")
@@ -186,7 +193,7 @@ class CardProcessEndpoint(object):
             self.rpc_timeout, self.initialize_timeout, self.close_timeout,
             self.trusted_factory, self.client_factory, self.observer,
             self.service_factory, self.service_options, self.expected_tasks,
-            self.expected_started_counters)
+            self.expected_started_counters, self.sample_sink, self.continuous_input)
         replacement.start()
         return replacement
 
@@ -211,6 +218,21 @@ class CardProcessEndpoint(object):
             self.latest, self.sample_started_at = copy.deepcopy(value), started
             self.sample_sequence += 1
             self.input_error = ""
+        if self.sample_sink is not None:
+            # Installation-owned O(1) staging only, outside endpoint locks.
+            # Never decode pixels, compress, send, or wait for delivery here.
+            # A rejected/full output queue must not poison the input owner.
+            try:
+                accepted = self.sample_sink(self, value, started) is True
+            except Exception as error:
+                with self.lock:
+                    self.sink_errors += 1
+                    self.sink_last_error = type(error).__name__ + ": " + str(error)[:180]
+            else:
+                with self.lock:
+                    self.sink_accepted += int(accepted)
+                    self.sink_rejected += int(not accepted)
+                    self.sink_last_error = ""
         return value, started
 
     def _execute(self, request):
@@ -312,7 +334,12 @@ class CardProcessEndpoint(object):
                             self.input_error = type(error).__name__ + ": " + str(error)
                             if self.client.isolation_snapshot().get("ownership_uncertain") is True:
                                 self.state = "OWNERSHIP_UNCERTAIN"
-                    next_read = time.monotonic() + self.period
+                    # Camera grab waits for the next hardware frame. In that
+                    # explicit mode add no poll sleep after a successful read;
+                    # still service queued commands/close between every read.
+                    # Read failures retain the normal backoff in either mode.
+                    next_read = time.monotonic() + (self.period if self.input_error
+                        or not self.continuous_input else 0.)
                 elif not eligible:
                     next_read = time.monotonic() + self.period
         finally:
@@ -348,6 +375,10 @@ class CardProcessEndpoint(object):
                 started_counters=list(self.started_counters), native=native,
                 sample_age_seconds=age, sample_sequence=self.sample_sequence,
                 sample=copy.deepcopy(self.latest), queue_depth=self.incoming.qsize(),
+                sample_sink=dict(enabled=self.sample_sink is not None,
+                    accepted=self.sink_accepted, rejected=self.sink_rejected,
+                    errors=self.sink_errors, last_error=self.sink_last_error),
+                continuous_input=self.continuous_input,
                 unresolved_request=self.unresolved_request,
                 elapsed_seconds=(0. if self.started_at is None else
                     (self.finished_initialization_at or now) - self.started_at),

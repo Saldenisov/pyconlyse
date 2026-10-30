@@ -244,9 +244,14 @@ class SupervisionRuntime(object):
                 options.update(configuration=self._video_configuration,
                                timeout_ms=int(self._read_timeout * 1000))
             options.update(self._service_options.get(name, {}))
+            stream = getattr(self, "telemetry_publisher", None)
+            native_video = bool(name == "video" and stream is not None
+                                and getattr(stream, "independent_native_video", False))
             endpoint = self._endpoint_factory(device=name, service_factory=service,
                 service_options=options, expected_tasks=tasks, expected_started_counters=counter_starts,
-                period=self._period, read_timeout=self._read_timeout)
+                period=self._period, read_timeout=self._read_timeout,
+                sample_sink=self._native_video_sample if native_video else None,
+                continuous_input=native_video)
             with self._lock:
                 self._owners[name] = endpoint  # Retain before any process-start effect.
             try:
@@ -266,6 +271,34 @@ class SupervisionRuntime(object):
                for item in statuses.values()):
             raise RuntimeError("SuperVision card initialization failed; all owners retained: " + "; ".join(failures))
         self._startup_complete = True
+
+    def _native_video_sample(self, endpoint, sample, started):
+        """Stage each returned camera sample, rather than polling latest at 1Hz.
+
+        Called only by this card's dispatcher. Ownership/lifecycle are fenced
+        before a bounded RAM append; no NI, pixel decode, network or disk work.
+        Lock contention/full queues are explicit endpoint sink rejections.
+        """
+        native = endpoint.client.isolation_snapshot()
+        frame = sample.get("video_frame")
+        generation = native.get("worker_generation")
+        if (not isinstance(frame, dict) or native.get("ownership_uncertain") is not False
+                or not valid_hex(generation, 32) or not self._lock.acquire(False)):
+            return False
+        try:
+            if (self.vi_passive_shadow or self._owners.get("video") is not endpoint
+                    or self._shutdown_requested
+                    or self._state not in ("INITIALIZING", "RUNNING", "EXECUTING", "FAULT")
+                    or self._operation == "close"):
+                return False
+            publisher = getattr(self, "telemetry_publisher", None)
+            if publisher is None or not publisher.independent_native_video:
+                return False
+            value = dict(frame, capture_session_id=generation,
+                         source_age_seconds=max(0., time.monotonic() - started))
+            return publisher.offer_native_video(value)
+        finally:
+            self._lock.release()
 
     def _close_cards(self):
         owners = dict(self._owners)

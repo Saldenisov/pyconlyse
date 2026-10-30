@@ -346,6 +346,17 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
             if stream_config is not None:
                 self.camera_stream = CameraStreamPublisher(stream_config, key, clock=self.clock)
 
+    @property
+    def independent_native_video(self):
+        return bool(self.camera_stream is not None
+                    and self.camera_stream.config['source_mode'] == 'VI_OR_NATIVE')
+
+    def offer_native_video(self, video):
+        """Private runtime-owned append, never a public/VI ingress operation."""
+        if not self.independent_native_video:
+            return False
+        return self.camera_stream.submit_python_video(video, self.runtime._identity['session_id'], self.clock())
+
     def _video_delivered(self, packet):
         video = packet.get("video_frame")
         if video is None:
@@ -375,7 +386,8 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
             records = {row["publication"]: dict(copy.deepcopy(row), source_age_seconds=age)
                        for row in packet["data"]["banks"] if row["publication"] == "C12NI1409"}
             counter, video = projection.get("_supervision_counter_part"), None
-            if self._native_video_sent_at is None or self.clock() - self._native_video_sent_at >= 1.:
+            if not self.independent_native_video and (self._native_video_sent_at is None
+                    or self.clock() - self._native_video_sent_at >= 1.):
                 video = projection.get("_supervision_video_frame")
                 if video is not None:
                     video = copy.deepcopy(video)
@@ -658,7 +670,8 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
             bridge = value.get("telemetry_bridge_mode") is True
             if not bridge:
                 value["_supervision_counter_part"] = self.runtime.counter_memory_part()
-                value["_supervision_video_frame"] = self.runtime.video_frame_snapshot()
+                if not self.independent_native_video:
+                    value["_supervision_video_frame"] = self.runtime.video_frame_snapshot()
         finally:
             self.runtime._lock.release()
         # Base64/JSON projection and outbox copies never hold the runtime lock.
@@ -729,9 +742,13 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 vi_xml_counter_timestamp_origin="local_receipt_observed_control_memory")
         if self.camera_stream is not None:
             result.update(independent_camera=self.camera_stream.status(),
-                independent_camera_source='accepted_typed_labview_only',
+                independent_camera_source=('current_vi_or_python_owner' if self.independent_native_video
+                                           else 'accepted_typed_labview_only'),
                 independent_camera_stale_capture_skipped=self._stream_stale_capture_skipped,
-                raw_video_transport='independent_binary_camera_v2_for_vi',
-                raw_video_period_seconds=None, native_video_period_seconds=1.,
-                native_video_transport='unchanged_legacy_owner_video')
+                raw_video_transport=('independent_binary_camera_v2' if self.independent_native_video
+                                     else 'independent_binary_camera_v2_for_vi'),
+                raw_video_period_seconds=None,
+                native_video_period_seconds=None if self.independent_native_video else 1.,
+                native_video_transport=('independent_binary_camera_v2' if self.independent_native_video
+                                        else 'unchanged_legacy_owner_video'))
         return result

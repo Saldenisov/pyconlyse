@@ -97,6 +97,21 @@ class PersistentSupervisionIngressTests(unittest.TestCase):
             remaining = b""
         self.assertEqual(remaining, b"")
 
+    def assert_rejected_or_closed(self, connection):
+        # Windows may report a recv timeout just before the absolute clock
+        # deadline. A best-effort negative ACK can then still fit; either that
+        # ACK followed by EOF, or immediate EOF/reset, satisfies the contract.
+        try:
+            reply = recv_message(connection, 16384)
+        except socket.timeout:
+            self.fail("Private ingress connection exceeded client deadline")
+        except (EOFError, OSError):
+            pass
+        else:
+            self.assertIs(reply['ok'], False)
+            self.assertEqual(reply['error']['code'], 'snapshot_rejected')
+        self.assert_closed(connection)
+
     def test_mixed_native_and_json_frames_share_one_connection_and_ordered_acks(self):
         connection = self.connect()
         self.send_json(connection, 1)
@@ -153,7 +168,7 @@ class PersistentSupervisionIngressTests(unittest.TestCase):
         with patch(MODULE + ".VI_FRAME_TIMEOUT_SECONDS", .1):
             connection = self.connect()
             connection.sendall(struct.pack("!I", 100) + b"{")
-            self.assert_closed(connection)
+            self.assert_rejected_or_closed(connection)
             self.wait_until(lambda: self.server._active_handlers == 0)
         self.assertEqual(self.store.rejected, 1)
         self.assertEqual(self.store.messages, [])
@@ -175,7 +190,7 @@ class PersistentSupervisionIngressTests(unittest.TestCase):
             connection.sendall(struct.pack("!I", 100) + b"{")
             sender.start()
             try:
-                self.assert_closed(connection)
+                self.assert_rejected_or_closed(connection)
                 self.wait_until(lambda: self.server._active_handlers == 0)
             finally:
                 stop.set()
