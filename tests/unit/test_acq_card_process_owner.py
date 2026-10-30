@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest import mock
 
 from legacy.xp_acq_control.elyse_agent.card_process_owner import (
     CardProcessTasks, CardProcessEndpoint, CardRequestTimeout, create_card_process_tasks,
@@ -15,6 +16,7 @@ from legacy.xp_acq_control.elyse_agent.card_process_owner import (
 from legacy.xp_acq_control.elyse_agent.hardware_plan import AI_BANKS, DI_BANKS, DO_BANKS, AO_BANKS
 from legacy.xp_acq_control.elyse_agent.hardware_tasks import PartialTaskCreationError, TaskCleanupError
 from legacy.xp_acq_control.elyse_agent.card_service import CardService
+from legacy.xp_acq_control.elyse_agent import isolated_backend
 
 
 class RamTask(object):
@@ -124,6 +126,12 @@ def slow_fixture(**options):
     return _make(mode="slow", **options)
 
 
+def slow_initialization_fixture(**options):
+    options["observer"](dict(call="fixture slow initialization", phase="ENTER"))
+    time.sleep(.4)
+    return _make(**options)
+
+
 def read_failure_fixture(**options):
     return _make(mode="read_failure", **options)
 
@@ -179,10 +187,77 @@ class CardProcessOwnerTests(unittest.TestCase):
 
     def test_cold_construction_and_explicit_admission(self):
         endpoint = CardProcessEndpoint(10)
+        self.assertEqual(endpoint.initialize_timeout, 120.)
+        self.assertEqual((endpoint.rpc_timeout, endpoint.read_timeout, endpoint.close_timeout),
+                         (3., .5, 5.))
         self.assertIsNone(endpoint.status()["native"]["worker_pid"])
         endpoint.close()
         self.assertTrue(endpoint.status()["native"]["cleanup_confirmed"])
         self.assertRaises(ValueError, create_card_process_tasks)
+
+    def test_cold_initialization_outlasts_command_deadline_without_extending_commands(self):
+        owner = create_card_process_tasks(authorized=True, outputs_commissioned=True,
+            devices=(3,), trusted_factory=fixture_name("slow_initialization_fixture"),
+            rpc_timeout=.1, close_timeout=1., period=.05)
+        dispatcher = owner.dispatchers[3]
+        try:
+            self.assertEqual(owner.initialize_timeout, 120.)
+            self.assertEqual(dispatcher.client._initialize_timeout, 120.)
+            self.assertGreaterEqual(dispatcher.status()["elapsed_seconds"], .4)
+            self.assertEqual((dispatcher.rpc_timeout, dispatcher.client._rpc_timeout,
+                dispatcher.read_timeout, dispatcher.close_timeout), (.1, .1, .5, 1.))
+            self.assertEqual(owner.write_digital_bank("C3_DIO96_DO", [False] * 40), 40)
+        finally:
+            owner.close()
+        self.assertEqual(owner.resource_count, 0)
+
+    def test_default_initialization_deadline_retains_owner_until_explicit_clean_close(self):
+        offset, observations = [0.], []
+        def expire_after_child_entry(event):
+            observations.append(event)
+            if event.get("call") == "fixture slow initialization" and event.get("phase") == "ENTER":
+                offset[0] = 121.
+        # Replace this module's clock reference, never process-wide time.monotonic.
+        # Expire the real 120-second RPC only after its RAM child entered startup.
+        with mock.patch.object(isolated_backend, "time") as child_clock:
+            child_clock.monotonic.side_effect = lambda: time.monotonic() + offset[0]
+            with self.assertRaises(PartialTaskCreationError) as failure:
+                create_card_process_tasks(authorized=True, outputs_commissioned=True,
+                    devices=(10,), trusted_factory=fixture_name("slow_initialization_fixture"),
+                    observer=expire_after_child_entry, rpc_timeout=.1, close_timeout=1.)
+            owner = failure.exception.owner
+            dispatcher = owner.dispatchers[10]
+            try:
+                before = dispatcher.status()
+                self.assertEqual(before["state"], "INITIALIZATION_FAILED_RETAINED")
+                self.assertIn("Child RPC timeout for initialize", before["error"])
+                self.assertTrue(before["native"]["ownership_uncertain"])
+                self.assertFalse(before["native"]["cleanup_confirmed"])
+                self.assertIsNone(dispatcher.client._process.poll())
+                self.assertGreater(owner.resource_count, 0)
+                self.assertRaises(RuntimeError, owner.initialize, threading.Event())
+                self.assertRaises(RuntimeError, owner.start_legacy_counters)
+                self.assertRaises(RuntimeError, owner.restart_card, 10, True,
+                                  before["native"]["worker_generation"])
+                wait_until(lambda: dispatcher.client._response is not None)
+                after = dispatcher.status()
+                self.assertEqual(after["state"], "INITIALIZATION_FAILED_RETAINED")
+                self.assertEqual(after["native"]["worker_pid"], before["native"]["worker_pid"])
+                self.assertTrue(after["native"]["ownership_uncertain"])
+                self.assertFalse(after["native"]["cleanup_confirmed"])
+                self.assertEqual(after["started_counters"], [])
+                self.assertEqual(sum(event.get("call") == "fixture slow initialization"
+                    and event.get("phase") == "ENTER" for event in observations), 1)
+            finally:
+                wait_until(lambda: dispatcher.client._response is not None)
+                owner.close()
+            self.assertEqual(owner.resource_count, 0)
+            self.assertTrue(dispatcher.status()["native"]["cleanup_confirmed"])
+
+    def test_initialization_budget_remains_finite_and_bounded(self):
+        for invalid in (True, float("nan"), float("inf"), .049, 120.001):
+            self.assertRaises(ValueError, CardProcessEndpoint, 10, initialize_timeout=invalid)
+            self.assertRaises(ValueError, CardProcessTasks, devices=(10,), initialize_timeout=invalid)
 
     def test_one_process_per_card_and_counter_start_commit_once(self):
         owner = make_owner((1, 3, 10))

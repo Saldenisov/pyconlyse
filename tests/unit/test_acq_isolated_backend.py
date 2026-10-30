@@ -11,6 +11,7 @@ import threading
 import time
 import unittest
 
+from legacy.xp_acq_control.elyse_agent import isolated_backend as isolated_backend_module
 from legacy.xp_acq_control.elyse_agent.isolated_backend import (
     IsolatedCardBackend, IsolatedBackendError, IsolatedBackendUncertain,
 )
@@ -25,8 +26,8 @@ from legacy.xp_acq_control.elyse_agent.acquisition_recovery import OwnershipMark
 
 class FixtureBackend(object):
     """Top-level importable constructor; never constructs a native adapter."""
-    def __init__(self, mode="normal", delay=.3):
-        self.mode, self.delay = mode, delay
+    def __init__(self, mode="normal", delay=.3, close_delay=0.):
+        self.mode, self.delay, self.close_delay = mode, delay, close_delay
         self.resource_count, self.procedure = 0, None
         self.control_profile = "extended_ht_stop"
         self.stage_controls_verified = self.ht_feedback_verified = True
@@ -153,6 +154,8 @@ class FixtureBackend(object):
         self.resource_count = 0
         if self.mode == "late_close":
             time.sleep(self.delay)
+        if self.close_delay:
+            time.sleep(self.close_delay)
         return self._record("close")
 
 
@@ -461,6 +464,71 @@ class IsolatedBackendTests(unittest.TestCase):
         backend.close()  # Explicit release after late return, not a retry of the read.
         self.assertEqual(backend.resource_count, 0)
         self.assertEqual(backend.isolation_snapshot()["worker_generation"], generation)
+
+    def test_explicit_delayed_close_waits_after_late_timed_out_read(self):
+        backend = self.make_backend(backend_options=dict(mode="slow_read", delay=.3, close_delay=.15))
+        backend.initialize(threading.Event(), startup_confirmed=True)
+        generation = backend.isolation_snapshot()["worker_generation"]
+        backend._rpc_timeout = .06
+        with self.assertRaises(IsolatedBackendUncertain):
+            backend.read_snapshot(threading.Event())
+        with self.assertRaises(IsolatedBackendUncertain):
+            backend.close()  # No cleanup may race the unresolved read.
+        wait_until(lambda: backend._response is not None)
+        self.assertTrue(backend.isolation_snapshot()["ownership_uncertain"])
+        original_rpc, close_results = backend._rpc, []
+        def record_close(operation, *args, **keywords):
+            result = original_rpc(operation, *args, **keywords)
+            if operation == "close":
+                close_results.append(result)
+            return result
+        backend._rpc = record_close
+        try:
+            backend.close()
+            self.assertEqual(len(close_results), 1)
+            self.assertEqual(close_results[0]["calls"], ("initialize", "read_snapshot", "close"))
+            self.assertEqual(backend.resource_count, 0)
+            self.assertEqual(backend._process.returncode, 0)
+            self.assertTrue(backend.isolation_snapshot()["cleanup_confirmed"])
+            self.assertEqual(backend.isolation_snapshot()["worker_generation"], generation)
+        finally:
+            if not backend.isolation_snapshot()["cleanup_confirmed"]:
+                wait_until(lambda: backend._response is not None)
+                backend.close()  # Join only the already-released RAM fixture.
+
+    def test_decoded_close_reply_wins_over_eof_between_rpc_checks(self):
+        backend = self.make_backend(backend_options=dict(close_delay=.1))
+        original_read, original_observe = isolated_backend_module.read_frame, backend._observe_progress
+        result_read, release_result = threading.Event(), threading.Event()
+        def pause_close_result(stream):
+            message = original_read(stream)
+            if message.get("kind") == "result" and backend._active_operation == "close":
+                result_read.set()
+                if not release_result.wait(3):
+                    raise AssertionError("RAM close reply was not released")
+            return message
+        def decode_reply_and_eof(event):
+            if not release_result.is_set():
+                self.assertTrue(result_read.wait(2))
+                release_result.set()
+                wait_until(lambda: backend._response is not None)
+                backend._reader.join(2)
+                self.assertFalse(backend._reader.is_alive())
+                self.assertTrue(backend.isolation_snapshot()["ownership_uncertain"])
+        isolated_backend_module.read_frame = pause_close_result
+        try:
+            backend.initialize(threading.Event(), startup_confirmed=True)
+            backend._observe_progress = decode_reply_and_eof
+            backend.close()
+            self.assertEqual(backend.resource_count, 0)
+            self.assertEqual(backend._process.returncode, 0)
+            self.assertTrue(backend.isolation_snapshot()["cleanup_confirmed"])
+        finally:
+            release_result.set()
+            isolated_backend_module.read_frame, backend._observe_progress = original_read, original_observe
+            if not backend.isolation_snapshot()["cleanup_confirmed"]:
+                wait_until(lambda: backend._response is not None)
+                backend.close()  # Join only the already-released RAM fixture.
 
     def test_partial_cleanup_retains_owner_until_explicit_retry_and_join(self):
         backend, cancel = self.make_backend(backend_options=dict(mode="partial_close")), threading.Event()

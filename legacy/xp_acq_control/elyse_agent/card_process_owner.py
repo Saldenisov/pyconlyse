@@ -82,7 +82,7 @@ class _Request(object):
 
 class CardProcessEndpoint(object):
     """Reusable private card endpoint; local factories only, no public RPC port."""
-    def __init__(self, device, read_timeout=.5, period=.2, rpc_timeout=3., initialize_timeout=30.,
+    def __init__(self, device, read_timeout=.5, period=.2, rpc_timeout=3., initialize_timeout=120.,
                  close_timeout=5., trusted_factory=None, client_factory=None, observer=None,
                  service_factory=CardService, service_options=None, expected_tasks=None,
                  expected_started_counters=None, sample_sink=None, continuous_input=False):
@@ -99,6 +99,8 @@ class CardProcessEndpoint(object):
         self.read_timeout = _bounded(read_timeout, .01, 2, "read timeout")
         self.period = _bounded(period, .02, 10, "poll period")
         self.rpc_timeout = _bounded(rpc_timeout, .05, 30, "card RPC timeout")
+        # Cold child imports and NI preparation share this startup-only budget.
+        # Reads, commands and cleanup retain their separate shorter deadlines.
         self.initialize_timeout = _bounded(initialize_timeout, .05, 120, "initialization timeout")
         self.close_timeout = _bounded(close_timeout, .05, 30, "close timeout")
         self.trusted_factory, self.client_factory = trusted_factory, client_factory
@@ -408,7 +410,7 @@ class _CounterTaskProxy(object):
 
 class CardProcessTasks(object):
     def __init__(self, devices=None, read_timeout=.5, period=.2, rpc_timeout=3.,
-                 initialize_timeout=30., close_timeout=5., trusted_factory=None,
+                 initialize_timeout=120., close_timeout=5., trusted_factory=None,
                  client_factory=None, observer=None):
         devices = tuple(range(1, 12)) if devices is None else devices
         if (type(devices) is not tuple or not devices or len(set(devices)) != len(devices)

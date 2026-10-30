@@ -148,6 +148,7 @@ class IsolatedCardBackend(object):
         self._serial = 0
         self._request_started = None
         self._uncertain = self._may_own_resources = self._cleanup_confirmed = False
+        self._uncertainty_version = 0
         self._worker_state, self._worker_error = "COLD", ""
         self._observer_error = ""
         self._worker_pid = None
@@ -209,6 +210,7 @@ class IsolatedCardBackend(object):
             if self._cleanup_confirmed:
                 return
             self._uncertain = self._may_own_resources = True
+            self._uncertainty_version += 1
             self._worker_state, self._worker_error = "OWNERSHIP_UNCERTAIN", str(reason)
             self._condition.notify_all()
 
@@ -401,6 +403,7 @@ class IsolatedCardBackend(object):
             self._active_operation = operation
             seen_progress = self._progress_version
             seen_software = self._software_version
+            uncertainty_version = self._uncertainty_version
             self._worker_state = "EXECUTING_" + operation.upper()
         message = dict(kind="call", id=request_id, operation=operation,
                        arguments=tuple(arguments), keywords=dict(keywords or {}))
@@ -454,7 +457,12 @@ class IsolatedCardBackend(object):
                 self._queue(dict(kind="cancel", id=request_id))
                 cancellation_sent = True
             with self._condition:
-                if self._uncertain:
+                # An explicitly admitted close must await its own bounded
+                # reply despite a prior timeout. A decoded terminal reply
+                # also wins over the expected EOF following child close.
+                # Ownership remains uncertain until zero resources AND join.
+                if (self._uncertain and self._uncertainty_version != uncertainty_version
+                        and self._response is None):
                     raise IsolatedBackendUncertain(self._worker_error)
 
     def initialize(self, cancel, startup_confirmed=False):
