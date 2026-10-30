@@ -36,6 +36,10 @@ BINARY_CAMERA_HEADER_BYTES = len(BINARY_CAMERA_PREFIX) + 2 + 3 * 16 + 4 * 4 + 2 
 MAX_BINARY_CAMERA_BYTES = BINARY_CAMERA_HEADER_BYTES + MAX_VIDEO_RAW_BYTES
 LABVIEW_UNIX_OFFSET = 2082844800
 FRACTION_SCALE = 1 << 64
+# GetTickCount on XP has 10--16ms resolution. The native LV timer was measured
+# 1--6ms ahead on this host. Admit only that bounded quantization window and
+# charge its full uncertainty to age; do not extend the two-second deadline.
+NATIVE_TICK_UNCERTAINTY_MS = 16
 
 
 def _binary_camera_header(raw, total_size):
@@ -108,13 +112,17 @@ closed; neither new receipt time nor a repeated FrameCount freshens an image.
     ticks = _windows_tick_count() if now_ticks is None else now_ticks
     if type(ticks) is not int or not 0 <= ticks <= 4294967295:
         raise ValueError("Known unsigned Win32 camera tick clock required")
-    tick_age = ((ticks - header["observed_tick_ms"]) & 4294967295) / 1000.
-    if not 0 <= tick_age < 2:
-        raise ValueError("Native camera monotonic age is stale/future or its tick clock is not qualified")
-    age = max(age, tick_age)
-    sequence = ((header["fixed"][2] - header["fixed"][0]) * 1000000) // FRACTION_SCALE + 1
-    if not 1 <= sequence <= 9007199254740991:
-        raise ValueError("Native camera observation sequence is outside the source-run bound")
+    signed_ms = ((ticks - header["observed_tick_ms"] + 2147483648) & 4294967295) - 2147483648
+    if signed_ms < -NATIVE_TICK_UNCERTAINTY_MS or signed_ms + NATIVE_TICK_UNCERTAINTY_MS >= 2000:
+        raise ValueError("Native camera monotonic age is stale/future or its tick clock is not qualified: "
+                         "delta_ms={}, wall_age_seconds={:.6f}, receiver_ticks={}, observed_ticks={}".format(
+                             signed_ms, age, ticks, header["observed_tick_ms"]))
+    age = max(age, signed_ms / 1000.) + NATIVE_TICK_UNCERTAINTY_MS / 1000.
+    if age >= 2:
+        raise ValueError('Native camera age plus timer uncertainty exceeds the two-second deadline')
+    # FrameCount is the native growing identifier. Timestamps describe age,
+    # never the delivery/replay order. Count resets are scoped by capture ID.
+    sequence = header["frame_count"] + 1
     copy_elapsed = header["copy_elapsed_ms"] / 1000.
     if copy_elapsed > age:
         raise ValueError("Native camera copy duration exceeds its source age")
@@ -274,6 +282,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
         self.vi_address, self.vi_server, self.vi_worker = vi_address, None, None
         self._vi_counter = self._vi_string = self._vi_video = None
         self._typed_session, self._typed_sequence, self._typed_digest = None, 0, None
+        self._native_observations = {}
         self._retired_sources = set()
         self._retired_captures = set()
         self._last_typed_receipt = None
@@ -503,10 +512,22 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 session, sequence = observation["source_session_id"], observation["sequence"]
                 staged = None
                 duplicate = session == self._typed_session and sequence == self._typed_sequence
-                if session in self._retired_sources or session == self._typed_session and sequence < self._typed_sequence:
+                if native:
+                    video = observation['video_frame']
+                    native_identity = (session, video['capture_session_id'], sequence)
+                    prior_native = self._native_observations.get(video['channel'])
+                    same_capture = prior_native is not None and prior_native[:2] == native_identity[:2]
+                    duplicate = same_capture and prior_native[2] == sequence
+                    if same_capture and sequence < prior_native[2]:
+                        raise ValueError('Native camera FrameCount regressed within capture')
+                    if video['channel'] not in self._native_observations and len(self._native_observations) >= 4:
+                        raise ValueError('Native camera replay channel bound reached')
+                if session in self._retired_sources or (not native and session == self._typed_session
+                                                        and sequence < self._typed_sequence):
                     raise ValueError("Retired or regressed VI source observation")
                 if duplicate:
-                    if digest != self._typed_digest:
+                    previous_digest = prior_native[3] if native else self._typed_digest
+                    if digest != previous_digest:
                         raise ValueError("VI observation identity reused with different data")
                     self.typed_duplicates += 1
                 else:
@@ -521,6 +542,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                             self._retired_sources.add(self._typed_session)
                         self._vi_counter = self._vi_string = self._vi_video = None
                         self._stream_videos, self._stream_retired = {}, {}
+                        self._native_observations = {}
                     stamp = self.clock()
                     stream_new = False
                     if self.camera_stream is not None:
@@ -534,6 +556,8 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                         self._vi_counter = (copy.deepcopy(observation["counter_part"]), stamp)
                     self._vi_video = video
                     self._typed_session, self._typed_sequence, self._typed_digest = session, sequence, digest
+                    if native:
+                        self._native_observations[observation['video_frame']['channel']] = native_identity + (digest,)
                     self._bridge_generation += 1
                     # Independent camera RAM admission must not rebuild and
                     # validate all 27 banks for every image. The existing owner
@@ -567,6 +591,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 self._retired_sources.add(self._typed_session)
             self._vi_counter = self._vi_string = self._vi_video = None
             self._typed_session, self._typed_sequence, self._typed_digest = None, 0, None
+            self._native_observations = {}
             self._last_typed_receipt = None
             self._retired_captures = set()  # Retired source boots already fence their captures.
             self._stream_videos, self._stream_retired = {}, {}

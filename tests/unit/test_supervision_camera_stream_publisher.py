@@ -154,12 +154,25 @@ class SupervisionCameraStreamTests(unittest.TestCase):
         self.assertRaises(ValueError, self.publisher.ingest_observation, raw + b'x', '127.0.0.1')
         self.assertEqual(self.publisher.camera_stream.status()['staging']['accepted'], 0)
 
+    def test_native_frame_id_is_scoped_per_channel_and_capture_not_timestamp(self):
+        self.publisher.wall_clock = lambda: NATIVE_NOW
+        self.publisher.tick_clock = lambda: 100125
+        first = native_camera(channel=2)
+        second = native_camera(channel=3, capture=native_timestamp(NATIVE_NOW - 1))
+        self.publisher.ingest_observation(first, '127.0.0.1')
+        self.publisher.ingest_observation(second, '127.0.0.1')
+        retry = self.publisher.ingest_observation(first, '127.0.0.1')
+        self.assertTrue(retry['duplicate'])
+        self.drain()
+        self.assertEqual([(meta['channel'], meta['sequence']) for meta, raw in self.source_frames()],
+                         [(2, 8), (3, 8)])
+
     def test_native_queue_preserves_real_age_and_bounds_owned_pixels(self):
         self.publisher.ingest_observation(self.native(1), '127.0.0.1')
         self.now += .5
         self.drain()
         metadata, pixels = self.source_frames()[0]
-        self.assertAlmostEqual(metadata['source_age_seconds'], .625, places=5)
+        self.assertAlmostEqual(metadata['source_age_seconds'], .641, places=5)
         self.assertEqual(len(pixels), 768 * 576)
         self.assertRaises(ValueError, self.publisher.camera_stream.submit_native_video,
                           image(), self.now)

@@ -440,9 +440,9 @@ class NativeCameraBinaryTests(unittest.TestCase):
         value = decode_vi_camera_binary(raw, NATIVE_NOW, 100125)
         self.assertEqual(value["source_session_id"], ''.join('{:02x}'.format(v) for v in bytearray(raw[23:39])))
         self.assertEqual(value["video_frame"]["capture_session_id"], ''.join('{:02x}'.format(v) for v in bytearray(raw[39:55])))
-        self.assertEqual(value["sequence"], 9875001)
+        self.assertEqual(value["sequence"], 8)
         self.assertEqual(value["video_frame"]["sequence"], 8)
-        self.assertEqual(value["video_frame"]["source_age_seconds"], .125)
+        self.assertAlmostEqual(value["video_frame"]["source_age_seconds"], .141)
         self.assertEqual(value["video_frame"]["observed_utc"], "2026-10-27T11:59:59.875000+00:00")
         self.assertEqual(value["video_frame"]["data"], "AAEC/f7/")
         validate_vi_observation(value)
@@ -455,7 +455,7 @@ class NativeCameraBinaryTests(unittest.TestCase):
         self.assertEqual(packet["video_frame"]["width"], 3)
         self.assertEqual(packet["video_frame"]["height"], 2)
         self.assertEqual(packet["video_frame"]["data"], "AAEC/f7/")
-        self.assertEqual(packet["source_identity"]["sequence"], 9875001)
+        self.assertEqual(packet["source_identity"]["sequence"], 8)
         self.assertIsNone(packet["counter_part"])
         self.assertEqual(self.runtime._owners, {})
 
@@ -467,7 +467,7 @@ class NativeCameraBinaryTests(unittest.TestCase):
         result = self.submit_binary(raw)
         self.assertTrue(result["duplicate"])
         self.assertIsNone(self.publisher.outbox.peek())
-        self.assertAlmostEqual(self.publisher._aged(self.publisher._vi_video)["source_age_seconds"], .625)
+        self.assertAlmostEqual(self.publisher._aged(self.publisher._vi_video)["source_age_seconds"], .641)
 
     def test_repeated_framecount_with_new_timestamp_cannot_fake_a_new_image(self):
         self.submit_binary(native_camera())
@@ -476,7 +476,7 @@ class NativeCameraBinaryTests(unittest.TestCase):
         newer_time = native_timestamp(NATIVE_NOW, 7 * (1 << 61))
         self.assertRaises(ValueError, self.submit_binary,
                           native_camera(observed=newer_time, observed_tick=101000))
-        self.assertEqual(self.publisher._typed_sequence, 9875001)
+        self.assertEqual(self.publisher._typed_sequence, 8)
         self.assertRaises(ValueError, self.submit_binary,
                           native_camera(frame_count=6, observed=newer_time, observed_tick=101000))
 
@@ -510,18 +510,43 @@ class NativeCameraBinaryTests(unittest.TestCase):
         raw = native_camera()
         for wall, tick in ((float("nan"), 100125), (NATIVE_NOW - 1, 100125),
                            (NATIVE_NOW + 2, 100125), (NATIVE_NOW, 102000),
-                           (NATIVE_NOW, 99999), (NATIVE_NOW, True)):
+                           (NATIVE_NOW, 99983), (NATIVE_NOW, True)):
             self.assertRaises(ValueError, decode_vi_camera_binary, raw, wall, tick)
         # A wall clock rollback leaves a seemingly young timestamp, but the
         # independently observed Win32 tick age still exposes the old frame.
         self.assertRaises(ValueError, decode_vi_camera_binary, raw, NATIVE_NOW, 105000)
         value = decode_vi_camera_binary(raw, NATIVE_NOW, 100500)
-        self.assertEqual(value["video_frame"]["source_age_seconds"], .5)
+        self.assertAlmostEqual(value["video_frame"]["source_age_seconds"], .516)
 
     def test_win32_tick_wrap_preserves_a_real_short_monotonic_age(self):
         raw = native_camera(observed_tick=4294967246)
         value = decode_vi_camera_binary(raw, NATIVE_NOW, 50)
-        self.assertEqual(value["video_frame"]["source_age_seconds"], .125)
+        self.assertAlmostEqual(value["video_frame"]["source_age_seconds"], .141)
+
+    def test_native_tick_quantization_does_not_turn_fresh_frames_into_49_day_frames(self):
+        raw = native_camera(observed=native_timestamp(NATIVE_NOW), observed_tick=100006, copy_ms=1)
+        value = decode_vi_camera_binary(raw, NATIVE_NOW, 100000)
+        self.assertAlmostEqual(value['video_frame']['source_age_seconds'], .016)
+        self.assertEqual(value['video_frame']['sequence'], 8)
+        self.assertRaises(ValueError, decode_vi_camera_binary,
+                          native_camera(observed_tick=100017), NATIVE_NOW, 100000)
+
+    def test_native_order_uses_growing_framecount_when_wall_timestamp_moves_back(self):
+        self.submit_binary(native_camera())
+        self.take()
+        earlier_wall = native_timestamp(NATIVE_NOW - 1, 3 * (1 << 62))
+        result = self.submit_binary(native_camera(frame_count=8, observed=earlier_wall, observed_tick=100050))
+        self.assertFalse(result['duplicate'])
+        self.assertEqual(result['source_sequence'], 9)
+        self.assertEqual(self.publisher._aged(self.publisher._vi_video)['sequence'], 9)
+        self.assertEqual(self.take()['packet']['source_identity']['sequence'], 9)
+
+    def test_timer_uncertainty_is_charged_to_age_without_extending_stale_deadline(self):
+        raw = native_camera(observed=native_timestamp(NATIVE_NOW), observed_tick=100000)
+        self.assertRaises(ValueError, decode_vi_camera_binary, raw, NATIVE_NOW + 1.99, 100100)
+        self.assertRaises(ValueError, decode_vi_camera_binary, raw, NATIVE_NOW, 101984)
+        # A wall-clock rollback still cannot freshen an old monotonic observation.
+        self.assertRaises(ValueError, decode_vi_camera_binary, raw, NATIVE_NOW, 102100)
 
     def test_bad_native_shape_epoch_version_and_trailing_bytes_fail_closed(self):
         bad = [native_camera(version=2), native_camera(rows=0),

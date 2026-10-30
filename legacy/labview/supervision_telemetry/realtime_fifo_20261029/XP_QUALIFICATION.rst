@@ -97,5 +97,63 @@ remain enforced. No camera pixels enter the Acquisition telemetry database.
 
 Python3.4: 67 tests passed with 3 modern-only skips. Python3.12: all 77 camera,
 owner-telemetry and ingress/integration tests passed. The second candidate's
-XP deployment and live throughput/freshness qualification are pending the
-Windows execution warning. No 25Hz result is claimed.
+XP deployment completed on 30 October; the backup and receipt preserve all
+three previous module hashes. The first 120-second run delivered 1107 frames
+(9.225 frames/s); a subsequent 120-second run delivered 1005 (8.375 frames/s).
+The second run had no new Everest ingress errors. Native XP admission still
+rejected observations, so removing compression did not establish 25Hz.
+
+Growing frame IDs and native clock quantization, 30 October
+----------------------------------------------------------
+
+Native camera observation order now uses ``FrameCount + 1`` rather than a
+microsecond ordinal calculated from timestamps. Replay state is bounded and
+scoped per source, capture and channel. A new capture can reset FrameCount;
+retired captures/sources, regressed counts and changed bytes under a repeated
+ID remain rejected. Equivalent JSON/native retries retain the same digest.
+Timestamps remain observation labels and freshness inputs, not frame IDs.
+
+Read-only error sampling on XP found native timer values 1--6ms ahead of
+``GetTickCount`` while wall-clock age was zero. Unsigned subtraction had
+interpreted these small differences as approximately 49.7 days. Some fresh
+frames also failed the copy-duration check because coarse clocks reported
+zero elapsed time. Microsoft's GetTickCount reference documents typical
+10--16ms resolution:
+https://learn.microsoft.com/windows/win32/api/sysinfoapi/nf-sysinfoapi-gettickcount
+
+The decoder now uses signed modular subtraction, admits at most 16ms of
+negative quantization, and adds the full 16ms uncertainty to reported age.
+The two-second deadline is not extended. Larger future offsets, old ticks,
+wall-clock rollback with old monotonic observations and age plus uncertainty
+at or beyond two seconds remain rejected. This is a measured compatibility
+allowance on this XP host, not independent clock or hardware calibration.
+
+Python3.4: 71 tests passed with 3 modern-only skips. Python3.12: all 81 tests
+passed. Coverage includes per-channel IDs, capture resets, retries, timestamp
+rollback without ID rollback, timer wrap and the unchanged stale deadline.
+The deployed source build is
+``7b3df4054e029b09fcbaed5d0be3a2f711db3b7e49284e7cb2d8ec7b464a3349``.
+Only the passive Python module/server was replaced; the running VI and NI
+tasks were not stopped, reinitialized or independently commanded.
+
+The next 120-second live run delivered 1626 frames (13.55 frames/s), with
+24.80--70.86 Mbit/s ingress windows. Reported camera age ranged from 0.020 to
+2.751 seconds; 113 of 121 one-second observations were fresh. The sender FIFO
+ranged from 0 to 47 frames and ended empty, without rejecting new frames.
+There were 34 native admission rejections and 120 stale frames received, so
+this is neither an all-frames nor a 25Hz qualification. All 27 public banks
+advanced, remained fresh in these samples, and PostgreSQL stayed RUNNING
+under ``metadata_only_no_pixels``. Synchronization metadata had one stale
+sample at 2.062 seconds; this does not establish a hardware timing failure.
+
+An independent web SSE observation received 101 distinct, strictly growing
+frame IDs in 12.219 seconds, with maximum reported age 0.690 seconds. Pixel
+payloads were consumed in RAM; only IDs/age/availability were retained in the
+diagnostic receipt. This checks the web stream, not browser repaint cadence.
+
+An isolated Everest loopback fixture delivered 250 full 768x576 U8 frames in
+five seconds, with zero FIFO rejection and no NI/SQL/live Tango operation.
+It excludes XP, the real LAN and native VI scheduling. A transient XP sender
+``WinError 10048`` was also observed before the final restart; it did not recur
+in the final 120-second sample. Native producer/transport timing and TCP
+connection churn remain to be measured before changing the VI transport.
