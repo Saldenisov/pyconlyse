@@ -158,17 +158,21 @@ class TelemetrySinkStore:
             if unified:
                 self.unified_relay = relay_id
             self.active_kind = packet['producer_kind']
-            entry = dict(body=copy.deepcopy(body), received_at=received_at, received_utc=received_utc)
             if is_snapshot:
                 expanded = expand_python_snapshot(packet) if is_python else expand_snapshot(packet)
                 for name, bank_packet in expanded.items():
-                    bank_body = copy.deepcopy(body)
+                    # Expansion already owns each bank's mutable payload.
+                    # Remaining envelope fields are validated JSON scalars;
+                    # copying the complete 27-bank packet here only to replace
+                    # it repeated the same large recursive copy for every bank.
+                    bank_body = dict(body)
                     bank_body['packet'] = bank_packet
-                    self.latest[name] = dict(body=bank_body, received_at=entry['received_at'],
+                    self.latest[name] = dict(body=bank_body, received_at=received_at,
                                              received_utc=received_utc)
                 self.shared_snapshot_seen = True
             else:
-                self.latest[packet["publication"]] = entry
+                self.latest[packet["publication"]] = dict(body=copy.deepcopy(body),
+                    received_at=received_at, received_utc=received_utc)
             self.relays[relay_id] = dict(message_id=message_id, digest=digest)
             self.received += 1
             # Alarm transitions are evaluated on ingress, even with no

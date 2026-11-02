@@ -217,6 +217,39 @@ class SinkTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'closed'):
             self.store.accept(request(self.box.peek()))
 
+    def test_27_bank_snapshot_owns_nested_payloads_and_preserves_receipt(self):
+        from legacy.xp_acq_agent.elyse_agent.shared_state import BANKS, SNAPSHOT_PUBLICATION
+        value = packet()
+        value.update(publication=SNAPSHOT_PUBLICATION, data=dict(snapshot_version=1,
+            capture_kind='sequential_local_controls', timestamp_origin='xp_receipt_not_card_sample',
+            banks=[dict(publication=name, data=[index, [index + .5]],
+                        lv_type=dict(type='LvVariant', contained_type=dict(type='Array', sizes=[2])),
+                        error=dict(status=False, code=0, source='bank-' + str(index)))
+                   for index, name in enumerate(BANKS)]))
+        self.box = TelemetryOutbox(clock=lambda: self.now[0])
+        self.box.enqueue(json.dumps(value), 'fixture UTC')
+        body = self.box.peek()
+        original = copy.deepcopy(body)
+        self.store.accept(request(body))
+        for row in body['packet']['data']['banks']:
+            row['data'][1][0] = 999
+            row['lv_type']['contained_type']['sizes'][0] = 999
+            row['error']['source'] = 'mutated'
+        self.now[0] += 3
+        observed = self.store.snapshot()['publications']
+        self.assertEqual(set(observed), set(BANKS))
+        for index, name in enumerate(BANKS):
+            self.assertEqual(observed[name]['data'], [index, [index + .5]])
+            self.assertEqual(observed[name]['lv_type']['contained_type']['sizes'], [2])
+            self.assertEqual(observed[name]['error']['source'], 'bank-' + str(index))
+            self.assertEqual(observed[name]['age_seconds'], 3)
+            self.assertTrue(observed[name]['stale'])
+            self.assertEqual(observed[name]['relay_id'], original['relay_id'])
+            self.assertEqual(observed[name]['message_id'], original['message_id'])
+        observed[BANKS[0]]['data'][1][0] = 888
+        self.assertEqual(self.store.snapshot()['publications'][BANKS[0]]['data'], [0, [.5]])
+        self.assertTrue(self.store.accept(request(original))['body']['duplicate'])
+
     def test_invalid_relay_limits_rejected(self):
         for limit in (True, 0, -1, 1025, 1.5):
             with self.assertRaises(ValueError):
