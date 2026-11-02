@@ -97,8 +97,8 @@ the slow/variable cadence before local Python admission, rather than a 100 ms
 queue wait. Approximately 1--2% of observations were rejected by the existing
 busy-owner admission guard; that guard was not bypassed.
 
-Everest receiver optimization, prepared separately
--------------------------------------------------
+Everest receiver optimization and approved rollout
+--------------------------------------------------
 
 A 20 s external nonblocking profile of the live DS collected 832 samples with 11
 sampling errors. 346 samples ended inside recursive copying called from
@@ -122,18 +122,39 @@ The live module matched the pre-fix Git version, SHA256::
 
     45ae4a2e88143eda134ce39b2f56518f1462734e5a204a3e0d9d0e1ea0c06288
 
-The optimization is prepared and tested but has not been installed as of
-2026-11-02T17:37:31Z. Applying it requires a short restart of the unified Tango
-Device Server and therefore a brief telemetry/archive ingress interruption.
-The operator decision was requested separately; no elapsed-time approval is
-assumed. The read-only rollout plan and guarded installer are in the local
-evidence directory. No forced process termination is used.
+The operator explicitly approved applying the update. The guarded one-module
+rollout ran from 18:07:49 UTC to verification at 18:08:05 UTC (19:08 Paris). The old
+process 2696 exited normally; replacement 24600 resumed all 27 fresh banks and
+PostgreSQL commits. No Acquisition VI stop or hardware command was performed.
+Backup and deployment receipts are at::
+
+    F:\ELYSE_Telemetry_Server\postgres_v3\rollbacks\sink_copy_20261102T180749Z
+
+The installed module SHA256 is::
+
+    a611c1872086112a0113123ae8bb1b30ee0dc5fdb1bcedab61eb89bc26e897fd
+
+A 180.203 s run after the restart admitted 16.4648 frames/s on XP and accepted
+16.4703 frames/s on Everest, transferring 58.3565 Mbit/s. The apparent small excess
+reflects boundary/in-flight timing, not generated frames. FIFO stayed 0--3 frames,
+ending at 1; no new stale-frame count increase occurred within this measurement.
+At its first sample, the XP FIFO already recorded 138 rejected-new frames after
+the maintenance interval; the count stayed 138 throughout the run. No claim of
+lossless image delivery across the restart is made. DS CPU time averaged 63.35%
+of one core during this run; the earlier 84% sample had different camera load
+and is not a controlled production CPU comparison. The remaining first cadence
+reduction is upstream of XP admission, despite the improved receiver path.
+
+A later independent two-sample check verified increasing sequences in all 27 banks,
+maximum age 0.188 s, PostgreSQL RUNNING with 8911 commits, two pending records and
+no archive error. Acquisition and its image-free telemetry archive remained
+operational after the approved brief ingress interruption.
 
 Verification and remaining work
 -------------------------------
 
-* Actual Python 3.4.4 x86: 9 launcher tests passed; 55 camera/publisher tests passed
-  with 3 skipped.
+* Actual Python 3.4.4 x86: 9 launcher tests passed; the 55-case camera/publisher
+  suite completed with 52 passed and 3 skipped.
 * Python 3.12: 104 receiver/federation/Tango/pipeline/camera tests passed, plus 10
   durable archive tests. These tests use fixtures/private loopback, not NI.
 * At 17:34:51 UTC all 27 Acquisition banks were fresh, same source sequence 52271,
@@ -163,22 +184,28 @@ table have not yet been read. References:
 * https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/tcpip-and-nbt-configuration-parameters
 
 ``tools/read_supervision_xp_tcp.pyw`` is a read-only three-snapshot probe of
-GetTcpTable and existing MaxUserPort/TcpTimedWaitDelay values. It does not change
-the registry, network settings, services or NI. Launch of its prepared shared
-shortcut is currently blocked by XP's Open File Security Warning for
-``READ_XP_TCP.lnk``; operator action on that security prompt was requested.
-No TCP-table result or proven port-exhaustion diagnosis is claimed yet.
+GetTcpTable and existing MaxUserPort/TcpTimedWaitDelay values. The operator
+cleared its Open File Security Warning, and it ran at 18:06:52--54 UTC on XP.
+It changed no registry, network setting, service or NI state. The snapshots
+showed 1998--2001 camera-client TIME_WAIT entries, 146--148 relay-client TIME_WAIT
+entries, and 2301--2302 distinct occupied local ports in 1025..5000. Total TIME_WAIT
+rows were 4469--4475, including both ends of local loopback connections; that total
+is not a count of unique ephemeral ports. MaxUserPort and TcpTimedWaitDelay were
+absent as explicit overrides. The table establishes substantial connection churn
+but does not demonstrate that the entire ephemeral-port pool was exhausted.
 
 Separately, ten passive camera metadata reads estimated XP's wall clock ahead of
 Everest by 4.77--4.95 s, near the receiver's 5 s future-timestamp rejection limit.
-This is a metadata/monotonic-age estimate, not an NTP measurement. The existing
-``C:\dev\sup_fifo_deploy_20261029\ALIGN_XP_TIME.pyw`` utility was located and
-reviewed, but clock correction has not been run. VI must be stopped normally
-before adjusting its wall clock and restarted afterward with a fresh source run.
+This is a metadata/monotonic-age estimate, not an NTP measurement. SuperVision VI
+was stopped normally at approximately 19:12:56 Paris. The existing
+``C:\dev\sup_fifo_deploy_20261029\ALIGN_XP_TIME.pyw`` utility then aligned XP to
+Everest at 18:21:34 UTC (19:21:34 Paris). Its HTTP-Date-based estimate changed from
+-5.054 s correction to -0.046 s residual; HTTP-Date second resolution prevents a
+claim of millisecond clock accuracy. The utility reported CLOCK_ALIGNED_TO_EVEREST.
+VI needs a fresh run afterward; its restart was requested from the operator
+because recovered RDP input failed with ``Input Capture Window, not target window``.
 
-After the TCP probe, compare sustainable unique observations with occupied
-ephemeral ports and TIME_WAIT duration. If churn is confirmed, the transport
-fix belongs in a persistent client: retain the TCP connection in the independent
+The transport still needs a persistent client: retain the TCP connection in the independent
 consumer loop, reconnect only on error, and close once on every normal stop.
 Keep a rejected/in-flight owned frame distinct from the FIFO head, validate ACK
 length/acceptance, and avoid retry sleeps on the healthy path. Do not modify OS
