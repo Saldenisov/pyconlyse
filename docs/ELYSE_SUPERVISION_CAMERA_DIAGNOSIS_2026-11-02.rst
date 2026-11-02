@@ -177,8 +177,8 @@ legacy processing alone is not established as the explanation.
 Microsoft documents a default maximum ephemeral port number 5000 in the relevant
 older Windows versions and an IPv4 TIME_WAIT default 120 s specifically for XP.
 The frequently quoted 240 s default belongs to Windows 2000 or XP IPv6, so it must
-not be assumed for this machine. Explicit registry overrides and the actual TCP
-table have not yet been read. References:
+not be assumed for this machine. Existing registry settings and the actual TCP
+table were subsequently read by the probe described below. References:
 
 * https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/connect-tcp-greater-than-5000-error-wsaenobufs-10055
 * https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/tcpip-and-nbt-configuration-parameters
@@ -202,8 +202,28 @@ was stopped normally at approximately 19:12:56 Paris. The existing
 Everest at 18:21:34 UTC (19:21:34 Paris). Its HTTP-Date-based estimate changed from
 -5.054 s correction to -0.046 s residual; HTTP-Date second resolution prevents a
 claim of millisecond clock accuracy. The utility reported CLOCK_ALIGNED_TO_EVEREST.
-VI needs a fresh run afterward; its restart was requested from the operator
-because recovered RDP input failed with ``Input Capture Window, not target window``.
+The first restart attempt was blocked by RDP input reporting
+``Input Capture Window, not target window``. Reconnecting the local RDP client
+restored input without restarting XP or its Python orchestrator. The existing
+``Supervision Telemetry.vi`` wrapper was then started with Ctrl+R at
+19:51:44 Paris. New camera source/capture identities were observed on Everest
+and in the web API; observed synchronization memory retained all 16 values.
+The Python orchestrator remained IDLE with zero NI resources, and all 27
+Acquisition banks and PostgreSQL recording remained active. No Python Initialize
+or equipment start command was invoked.
+
+A 60.907 s web/API observation after this restart measured 18.6678 accepted
+frames/s and 66.1424 Mbit/s. All 13 samples had an available camera, fresh
+synchronization memory with the same 16 values, and all 27 fresh Acquisition
+banks; every bank sequence advanced. Stale-frame and ingress-error counters
+did not increase. A preceding 60.938 s window measured only 12.6358 frames/s,
+so recovery of data flow does not establish sustained 25 Hz. Its initial sync
+comparison used rounded 2008.4 rather than the exact baseline double
+2008.3999999999999; the second observation retained and compared exact values.
+At 19:55:11 Paris the independent XP status check showed IDLE/resources 0,
+one pending camera frame and no sender error; PostgreSQL was RUNNING with
+18988 commits, nine pending records and no archive error. The rate observations
+are in ``restarted_stream_verification.json`` beside the local health receipts.
 
 The transport still needs a persistent client: retain the TCP connection in the independent
 consumer loop, reconnect only on error, and close once on every normal stop.
