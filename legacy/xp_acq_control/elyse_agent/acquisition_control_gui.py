@@ -21,6 +21,14 @@ from .acquisition_supervisor import FileInstanceGuard
 BUTTON_LABELS = ("Initialize", "Deinitialize", "Stop server")
 
 
+def telemetry_route_text(delivery):
+    age = delivery.get('vi_seen_age_seconds')
+    seen = 'not seen' if age is None else '{0:.1f}s ago'.format(age)
+    return '{0} | VI accepted: {1}, rejected: {2} | last valid XML: {3}'.format(
+        delivery.get('transport_health', 'WAITING_FOR_STATUS'),
+        delivery.get('vi_accepted', 0), delivery.get('vi_rejected', 0), seen)
+
+
 def control_backend_factory(backend_options, focal_options):
     """Cold selection: per-card children belong directly to this GUI process."""
     options, focal = dict(backend_options), dict(focal_options)
@@ -243,7 +251,8 @@ class ControlWindow(AcquisitionWindow):
         self.cards.set(initialization_card_text(state))
         age = state["everest_read_age_seconds"]
         delivery = state.get("telemetry_delivery", {})
-        self.link.set("{0} | Everest telemetry ACK: {1} | {2} | ".format(delivery.get("source_mode", "DISABLED"), delivery.get("everest_acknowledged", 0),
+        self.link.set(telemetry_route_text(delivery) + "\n" +
+                      "{0} | Everest telemetry ACK: {1} | {2} | ".format(delivery.get("source_mode", "DISABLED"), delivery.get("everest_acknowledged", 0),
                       delivery.get("publisher_error") or delivery.get("last_error", "publisher disabled")) +
                       ("command channel not seen" if age is None else "last signed read {0:.1f}s ago".format(age)) +
                       " | " + input_read_text(state) +
@@ -333,6 +342,8 @@ def main(entrypoint, argv=None):
                 (control["telemetry"]["host"], control["telemetry"]["port"]), read_key,
                 period=control["telemetry"]["period_seconds"])
             runtime.telemetry_publisher = publisher
+            publisher.diagnostics.path = os.path.join(os.path.dirname(os.path.abspath(args.config)),
+                                                       'logs', 'telemetry_diagnostics.jsonl')
             publisher.start()
         # A leftover old bridge on 8766 or old unified server on 8772 now
         # refuses startup BEFORE touching the live alarm journal.

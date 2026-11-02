@@ -53,6 +53,7 @@ CONTROL_MODULES += ("federation_wire.py", "orchestrator_publisher.py", "synchron
                     "supervision_cards.py", "supervision_imaq.py", "supervision_service.py",
                     "supervision_runtime.py", "supervision_gui.py", "supervision_vi_telemetry.py")
 CONTROL_MODULES += ("camera_stream.py", "camera_stream_publisher.py")
+CONTROL_MODULES += ("telemetry_diagnostics.py",)
 
 
 def control_identity(root=None):
@@ -857,7 +858,6 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
             result["server_variant"] = "acquisition_control_vnext"
             result["control_policy_version"] = 2
             publisher = getattr(self, "telemetry_publisher", None)
-            result["telemetry_delivery"] = publisher.status() if publisher is not None else dict(enabled=False)
             result["remote_setpoints_enabled"] = self.broker.enabled
             result["pending_operation"] = self._pending
             result["shutdown_requested"] = self._shutdown_requested
@@ -921,4 +921,7 @@ class AcquisitionControlRuntime(AcquisitionRuntime):
                 moxa_host="10.20.30.51", moxa_port=index + 1, voltage_v=row[2],
                 current_slew_source_value=row[3], current_a=row[4], physical_output_state="UNKNOWN")
                 for index, row in enumerate(BRANCHES)]
-            return result
+        # Transport diagnostics are independently captured metadata. Waiting
+        # for their publication lock must not retain the NI/lifecycle lock.
+        result["telemetry_delivery"] = publisher.status() if publisher is not None else dict(enabled=False)
+        return result
