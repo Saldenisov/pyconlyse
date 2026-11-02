@@ -143,12 +143,55 @@ Verification and remaining work
   0.35,0.35,2176,100,2008.4,10,2175,10,2175,100,500,500,0.3,10,2175,100.
   This verifies observed VI control memory, not physical timing pulses.
 
-Next discriminate legacy camera work from acquisition waiting with per-iteration
-Grab/processing timing, then isolate owned capture from legacy image processing
-if required. The producer must retain exclusive IMAQ-session ownership and enqueue
-owned pixels; a reference to a reused mutable image is insufficient. Preserve
-the existing channel-switch handshake, error recovery and stop/release ordering.
-Do not claim persistent 25 Hz from one successful one-minute window.
+Later observations and the next discriminating test
+--------------------------------------------------
+
+At approximately 18:51--18:56 Paris the XP orchestrator GUI intermittently displayed
+``WinError 10048`` while its ACK count continued growing. The VI camera helper
+still opens/closes TCP for every frame, and measured connection totals equal
+completed observation totals. Ephemeral-port pressure is therefore an additional
+specific hypothesis for the delayed rate reduction and transient relay failures;
+legacy processing alone is not established as the explanation.
+
+Microsoft documents a default maximum ephemeral port number 5000 in the relevant
+older Windows versions and an IPv4 TIME_WAIT default 120 s specifically for XP.
+The frequently quoted 240 s default belongs to Windows 2000 or XP IPv6, so it must
+not be assumed for this machine. Explicit registry overrides and the actual TCP
+table have not yet been read. References:
+
+* https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/connect-tcp-greater-than-5000-error-wsaenobufs-10055
+* https://learn.microsoft.com/en-us/troubleshoot/windows-client/networking/tcpip-and-nbt-configuration-parameters
+
+``tools/read_supervision_xp_tcp.pyw`` is a read-only three-snapshot probe of
+GetTcpTable and existing MaxUserPort/TcpTimedWaitDelay values. It does not change
+the registry, network settings, services or NI. Launch of its prepared shared
+shortcut is currently blocked by XP's Open File Security Warning for
+``READ_XP_TCP.lnk``; operator action on that security prompt was requested.
+No TCP-table result or proven port-exhaustion diagnosis is claimed yet.
+
+Separately, ten passive camera metadata reads estimated XP's wall clock ahead of
+Everest by 4.77--4.95 s, near the receiver's 5 s future-timestamp rejection limit.
+This is a metadata/monotonic-age estimate, not an NTP measurement. The existing
+``C:\dev\sup_fifo_deploy_20261029\ALIGN_XP_TIME.pyw`` utility was located and
+reviewed, but clock correction has not been run. VI must be stopped normally
+before adjusting its wall clock and restarted afterward with a fresh source run.
+
+After the TCP probe, compare sustainable unique observations with occupied
+ephemeral ports and TIME_WAIT duration. If churn is confirmed, the transport
+fix belongs in a persistent client: retain the TCP connection in the independent
+consumer loop, reconnect only on error, and close once on every normal stop.
+Keep a rejected/in-flight owned frame distinct from the FIFO head, validate ACK
+length/acceptance, and avoid retry sleeps on the healthy path. Do not modify OS
+port/time-wait settings as a substitute for removing per-frame connection churn.
+Python's typed ingress already accepts multiple framed observations per TCP
+connection; the native VI client still requires editing and qualification.
+
+If cadence remains variable after connection reuse, discriminate legacy image
+work from acquisition waiting with per-iteration Grab/processing timing before
+isolating capture. The producer must retain exclusive IMAQ-session ownership
+and enqueue owned pixels; a reused mutable image reference is insufficient.
+Preserve the existing channel-switch handshake, error recovery and stop/release
+ordering. Sustained 25 Hz remains unverified.
 
 Local evidence
 --------------
