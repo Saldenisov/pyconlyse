@@ -12,6 +12,7 @@ import threading
 import time
 
 from .camera_stream import CameraFrameQueue, CameraFrameAdmission, CameraFrameSender, validate_frame
+from .camera_latest import LatestCameraFrameQueue
 from .federation_wire import validate_video_frame
 
 
@@ -22,11 +23,12 @@ def validate_camera_stream_configuration(value):
         raise ValueError('Explicit camera_stream enabled policy required')
     fields = {'enabled', 'source_mode', 'host', 'port', 'every_n', 'capacity', 'max_bytes',
               'max_channels', 'timeout_seconds', 'retry_seconds'}
-    if set(value) - fields:
+    if set(value) - (fields | {'delivery_policy'}):
         raise ValueError('Unknown independent camera configuration field')
     if not value['enabled']:
         return None
-    if (set(value) != fields or value['source_mode'] not in ('LABVIEW_BRIDGE', 'VI_OR_NATIVE') or value['host'] != '10.20.30.202'
+    if (not fields.issubset(value) or value.get('delivery_policy', 'fifo') not in ('fifo', 'latest')
+            or value['source_mode'] not in ('LABVIEW_BRIDGE', 'VI_OR_NATIVE') or value['host'] != '10.20.30.202'
             or type(value['port']) is not int or not 1024 <= value['port'] <= 65535 or value['port'] == 8767
             or type(value['every_n']) is not int or value['every_n'] not in (1, 2)
             or type(value['capacity']) is not int or not 1 <= value['capacity'] <= 128
@@ -46,13 +48,17 @@ class CameraStreamPublisher(object):
         if config is None:
             raise ValueError('Enabled independent camera configuration required')
         self.config, self.clock = config, clock or time.monotonic
-        self.queue = CameraFrameQueue(config['capacity'], config['max_bytes'], clock=self.clock)
+        self.latest = config.get('delivery_policy', 'fifo') == 'latest'
+        self.staging_capacity = min(config['capacity'], config['max_channels']) if self.latest else config['capacity']
+        queue_type = LatestCameraFrameQueue if self.latest else CameraFrameQueue
+        self.queue = queue_type(self.staging_capacity, config['max_bytes'], clock=self.clock)
         self.admission = CameraFrameAdmission(self.queue, every_n=config['every_n'], max_channels=config['max_channels'])
         self.sender = (sender_factory or CameraFrameSender)(self.queue, (config['host'], config['port']), key,
             timeout=config['timeout_seconds'], retry_seconds=config['retry_seconds'])
         self.lock = threading.Lock()
         self.staging = deque()
         self.staging_bytes = self.received = self.staging_rejected = self.errors = 0
+        self.staging_replaced = 0
         self.native_received = 0
         self.python_received = 0
         self.last_error = ''
@@ -86,10 +92,22 @@ class CameraStreamPublisher(object):
         descriptor = dict(video)
         size = len(descriptor['data'])
         with self.lock:
-            if (self.stop.is_set() or len(self.staging) >= self.config['capacity']
-                    or self.staging_bytes + size > self.config['max_bytes']):
+            if (self.stop.is_set() or size > self.config['max_bytes']
+                    or (not self.latest and (len(self.staging) >= self.staging_capacity
+                        or self.staging_bytes + size > self.config['max_bytes']))):
                 self.staging_rejected += 1
                 return False
+            if self.latest:
+                for index, item in enumerate(self.staging):
+                    if item[0]['channel'] == descriptor['channel']:
+                        self.staging_bytes -= item[2]
+                        del self.staging[index]
+                        self.staging_replaced += 1
+                        break
+                while (len(self.staging) >= self.staging_capacity
+                       or self.staging_bytes + size > self.config['max_bytes']):
+                    self.staging_bytes -= self.staging.popleft()[2]
+                    self.staging_replaced += 1
             self.staging.append((descriptor, received_at, size, native_pixels, owner_session_id))
             self.staging_bytes += size
             self.received += 1
@@ -160,11 +178,14 @@ class CameraStreamPublisher(object):
         with self.lock:
             staging = dict(pending=len(self.staging), pending_bytes=self.staging_bytes,
                 accepted=self.received, rejected_new=self.staging_rejected,
+                replaced_pending=self.staging_replaced, capacity=self.staging_capacity,
+                overflow_policy='replace_pending_latest_per_channel' if self.latest else 'reject_new_report_loss',
                 native_pixels_accepted=self.native_received,
                 python_frames_accepted=self.python_received,
                 errors=self.errors, last_error=self.last_error,
                 oldest_age_seconds=None if not self.staging else max(0., self.clock() - self.staging[0][1]))
         return dict(enabled=True, transport='independent_binary_camera_v2',
+            delivery_policy='latest' if self.latest else 'fifo',
             destination='{}:{}'.format(self.config['host'], self.config['port']),
             source_admission=self.admission.status(), staging=staging, fifo=self.queue.status(),
             compression_level=self.sender.compression_level,

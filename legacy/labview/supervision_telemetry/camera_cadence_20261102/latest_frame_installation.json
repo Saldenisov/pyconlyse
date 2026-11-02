@@ -1,0 +1,84 @@
+{
+  "backup": "C:\\SV_READY_20261030\\latest_camera_backup_20261102T200215Z",
+  "configuration_fields_changed": [
+    "camera_stream.delivery_policy"
+  ],
+  "hardware_commands_sent": false,
+  "initialize_invoked": false,
+  "installed_sha256": {
+    "SUP_Camera_Queue_Latest.vi": "bef72a8c0a4b7cc269e1694668464ba5c75164519687fee3b428552e7bd49bb7",
+    "camera_latest.py": "6820fa3bbe79649900082eb42958bc00d93acb1497cdc4383e9e684aa25c6d5b",
+    "camera_stream_publisher.py": "c811e6de054056bb2b73b4b185beefbf2f3659269cc95275bb26d930d5fb2a02"
+  },
+  "launcher_pid": 592,
+  "original_vi_changed": false,
+  "protections_changed": false,
+  "python_delivery_policy": "latest",
+  "state": "COLD_SERVER_LAUNCH_REQUESTED",
+  "synchronization_changed": false,
+  "vi_delivery_policy": "lossy_enqueue_latest_queue_capacity_1",
+  "wrapper_unchanged": true,
+  "live_verification": {
+    "elapsed_seconds": 61.1559999999954,
+    "received_fps": 16.057296095233074,
+    "wire_mbit_s": 56.8928569559857,
+    "stale_frame_delta": 0,
+    "ingress_error_delta": 0,
+    "all_camera_available": true,
+    "all_sync_fresh_and_unchanged": true,
+    "all_27_banks_fresh": true,
+    "every_bank_advanced": true,
+    "web_metadata_age_min_seconds": 0.15882154655264458,
+    "web_metadata_age_max_seconds": 0.7601407260881388
+  },
+  "final_health": {
+    "utc": "2026-11-02T20:12:58.167015+00:00",
+    "runtime": {
+      "session_id": "2edcdc3eaa8f4490af7b9cc09f272c56",
+      "state": "IDLE",
+      "resource_count": 0,
+      "ownership_state": null,
+      "source_mode": null
+    },
+    "camera_queue": {
+      "stream_id": "ff02fb24f6814d99a7860641ecf55805",
+      "pending_latest": 0,
+      "durable": false,
+      "max_bytes": 67108864,
+      "inflight": 1,
+      "delivery_policy": "latest",
+      "capacity": 3,
+      "pending": 1,
+      "overflow_policy": "replace_pending_latest_per_channel_preserve_inflight",
+      "transport_ids_assigned": "on_send",
+      "pending_bytes": 442368,
+      "accepted": 8242,
+      "replaced_pending": 228,
+      "rejected_new": 0,
+      "pending_channel_capacity": 2,
+      "acknowledged": 8013
+    },
+    "camera_staging": {
+      "last_error": "",
+      "replaced_pending": 0,
+      "capacity": 2,
+      "overflow_policy": "replace_pending_latest_per_channel",
+      "oldest_age_seconds": null,
+      "errors": 0,
+      "native_pixels_accepted": 8242,
+      "pending_bytes": 0,
+      "python_frames_accepted": 0,
+      "accepted": 8242,
+      "rejected_new": 0,
+      "pending": 0
+    },
+    "sender_error": "",
+    "camera_age_seconds": 0.27586099243490025,
+    "acquisition_banks": 27,
+    "acquisition_quality": "FRESH",
+    "archive_state": "RUNNING",
+    "archive_commits": 62616,
+    "archive_error": ""
+  },
+  "sustained_25hz_qualified": false
+}

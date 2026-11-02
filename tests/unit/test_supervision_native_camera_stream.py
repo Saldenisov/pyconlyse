@@ -81,6 +81,25 @@ class NativeCameraStreamTests(unittest.TestCase):
         self.assertEqual(packet['source_mode'], 'PYTHON_NATIVE')
         self.assertIsNone(packet['video_frame'])
 
+    def test_latest_policy_coalesces_native_card_samples_without_stopping_sync(self):
+        self.publisher.close()
+        self.publisher = SupervisionTelemetryPublisher(self.runtime, ('127.0.0.1', 12345),
+            KEYS['supervision'], camera_stream_configuration=configuration(
+                source_mode='VI_OR_NATIVE', delivery_policy='latest'))
+        self.runtime.telemetry_publisher = self.publisher
+        self.initialize()
+        stream = self.publisher.camera_stream
+        state = stream.status()
+        self.assertEqual(state['delivery_policy'], 'latest')
+        self.assertEqual(state['staging']['pending'], 1)
+        self.assertGreaterEqual(state['staging']['replaced_pending'], 2)
+        self.assertTrue(stream.process_once())
+        message, frame, pixels = stream.queue.peek()
+        self.assertEqual(frame['source_session_id'], 'a' * 32)
+        self.assertEqual(pixels, bytes(range(6)))
+        self.assertEqual(self.runtime._owners['sync'].status()['state'], 'READY')
+        self.assertEqual(self.runtime.snapshot()['state'], 'RUNNING')
+
     def test_full_or_failed_staging_does_not_fault_card_or_stop_sync(self):
         self.publisher.close()
         self.publisher = SupervisionTelemetryPublisher(self.runtime, ('127.0.0.1', 12345),
