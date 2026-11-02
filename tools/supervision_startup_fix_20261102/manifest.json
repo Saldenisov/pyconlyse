@@ -1,0 +1,19 @@
+{
+  "files": [
+    {
+      "name": "launch_supervision.pyw",
+      "sha256": "c1f7c97caca8970a2a1ec3dd55b3acb43ae080fe91a86e29ffd9b1616020be38"
+    },
+    {
+      "name": "Supervision Telemetry.lnk",
+      "sha256": "0657150095698ce095ba08c6f8a97d3dc35cd7c78f763212b4c9c928e639e421"
+    },
+    {
+      "name": "Supervision Server.lnk",
+      "sha256": "11becc26cd4cba88666e7c4bf86574a589434bb1084d7b91d96639b326aa300b"
+    }
+  ],
+  "python": "3.4.4 x86",
+  "tests": "9 passed",
+  "initialize_invoked": false
+}

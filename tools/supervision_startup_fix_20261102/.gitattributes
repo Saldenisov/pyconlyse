@@ -1,0 +1,3 @@
+*.pyw -text whitespace=cr-at-eol
+manifest.json -text whitespace=cr-at-eol
+*.lnk -text

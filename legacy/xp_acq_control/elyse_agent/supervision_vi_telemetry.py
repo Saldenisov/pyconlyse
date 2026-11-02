@@ -27,6 +27,7 @@ from .shared_state import decode_supervision_snapshot_xml, LatestSnapshotOutbox
 from .shared_state_receiver import SharedStateServer
 from .standard_banks import standard_packet, schemas, packet_age_seconds
 from .telemetry_relay import DeadlineSocket, canonical
+from .camera_ingress_metrics import CameraIngressMetrics
 
 
 PUBLICATION = "ELYSE_SUPERVISION_VI_OBSERVATION"
@@ -250,6 +251,9 @@ class _TypedHandler(socketserver.BaseRequestHandler):
     def handle(self):
         if self.client_address[0] != "127.0.0.1":
             return
+        metrics = getattr(self.server.store, 'ingress_metrics', None)
+        if metrics is not None:
+            metrics.connection()
         while not getattr(self.server, "_closing_handlers", False):
             # Old one-frame clients may close after their ACK. An idle/closed
             # connection has not submitted a new observation, so is not a loss.
@@ -260,6 +264,7 @@ class _TypedHandler(socketserver.BaseRequestHandler):
                 return
             if not header or getattr(self.server, "_closing_handlers", False):
                 return
+            arrival = time.perf_counter()
             # Renew only at a frame boundary, never for each partial recv. Idle
             # time between frames must not consume the next frame's deadline.
             bounded = DeadlineSocket(self.request, time.monotonic() + VI_FRAME_TIMEOUT_SECONDS)
@@ -268,6 +273,14 @@ class _TypedHandler(socketserver.BaseRequestHandler):
             except Exception as error:
                 self._send_reply(bounded, self._rejection(error))
                 return  # Unread payload bytes cannot become the next length.
+            received = time.perf_counter()
+            source_age = source_copy = None
+            if metrics is not None and raw.startswith(BINARY_CAMERA_PREFIX):
+                native = _binary_camera_header(raw[:BINARY_CAMERA_HEADER_BYTES], len(raw))
+                seconds, fraction, unused = native['stamps'][2]
+                source_age = time.time() - (seconds - LABVIEW_UNIX_OFFSET) - fraction / FRACTION_SCALE
+                source_copy = native['copy_elapsed_ms'] / 1000.
+            error_text = ''
             try:
                 result = self.server.store.ingest_observation(raw, self.client_address[0])
                 reply = dict(id="supervision-vi", ok=True, result=result)
@@ -275,7 +288,13 @@ class _TypedHandler(socketserver.BaseRequestHandler):
                 # The complete frame was consumed: a rejected observation does
                 # not corrupt the boundary of the following framed observation.
                 reply = self._rejection(error)
-            if not self._send_reply(bounded, reply):
+                error_text = str(error)
+            ingested = time.perf_counter()
+            sent = self._send_reply(bounded, reply)
+            if metrics is not None:
+                metrics.record(arrival, received - arrival, ingested - received,
+                    time.perf_counter() - ingested, reply['ok'], source_age, source_copy, error_text)
+            if not sent:
                 return
 
 
@@ -334,6 +353,7 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
         self._bridge_generation, self._published_generation = 0, -1
         self._native_video_sent_at = None
         self.typed_accepted, self.typed_duplicates = 0, 0
+        self.ingress_metrics = CameraIngressMetrics()
         self.outbox = _VideoDeliveryOutbox(self._video_delivered, clock=self.clock,
                                          max_encoded_bytes=900 * 1024)
         self.relay.outbox = self.outbox  # No relay thread has started yet.
@@ -751,4 +771,5 @@ class SupervisionTelemetryPublisher(OwnerTelemetryPublisher):
                 native_video_period_seconds=None if self.independent_native_video else 1.,
                 native_video_transport=('independent_binary_camera_v2' if self.independent_native_video
                                         else 'unchanged_legacy_owner_video'))
+        result['vi_camera_ingress_metrics'] = self.ingress_metrics.snapshot()
         return result

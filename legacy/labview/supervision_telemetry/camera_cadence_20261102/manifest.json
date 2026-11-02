@@ -1,0 +1,38 @@
+{
+  "source_host": "10.20.30.2",
+  "source_path": "C:\\SUPERVISION_TELEMETRY_20261028\\SUPERVISION.llb",
+  "original_vi_modified": false,
+  "sync_values_modified": false,
+  "python_initialize_executed": false,
+  "before_sha256": "1dd9cc211409af774bc4bb8d1f75285c17c0b5a6976dbc8522c7306580fcf09f",
+  "after_sha256": "fd00b9128fee9ae541484f4e59b5240dafbc521a90175363ee9e6a283d9f105a",
+  "changes": [
+    {
+      "kind": "constant",
+      "uid": 25451,
+      "while_uid": 5841,
+      "sequence_uid": 18881,
+      "frame": 9,
+      "before_ms": 30,
+      "after_ms": 0
+    },
+    {
+      "kind": "execution_setting",
+      "name": "Allow debugging",
+      "before": true,
+      "after": false
+    }
+  ],
+  "unchanged": [
+    "500ms camera reconfiguration/error recovery",
+    "synchronization settings",
+    "diagram node and terminal identities"
+  ],
+  "tests": {
+    "python34": "55 tests; OK; 3 skipped",
+    "launcher_python34": "9 tests; OK",
+    "receiver_python312": "114 passed"
+  },
+  "rate_limit": "One 60.391s run admitted24.4904fps and Everest accepted24.3083fps; later VI ingress fell to16Hz. Sustained25Hz is not verified.",
+  "receiver_patch": "Prepared separately; not deployed as of2026-11-02T17:37:31Z; unified DS restart pending operator decision"
+}
