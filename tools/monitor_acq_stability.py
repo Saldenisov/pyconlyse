@@ -56,7 +56,9 @@ def xp_metadata(data):
         'everest_acknowledged', 'last_ack_age_seconds', 'last_error', 'publisher_error',
         'vi_accepted', 'vi_rejected', 'vi_seen_age_seconds', 'vi_ingress_error',
         'replaced_pending', 'pending', 'capacity', 'inflight', 'pending_latest',
-        'ingress_handler_limit_rejections')}
+        'ingress_handler_limit_rejections', 'vi_owner_contentions', 'vi_deferred',
+        'vi_deferred_replaced', 'vi_deferred_rejected', 'vi_deferred_pending',
+        'vi_admission_delay_seconds', 'vi_admission_delay_max_seconds')}
     return result
 
 
@@ -310,7 +312,28 @@ class RunSummary:
 def atomic_json(path, value):
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n', encoding='utf-8')
-    os.replace(temporary, path)
+    for attempt in range(6):
+        try:
+            os.replace(temporary, path)
+            return
+        except PermissionError:
+            if attempt == 5:
+                raise
+            # A concurrent Windows reader/AV can briefly deny replacement.
+            time.sleep(.02 * (attempt + 1))
+
+
+def resume_summary(output, duration, interval):
+    saved = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
+    if saved['requested_seconds'] != duration or saved['interval_seconds'] != interval:
+        raise ValueError('Resume must retain the original duration and sample interval')
+    summary = RunSummary(datetime.fromisoformat(saved['started_utc']), duration, interval)
+    with (output / 'samples.jsonl').open(encoding='utf-8') as stream:
+        for line in stream:
+            summary.add(json.loads(line))
+    if summary.last and time.monotonic() < summary.last['monotonic']:
+        raise ValueError('Monotonic clock reset; use a new observation folder')
+    return summary
 
 
 def main():
@@ -319,13 +342,17 @@ def main():
     parser.add_argument('--hours', type=float, default=24)
     parser.add_argument('--interval', type=float, default=10)
     parser.add_argument('--max-samples', type=int, help='Bounded smoke check; never qualifies a full-duration run')
+    parser.add_argument('--resume', action='store_true', help='Append to existing samples; retain and report the monitoring gap')
     args = parser.parse_args()
     if (not math.isfinite(args.hours) or not 0 < args.hours <= 168 or
             not math.isfinite(args.interval) or not 2 <= args.interval <= 60 or
             (args.max_samples is not None and args.max_samples < 1)):
         parser.error('Require 0 < hours <= 168, 2 <= interval <= 60 and positive max-samples')
-    args.output.mkdir(parents=True, exist_ok=False)
-    summary = RunSummary(now_utc(), args.hours * 3600, args.interval)
+    if args.resume:
+        summary = resume_summary(args.output, args.hours * 3600, args.interval)
+    else:
+        args.output.mkdir(parents=True, exist_ok=False)
+        summary = RunSummary(now_utc(), args.hours * 3600, args.interval)
     atomic_json(args.output / 'summary.json', summary.snapshot())
     state = 'INTERRUPTED'
     try:
@@ -338,7 +365,14 @@ def main():
                 samples.write(json.dumps(row, allow_nan=False) + '\n')
                 for change in changes:
                     events.write(json.dumps(change, allow_nan=False) + '\n')
-                atomic_json(args.output / 'summary.json', summary.snapshot())
+                try:
+                    atomic_json(args.output / 'summary.json', summary.snapshot())
+                except OSError as exc:
+                    # Preserve the flushed sample/event journal and keep
+                    # observing; a status-file sharing error is not NI failure.
+                    events.write(json.dumps(dict(utc=now_utc().isoformat(),
+                        entered=['monitor:summary_write_failed'], error=type(exc).__name__)) + '\n')
+                    print('Summary write failed: ' + type(exc).__name__, file=sys.stderr, flush=True)
                 print(json.dumps(dict(utc=row['utc'], sample=summary.samples, issues=row['issues'])), flush=True)
                 if row['monotonic'] - summary.first['monotonic'] >= summary.duration:
                     state = 'COMPLETED'

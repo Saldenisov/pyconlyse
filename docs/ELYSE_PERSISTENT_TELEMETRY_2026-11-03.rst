@@ -220,6 +220,26 @@ only the cold Python server to be stopped normally; running VIs/cards remain
 untouched. A Python restart is an observation-window boundary, not continuous
 uptime, and must remain visible in the original 24-hour log.
 
+The operator installed the pinned publisher on Acquisition at 10:40:39 Paris,
+3 November. Backup:
+``C:\ACQ_READY_20261030\runtime\transport_backup_20261103T094039058750Z``.
+The replacement stayed IDLE/resources0 and resumed LABVIEW_BRIDGE telemetry.
+The first authenticated readback showed 373 admitted observations, 39 deferred
+for lock contention, zero VI/deferred rejections, an empty ingress error, and
+one persistent connection with zero disconnects or failed attempts. All 27
+banks were fresh, PostgreSQL RUNNING and web quality FRESH. Hardware commands,
+Initialize, VI edits and screen use were absent from this verification.
+
+The passive observer itself previously exited on WinError5 while replacing its
+summary JSON on Windows. Source telemetry continued independently. The observer
+now retries transient sharing conflicts, continues its flushed sample/event
+journal if a summary replacement remains unavailable, and supports explicit
+resume without clearing historical failures. Fifteen observer tests pass,
+including sharing-conflict retry and reconstruction with a visible sampling gap.
+Its original journal was resumed with the unobserved 986.703-second interval
+preserved; this interval cannot count as confirmed continuous availability.
+The operator's subsequent Python restart also remains an observation boundary.
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release

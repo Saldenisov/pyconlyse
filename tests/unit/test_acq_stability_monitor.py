@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from tools.monitor_acq_stability import (BANKS, Collector, RunSummary, atomic_json,
-    compact_banks, sample_issues, xp_metadata)
+    compact_banks, sample_issues, xp_metadata, resume_summary)
 
 
 def healthy(sequence=1, monotonic=100):
@@ -141,6 +141,38 @@ class StabilityReporting(unittest.TestCase):
             atomic_json(path, dict(samples=2))
             self.assertEqual(json.loads(path.read_text())['samples'], 2)
             self.assertFalse(path.with_suffix('.tmp').exists())
+
+    def test_windows_reader_sharing_conflict_is_retried(self):
+        import os
+        original = os.replace
+        calls = []
+        def replace(source, target):
+            calls.append(True)
+            if len(calls) == 1:
+                raise PermissionError('Fixture Windows reader sharing conflict')
+            return original(source, target)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'summary.json'
+            atomic_json(path, dict(samples=1))
+            with patch('tools.monitor_acq_stability.os.replace', replace):
+                atomic_json(path, dict(samples=2))
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(json.loads(path.read_text())['samples'], 2)
+
+    def test_resume_retains_old_samples_and_marks_unobserved_gap(self):
+        summary = self.summary(86400)
+        first = healthy()
+        summary.add(first)
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            atomic_json(output / 'summary.json', summary.snapshot('FAILED'))
+            (output / 'samples.jsonl').write_text(json.dumps(first) + '\n')
+            resumed = resume_summary(output, 86400, 10)
+            self.assertEqual(resumed.samples, 1)
+            self.assertEqual(resumed.started, summary.started)
+            resumed.add(healthy(2, 500))
+            self.assertIn('monitor:sampling_gap', resumed.snapshot()['issue_sample_counts'])
+            self.assertNotEqual(resumed.snapshot()['verdict'], 'NO_SAMPLED_FAILURES')
 
     def test_one_failed_source_does_not_suppress_other_sources(self):
         collector = Collector.__new__(Collector)
