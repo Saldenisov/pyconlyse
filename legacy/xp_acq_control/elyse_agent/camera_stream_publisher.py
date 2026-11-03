@@ -190,6 +190,7 @@ class CameraStreamPublisher(object):
             source_admission=self.admission.status(), staging=staging, fifo=self.queue.status(),
             compression_level=self.sender.compression_level,
             last_encode_seconds=self.sender.last_encode_seconds,
+            transport_health=self.sender.status(),
             sender_error=self.sender.last_error, receiver_session_id=self.sender.receiver_id,
             receiver_session_changes=self.sender.receiver_changes,
             started=self.worker is not None, durable=False, images_archived=False,

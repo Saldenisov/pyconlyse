@@ -112,7 +112,7 @@ class TelemetryOutbox(object):
 
 
 class TelemetryRelay(object):
-    """One forwarding thread; dequeue only after a verified matching ACK."""
+    """One persistent TCP worker; retry until a verified matching ACK arrives."""
     def __init__(self, outbox, address, key, timeout=2.0, retry_seconds=1.0):
         if not isinstance(address, tuple) or len(address) != 2:
             raise ValueError("explicit Everest host/port tuple required")
@@ -127,55 +127,87 @@ class TelemetryRelay(object):
         self._lock = threading.Lock()
         self._last_error = "Not started"
         self._attempts = 0
+        self._connection = None
+        self._connect_attempts = self._connections = self._disconnects = self._failures = 0
+        self._last_ack_at = None
+
+    def disconnect(self):
+        """Worker-owned socket; no socket operation holds the status lock."""
+        with self._lock:
+            connection, self._connection = self._connection, None
+            if connection is not None:
+                self._disconnects += 1
+        if connection is not None:
+            connection.close()
 
     def send_once(self):
         body = self.outbox.peek()
         if body is None:
             return False
-        nonce = uuid.uuid4().hex
-        signed = dict(body=body, nonce=nonce)
-        request = dict(signed, signature=sign(self.key, "ACQ-TELEMETRY-REQUEST-1", signed))
-        deadline = time.monotonic() + self.timeout
-        with socket.create_connection(self.address, timeout=self.timeout) as connection:
-            bounded = DeadlineSocket(connection, deadline)
+        with self._lock:
+            self._attempts += 1
+        try:
+            nonce = uuid.uuid4().hex
+            signed = dict(body=body, nonce=nonce)
+            request = dict(signed, signature=sign(self.key, "ACQ-TELEMETRY-REQUEST-1", signed))
+            deadline = time.monotonic() + self.timeout
+            if self._connection is None:
+                with self._lock:
+                    self._connect_attempts += 1
+                connection = socket.create_connection(self.address, timeout=self.timeout)
+                try:
+                    connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    connection.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                except Exception:
+                    connection.close()
+                    raise
+                with self._lock:
+                    self._connection = connection
+                    self._connections += 1
+            bounded = DeadlineSocket(self._connection, deadline)
             send_message(bounded, request, MAX_RELAY_FRAME)
             ack = recv_message(bounded, MAX_RELAY_FRAME)
-        if not isinstance(ack, dict) or set(ack) != set(("body", "nonce", "signature")):
-            raise ValueError("malformed Everest ACK")
-        signed_ack = dict(body=ack["body"], nonce=ack["nonce"])
-        expected = sign(self.key, "ACQ-TELEMETRY-ACK-1", signed_ack)
-        if not isinstance(ack["signature"], str) or not hmac.compare_digest(ack["signature"], expected):
-            raise ValueError("Everest ACK authentication failed")
-        result = ack["body"]
-        if (ack["nonce"] != nonce or not isinstance(result, dict)
-                or result.get("accepted") is not True
-                or result.get("relay_id") != body["relay_id"]
-                or type(result.get("message_id")) is not int
-                or result["message_id"] != body["message_id"]):
-            raise ValueError("Everest ACK does not accept this FIFO message")
-        self.outbox.acknowledge(body["relay_id"], body["message_id"])
-        return True
+            if not isinstance(ack, dict) or set(ack) != set(("body", "nonce", "signature")):
+                raise ValueError("malformed Everest ACK")
+            signed_ack = dict(body=ack["body"], nonce=ack["nonce"])
+            expected = sign(self.key, "ACQ-TELEMETRY-ACK-1", signed_ack)
+            if not isinstance(ack["signature"], str) or not hmac.compare_digest(ack["signature"], expected):
+                raise ValueError("Everest ACK authentication failed")
+            result = ack["body"]
+            if (ack["nonce"] != nonce or not isinstance(result, dict)
+                    or result.get("accepted") is not True
+                    or result.get("relay_id") != body["relay_id"]
+                    or type(result.get("message_id")) is not int
+                    or result["message_id"] != body["message_id"]):
+                raise ValueError("Everest ACK does not accept this FIFO message")
+            self.outbox.acknowledge(body["relay_id"], body["message_id"])
+            with self._lock:
+                self._last_ack_at, self._last_error = time.monotonic(), ""
+            return True
+        except Exception as error:
+            self.disconnect()
+            with self._lock:
+                self._failures += 1
+                self._last_error = type(error).__name__ + ": " + str(error)[:300]
+            raise
 
     def _run(self):
-        while not self._stop.is_set():
-            if self.outbox.peek() is None:
-                self.outbox.changed.wait(0.25)
-                continue
-            try:
-                with self._lock:
-                    self._attempts += 1
-                self.send_once()
-                with self._lock:
-                    self._last_error = ""
-            except Exception as error:
-                with self._lock:
-                    self._last_error = str(error)
-                self._stop.wait(self.retry_seconds)
+        try:
+            while not self._stop.is_set():
+                try:
+                    if not self.send_once():
+                        self.outbox.changed.wait(0.25)
+                except Exception as error:
+                    with self._lock:
+                        self._last_error = type(error).__name__ + ": " + str(error)[:300]
+                    self._stop.wait(self.retry_seconds)
+        finally:
+            self.disconnect()
 
     def start(self):
-        if self._thread is not None:
+        if self._thread is not None or self._stop.is_set():
             raise RuntimeError("relay already started")
-        self._thread = threading.Thread(target=self._run)
+        self._thread = threading.Thread(target=self._run, name="telemetry-persistent-relay")
         self._thread.daemon = True
         try:
             self._thread.start()
@@ -185,12 +217,22 @@ class TelemetryRelay(object):
 
     def close(self):
         self._stop.set()
+        self.outbox.changed.set()
         if self._thread is not None:
             self._thread.join(self.timeout * 2 + 1)
             if self._thread.is_alive():
                 raise RuntimeError("telemetry relay did not stop within shutdown bound")
+        self.disconnect()
 
     def status(self):
         with self._lock:
             return dict(self.outbox.status(), attempts=self._attempts,
-                        last_error=self._last_error, endpoint="{0}:{1}".format(*self.address))
+                        last_error=self._last_error, endpoint="{0}:{1}".format(*self.address),
+                        transport="persistent_tcp_with_authenticated_ack", auto_reconnect=True,
+                        retry_seconds=self.retry_seconds, transaction_timeout_seconds=self.timeout,
+                        connected=self._connection is not None,
+                        worker_alive=self._thread is not None and self._thread.is_alive(),
+                        connect_attempts=self._connect_attempts, connections_opened=self._connections,
+                        disconnects=self._disconnects, failed_attempts=self._failures,
+                        last_ack_age_seconds=(None if self._last_ack_at is None else
+                                              max(0., time.monotonic() - self._last_ack_at)))

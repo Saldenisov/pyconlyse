@@ -270,6 +270,8 @@ class CameraFrameSender(object):
         self.stop_event, self.thread = threading.Event(), None
         self.connection, self.last_error = None, 'Not started'
         self.receiver_id, self.receiver_changes = None, 0
+        self.connect_attempts = self.connections_opened = self.failed_attempts = 0
+        self.last_ack_at = None
 
     def disconnect(self):
         connection, self.connection = self.connection, None
@@ -289,8 +291,11 @@ class CameraFrameSender(object):
         self.last_encode_seconds = time.monotonic() - begin
         try:
             if self.connection is None:
+                self.connect_attempts += 1
                 self.connection = socket.create_connection(self.address, timeout=self.timeout)
                 self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                self.connections_opened += 1
             bounded = DeadlineSocket(self.connection, time.monotonic() + self.timeout)
             bounded.sendall(payload)
             reply = recv_message(bounded, MAX_METADATA)
@@ -310,11 +315,23 @@ class CameraFrameSender(object):
             if self.receiver_id is not None and self.receiver_id != receiver_id:
                 self.receiver_changes += 1
             self.receiver_id = receiver_id
-            self.last_error = ''
+            self.last_ack_at, self.last_error = time.monotonic(), ''
             return True
-        except Exception:
+        except Exception as error:
+            self.failed_attempts += 1
+            self.last_error = type(error).__name__ + ': ' + str(error)[:180]
             self.disconnect()
             raise
+
+    def status(self):
+        return dict(transport='persistent_tcp_with_authenticated_ack', auto_reconnect=True,
+            connected=self.connection is not None,
+            worker_alive=self.thread is not None and self.thread.is_alive(),
+            connect_attempts=self.connect_attempts, connections_opened=self.connections_opened,
+            failed_attempts=self.failed_attempts, retry_seconds=self.retry_seconds,
+            transaction_timeout_seconds=self.timeout, last_error=self.last_error,
+            last_ack_age_seconds=(None if self.last_ack_at is None else
+                                  max(0., time.monotonic() - self.last_ack_at)))
 
     def _run(self):
         try:

@@ -164,6 +164,8 @@ class DS_AcqTelemetry(Device):
         if self._store is None:
             return json.dumps(dict(available=False, hardware_writes=False))
         snapshot = self._store.snapshot()
+        if getattr(self, "_server", None) is not None:
+            snapshot["telemetry_transport"] = self._server.status()
         if getattr(self, "_federated", False):
             view = self._control_view("acquisition")
             runtime = view.get("runtime") or {}

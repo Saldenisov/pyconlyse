@@ -12,6 +12,8 @@ import datetime
 import hashlib
 import hmac
 import math
+import select
+import socket
 import socketserver
 import threading
 import time
@@ -239,13 +241,17 @@ class TelemetrySinkStore:
 
 class _Handler(socketserver.BaseRequestHandler):
     def handle(self):
-        if self.client_address[0] not in self.server.permitted_peers:
-            return
         try:
-            bounded = DeadlineSocket(self.request, time.monotonic() + 2)
-            request = recv_message(bounded, MAX_RELAY_FRAME)
-            reply = self.server.store.accept(request)
-            send_message(bounded, reply, MAX_RELAY_FRAME)
+            self.request.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            # Idle is not a failed transaction. Keep the authenticated stream
+            # open between observations; start its deadline at the next frame.
+            while not self.server.closing.is_set():
+                if not select.select([self.request], [], [], .25)[0]:
+                    continue
+                bounded = DeadlineSocket(self.request, time.monotonic() + 2)
+                request = recv_message(bounded, MAX_RELAY_FRAME)
+                reply = self.server.store.accept(request)
+                send_message(bounded, reply, MAX_RELAY_FRAME)
         except Exception:
             # No trusted positive ACK: XP keeps the head for a later retry.
             return
@@ -256,6 +262,75 @@ class TelemetrySinkServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     daemon_threads = False
     allow_reuse_address = True
 
-    def __init__(self, address, store, permitted_peers=("10.20.30.10",)):
+    def __init__(self, address, store, permitted_peers=("10.20.30.10",), max_clients=8):
+        if type(max_clients) is not int or not 1 <= max_clients <= 64:
+            raise ValueError("Bounded telemetry connection limit required")
         self.store, self.permitted_peers = store, tuple(permitted_peers)
+        self.closing = threading.Event()
+        self.active_changed = threading.Condition()
+        self.active = set()
+        self.slots = threading.BoundedSemaphore(max_clients)
+        self.connections_opened = self.rejected_peers = self.rejected_busy = 0
         super().__init__(address, _Handler)
+
+    def process_request(self, request, client_address):
+        if client_address[0] not in self.permitted_peers:
+            self.rejected_peers += 1
+            self.shutdown_request(request)
+            return
+        if not self.slots.acquire(blocking=False):
+            self.rejected_busy += 1
+            self.shutdown_request(request)
+            return
+        with self.active_changed:
+            if self.closing.is_set():
+                self.slots.release()
+                self.shutdown_request(request)
+                return
+            self.active.add(request)
+            self.connections_opened += 1
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._release(request)
+            raise
+
+    def _release(self, request):
+        with self.active_changed:
+            self.active.discard(request)
+            self.slots.release()
+            self.active_changed.notify_all()
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._release(request)
+
+    def status(self):
+        with self.active_changed:
+            return dict(transport="persistent_tcp_with_authenticated_ack",
+                        active_connections=len(self.active), connections_opened=self.connections_opened,
+                        rejected_peers=self.rejected_peers, rejected_busy=self.rejected_busy,
+                        listening=not self.closing.is_set())
+
+    def server_close(self):
+        # ThreadingMixIn.server_close joins indefinitely on modern Python.
+        # Explicitly wake persistent idle/partial-frame handlers, then wait
+        # only for the existing bounded ownership deadline before store.close.
+        with self.active_changed:
+            self.closing.set()
+            connections = tuple(self.active)
+        for connection in connections:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        socketserver.TCPServer.server_close(self)
+        deadline = time.monotonic() + 3
+        with self.active_changed:
+            while self.active:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("Telemetry handlers remain owned; store cannot close yet")
+                self.active_changed.wait(remaining)
