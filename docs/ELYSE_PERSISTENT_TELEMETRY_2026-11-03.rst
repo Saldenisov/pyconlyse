@@ -121,10 +121,10 @@ advancing, camera available in all 13 samples, unchanged fresh synchronization
 settings, and zero new stale-camera or ingress-error counts. Camera delivery
 averaged 16.358 frames/s and 57.957 Mbit/s; sustained25Hz remains unqualified.
 
-XP Python modules are prepared, NOT installed. They require normal closure of
-only the cold Python orchestrator, then its existing launcher. This update
-does not stop or start a VI. The current old XP publishers remain compatible
-with the updated receiver and still use one connection per :8767 publication.
+Acquisition XP is now installed and verified. SuperVision XP remains prepared
+but NOT installed; the user deferred access to10.20.30.2. The cold SuperVision
+Python server was stopped normally before that restriction; its VI was left
+running. Do not access or restart that computer's server until permitted.
 
 The first Acquisition installation attempt at08:43:22Z was refused before any
 file swap: the installer incorrectly expected bind_host/port in its separate
@@ -133,8 +133,16 @@ continued delivering 27 fresh banks. Endpoint validation now follows the GUI:
 Acquisition reads the sibling config.acquisition.json, while SuperVision reads
 its single configuration. Eight installer/endpoint tests pass on both Python3.4
 and Python3.12, including wrong-role/host rejection and configuration preservation.
-The same shared-folder apply_xp.py has been rebuilt; module payload hashes are
-unchanged. This correction does not claim that the pending XP update ran.
+The same shared-folder apply_xp.py was rebuilt; module payload hashes stayed
+unchanged. The subsequent Acquisition installation completed at08:50:31Z,
+with backups at
+``C:\ACQ_READY_20261030\runtime\transport_backup_20261103T085030965000Z``.
+The08:52:14Z live check observed IDLE/resources0, all27banks fresh and advancing,
+maximum bank age0.281s, 670 signed ACKs through one retained TCP connection,
+zero failures/disconnects, and PostgreSQL RUNNING with63043commits in the current
+receiver process. Configuration, VI and hardware ownership were unchanged;
+no Initialize or hardware command was issued. VI -> Python is still one-shot;
+this live connection result applies to Python -> Everest.
 
 Build a self-contained source-only update folder::
 
