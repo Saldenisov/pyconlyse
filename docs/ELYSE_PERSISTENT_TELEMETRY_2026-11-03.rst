@@ -126,6 +126,16 @@ only the cold Python orchestrator, then its existing launcher. This update
 does not stop or start a VI. The current old XP publishers remain compatible
 with the updated receiver and still use one connection per :8767 publication.
 
+The first Acquisition installation attempt at08:43:22Z was refused before any
+file swap: the installer incorrectly expected bind_host/port in its separate
+active control configuration. The existing server reopened automatically and
+continued delivering 27 fresh banks. Endpoint validation now follows the GUI:
+Acquisition reads the sibling config.acquisition.json, while SuperVision reads
+its single configuration. Eight installer/endpoint tests pass on both Python3.4
+and Python3.12, including wrong-role/host rejection and configuration preservation.
+The same shared-folder apply_xp.py has been rebuilt; module payload hashes are
+unchanged. This correction does not claim that the pending XP update ran.
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release

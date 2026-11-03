@@ -24,6 +24,31 @@ def digest(path, normalize=False):
     return hashlib.sha256(raw.replace(b'\r\n', b'\n') if normalize else raw).hexdigest()
 
 
+def site_endpoint(role, config_path):
+    """Read the same role-specific endpoint file as the existing GUI launcher."""
+    if role not in HOSTS:
+        raise ValueError('Unknown local server role')
+    with open(config_path, encoding='utf-8') as stream:
+        config = json.load(stream)
+    if type(config) is not dict:
+        raise ValueError('Expected installed server configuration object')
+    if role == 'acquisition':
+        # Acquisition uses a separate active control configuration; the GUI
+        # takes bind_host/port from its sibling config.acquisition.json.
+        if (not {'remote_control_enabled', 'command_key_file', 'cooling_safety'} <= set(config)
+                or 'bind_host' in config or 'port' in config):
+            raise ValueError('Expected separate Acquisition control configuration')
+        endpoint_path = os.path.join(os.path.dirname(config_path), 'config.acquisition.json')
+        with open(endpoint_path, encoding='utf-8') as stream:
+            endpoint = json.load(stream)
+    else:
+        endpoint = config
+    if (type(endpoint) is not dict or endpoint.get('bind_host') != HOSTS[role]
+            or type(endpoint.get('port')) is not int or endpoint['port'] != 8772):
+        raise ValueError('Role/configuration host mismatch')
+    return endpoint['bind_host'], endpoint['port']
+
+
 def install_files(folder, runtime, role, manifest, replace=os.replace):
     """Copy exactly the pinned modules; keep configuration and backups intact."""
     names = manifest['roles'][role]
@@ -83,16 +108,13 @@ def main():
     with open(path, encoding='utf-8') as stream:
         manifest = json.load(stream)
     config_path = os.path.abspath(args.config)
-    with open(config_path, encoding='utf-8') as stream:
-        config = json.load(stream)
-    if config.get('bind_host') != HOSTS[args.role] or config.get('port') != 8772:
-        raise RuntimeError('Role/configuration host mismatch')
+    host, api_port = site_endpoint(args.role, config_path)
     probe = socket.socket()
     try:
-        probe.bind((HOSTS[args.role], 0))
+        probe.bind((host, 0))
     finally:
         probe.close()
-    for host, port in ((HOSTS[args.role], 8772), ('127.0.0.1', 8766), ('127.0.0.1', 8768)):
+    for host, port in ((host, api_port), ('127.0.0.1', 8766), ('127.0.0.1', 8768)):
         probe = socket.socket()
         try:
             probe.settimeout(.4)

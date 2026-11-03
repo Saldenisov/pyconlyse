@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tools.install_telemetry_reconnect import install_files
+from tools.install_telemetry_reconnect import install_files, site_endpoint
 
 
 def write(path, raw):
@@ -75,6 +75,55 @@ class TransportInstallTests(unittest.TestCase):
             install_files(str(self.payload), str(self.runtime), 'acquisition', self.manifest)
         self.assertEqual(read(self.runtime/'elyse_agent'/self.names[0]), self.old)
         self.assertEqual(list(self.runtime.glob('transport_backup_*')), [])
+
+
+class SiteEndpointTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.temp.name)
+        self.control = self.folder/'config.acquisition.active.json'
+        self.base = self.folder/'config.acquisition.json'
+        self.write_json(self.control, dict(remote_control_enabled=False,
+            command_key_file='fixture-command.key', cooling_safety=dict(polarity_verified=False,
+                journal_file='fixture-history.sqlite3')))
+        self.write_json(self.base, dict(bind_host='10.20.30.10', port=8772))
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    @staticmethod
+    def write_json(path, value):
+        write(path, json.dumps(value).encode('utf-8'))
+
+    def test_acquisition_reads_sibling_endpoint_without_rewriting_either_configuration(self):
+        before = read(self.control), read(self.base)
+        self.assertEqual(site_endpoint('acquisition', str(self.control)), ('10.20.30.10', 8772))
+        self.assertEqual((read(self.control), read(self.base)), before)
+
+    def test_acquisition_rejects_other_host_in_sibling_configuration(self):
+        self.write_json(self.base, dict(bind_host='10.20.30.2', port=8772))
+        with self.assertRaises(ValueError):
+            site_endpoint('acquisition', str(self.control))
+
+    def test_supervision_reads_its_single_configuration(self):
+        path = self.folder/'config.supervision.active.json'
+        self.write_json(path, dict(bind_host='10.20.30.2', port=8772))
+        before = read(path)
+        self.assertEqual(site_endpoint('supervision', str(path)), ('10.20.30.2', 8772))
+        self.assertEqual(read(path), before)
+
+    def test_flat_supervision_configuration_cannot_select_acquisition_application_lock(self):
+        self.write_json(self.control, dict(bind_host='10.20.30.2', port=8772))
+        with self.assertRaises(ValueError):
+            site_endpoint('acquisition', str(self.control))
+
+    def test_missing_sibling_is_reported_without_falling_back_to_control_file(self):
+        absent = self.folder/'other'
+        absent.mkdir()
+        path = absent/self.control.name
+        write(path, read(self.control))
+        with self.assertRaises(OSError):
+            site_endpoint('acquisition', str(path))
 
 
 if __name__ == '__main__':
