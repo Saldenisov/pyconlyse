@@ -215,10 +215,10 @@ class LocalHandoverFlowTests(unittest.TestCase):
             self.assertEqual(json.load(source)["original_marker_utf8"].encode("utf-8"), self.original)
 
     def test_concurrent_vi_seen_while_owner_lock_busy_still_blocks_post_audit_initialize(self):
-        rejected = []
+        rejected, staged = [], []
         def incoming_vi():
             try:
-                self.publisher.ingest(synthetic_xml(), "127.0.0.1")
+                staged.append(self.publisher.ingest(synthetic_xml(), "127.0.0.1"))
             except ValueError as error:
                 rejected.append(str(error))
         def concurrent_receipt(call):
@@ -230,7 +230,8 @@ class LocalHandoverFlowTests(unittest.TestCase):
         self.inventory_hook = concurrent_receipt
         with self.assertRaisesRegex(RuntimeError, "LabVIEW telemetry is still arriving"):
             self.handover()
-        self.assertEqual(rejected, ["OWNER_STATE_BUSY_VI_NOT_ADMITTED"])
+        self.assertEqual(rejected, [])
+        self.assertTrue(staged[0]['admission_pending'])
         self.assertEqual(self.publisher.vi_accepted, 0)
         self.assertEqual(self.publisher.last_vi_seen, self.now[0])
         self.assertEqual(self.events, [])

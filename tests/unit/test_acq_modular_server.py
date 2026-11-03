@@ -273,15 +273,19 @@ class TelemetryIsolationTests(unittest.TestCase):
         self.assertFalse(busy['telemetry_bridge_mode'])
         self.assertFalse(busy['telemetry_view_current'])
 
-    def test_contended_vi_ingress_rejects_fast_but_seen_traffic_still_fences_initialize(self):
+    def test_contended_vi_ingress_stages_fast_but_seen_traffic_still_fences_initialize(self):
         with PausedOwner(self.runtime):
             started = time.monotonic()
-            with self.assertRaisesRegex(ValueError, 'OWNER_STATE_BUSY_VI_NOT_ADMITTED'):
-                self.publisher.ingest(vi_xml(), '127.0.0.1')
+            result = self.publisher.ingest(vi_xml(), '127.0.0.1')
+            self.assertTrue(result['accepted'])
+            self.assertTrue(result['admission_pending'])
+            self.assertEqual(result['acknowledged_on'], 'xp_ram_staging_not_published_or_everest')
             self.assertLess(time.monotonic() - started, .5)
         with self.assertRaisesRegex(RuntimeError, 'LabVIEW telemetry is still arriving'):
             self.runtime.initialize(startup_confirmed=True)
         self.assertEqual(self.publisher.vi_accepted, 0)
+        self.assertTrue(self.publisher._drain_deferred_once())
+        self.assertEqual(self.publisher.vi_accepted, 1)
 
     def test_old_native_poll_cannot_overwrite_new_vi_image_after_deinitialization(self):
         self.native_memory()

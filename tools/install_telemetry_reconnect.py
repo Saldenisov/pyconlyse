@@ -52,8 +52,10 @@ def site_endpoint(role, config_path):
 def install_files(folder, runtime, role, manifest, replace=os.replace):
     """Copy exactly the pinned modules; keep configuration and backups intact."""
     names = manifest['roles'][role]
-    allowed = {'telemetry_relay.py', 'shared_state_receiver.py', 'camera_stream.py', 'camera_stream_publisher.py'}
+    allowed = {'telemetry_relay.py', 'shared_state_receiver.py', 'camera_stream.py',
+               'camera_stream_publisher.py', 'dual_mode_telemetry.py'}
     if (not names or len(names) != len(set(names)) or set(names) - allowed
+            or role != 'acquisition' and 'dual_mode_telemetry.py' in names
             or any(name not in manifest['files'] for name in names)):
         raise ValueError('Unexpected transport payload')
     agent = os.path.join(runtime, 'elyse_agent')

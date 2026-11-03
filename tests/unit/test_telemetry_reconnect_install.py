@@ -76,6 +76,26 @@ class TransportInstallTests(unittest.TestCase):
         self.assertEqual(read(self.runtime/'elyse_agent'/self.names[0]), self.old)
         self.assertEqual(list(self.runtime.glob('transport_backup_*')), [])
 
+    def test_deferred_vi_update_swaps_only_acquisition_publisher(self):
+        name = 'dual_mode_telemetry.py'
+        write(self.runtime/'elyse_agent'/name, self.old)
+        write(self.payload/name, self.new)
+        self.manifest['files'][name] = dict(
+            before_sha256=hashlib.sha256(self.old.replace(b'\r\n', b'\n')).hexdigest(),
+            after_sha256=hashlib.sha256(self.new).hexdigest())
+        self.manifest['roles']['acquisition'] = [name]
+        report = install_files(str(self.payload), str(self.runtime), 'acquisition', self.manifest)
+        self.assertEqual(report['files'], [name])
+        self.assertEqual(read(self.runtime/'elyse_agent'/name), self.new)
+        for untouched in self.names:
+            self.assertEqual(read(self.runtime/'elyse_agent'/untouched), self.old)
+
+    def test_acquisition_vi_publisher_cannot_be_installed_on_supervision(self):
+        self.manifest['roles']['supervision'] = ['dual_mode_telemetry.py']
+        with self.assertRaises(ValueError):
+            install_files(str(self.payload), str(self.runtime), 'supervision', self.manifest)
+        self.assertEqual(list(self.runtime.glob('transport_backup_*')), [])
+
 
 class SiteEndpointTests(unittest.TestCase):
     def setUp(self):

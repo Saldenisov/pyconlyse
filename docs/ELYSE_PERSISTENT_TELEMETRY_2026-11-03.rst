@@ -181,6 +181,45 @@ Example (the output directory must not already exist)::
 
     python tools/monitor_acq_stability.py --output F:/ELYSE_Telemetry_Server/stability/acquisition_24h_20261103 --hours 24 --interval 10
 
+VI admission contention correction
+----------------------------------
+
+``OWNER_STATE_BUSY_VI_NOT_ADMITTED`` originated in
+``DualModeTelemetryPublisher.ingest``: after decoding valid XML, an immediate
+nonblocking attempt at the runtime lifecycle lock rejected the entire frame.
+The ApplicationView metadata capture takes that same lock every 100 ms while
+running runtime.snapshot(), even in IDLE with no NI resources. Thus an ordinary
+metadata/ingress collision was exposed as a rejected VI packet. This is distinct
+from a driver error, TCP disconnect or failure to initialize a card.
+
+The correction stages one latest decoded observation if that lock is occupied.
+The local ACK explicitly means bounded RAM staging, with admission_pending and
+no publication sequence. A separate worker retries admission after a condition
+wake, retaining the original receipt time and monotonic source age. It captures
+the actual mode under the lifecycle lock, rejects changed owner epochs or
+observations aged two seconds, and never admits VI data into native ownership.
+Seen valid VI traffic still fences Initialize before publication. Concurrent
+old parses cannot overtake newer observations. Shutdown wakes the staging worker
+without waiting for a native owner or performing NI operations.
+
+Validation on actual Python3.4x86: 39 tests passed across deferred admission,
+local handover, cold recovery bridge and the source-only installer. On Python3.12,
+61 source arbitration/modular/unified-Tango/command-telemetry tests passed, with
+two separately identified pre-existing tests excluded. Both failures were also
+reproduced with the original publisher loaded from HEAD: the HTTP admission test
+expects REJECTED after deliberately exceeding the reply timeout (actual409
+COMMAND_ADMISSION_REPLY_TIMEOUT_OUTCOME_UNKNOWN_NO_AUTOMATIC_RETRY), and a
+one-shot test receiver closes a connection that the persistent relay reuses
+(WinError10053). Neither is reported as a passing test or altered by this fix.
+
+The Acquisition-only package is built with ``--vi-admission``. It pins the old
+publisher hash, backs up/swaps only dual_mode_telemetry.py, rejects use on
+SuperVision, and preserves configuration, VI files, journals and ownership.
+The running observer remains active. Deployment is operator-run and requires
+only the cold Python server to be stopped normally; running VIs/cards remain
+untouched. A Python restart is an observation-window boundary, not continuous
+uptime, and must remain visible in the original 24-hour log.
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release
