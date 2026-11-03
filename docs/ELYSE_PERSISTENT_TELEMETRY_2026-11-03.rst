@@ -144,6 +144,43 @@ receiver process. Configuration, VI and hardware ownership were unchanged;
 no Initialize or hardware command was issued. VI -> Python is still one-shot;
 this live connection result applies to Python -> Everest.
 
+Passive multi-hour observation
+------------------------------
+
+``tools/monitor_acq_stability.py`` is an Everest-only observer. Its default
+window is 24 hours with one poll every 10 seconds. It reads authenticated
+Acquisition /status, Tango telemetry/archive attributes, the existing web
+telemetry endpoint, and local receiver process memory/handles/threads/CPU time.
+It never calls commands, initializes cards, restarts a service, changes a VI,
+or contacts SuperVision. Compact samples, incident transitions, hourly resource
+totals and an atomically replaced summary are written to the selected F: folder.
+Pixels and authentication keys are excluded.
+
+The observer checks the exact 27-bank set, stale/error flags, sequence progress,
+ACK and archive-commit progress, sender reconnect counters, source/runtime and
+receiver process identities, and monitoring gaps. Existing cumulative counters
+are baselines, not attributed to the new observation window. A recovered incident
+remains in the final report. A short smoke check or interrupted monitor cannot
+produce a full-duration qualification. Thirteen unit tests cover these cases.
+
+The initial three-sample live smoke check on 3 November at 10:17 Paris recorded
+one transient ``OWNER_STATE_BUSY_VI_NOT_ADMITTED`` at the VI ingress. It cleared
+at the next poll; all 27 banks remained fresh, web quality was FRESH, archive
+commits advanced, and the persistent sender retained one connection with zero
+disconnects. This is an ingress admission observation, not evidence of a TCP
+disconnection; periodic restart is not justified by that observation alone.
+
+This passive run qualifies only the current VI-to-Python-to-Everest path under
+the observed load. Ten-second polling cannot exclude shorter outages. XP process
+memory is not exposed by the existing API and is not measured. Native Python
+card ownership, SuperVision/camera throughput, and deliberately interrupted
+network/receiver recovery require separate observation windows. Receiver lifetime
+or a fixed restart interval cannot be inferred from a short passing run.
+
+Example (the output directory must not already exist)::
+
+    python tools/monitor_acq_stability.py --output F:/ELYSE_Telemetry_Server/stability/acquisition_24h_20261103 --hours 24 --interval 10
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release
