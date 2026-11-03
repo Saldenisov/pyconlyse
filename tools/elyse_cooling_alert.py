@@ -1,9 +1,9 @@
 """Everest operator alarm. READS Tango only; never sends machine commands.
 
 Interactive Windows process, independent of Flask/browser and database writer.
-CANON/SECTION polarity follows SuperVision's saved Fluides panel. A fresh
-General + green indication arms each circuit; its subsequent red indication
-sounds immediately. Cold red inputs do not arm. Unknown data cannot clear an
+CANON/SECTION polarity follows SuperVision's saved Fluides panel. Only fresh
+Chauffage ON and regulation/cooling ON together enable this alarm. Red inputs
+outside that operating scope do not alarm. Unknown data cannot clear an
 incident. This annunciator is not the hardware interlock or shutdown policy.
 """
 from __future__ import annotations
@@ -21,6 +21,9 @@ import uuid
 
 DEVICE = 'tango://10.20.30.202:10000/elyse/acquisition/telemetry'
 CIRCUITS = {'CANON': 0, 'SECTION': 6}
+POLICY_VERSION = 2
+REGULATION_OK_INDEX = 2
+CHAUFFAGE_OK_INDEX = 14
 MAX_AGE = 2.0
 RECOVERY_SECONDS = 2.0
 DEFAULT_DIRECTORY = Path(r'F:\ELYSE_Telemetry_Server\cooling_alert')
@@ -35,6 +38,11 @@ class CoolingAlert:
     def __init__(self, saved=None):
         saved = saved if isinstance(saved, dict) else {}
         self.general = saved.get('general') is True
+        # Previous General-only arming cannot authorize a new-policy alarm.
+        saved = saved if saved.get('policy_version') == POLICY_VERSION else {}
+        self.chauffage = saved.get('chauffage') is True
+        self.regulation = saved.get('regulation') is True
+        self.operating = self.chauffage and self.regulation
         self.armed = set(saved.get('armed', [])) & set(CIRCUITS)
         self.faults = set(saved.get('faults', [])) & set(CIRCUITS)
         self.recovering = {}
@@ -75,15 +83,18 @@ class CoolingAlert:
             c3 = None
         if eps is not None:
             self.general = eps[8]
-        unknown = eps is None or (self.general and c3 is None)
-        if eps is not None and not self.general:
+            self.chauffage = eps[CHAUFFAGE_OK_INDEX]
+            self.regulation = eps[REGULATION_OK_INDEX]
+            self.operating = self.chauffage and self.regulation
+        unknown = eps is None or (self.operating and c3 is None)
+        if eps is not None and not self.operating:
             self.armed.clear()
             self.faults.clear()
             self.recovering.clear()
-        elif self.general and c3 is not None and eps is not None:
+        elif self.operating and c3 is not None and eps is not None:
             for name, index in CIRCUITS.items():
+                self.armed.add(name)
                 if c3[index] is False:
-                    self.armed.add(name)
                     if name in self.faults:
                         since = self.recovering.setdefault(name, now)
                         if now - since >= RECOVERY_SECONDS:
@@ -91,23 +102,23 @@ class CoolingAlert:
                             self.recovering.pop(name, None)
                 else:
                     self.recovering.pop(name, None)
-                    if name in self.armed:
-                        self.faults.add(name)
+                    self.faults.add(name)
         if unknown:
             self.recovering.clear()
-        reasons = tuple(sorted(self.faults)) + (('TELEMETRY',) if unknown and self.general else ())
+        reasons = tuple(sorted(self.faults)) + (('TELEMETRY',) if unknown and self.operating else ())
         # A new/escalated cause bypasses a previous silence interval.
         if reasons and (not self.episode or set(reasons) - set(self.previous_reasons)):
             self.episode = uuid.uuid4().hex
         elif not reasons:
             self.episode = ''
         self.previous_reasons = reasons
-        return dict(schema_version=1, observed_utc=utc(), general=self.general,
+        return dict(schema_version=1, policy_version=POLICY_VERSION, observed_utc=utc(), general=self.general,
+                    chauffage=self.chauffage, regulation=self.regulation, operating=self.operating,
                     armed=sorted(self.armed), faults=sorted(self.faults), reasons=list(reasons),
                     active=bool(reasons), episode=self.episode,
                     quality='UNKNOWN' if unknown else 'FRESH', source_error=error,
                     cold_red=[name for name, index in CIRCUITS.items()
-                              if self.general and c3 is not None and c3[index] and name not in self.armed])
+                              if not self.operating and c3 is not None and c3[index]])
 
 
 def read_saved(path):
@@ -234,7 +245,7 @@ def run(directory, device, show=False):
         item = state['last_item']
         # Let the first bounded Tango read complete before diagnosing an outage.
         # Persisted real faults still announce immediately; no startup chirp for
-        # an otherwise healthy monitor retaining General's previous ON state.
+        # an otherwise healthy monitor retaining its previous operating scope.
         if item is None and now - state['started'] < MAX_AGE and not policy.faults:
             root.after(200, tick)
             return
@@ -269,13 +280,15 @@ def run(directory, device, show=False):
         if result['active']:
             circuits = ' + '.join(result['faults'])
             title.set('ALERTE REFROIDISSEMENT' + (' — ' + circuits if circuits else ' — TÉLÉMÉTRIE PERDUE'))
-            detail.set(('Retour Secteur 220 V devenu rouge après fonctionnement.\n' if circuits else '')
+            detail.set(('Retour Secteur 220 V rouge avec Chauffage et régulation activés.\n' if circuits else '')
                        + ('Surveillance perdue : circulation non confirmée.\n' if 'TELEMETRY' in result['reasons'] else '')
                        + 'Vérifier immédiatement le moteur et la circulation d’eau ; rétablir le refroidissement ou arrêter la machine selon la procédure locale.\nAucune commande automatique envoyée par cette alerte.')
         else:
-            title.set('Surveillance refroidissement — ' + ('active' if result['general'] else 'General arrêté / attente'))
+            title.set('Surveillance refroidissement — ' + ('active' if result['operating'] else 'hors fonctionnement / attente'))
             detail.set('Tango → alerte Windows · navigateur indépendant\n'
-                       + ('Armés : ' + ', '.join(result['armed']) if result['armed'] else 'Attente de retours verts pendant General')
+                       + 'Chauffage : ' + ('ON' if result['chauffage'] else 'OFF')
+                       + ' · Régulation : ' + ('ON' if result['regulation'] else 'OFF') + '\n'
+                       + ('Armés : ' + ', '.join(result['armed']) if result['armed'] else 'Alarme désarmée : Chauffage ET régulation requis')
                        + ('\nSignaux rouges initiaux : ' + ', '.join(result['cold_red']) if result['cold_red'] else '')
                        + ('\nLecture indisponible : ' + result['source_error'] if result['quality'] != 'FRESH' else ''))
         remaining = max(0, math.ceil(state['silenced_until'] - now))
@@ -302,7 +315,7 @@ def run(directory, device, show=False):
     def callback_failed(exception_type, value, traceback):
         # A UI callback failure must be visible/audible rather than silently
         # stopping all future polling callbacks in a hidden pythonw process.
-        audible.set()
+        (audible.set if policy.operating else audible.clear)()
         root.deiconify()
         root.attributes('-topmost', True)
         title.set('ERREUR DU MONITEUR REFROIDISSEMENT')

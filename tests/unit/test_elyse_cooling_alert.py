@@ -9,9 +9,11 @@ from tools.elyse_cooling_alert import CoolingAlert, CIRCUITS
 from legacy.xp_acq_control.elyse_agent.cooling_safety import CIRCUITS as HARDWARE_SIGNALS
 
 
-def banks(general=True, canon=False, section=False, sequence=1, session='owner'):
+def banks(general=True, canon=False, section=False, sequence=1, session='owner',
+          chauffage=True, regulation=True):
     eps, c3 = [False] * 77, [False] * 56
     eps[8], c3[0], c3[6] = general, canon, section
+    eps[14], eps[2] = chauffage, regulation
     return {name: dict(data=data, age_seconds=0.1, stale=False,
                        error=dict(status=False, code=0), session_id=session, sequence=sequence)
             for name, data in (('EPS', eps), ('C3_IN_DIO96', c3))}
@@ -36,14 +38,22 @@ class CoolingAlertTests(unittest.TestCase):
         for name, index in CIRCUITS.items():
             self.assertEqual(HARDWARE_SIGNALS[name][0], ('C3_IN_DIO96', index, True, '220V'))
 
-    def test_cold_red_does_not_alarm_and_only_green_circuit_arms(self):
+    def test_general_alone_or_only_one_required_stage_never_arms_or_sounds(self):
+        for chauffage, regulation in ((False, False), (False, True), (True, False)):
+            p = CoolingAlert()
+            s = p.update(banks(canon=True, section=True, chauffage=chauffage,
+                               regulation=regulation), now=0)
+            self.assertFalse(s['active'])
+            self.assertFalse(s['operating'])
+            self.assertEqual(s['armed'], [])
+            self.assertEqual(s['cold_red'], ['CANON', 'SECTION'])
+            self.assertFalse(p.update(error='timeout', now=1)['active'])
+
+    def test_red_already_present_when_both_stages_on_requires_attention(self):
         p = CoolingAlert()
-        self.assertFalse(p.update(banks(False, True, True), now=0)['active'])
-        s = p.update(banks(True, True, False, 2), now=0.5)
-        self.assertFalse(s['active'])
-        self.assertEqual(s['armed'], ['SECTION'])
-        self.assertEqual(s['cold_red'], ['CANON'])
-        self.assertEqual(p.update(banks(True, True, True, 3), now=1)['faults'], ['SECTION'])
+        s = p.update(banks(canon=True, section=True), now=0)
+        self.assertTrue(s['operating'])
+        self.assertEqual(s['faults'], ['CANON', 'SECTION'])
 
     def test_both_losses_alarm_immediately_and_escalation_has_new_episode(self):
         p = CoolingAlert()
@@ -84,14 +94,23 @@ class CoolingAlertTests(unittest.TestCase):
         self.assertFalse(p.update(sample, now=1.99)['active'])
         self.assertEqual(p.update(sample, now=2)['reasons'], ['TELEMETRY'])
 
-    def test_general_off_clears_and_disarms_but_unknown_off_does_not(self):
-        p = CoolingAlert()
-        p.update(banks(), now=0)
-        self.assertTrue(p.update(now=1, error='timeout')['active'])
-        s = p.update(banks(False, True, True, 2), now=2)
-        self.assertFalse(s['active'])
-        self.assertEqual(s['armed'], [])
-        self.assertFalse(p.update(banks(True, True, True, 3), now=2.5)['active'])
+    def test_each_fresh_stage_off_clears_alarm_but_stale_off_does_not(self):
+        for off in ({'chauffage': False}, {'regulation': False}):
+            p = CoolingAlert()
+            p.update(banks(), now=0)
+            self.assertTrue(p.update(banks(canon=True, sequence=2), now=0.5)['active'])
+            stale = banks(canon=True, sequence=3, **off)
+            stale['EPS']['stale'] = True
+            self.assertTrue(p.update(stale, now=1)['active'])
+            s = p.update(banks(canon=True, sequence=4, **off), now=1.5)
+            self.assertFalse(s['active'])
+            self.assertEqual(s['armed'], [])
+
+    def test_old_general_only_saved_state_is_not_new_policy_arming(self):
+        p = CoolingAlert(dict(general=True, armed=['CANON'], faults=['CANON']))
+        self.assertFalse(p.update(error='no initial read', now=0)['active'])
+        s = p.update(banks(canon=True, chauffage=False, regulation=False), now=0.5)
+        self.assertEqual(s['faults'], [])
 
     def test_restart_retains_armed_state_and_fault_not_silence(self):
         p = CoolingAlert()

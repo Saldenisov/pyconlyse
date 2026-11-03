@@ -304,17 +304,23 @@ independent of Flask, browser tabs, and database writing. It polls only the Tang
 reconnection after failures. It neither opens NI resources nor sends commands.
 
 The saved SuperVision Fluides polarity is red=true for CANON
-``C3_IN_DIO96[0]`` and SECTION ``C3_IN_DIO96[6]``. Each circuit arms after a fresh
-green indication while the published General state ``EPS[8]`` is true. A subsequent
-red indication raises a repeating Windows sound and a foreground red operator
-window. Initial red indications before a circuit has armed do not raise this
-transition alarm. An existing fault survives unknown data; recovery requires
-two seconds of fresh, progressing green indications, or a fresh General OFF
-state. Source-session consistency, bank errors, malformed values, source age
-and locally frozen sequence numbers are checked. A lost read while General was
-active also raises a monitoring-loss alarm. Armed/fault state survives a monitor
-restart; a new monitor cannot reconstruct a transition absent from its saved
-state. This is operator annunciation, not proof of water circulation or an
+``C3_IN_DIO96[0]`` and SECTION ``C3_IN_DIO96[6]``. Policy2 enables annunciation
+only when Chauffage ``EPS[14]`` AND regulation/cooling ``EPS[2]`` are both ON.
+General alone does not enable it. The SuperVision Fluides ``Marche régulation``
+button maps to ``Marche refroidissement X`` in parameter_page_events.py;
+the Acquisition procedure completes with ``Marche refroidissement OK`` at EPS[2].
+These are software operating states, not independent physical flow feedback.
+
+A red input within that enabled scope raises repeating Windows sound and a
+foreground red operator window, including a red input already present when both
+required stages become ON. Red inputs outside this scope do not raise an alarm.
+An existing fault survives unknown data; recovery requires two seconds of fresh,
+progressing green indications, or either required stage freshly confirmed OFF.
+Source-session consistency, bank errors, malformed values, source age
+and locally frozen sequence numbers are checked. A lost read after both stages
+were ON also raises a monitoring-loss alarm. Policy2 operating/fault state survives
+a monitor restart; previous General-only saved state does not authorize arming.
+This is operator annunciation, not proof of water circulation or an
 automatic shutdown/interlock.
 
 ``Silence 60 s`` silences only the current sound temporarily. The visible fault
@@ -327,7 +333,7 @@ interactive session with working, audible speakers. A three-second sound test
 checks the Windows audio call, not physical audibility at the experiment.
 Optional local JSON/status recording failures do not gate alarm sound or polling.
 
-The global web cooling banner observes the same General/green-to-red conditions
+The global web cooling banner observes the same Chauffage-AND-regulation scope
 on every ELYSE tab, including the journal, and retains faults on stale data.
 It does not replace the server's existing countdown/confirmation policy or
 acknowledge a fault through the historical-message buttons. The independent
@@ -335,7 +341,7 @@ Windows process provides sound on Everest even when the web browser is closed.
 
 Installation on Everest uses ``tools/install_elyse_cooling_alert.ps1`` with the
 existing Python3.12 environment; runtime files are under
-``F:\ELYSE_Telemetry_Server\cooling_alert``. Eleven Python detector/Windows tests and79
+``F:\ELYSE_Telemetry_Server\cooling_alert``. Thirteen Python detector/Windows tests and80
 focused web/command/history tests passed. The initial live readback showed fresh
 General ON and both circuits green/armed. No machine fault was induced for testing.
 
