@@ -26,7 +26,7 @@ def main():
     server.name = info.server
     server.host = args.host
     server.mode = 1
-    server.level = 1
+    server.level = 2
     db.put_server_info(server)
     db.put_device_property(
         info.name,
