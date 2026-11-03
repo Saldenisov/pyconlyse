@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import './AcquisitionCommands.css';
 import { CIRCULATION_CONFIRMATION, validCommandValue, sameCommandValue, describeCommandValue } from './acquisitionCommandValue';
+import { historicalCommandKey, useHistoryAcknowledgments } from './historicalNotices';
 
 const Context = createContext(null);
 const id = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (x) => x.toString(16).padStart(2, '0')).join('');
@@ -73,6 +74,7 @@ export function AcquisitionCommand({ operation, name, value = null, className, c
 }
 
 export default function AcquisitionCommands({ client, children }) {
+  const historyNotices = useHistoryAcknowledgments();
   const [view, setView] = useState(null), [fresh, setFresh] = useState(false);
   const [pending, setPending] = useState(false), [confirmation, setConfirmation] = useState(null);
   const [message, setMessage] = useState(''), [failure, setFailure] = useState('');
@@ -199,7 +201,20 @@ export default function AcquisitionCommands({ client, children }) {
       if (mounted.current) { setPending(false); setFresh(false); }
     }
   };
-  const last = view?.commands?.[0];
+  const receipts = view?.commands || [];
+  const unseenPrior = receipts.filter((item) => {
+    const key = historicalCommandKey(item, view?.session_id);
+    return key && !historyNotices.seen.includes(key);
+  });
+  // Current or unresolved results remain visible regardless of a prior-session
+  // display acknowledgment. The at-most-once command ledger is untouched.
+  const last = receipts.find((item) => item.session_id === view?.session_id)
+    || receipts.find((item) => !TERMINAL.has(item.outcome))
+    || receipts.find((item) => {
+      const key = historicalCommandKey(item, view?.session_id);
+      return !key || !historyNotices.seen.includes(key);
+    });
+  const priorLast = historicalCommandKey(last, view?.session_id);
   const waterCandidates = circulationConfirmationCandidates(view);
   const waterValue = { incident_ids: waterCandidates.map((item) => item.incident_id) };
   return <Context.Provider value={{ view, fresh, pending, choose, invalidateValue, permitted }}>
@@ -209,8 +224,14 @@ export default function AcquisitionCommands({ client, children }) {
           ? 'Serveur XP : relais VI · lecture seule · commandes Python non activées'
           : `Serveur XP : ${view?.state || 'en attente'} · commandes non disponibles`)}
         {view?.startup_phase && view.startup_phase !== 'NOT_STARTED' ? ` · ${view.startup_phase}` : ''}</span>
-      {last && <span>{last.operation} : {last.outcome}{last.error ? ` · ${last.error}` : ''}
+      {last && <span>{priorLast ? 'Historique · ancienne session : ' : ''}{last.operation} : {last.outcome}{last.error ? ` · ${last.error}` : ''}
         {['QUEUED', 'EXECUTING', 'INDETERMINATE'].includes(last.outcome) ? ' · Ne pas renvoyer la commande.' : ''}</span>}
+      {priorLast && unseenPrior.length > 0 && <button type="button" className="historical-notice-ack"
+        aria-label="Marquer les anciennes commandes comme vues"
+        title="Masquer les anciens messages sur ce navigateur. Le journal serveur et les résultats d’arrêt sont conservés."
+        onClick={() => historyNotices.acknowledge(unseenPrior.map((item) => historicalCommandKey(item, view.session_id)))}>
+        OK · anciens messages vus ({unseenPrior.length})</button>}
+      {historyNotices.error && <span role="alert" className="historical-notice-error">{historyNotices.error}</span>}
       {message && <span role="status">{message}</span>}
       {(ledger.error || ledger.intents.length > 0 || ledger.stop_intent) && <span role="alert">{ledger.error || 'Intention non résolue : nouvelles commandes bloquées, sauf Arrêt General autorisé sans arrêt déjà non résolu.'}
         {ledger.intents.map((intent) => ` · ${intent.operation}${describeCommandValue(intent.operation, intent.value) ? ` = ${describeCommandValue(intent.operation, intent.value)}` : ''} · ${intent.command_id}`).join('')}

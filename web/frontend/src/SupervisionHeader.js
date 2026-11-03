@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { readBankField } from './elyseLiveProjection';
 import header from './elyseSupervisionHeader.json';
+import { journalNotice, useHistoryAcknowledgments } from './historicalNotices';
 
 export function acquisitionLinkState({ payload, failure, elapsed = 0 }) {
   if (failure) return 'UNAVAILABLE';
@@ -24,7 +25,7 @@ export function frequencyReadback(telemetry) {
     ? String(row.value) : '';
 }
 
-export function acquisitionProblems(telemetry, cooling) {
+export function acquisitionProblems(telemetry, cooling, seenHistory = []) {
   const issues = [];
   const add = (level, text) => issues.push({ level, text });
   const state = acquisitionLinkState(telemetry);
@@ -78,22 +79,29 @@ export function acquisitionProblems(telemetry, cooling) {
       add(['FAILED', 'INTERRUPTED'].includes(safety.stop_state) ? 2 : 1,
         `Arrêt : ${safety.stop_state}${safety.stop_error ? ` · ${safety.stop_error}` : ''}`);
     }
-    if (safety.journal_error) add(2, `Journal source : ${safety.journal_error}`);
+    const notice = journalNotice(safety);
+    if (notice.currentError) add(2, `Journal source : ${notice.currentError}`);
+    if (notice.history && (!notice.key || !seenHistory.includes(notice.key))) {
+      issues.push({ level: 1, text: `Historique journal : ${notice.history}`, historyKey: notice.key });
+    }
   }
   if (cooling?.payload?.archive_error) add(2, `Archivage Web : ${cooling.payload.archive_error}`);
   return issues.sort((a, b) => b.level - a.level);
 }
 
 export function AcquisitionWatchdogDetails({ telemetry, cooling }) {
-  const problems = acquisitionProblems(telemetry, cooling);
+  const acknowledgments = useHistoryAcknowledgments();
+  const problems = acquisitionProblems(telemetry, cooling, acknowledgments.seen);
   return problems.length ? <section aria-label="Problèmes observés actuellement"><h3>Problèmes observés actuellement</h3>
     <ul>{problems.map((item, index) => <li key={index}>{item.text}</li>)}</ul></section> : null;
 }
 
 export function AcquisitionWatchdog({ telemetry, cooling, onOpenJournal }) {
+  const acknowledgments = useHistoryAcknowledgments();
   const state = acquisitionLinkState(telemetry);
   const connected = state === 'CONNECTED';
-  const problems = acquisitionProblems(telemetry, cooling);
+  const problems = acquisitionProblems(telemetry, cooling, acknowledgments.seen);
+  const historyKeys = problems.map((item) => item.historyKey).filter(Boolean);
   const severity = problems[0]?.level || 0;
   const label = connected ? 'connecté' : state === 'WAITING' ? 'en attente'
     : state === 'STALE' ? 'données périmées' : 'déconnecté';
@@ -105,6 +113,11 @@ export function AcquisitionWatchdog({ telemetry, cooling, onOpenJournal }) {
     <span className={`elyse-lamp elyse-lamp--${severity === 2 ? 'red' : severity === 1 ? 'amber' : 'green'}`} aria-hidden="true" />
     {onOpenJournal ? <button type="button" className="elyse-watchdog__message" onClick={onOpenJournal}
       aria-label="Ouvrir le journal des alarmes">{text}</button> : <span className="elyse-watchdog__message">{text}</span>}
+    {historyKeys.length > 0 && <button type="button" className="historical-notice-ack"
+      aria-label="Marquer l’ancien avertissement du journal comme vu"
+      title="Masquer cet avertissement historique sur ce navigateur. Les incidents actifs et les erreurs d’écriture restent affichés."
+      onClick={() => acknowledgments.acknowledge(historyKeys)}>OK · vu</button>}
+    {acknowledgments.error && <span role="alert" className="historical-notice-error">{acknowledgments.error}</span>}
   </div>;
 }
 

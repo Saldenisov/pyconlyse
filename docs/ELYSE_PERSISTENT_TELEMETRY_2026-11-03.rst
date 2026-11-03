@@ -270,6 +270,31 @@ banks fresh and PostgreSQL RUNNING. The original observer remained RUNNING
 with885samples. No screen/UI was accessed; browser visual confirmation remains
 with the operator after refreshing the page.
 
+Historical-message display acknowledgment
+-----------------------------------------
+
+The web operator can mark old terminal command messages and explicit prior-writer
+journal notices as seen. This is a browser-local display choice, persisted across
+reloads and synchronized between the header and cooling panel. It sends no command
+and does not acknowledge source-journal recovery, reconstruct missing events,
+change a stop outcome, erase server history or alter any command/ownership gate.
+
+Only terminal receipts with valid IDs from a different runtime session qualify
+for the old-command button. Current results and unresolved prior commands remain
+visible. The reserved protective-stop ledger and other unresolved intents are not
+changed. Journal history requires the explicit history field and a source-session
+identity; ordinary journal revision progress does not revive the same seen notice.
+A new source session or a different warning reappears. Current storage failures,
+active cooling incidents and countdowns remain visible independently. Storage
+failure keeps the notice visible. Display acknowledgment keys are bounded at256.
+
+Ten focused display-acknowledgment tests and74existing command/water/Elyse tests
+passed. The older live-tree command fixture lacked the sessionStorage isolation
+already present in the release tests; that one-line test isolation was restored
+without changing the production command ledger. Backups and build rollout evidence
+are kept in
+``F:\ELYSE_Telemetry_Server\web_rollbacks\history_notices_20261103T122304Z``.
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release
