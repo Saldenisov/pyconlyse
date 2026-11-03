@@ -8,6 +8,7 @@ import LiveSupervision from './LiveSupervision';
 import useAcquisitionTelemetry, { useLatestRead } from './useAcquisitionTelemetry';
 import { AcquisitionWatchdog, AcquisitionWatchdogDetails, MachineFrequency } from './SupervisionHeader';
 import { CoolingAlarmView } from './CoolingAlarm';
+import CoolingOperationalAlert from './CoolingOperationalAlert';
 import ErrorJournal from './ErrorJournal';
 import SupervisionMonitor from './SupervisionMonitor';
 import useSupervisionHistory from './useSupervisionHistory';
@@ -363,7 +364,9 @@ export default function Elyse({ client = elyseSupervisionClient, persistUi = cli
   const diagnosticsView = activeTab === 'diagnostics';
   const videoView = activeTab === 'ni1409';
   const liveView = !telemetryView && !diagnosticsView && !videoView && liveAvailable;
-  return <AcquisitionCommands client={client}><div className="elyse-console elyse-console--extended" ref={consoleRef}><header className={`elyse-console__header${liveAvailable ? ' elyse-console__header--live' : ''}`}>
+  return <AcquisitionCommands client={client}><div className="elyse-console elyse-console--extended" ref={consoleRef}>
+    {liveAvailable && <CoolingOperationalAlert telemetry={telemetry} onOpenJournal={() => setActiveTab('journal')} />}
+    <header className={`elyse-console__header${liveAvailable ? ' elyse-console__header--live' : ''}`}>
     <div className="elyse-brand"><span className="elyse-brand__mark">E</span><div><strong>ELYSE</strong><small>SuperVision Web</small></div></div>
     <AcquisitionWatchdog telemetry={telemetry} cooling={coolingEnabled ? cooling : undefined}
       onOpenJournal={() => setActiveTab('journal')} />

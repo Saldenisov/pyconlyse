@@ -295,6 +295,50 @@ without changing the production command ledger. Backups and build rollout eviden
 are kept in
 ``F:\ELYSE_Telemetry_Server\web_rollbacks\history_notices_20261103T122304Z``.
 
+Independent Windows cooling annunciator
+--------------------------------------
+
+``tools/elyse_cooling_alert.py`` runs in the interactive Everest Windows session,
+independent of Flask, browser tabs, and database writing. It polls only the Tango
+``telemetry_json`` attribute every 500 ms, with a 1500-ms read timeout and automatic
+reconnection after failures. It neither opens NI resources nor sends commands.
+
+The saved SuperVision Fluides polarity is red=true for CANON
+``C3_IN_DIO96[0]`` and SECTION ``C3_IN_DIO96[6]``. Each circuit arms after a fresh
+green indication while the published General state ``EPS[8]`` is true. A subsequent
+red indication raises a repeating Windows sound and a foreground red operator
+window. Initial red indications before a circuit has armed do not raise this
+transition alarm. An existing fault survives unknown data; recovery requires
+two seconds of fresh, progressing green indications, or a fresh General OFF
+state. Source-session consistency, bank errors, malformed values, source age
+and locally frozen sequence numbers are checked. A lost read while General was
+active also raises a monitoring-loss alarm. Armed/fault state survives a monitor
+restart; a new monitor cannot reconstruct a transition absent from its saved
+state. This is operator annunciation, not proof of water circulation or an
+automatic shutdown/interlock.
+
+``Silence 60 s`` silences only the current sound temporarily. The visible fault
+remains; an additional cause sounds again immediately, and an unresolved alarm
+sounds and reopens after silence expires. Closing the window hides it without
+terminating monitoring. A single-instance lock prevents duplicate sound loops.
+The Desktop shortcut reopens the same monitor; the Startup shortcut launches it
+at the current user's next Windows login. Windows must remain running in an
+interactive session with working, audible speakers. A three-second sound test
+checks the Windows audio call, not physical audibility at the experiment.
+Optional local JSON/status recording failures do not gate alarm sound or polling.
+
+The global web cooling banner observes the same General/green-to-red conditions
+on every ELYSE tab, including the journal, and retains faults on stale data.
+It does not replace the server's existing countdown/confirmation policy or
+acknowledge a fault through the historical-message buttons. The independent
+Windows process provides sound on Everest even when the web browser is closed.
+
+Installation on Everest uses ``tools/install_elyse_cooling_alert.ps1`` with the
+existing Python3.12 environment; runtime files are under
+``F:\ELYSE_Telemetry_Server\cooling_alert``. Eleven Python detector/Windows tests and79
+focused web/command/history tests passed. The initial live readback showed fresh
+General ON and both circuits green/armed. No machine fault was induced for testing.
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release
