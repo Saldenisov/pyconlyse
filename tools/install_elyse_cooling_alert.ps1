@@ -5,6 +5,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $source = Join-Path $PSScriptRoot 'elyse_cooling_alert.py'
 if (!(Test-Path -LiteralPath $source) -or !(Test-Path -LiteralPath $Python)) { throw 'Alarm source or Python missing' }
+$helpers = @(
+    @{ Source = (Join-Path $PSScriptRoot 'elyse_cooling_temperature.py'); Name = 'elyse_cooling_temperature.py' },
+    @{ Source = (Join-Path (Split-Path $PSScriptRoot) 'web\frontend\src\coolingTemperaturePolicy.json'); Name = 'coolingTemperaturePolicy.json' }
+)
+foreach ($item in $helpers) {
+    if (!(Test-Path -LiteralPath $item.Source)) { throw ('Missing alarm helper: ' + $item.Source) }
+}
 New-Item -ItemType Directory -Path $Directory -Force | Out-Null
 $target = Join-Path $Directory 'elyse_cooling_alert.py'
 if (Test-Path -LiteralPath $target) {
@@ -12,6 +19,11 @@ if (Test-Path -LiteralPath $target) {
     Copy-Item -LiteralPath $target -Destination ($target + '.' + $stamp + '.backup')
 }
 Copy-Item -LiteralPath $source -Destination $target
+foreach ($item in $helpers) {
+    $destination = Join-Path $Directory $item.Name
+    if (Test-Path -LiteralPath $destination) { Copy-Item -LiteralPath $destination -Destination ($destination + '.' + (Get-Date -Format 'yyyyMMddTHHmmss') + '.backup') }
+    Copy-Item -LiteralPath $item.Source -Destination $destination
+}
 $shell = New-Object -ComObject WScript.Shell
 foreach ($folder in @([Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('Desktop'))) {
     $linkPath = Join-Path $folder 'ELYSE Cooling Alert.lnk'

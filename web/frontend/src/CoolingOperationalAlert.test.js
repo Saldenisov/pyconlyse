@@ -18,7 +18,7 @@ test('General alone or only one required stage never arms or sounds', () => {
   [[false, false], [false, true], [true, false]].forEach(([chauffage, regulation]) => {
     const w = newCoolingWatch();
     const result = observeCooling(w, sample({ canon: true, section: true, chauffage, regulation }), 0);
-    expect(result).toEqual({ faults: [], monitoringLost: false });
+    expect(result).toEqual({ faults: [], monitoringLost: false, temperature: [] });
     expect(w.armed.size).toBe(0);
     expect(observeCooling(w, { failure: 'timeout' }, 1).monitoringLost).toBe(false);
   });
@@ -37,7 +37,7 @@ test('stale replies retain fault and report lost monitoring; recovery requires 2
   const w = newCoolingWatch();
   observeCooling(w, sample(), 0);
   observeCooling(w, sample({ canon: true, sequence: 2 }), 0.5);
-  expect(observeCooling(w, { ...sample(), failure: 'timeout' }, 1)).toEqual({ faults: ['CANON'], monitoringLost: true });
+  expect(observeCooling(w, { ...sample(), failure: 'timeout' }, 1)).toEqual({ faults: ['CANON'], monitoringLost: true, temperature: [] });
   expect(observeCooling(w, sample({ sequence: 3 }), 2).faults).toEqual(['CANON']);
   expect(observeCooling(w, sample({ sequence: 4 }), 3).faults).toEqual(['CANON']);
   expect(observeCooling(w, sample({ sequence: 5 }), 4).faults).toEqual([]);
@@ -62,4 +62,30 @@ test('global alert offers details without a hardware dispatch or dismiss action'
   expect(screen.getByRole('alert')).toHaveTextContent('Vérifier immédiatement le moteur');
   fireEvent.click(screen.getByRole('button', { name: 'Voir les détails' }));
   expect(open).toHaveBeenCalledTimes(1);
+});
+
+test('green 220V with rising measured temperatures renders a distinct temperature warning', () => {
+  const clock = jest.spyOn(performance, 'now');
+  const withTemperatures = (t) => {
+    const s = sample({ sequence: t + 1 });
+    const banks = s.payload.snapshot.publications;
+    const numberBank = (name, data) => ({ ...banks.EPS, data,
+      lv_type: { type: 'Cluster', name, fields: data.map(() => ({ type: 'DBL' })) } });
+    const c1 = Array(64).fill(0); const c8 = Array(10).fill(0);
+    c1[0] = t <= 30 ? 21.3 : 22.5; c1[8] = 28.3; c8[1] = 21.1; c8[2] = 28.2;
+    banks.C1NI6071E = numberBank('C1NI6071E', c1);
+    banks.C8NI6703 = numberBank('C8NI6703', c8);
+    return s;
+  };
+  clock.mockReturnValue(0);
+  const { rerender } = render(<CoolingOperationalAlert telemetry={withTemperatures(0)} />);
+  for (let t = 1; t <= 46; t += 1) {
+    clock.mockReturnValue(t * 1000);
+    rerender(<CoolingOperationalAlert telemetry={withTemperatures(t)} />);
+  }
+  expect(screen.getByRole('alert')).toHaveClass('cooling-operational-alert--warning');
+  expect(screen.getByRole('alert')).toHaveTextContent('AVERTISSEMENT TEMPÉRATURE');
+  expect(screen.getByRole('alert')).toHaveTextContent('consigne 21.10 °C');
+  expect(screen.getByRole('alert')).not.toHaveTextContent('Secteur 220 V rouge');
+  clock.mockRestore();
 });

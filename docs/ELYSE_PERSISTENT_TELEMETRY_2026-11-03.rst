@@ -345,6 +345,55 @@ existing Python3.12 environment; runtime files are under
 focused web/command/history tests passed. The initial live readback showed fresh
 General ON and both circuits green/armed. No machine fault was induced for testing.
 
+Temperature-deviation warning, independent of 220V indications
+------------------------------------------------------------
+
+Policy3 adds a separate amber operator warning while Chauffage EPS[14] AND
+regulation/cooling EPS[2] are ON. CANON temperature is C1NI6071E[0], SECTION is
+C1NI6071E[8]; current command setpoints are C8NI6703[1] and[2]. The original
+SuperVision Fluides parameter/timeout mappings use these C8 values directly for
+the temperature consignes. They are commanded targets, not physical controller
+readback. All three input banks must be fresh, progressing and from the same
+source session. Red 220V inputs are not required for a temperature warning.
+
+Initial warning settings are in ``web/frontend/src/coolingTemperaturePolicy.json``:
+deviation above the unchanged setpoint >=1.0C, observed deviation growth >=0.5C
+within the trailing120s (baseline at least30s old), continuously qualified for15s.
+These are initial operator-warning settings, not commissioned hardware trip
+limits. The pending interval cannot span missing data or a gap over2s. Actual
+endpoint samples are retained at most once per second; no temperature averaging
+or interpolation is introduced. A target adjustment >=0.05C or source-session
+change starts a new comparison epoch. Stable offsets, an isolated spike and
+temperature increases still below the target do not trigger this warning.
+
+An active warning remains while temperatures are unknown or still elevated.
+It clears after30s of fresh deviation <=0.8C, or either required stage freshly
+OFF. The Windows window and web banner identify the affected circuit, measured
+temperature, target and deviation, and describe possible degraded cooling rather
+than asserting a failed motor or measured loss of circulation. Warning sound is
+one pulse every5s; existing 220V/monitoring-loss alarms retain their faster tone.
+The existing60s silence and browser-independent Windows operation are preserved.
+No shutdown command, VI, card, Tango receiver or existing physical safety policy
+is changed. Missing optional temperature configuration cannot disable the 220V
+alarm. Installer copies both helper code and the exact shared policy JSON.
+
+The120-minute web request returned5040display samples spanning12:46:58–14:18:57
+Paris on3November2026, with unavailable intervals preserved. The observed CANON
+range was21.4404–22.8711C and SECTION26.3916–30.6445C, with the rise around
+13:35–13:39Paris. Historical C8/EPS reads returnedHTTP503, so their historical
+values were not verified. A sensitivity replay assuming both operating flags ON
+and unchanged current targets21.1/28.2C first warned at13:38Paris for both
+circuits and ended without active warnings. This replay tests detection on the
+temperature record; it is not proof of historical setpoints or physical cause.
+Evidence is under ``F:\ELYSE_Telemetry_Server\cooling_alert`` in
+``temperature_history_120m_20261103.json`` and
+``temperature_replay_assumed_inputs_20261103.json``.
+
+Twenty-one Python detector/Windows tests passed. Eighty-five focused web tests
+passed across the existing suite and an added rendered green-220V temperature
+warning test. Checks include target changes, source changes, unknown data,
+transient spikes, normal heating below target, persistence and recovery.
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release

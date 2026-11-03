@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "excess_c": 1.0,
+  "rise_c": 0.5,
+  "window_seconds": 120,
+  "minimum_span_seconds": 30,
+  "persistence_seconds": 15,
+  "clear_margin_c": 0.2,
+  "clear_seconds": 30,
+  "setpoint_change_c": 0.05
+}
