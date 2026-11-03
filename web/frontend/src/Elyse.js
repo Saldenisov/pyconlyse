@@ -371,7 +371,8 @@ export default function Elyse({ client = elyseSupervisionClient, persistUi = cli
       </div>}
     <MachineFrequency telemetry={telemetry} />
   </header><div className={`elyse-console__layout elyse-console__layout--monitor${telemetryView ? ' elyse-console__layout--telemetry' : ''}${liveView ? ' elyse-console__layout--live' : ''}`}>
-    {!telemetryView && <SupervisionMonitor telemetry={telemetry} vacuumSamples={displayHistory.samples} minutes={displayHistory.minutes} />}
+    {!telemetryView && <SupervisionMonitor telemetry={telemetry} vacuumSamples={displayHistory.samples}
+      minutes={displayHistory.minutes} videoClient={videoClient} />}
     <main className={`elyse-workspace${telemetryView ? ' elyse-workspace--telemetry' : ''}${liveView ? ' elyse-workspace--live' : ''}`}><nav className="elyse-primary-tabs" role="tablist" aria-label="Pages SuperVision">
       {TABS.map(([id, label]) => <button type="button" role="tab" aria-label={label} aria-selected={activeTab === id}
         className={`${activeTab === id ? 'is-active' : ''}${id === 'business' ? ' elyse-business-tab' : ''}${id === 'telemetry' ? ' elyse-telemetry-tab' : ''}`}

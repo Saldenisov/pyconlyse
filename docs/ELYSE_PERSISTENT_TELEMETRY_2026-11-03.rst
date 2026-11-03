@@ -240,6 +240,36 @@ Its original journal was resumed with the unobserved 986.703-second interval
 preserved; this interval cannot count as confirmed continuous availability.
 The operator's subsequent Python restart also remains an observation boundary.
 
+Permanent web laser image
+-------------------------
+
+On 3 November the receiver and web API were receiving raw channel1 images,
+while the permanent ``Image laser`` panel still rendered a static
+``IMAGE LASER INDISPONIBLE`` placeholder. Old channel2 metadata was stale; it
+was not evidence that the currently selected channel1 stream had stopped.
+An independent HTTP SSE check received a current channel1 frame after the
+initial cached status, within0.171s. The actual browser codec also decoded the
+live 768x576 U8 payload as CURRENT with442368pixel bytes and age0.205s.
+
+The permanent panel now uses the existing read-only AcquisitionVideo component
+and the independent SuperVision SSE stream, following the source-selected raw
+channel rather than an Acquisition watchdog or a fixed historical channel2.
+It retains the last frame with an honest status/age on an interruption. No
+physical camera-channel mapping, motor action, image archive or profile data
+is inferred. Existing pressure/profile behavior is preserved.
+
+Six monitor tests and72existing Elyse/video tests passed across the focused
+runs. The live web tree's existing frame-display-rate changes were preserved.
+Production build ``main.f6451c5f.js`` / ``main.c4026f9a.css`` was installed at
+13:02:22 Paris by adding hashed assets and replacing index.html last; the web,
+Tango and XP processes were not restarted. HTTP checks verified the new index
+and both assets byte-for-byte. The old index and changed source backups are at
+``F:\ELYSE_Telemetry_Server\web_rollbacks\laser_monitor_20261103T115555Z``.
+Post-deployment readbacks showed channel1 sequence87527->87554->87581, all27
+banks fresh and PostgreSQL RUNNING. The original observer remained RUNNING
+with885samples. No screen/UI was accessed; browser visual confirmation remains
+with the operator after refreshing the page.
+
 Build a self-contained source-only update folder::
 
     python tools/build_telemetry_reconnect.py --output C:/dev/SuperVision_Telemetry/persistent_20261103/release

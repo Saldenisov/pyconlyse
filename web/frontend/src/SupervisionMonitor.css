@@ -3,6 +3,10 @@
 .sup-monitor h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; }
 .sup-monitor__camera > div { min-height: 100px; display: grid; align-content: center; justify-items: center; gap: 7px; background: #091523; color: #b8c9d9; text-align: center; font-size: 11px; }
 .sup-monitor__camera small { font-size: 9px; }
+.sup-monitor__camera .acquisition-video { padding: 0; border: 0; background: transparent; }
+.sup-monitor__camera .acquisition-video header { flex-wrap: wrap; gap: 3px; }
+.sup-monitor__camera .acquisition-video h2 { font-size: 12px; }
+.sup-monitor__camera .acquisition-video figcaption { font-size: 9px; overflow-wrap: anywhere; }
 .sup-monitor__profile-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .sup-monitor__profile-pair > div { min-height: 40px; display: grid; place-items: center; background: #091523; color: #a4b8c9; font-size: 10px; }
 .sup-monitor__profiles p { margin: 6px 0 0; font-size: 10px; }

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { DISPLAY_RULES, projectDisplay, pressureConversionDescription } from './elyseLiveProjection';
 import PressureReadout from './PressureReadout';
+import AcquisitionVideo from './components/AcquisitionVideo';
 import { temperaturePaths, isolatedTrendSamples } from './fluidesTrend';
 import './SupervisionMonitor.css';
 
@@ -57,14 +58,12 @@ export function VacuumHistoryChart({ telemetry, samples = [], minutes = 30 }) {
   </section>;
 }
 
-export default function SupervisionMonitor({ telemetry, vacuumSamples = [], minutes = 30 }) {
-  // The current NI1409 bank is metadata, not a qualified image/contour stream.
-  // Do not substitute a different experiment's Basler camera or a saved frame.
+export default function SupervisionMonitor({ telemetry, vacuumSamples = [], minutes = 30, videoClient }) {
+  // The independent SuperVision image stream follows the source-selected raw
+  // channel. Acquisition watchdog/NI1409 metadata is not camera availability.
   return <aside className="sup-monitor" aria-label="Moniteur permanent ELYSE">
     <section className="sup-monitor__camera" aria-label="Image laser permanente">
-      <h3>Image laser</h3><div role="img" aria-label="Image laser indisponible · source non connectée">
-        <span>IMAGE LASER INDISPONIBLE</span>
-      </div>
+      <AcquisitionVideo title="Image laser" client={videoClient} />
     </section>
     <section className="sup-monitor__profiles" aria-label="Contours et profils laser permanents">
       <h3>Contours · Profils X / Y</h3><div className="sup-monitor__profile-pair">
