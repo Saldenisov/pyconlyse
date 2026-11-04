@@ -480,4 +480,5 @@ class DS_AcqTelemetry(Device):
 
 
 if __name__ == "__main__":
-    run((DS_AcqTelemetry,))
+    from DeviceServers.control.elyse_acq.receiver_process_diagnostics import run_diagnosed
+    run_diagnosed(run, (DS_AcqTelemetry,))

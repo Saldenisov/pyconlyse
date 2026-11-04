@@ -10,7 +10,6 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
-import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +75,6 @@ def main():
     for name in MODULES:
         shutil.copy2(destination/name, backup/name)
     (backup/'before.json').write_text(json.dumps(before, indent=2), encoding='utf-8')
-    environment = previous.environ()
     report.update(state='GRACEFUL_STOP_REQUESTED', backup=str(backup))
     save()
     admin = tango.DeviceProxy('tango://10.20.30.202:10000/dserver/DS_AcqTelemetry/everest')
@@ -92,15 +90,16 @@ def main():
         shutil.copy2(ROOT/RELATIVE/name, destination/name)
         if sha(destination/name) != report['files'][name]['after']:
             raise RuntimeError('Installed checksum mismatch')
-    with (backup/'stdout.log').open('wb') as stdout, (backup/'stderr.log').open('wb') as stderr:
-        child = subprocess.Popen(COMMAND, cwd=destination, env=environment,
-            stdout=stdout, stderr=stderr, creationflags=subprocess.CREATE_NO_WINDOW)
-    report.update(state='VERIFYING', new_pid=child.pid)
+    # A directly spawned child bypasses DS_AcqTelemetry.bat's failure retry
+    # loop and may inherit the deployment tool's Windows process lifetime.
+    # Starter must own every production receiver, including after upgrades.
+    starter = tango.DeviceProxy('tango://10.20.30.202:10000/tango/admin/everest')
+    starter.set_timeout_millis(10000)
+    starter.command_inout('DevStart', 'DS_AcqTelemetry/everest')
+    report.update(state='VERIFYING', launch_method='Starter.DevStart')
     save()
     deadline = time.monotonic() + 35
     while time.monotonic() < deadline:
-        if child.poll() is not None:
-            raise RuntimeError('Replacement exited; inspect saved stderr, do not launch a duplicate')
         try:
             after = snapshot()
             banks = after['telemetry_json']['publications']
@@ -109,7 +108,12 @@ def main():
                     and after['archive_status_json']['state'] == 'RUNNING'
                     and after['archive_status_json']['committed_this_process'] > 0
                     and transport['listening']):
-                report.update(state='VERIFIED', verified_utc=datetime.now(timezone.utc).isoformat(),
+                receiver_info = tango.Database().get_device_info('elyse/acquisition/telemetry')
+                current = psutil.Process(receiver_info.pid)
+                if current.cmdline() != COMMAND or Path(current.cwd()).resolve() != destination.resolve():
+                    raise RuntimeError('Unexpected replacement receiver identity')
+                report.update(state='VERIFIED', new_pid=current.pid,
+                    verified_utc=datetime.now(timezone.utc).isoformat(),
                     bank_count=27, transport=transport, archive_commits=after['archive_status_json']['committed_this_process'],
                     camera_active_connections=after['camera_stream_json']['active_connections'])
                 (backup/'after.json').write_text(json.dumps(after, indent=2), encoding='utf-8')
