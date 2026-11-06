@@ -1,0 +1,2273 @@
+{
+  "source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "hardware_writes": false,
+  "saved_values_used_as_telemetry": false,
+  "display_wire_count": 40,
+  "lines": {
+    "direct": {
+      "rows": [
+        {
+          "index": 0,
+          "uid": "10297",
+          "label": "Dipôle 1",
+          "column": 4,
+          "row": 1,
+          "native_bounds": [
+            -659,
+            -1041,
+            -550,
+            -882
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "5288",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "15513",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "32360",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "10346",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "10330",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "10354",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "127885",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 8,
+            "source_terminal": "12842",
+            "target_terminal": "14346",
+            "native_flat_slot": 6
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 28,
+            "source_terminal": "12406",
+            "target_terminal": "14154",
+            "native_flat_slot": 7
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 1,
+          "uid": "41288",
+          "label": "Focale",
+          "column": 2,
+          "row": 1,
+          "native_bounds": [
+            -659,
+            -1359,
+            -550,
+            -1200
+          ],
+          "native_range_label": "0 à 120A",
+          "native_range_uid": "41334",
+          "native_formats": {
+            "consigne": "%.1f",
+            "lecture": "%.1f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "41343",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "41335",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "41375",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "41391",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "41367",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "41359",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 5,
+            "source_terminal": "11166",
+            "target_terminal": "14375",
+            "native_flat_slot": 18
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 20,
+            "source_terminal": "12425",
+            "target_terminal": "14179",
+            "native_flat_slot": 19
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 2,
+          "uid": "20222",
+          "label": "Phase HF / Laser",
+          "column": 1,
+          "row": 1,
+          "native_bounds": [
+            -659,
+            -1518,
+            -550,
+            -1359
+          ],
+          "native_range_label": "0 à 360°",
+          "native_range_uid": "20268",
+          "native_formats": {
+            "consigne": "%#_g",
+            "lecture": "%.0f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "20277",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "20269",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "20309",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "20325",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "20301",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "20293",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "°",
+          "consigne": {
+            "bank": "C8NI6703",
+            "index": 5,
+            "source_terminal": "16250",
+            "target_terminal": "13971",
+            "native_flat_slot": 30
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 45,
+            "source_terminal": "12462",
+            "target_terminal": "15043",
+            "native_flat_slot": 31
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 3,
+          "uid": "29740",
+          "label": "Correcteur H1",
+          "column": 1,
+          "row": 2,
+          "native_bounds": [
+            -540,
+            -1518,
+            -431,
+            -1359
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "29786",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "29795",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "29787",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "29827",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "7672",
+              "arithmetic_uid": "7706",
+              "step_selector_uid": "7692",
+              "literal_terminals": [
+                "7837",
+                "7817"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "29843",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "17240",
+              "arithmetic_uid": "17308",
+              "step_selector_uid": "17294",
+              "literal_terminals": [
+                "17246",
+                "17258"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "29819",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "9375",
+              "arithmetic_uid": "7558",
+              "step_selector_uid": "9486",
+              "literal_terminals": [
+                "9384",
+                "9414"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "29811",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "11385",
+              "arithmetic_uid": "6230",
+              "step_selector_uid": "11439",
+              "literal_terminals": [
+                "11391",
+                "11403"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 0,
+            "source_terminal": "12722",
+            "target_terminal": "13982",
+            "native_flat_slot": 42
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 29,
+            "source_terminal": "12465",
+            "target_terminal": "15046",
+            "native_flat_slot": 43
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 4,
+          "uid": "38767",
+          "label": "Correcteur V1",
+          "column": 1,
+          "row": 3,
+          "native_bounds": [
+            -421,
+            -1518,
+            -312,
+            -1359
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "38813",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "38822",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "38814",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "38854",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "7672",
+              "arithmetic_uid": "7706",
+              "step_selector_uid": "7692",
+              "literal_terminals": [
+                "7837",
+                "7817"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "38870",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "17240",
+              "arithmetic_uid": "17308",
+              "step_selector_uid": "17294",
+              "literal_terminals": [
+                "17246",
+                "17258"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "38846",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "9375",
+              "arithmetic_uid": "7558",
+              "step_selector_uid": "9486",
+              "literal_terminals": [
+                "9384",
+                "9414"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "38838",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "11385",
+              "arithmetic_uid": "6230",
+              "step_selector_uid": "11439",
+              "literal_terminals": [
+                "11391",
+                "11403"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 1,
+            "source_terminal": "12727",
+            "target_terminal": "14329",
+            "native_flat_slot": 54
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 22,
+            "source_terminal": "12470",
+            "target_terminal": "15049",
+            "native_flat_slot": 55
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 5,
+          "uid": "39127",
+          "label": "Correcteur H2",
+          "column": 3,
+          "row": 2,
+          "native_bounds": [
+            -540,
+            -1200,
+            -431,
+            -1041
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "39173",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "39182",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "39174",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "39214",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "7672",
+              "arithmetic_uid": "7706",
+              "step_selector_uid": "7692",
+              "literal_terminals": [
+                "7837",
+                "7817"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "39230",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "17240",
+              "arithmetic_uid": "17308",
+              "step_selector_uid": "17294",
+              "literal_terminals": [
+                "17246",
+                "17258"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "39206",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "9375",
+              "arithmetic_uid": "7558",
+              "step_selector_uid": "9486",
+              "literal_terminals": [
+                "9384",
+                "9414"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "39198",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "11385",
+              "arithmetic_uid": "6230",
+              "step_selector_uid": "11439",
+              "literal_terminals": [
+                "11391",
+                "11403"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 2,
+            "source_terminal": "12730",
+            "target_terminal": "14334",
+            "native_flat_slot": 66
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 30,
+            "source_terminal": "12477",
+            "target_terminal": "15067",
+            "native_flat_slot": 67
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 6,
+          "uid": "43629",
+          "label": "Correcteur V2",
+          "column": 3,
+          "row": 3,
+          "native_bounds": [
+            -421,
+            -1200,
+            -312,
+            -1041
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "43675",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "43684",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "43676",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "43716",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "7672",
+              "arithmetic_uid": "7706",
+              "step_selector_uid": "7692",
+              "literal_terminals": [
+                "7837",
+                "7817"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "43732",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "17240",
+              "arithmetic_uid": "17308",
+              "step_selector_uid": "17294",
+              "literal_terminals": [
+                "17246",
+                "17258"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "43708",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "9375",
+              "arithmetic_uid": "7558",
+              "step_selector_uid": "9486",
+              "literal_terminals": [
+                "9384",
+                "9414"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "43700",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "11385",
+              "arithmetic_uid": "6230",
+              "step_selector_uid": "11439",
+              "literal_terminals": [
+                "11391",
+                "11403"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 3,
+            "source_terminal": "14736",
+            "target_terminal": "14337",
+            "native_flat_slot": 78
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 23,
+            "source_terminal": "12482",
+            "target_terminal": "15070",
+            "native_flat_slot": 79
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 7,
+          "uid": "52641",
+          "label": "Triplet 1-1",
+          "column": 2,
+          "row": 2,
+          "native_bounds": [
+            -540,
+            -1359,
+            -431,
+            -1200
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "52687",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2g"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "52696",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "52688",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "52728",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "52744",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "52720",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "52712",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 0,
+            "source_terminal": "11201",
+            "target_terminal": "14379",
+            "native_flat_slot": 90
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 16,
+            "source_terminal": "12485",
+            "target_terminal": "12747",
+            "native_flat_slot": 91
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 8,
+          "uid": "645",
+          "label": "Triplet 1-2",
+          "column": 2,
+          "row": 3,
+          "native_bounds": [
+            -421,
+            -1359,
+            -312,
+            -1200
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "5412",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "5423",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "5415",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "5477",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "5493",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "5469",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "5461",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 1,
+            "source_terminal": "7724",
+            "target_terminal": "14382",
+            "native_flat_slot": 102
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 24,
+            "source_terminal": "15260",
+            "target_terminal": "12770",
+            "native_flat_slot": 103
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 9,
+          "uid": "99805",
+          "label": "Correcteur H3",
+          "column": 4,
+          "row": 2,
+          "native_bounds": [
+            -540,
+            -1041,
+            -431,
+            -882
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "99851",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "99860",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "99852",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "99892",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "7672",
+              "arithmetic_uid": "7706",
+              "step_selector_uid": "7692",
+              "literal_terminals": [
+                "7837",
+                "7817"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "99908",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "17240",
+              "arithmetic_uid": "17308",
+              "step_selector_uid": "17294",
+              "literal_terminals": [
+                "17246",
+                "17258"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "99884",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "9375",
+              "arithmetic_uid": "7558",
+              "step_selector_uid": "9486",
+              "literal_terminals": [
+                "9384",
+                "9414"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "99876",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "11385",
+              "arithmetic_uid": "6230",
+              "step_selector_uid": "11439",
+              "literal_terminals": [
+                "11391",
+                "11403"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 4,
+            "source_terminal": "14785",
+            "target_terminal": "14340",
+            "native_flat_slot": 114
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 31,
+            "source_terminal": "12866",
+            "target_terminal": "12773",
+            "native_flat_slot": 115
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 10,
+          "uid": "104146",
+          "label": "Correcteur V3",
+          "column": 4,
+          "row": 3,
+          "native_bounds": [
+            -421,
+            -1041,
+            -312,
+            -882
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "104188",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "104197",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "104189",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "104229",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "7672",
+              "arithmetic_uid": "7706",
+              "step_selector_uid": "7692",
+              "literal_terminals": [
+                "7837",
+                "7817"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "104245",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "17240",
+              "arithmetic_uid": "17308",
+              "step_selector_uid": "17294",
+              "literal_terminals": [
+                "17246",
+                "17258"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "104221",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "9375",
+              "arithmetic_uid": "7558",
+              "step_selector_uid": "9486",
+              "literal_terminals": [
+                "9384",
+                "9414"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "104213",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "11385",
+              "arithmetic_uid": "6230",
+              "step_selector_uid": "11439",
+              "literal_terminals": [
+                "11391",
+                "11403"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 5,
+            "source_terminal": "14789",
+            "target_terminal": "14343",
+            "native_flat_slot": 126
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 32,
+            "source_terminal": "12874",
+            "target_terminal": "12806",
+            "native_flat_slot": 127
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        }
+      ],
+      "columns": 4,
+      "row_count": 3
+    },
+    "deviated": {
+      "rows": [
+        {
+          "index": 0,
+          "uid": "117333",
+          "label": "Quadrupôle 1",
+          "column": 1,
+          "row": 2,
+          "native_bounds": [
+            -595,
+            -2384,
+            -486,
+            -2225
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "117379",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "117388",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "117380",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "117420",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "117436",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "117412",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "117404",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 6,
+            "source_terminal": "23921",
+            "target_terminal": "24088",
+            "native_flat_slot": 6
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 19,
+            "source_terminal": "28994",
+            "target_terminal": "29062",
+            "native_flat_slot": 7
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 1,
+          "uid": "121783",
+          "label": "Quadrupôle 2",
+          "column": 1,
+          "row": 3,
+          "native_bounds": [
+            -476,
+            -2384,
+            -367,
+            -2225
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "121825",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "121834",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121826",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121866",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121882",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121858",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121850",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 7,
+            "source_terminal": "23926",
+            "target_terminal": "24104",
+            "native_flat_slot": 18
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 27,
+            "source_terminal": "29004",
+            "target_terminal": "29065",
+            "native_flat_slot": 19
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 2,
+          "uid": "121897",
+          "label": "Triplet 2-1",
+          "column": 3,
+          "row": 2,
+          "native_bounds": [
+            -595,
+            -2066,
+            -486,
+            -1907
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "121943",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "121952",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121944",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121984",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "122000",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121976",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "121968",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 3,
+            "source_terminal": "23930",
+            "target_terminal": "24110",
+            "native_flat_slot": 30
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 25,
+            "source_terminal": "29016",
+            "target_terminal": "29068",
+            "native_flat_slot": 31
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 3,
+          "uid": "126459",
+          "label": "Triplet 2-2",
+          "column": 3,
+          "row": 3,
+          "native_bounds": [
+            -476,
+            -2066,
+            -367,
+            -1907
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "126501",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "126510",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "126502",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "126542",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "126558",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "126534",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "126526",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 4,
+            "source_terminal": "30948",
+            "target_terminal": "24113",
+            "native_flat_slot": 42
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 18,
+            "source_terminal": "29025",
+            "target_terminal": "29071",
+            "native_flat_slot": 43
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 4,
+          "uid": "30372",
+          "label": "Correcteur H4",
+          "column": 2,
+          "row": 2,
+          "native_bounds": [
+            -595,
+            -2225,
+            -486,
+            -2066
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "30418",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2g"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "30427",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "30419",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "30459",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "34779",
+              "arithmetic_uid": "34848",
+              "step_selector_uid": "34834",
+              "literal_terminals": [
+                "34785",
+                "34797"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "30475",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "35366",
+              "arithmetic_uid": "35455",
+              "step_selector_uid": "35420",
+              "literal_terminals": [
+                "35372",
+                "35384"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "30451",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "45617",
+              "arithmetic_uid": "45702",
+              "step_selector_uid": "45671",
+              "literal_terminals": [
+                "45623",
+                "45635"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "30443",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "46202",
+              "arithmetic_uid": "46287",
+              "step_selector_uid": "46256",
+              "literal_terminals": [
+                "46208",
+                "46220"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 6,
+            "source_terminal": "24164",
+            "target_terminal": "24036",
+            "native_flat_slot": 54
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 40,
+            "source_terminal": "29033",
+            "target_terminal": "29075",
+            "native_flat_slot": 55
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 5,
+          "uid": "35879",
+          "label": "Correcteur V4",
+          "column": 2,
+          "row": 3,
+          "native_bounds": [
+            -476,
+            -2225,
+            -367,
+            -2066
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "36029",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "36038",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "36030",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "36070",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "34779",
+              "arithmetic_uid": "34848",
+              "step_selector_uid": "34834",
+              "literal_terminals": [
+                "34785",
+                "34797"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "36086",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "35366",
+              "arithmetic_uid": "35455",
+              "step_selector_uid": "35420",
+              "literal_terminals": [
+                "35372",
+                "35384"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "36062",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "45617",
+              "arithmetic_uid": "45702",
+              "step_selector_uid": "45671",
+              "literal_terminals": [
+                "45623",
+                "45635"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "36054",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "46202",
+              "arithmetic_uid": "46287",
+              "step_selector_uid": "46256",
+              "literal_terminals": [
+                "46208",
+                "46220"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 7,
+            "source_terminal": "24167",
+            "target_terminal": "24039",
+            "native_flat_slot": 66
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 33,
+            "source_terminal": "29037",
+            "target_terminal": "29079",
+            "native_flat_slot": 67
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 6,
+          "uid": "58757",
+          "label": "Dipôle 2",
+          "column": 1,
+          "row": 1,
+          "native_bounds": [
+            -714,
+            -2384,
+            -605,
+            -2225
+          ],
+          "native_range_label": "-16A à 16A",
+          "native_range_uid": "58803",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "58812",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "58804",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "58844",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "58860",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "58836",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "58828",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C7NI6703",
+            "index": 9,
+            "source_terminal": "23915",
+            "target_terminal": "24064",
+            "native_flat_slot": 78
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 21,
+            "source_terminal": "29040",
+            "target_terminal": "29088",
+            "native_flat_slot": 79
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 7,
+          "uid": "63552",
+          "label": "Correcteur H5",
+          "column": 4,
+          "row": 2,
+          "native_bounds": [
+            -595,
+            -1907,
+            -486,
+            -1748
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "63598",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "63607",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "63599",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "63639",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "34779",
+              "arithmetic_uid": "34848",
+              "step_selector_uid": "34834",
+              "literal_terminals": [
+                "34785",
+                "34797"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "63655",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "35366",
+              "arithmetic_uid": "35455",
+              "step_selector_uid": "35420",
+              "literal_terminals": [
+                "35372",
+                "35384"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "63631",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "45617",
+              "arithmetic_uid": "45702",
+              "step_selector_uid": "45671",
+              "literal_terminals": [
+                "45623",
+                "45635"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "63623",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "46202",
+              "arithmetic_uid": "46287",
+              "step_selector_uid": "46256",
+              "literal_terminals": [
+                "46208",
+                "46220"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 8,
+            "source_terminal": "24175",
+            "target_terminal": "24053",
+            "native_flat_slot": 90
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 34,
+            "source_terminal": "29043",
+            "target_terminal": "29095",
+            "native_flat_slot": 91
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        },
+        {
+          "index": 8,
+          "uid": "68399",
+          "label": "Correcteur V5",
+          "column": 4,
+          "row": 3,
+          "native_bounds": [
+            -476,
+            -1907,
+            -367,
+            -1748
+          ],
+          "native_range_label": "-5A à 5A",
+          "native_range_uid": "68441",
+          "native_formats": {
+            "consigne": "%.2f",
+            "lecture": "%.2f"
+          },
+          "native_buttons": [
+            {
+              "native_uid": "68450",
+              "field_index": 0,
+              "label": "M/A",
+              "role": "power",
+              "action_code": 1,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "68442",
+              "field_index": 4,
+              "label": "X1/X10",
+              "role": "step_mode",
+              "action_code": 16,
+              "commands_enabled": false
+            },
+            {
+              "native_uid": "68482",
+              "field_index": 7,
+              "label": "<<",
+              "role": "coarse_decrease",
+              "action_code": 128,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "34779",
+              "arithmetic_uid": "34848",
+              "step_selector_uid": "34834",
+              "literal_terminals": [
+                "34785",
+                "34797"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "68498",
+              "field_index": 8,
+              "label": "<",
+              "role": "fine_decrease",
+              "action_code": 256,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "35366",
+              "arithmetic_uid": "35455",
+              "step_selector_uid": "35420",
+              "literal_terminals": [
+                "35372",
+                "35384"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "68474",
+              "field_index": 9,
+              "label": ">",
+              "role": "fine_increase",
+              "action_code": 512,
+              "commands_enabled": false,
+              "step_choices": [
+                0.01,
+                0.1
+              ],
+              "diagram_uid": "45617",
+              "arithmetic_uid": "45702",
+              "step_selector_uid": "45671",
+              "literal_terminals": [
+                "45623",
+                "45635"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            },
+            {
+              "native_uid": "68466",
+              "field_index": 10,
+              "label": ">>",
+              "role": "coarse_increase",
+              "action_code": 1024,
+              "commands_enabled": false,
+              "step_choices": [
+                0.1,
+                1.0
+              ],
+              "diagram_uid": "46202",
+              "arithmetic_uid": "46287",
+              "step_selector_uid": "46256",
+              "literal_terminals": [
+                "46208",
+                "46220"
+              ],
+              "unit": "A",
+              "boolean_to_step_polarity_qualified": false
+            }
+          ],
+          "unit": "A",
+          "consigne": {
+            "bank": "C6NI6703",
+            "index": 9,
+            "source_terminal": "24172",
+            "target_terminal": "24043",
+            "native_flat_slot": 102
+          },
+          "lecture": {
+            "bank": "C1NI6071E",
+            "index": 34,
+            "source_terminal": "29046",
+            "target_terminal": "29098",
+            "native_flat_slot": 103
+          },
+          "status_qualified": false,
+          "commands_enabled": false
+        }
+      ],
+      "columns": 4,
+      "row_count": 3
+    }
+  },
+  "synoptic": {
+    "resource_id": 75,
+    "width": 866,
+    "height": 596,
+    "png_sha256": "7a096d8686e1275adb926ff04aa9f08364d1eb6c2cae9f41cdffb8ae6d871453",
+    "static_diagram": true
+  },
+  "limits": [
+    "M/A, X1/X10 and three status lamps are not qualified live controls",
+    "C6[8] is Réserve; physical H5 identity remains unqualified",
+    "Native H5 and V5 Lecture both read C1[34]; not silently corrected",
+    "Synoptic is the original static picture, not live equipment state"
+  ]
+}
