@@ -232,13 +232,25 @@ class PostgresDiagnosticsStore:
     """Separate scalar-only tables in the existing local PostgreSQL on F:."""
     configured = True
     def __init__(self, config_path):
-        from DeviceServers.control.elyse_acq.telemetry_archive import PostgresStore
-        self.database = PostgresStore(config_path)
+        self.config_path = config_path
+        self._database = None
+
+    @property
+    def database(self):
+        if self._database is None:
+            raise RuntimeError('PostgreSQL diagnostics archive is not ready')
+        return self._database
 
     def initialize(self):
+        # The diagnostics writer owns native driver loading and database setup.
+        # App construction and unrelated requests must remain available during it.
+        from DeviceServers.control.elyse_acq.telemetry_archive import PostgresStore
+
+        database = PostgresStore(self.config_path)
         sql = Path(__file__).with_suffix('.sql').read_text(encoding='utf-8')
-        with self.database.connect(writer=True) as connection:
+        with database.connect(writer=True) as connection:
             connection.execute(sql)
+        self._database = database
 
     def get_state(self, camera_id):
         camera_channel(camera_id)

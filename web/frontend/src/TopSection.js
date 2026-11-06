@@ -2,6 +2,7 @@ import React, { useCallback, useContext, useEffect, useRef, useState } from 'rea
 import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
 import { fetchSelection, updateSelectionConfig } from './api/treatmentClient';
+import { convertPreviewTime, previewCurve } from './treatmentPreviewCurves';
 import './css/TopSection.css';
 import TreatmentError from './components/TreatmentError';
 
@@ -37,13 +38,6 @@ function safePurge(plotNode) {
   } catch (_error) {
     // Ignore Plotly teardown races.
   }
-}
-
-function safeRestyle(plotNode, update) {
-  if (!plotNode?.isConnected || !plotNode._fullLayout) {
-    return Promise.resolve();
-  }
-  return Plotly.restyle(plotNode, update, [0]).catch(() => undefined);
 }
 
 function clampCursor(value, fallback) {
@@ -619,64 +613,55 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
   );
 }
 
-function LinePlot({ x, y, title, xTitle, className }) {
+const COMPARISON_COLORS = ['#60a5fa', '#fbbf24', '#34d399', '#c084fc', '#f472b6', '#22d3ee'];
+
+function LinePlot({ active, comparisons, kind, title, xTitle, className }) {
   const ref = useRef(null);
 
   useEffect(() => {
     const plotNode = ref.current;
-    if (!plotNode) {
-      return undefined;
-    }
-
-    safePlot(
-      plotNode,
-      [
-        {
-          x: [],
-          y: [],
-          type: 'scatter',
-          mode: 'lines',
-          line: { color: '#dc2626', width: 2 },
-        },
-      ],
-      {
-        margin: { t: 28, r: 16, b: 40, l: 48 },
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        plot_bgcolor: 'rgba(0,0,0,0)',
-        font: { color: '#e5e7eb' },
-        title,
-        xaxis: {
-          title: xTitle,
-          gridcolor: 'rgba(148, 163, 184, 0.26)',
-          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
-        },
-        yaxis: {
-          title: 'Intensity',
-          gridcolor: 'rgba(148, 163, 184, 0.26)',
-          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
-        },
-      },
-      { responsive: true, displayModeBar: false }
-    );
-
-    const resizeObserver = new ResizeObserver(() => {
-      safeResize(plotNode);
-    });
+    if (!plotNode) return undefined;
+    const resizeObserver = new ResizeObserver(() => safeResize(plotNode));
     resizeObserver.observe(plotNode);
-
     return () => {
       resizeObserver.disconnect();
       safePurge(plotNode);
     };
-  }, [className, title, xTitle]);
+  }, []);
 
   useEffect(() => {
-    const plotNode = ref.current;
-    if (!plotNode) {
-      return;
-    }
-    safeRestyle(plotNode, { x: [x], y: [y] });
-  }, [x, y]);
+    const { x: activeX, y: activeY } = active[kind];
+    const traces = [{ x: activeX, y: activeY, name: `${active.label} (current)`, yaxis: 'y', line: { color: '#dc2626', width: 2 } }];
+    let otherUnit;
+    let skipped = 0;
+    comparisons.forEach((curve, index) => {
+      if (curve.id === active.id) return;
+      const series = curve[kind];
+      const x = kind === 'kinetics' ? convertPreviewTime(series.x, series.time_scale, active[kind].time_scale) : series.x;
+      if (!x) {
+        skipped += 1;
+        return;
+      }
+      const separateAxis = curve.unit !== active.unit;
+      if (separateAxis) otherUnit = curve.unit;
+      traces.push({ x, y: series.y, name: `${curve.label} · ${curve.ranges}`, yaxis: separateAxis ? 'y2' : 'y',
+        line: { color: COMPARISON_COLORS[index % COMPARISON_COLORS.length], width: 2 } });
+    });
+    const grid = { gridcolor: 'rgba(148, 163, 184, 0.26)', zerolinecolor: 'rgba(148, 163, 184, 0.35)' };
+    safePlot(ref.current, traces.map((trace) => ({ ...trace, type: 'scatter', mode: 'lines' })), {
+      margin: { t: 28, r: otherUnit ? 52 : 16, b: 40, l: 48 },
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      font: { color: '#e5e7eb' },
+      title: skipped ? `${title} (${skipped} skipped: time unit)` : title,
+      uirevision: `${xTitle}:${active.unit}`,
+      showlegend: traces.length > 1,
+      legend: { orientation: 'h', y: 1.02, yanchor: 'bottom', font: { size: 10 } },
+      xaxis: { title: xTitle, ...grid },
+      yaxis: { title: active.unit, ...grid },
+      ...(otherUnit ? { yaxis2: { title: otherUnit, overlaying: 'y', side: 'right', showgrid: false } } : {}),
+    }, { responsive: true, displayModeBar: false });
+  }, [active, comparisons, kind, title, xTitle]);
 
   return <div className={className} ref={ref}></div>;
 }
@@ -744,6 +729,8 @@ const TopSection = ({ fillPanel = false }) => {
   const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
   const selectionRefreshToken = treatmentContext?.selectionRefreshToken || 0;
   const requestSelectionRefresh = treatmentContext?.requestSelectionRefresh;
+  const comparisonCurves = treatmentContext?.comparisonCurves || [];
+  const setComparisonCurves = treatmentContext?.setComparisonCurves;
 
   const [selection, setSelection] = useState(null);
   const [error, setError] = useState('');
@@ -837,15 +824,6 @@ const TopSection = ({ fillPanel = false }) => {
       y1: nextSelection.y1,
       y2: nextSelection.y2,
     }));
-    setSelection((current) =>
-      current
-        ? {
-            ...current,
-            cursors: nextSelection,
-          }
-        : current
-    );
-
     setIsSaving(true);
     try {
       await updateSelectionConfig(treatmentSessionId, {
@@ -854,6 +832,7 @@ const TopSection = ({ fillPanel = false }) => {
         selection: nextSelection,
       });
       setError('');
+      requestSelectionRefresh?.();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -921,7 +900,7 @@ const TopSection = ({ fillPanel = false }) => {
     if (!selection) {
       return (
         <div style={{ padding: '16px' }}>
-          {error ? <TreatmentError message={error} /> : (
+          {error ? <><TreatmentError message={error} /><button type="button" onClick={requestSelectionRefresh}>Retry preview</button></> : (
             <p>Choose a folder or manifest, then assign input files to preview.</p>
           )}
         </div>
@@ -931,6 +910,9 @@ const TopSection = ({ fillPanel = false }) => {
     const previewCurves = buildPreviewCurves(selection, previewRange);
     const shownKinetics = previewCurves?.kinetics || selection.kinetics;
     const shownSpectrum = previewCurves?.spectrum || selection.spectrum;
+    const current = previewCurve(selection);
+    const active = { ...current, kinetics: shownKinetics, spectrum: shownSpectrum };
+    const pinned = comparisonCurves.some((curve) => curve.id === current.id);
 
     return (
       <>
@@ -983,8 +965,21 @@ const TopSection = ({ fillPanel = false }) => {
           <button onClick={applySelection} disabled={isSaving}>
             {isSaving ? 'Applying...' : 'Apply'}
           </button>
+          {setComparisonCurves && <button type="button" disabled={pinned || isSaving || Boolean(previewRange)}
+            title="Keep the current kinetics and spectrum, then open another file or map to compare."
+            onClick={() => setComparisonCurves((curves) => curves.some((curve) => curve.id === current.id) ? curves : [...curves, current])}>
+            {pinned ? 'Curves added' : 'Add curves'}
+          </button>}
         </div>
         <div className="selection-path">{selection.file_info.file_path}</div>
+        {comparisonCurves.length > 0 && <div className="selection-controls" aria-label="Comparison curves">
+          {comparisonCurves.map((curve) => <button type="button" key={curve.id}
+            title={`${curve.path}\n${curve.ranges}`} aria-label={`Remove ${curve.label} · ${curve.ranges}`}
+            onClick={() => setComparisonCurves((curves) => curves.filter((item) => item.id !== curve.id))}>
+            {curve.label} ×
+          </button>)}
+          <button type="button" onClick={() => setComparisonCurves([])}>Clear comparison</button>
+        </div>}
         <TreatmentError message={error} />
         <div className="top-plot-grid">
           <div className="left-column">
@@ -1001,15 +996,17 @@ const TopSection = ({ fillPanel = false }) => {
             <div className="vertical-layout">
               <LinePlot
                 className="xy-plot kinetics-plot"
-                x={shownKinetics.x}
-                y={shownKinetics.y}
+                active={active}
+                comparisons={comparisonCurves}
+                kind="kinetics"
                 title="Kinetics"
-                xTitle={`Time Delay, ${shownKinetics.time_scale || ''}`.trim()}
+                xTitle={`Time Delay, ${shownKinetics.time_scale?.replace(/^\?+$/, '') || 'file units'}`}
               />
               <LinePlot
                 className="xy-plot spectrum-plot"
-                x={shownSpectrum.x}
-                y={shownSpectrum.y}
+                active={active}
+                comparisons={comparisonCurves}
+                kind="spectrum"
                 title="Spectrum"
                 xTitle="Wavelength, nm"
               />

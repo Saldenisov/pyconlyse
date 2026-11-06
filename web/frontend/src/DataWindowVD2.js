@@ -49,6 +49,7 @@ const DataWindowVD2 = ({ profile = 'VD2', layoutMode = 'studio', workspace = 'ma
   // State for experiment type
   const [expType, setExpType] = useState('ABS+BASE+BRUIT');
   const [selectionRefreshToken, setSelectionRefreshToken] = useState(0);
+  const [comparisonCurves, setComparisonCurves] = useState([]);
 
   const requestSelectionRefresh = useCallback(() => {
     setSelectionRefreshToken((current) => current + 1);
@@ -70,6 +71,8 @@ const DataWindowVD2 = ({ profile = 'VD2', layoutMode = 'studio', workspace = 'ma
     expType, setExpType,
     selectionRefreshToken,
     requestSelectionRefresh,
+    comparisonCurves,
+    setComparisonCurves,
     treatmentProfile,
     treatmentSessionId,
     treatmentLayoutMode: layoutMode,
