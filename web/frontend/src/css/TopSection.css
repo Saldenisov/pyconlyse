@@ -1,5 +1,11 @@
 /* TopSection.css */
 
+.treatment-layout-studio .selection-controls { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px; align-items: end; }
+.treatment-layout-studio .selection-controls label { flex: 0 0 auto; width: 90px; font-size: 10px; }
+.treatment-layout-studio .selection-controls label:nth-child(2) { width: 65px; }
+.treatment-layout-studio .selection-controls input, .treatment-layout-studio .selection-controls select { height: 24px; font-size: 11px; }
+.treatment-layout-studio .selection-controls button { width: auto; min-width: 40px; height: 24px; padding: 0 7px; font-size: 11px; }
+
 .top-section-container {
   display: flex;
   flex-direction: column;

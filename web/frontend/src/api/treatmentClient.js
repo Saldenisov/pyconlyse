@@ -2,6 +2,7 @@ import { withCsrfToken } from './csrfRequest';
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const LONG_TREATMENT_TIMEOUT_MS = 120000;
+export const TREATMENT_AUTH_MESSAGE = 'The server rejected the request (HTTP 401). Check that Pyconlyse is running in local mode.';
 
 function buildHeaders(sessionId, baseHeaders = {}) {
   const headers = { ...baseHeaders };
@@ -20,8 +21,12 @@ async function parseResponse(response) {
   }
 
   if (!response.ok || payload?.success === false) {
-    const message = payload?.error || `Request failed with status ${response.status}.`;
-    throw new Error(message);
+    const message = response.status === 401
+      ? TREATMENT_AUTH_MESSAGE
+      : payload?.error || payload?.msg || `Request failed with status ${response.status}.`;
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
   return payload;
@@ -189,3 +194,43 @@ export function updateSelectionConfig(sessionId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// SK-Ana operates on session memory. Cancellation aborts this HTTP exchange;
+// cancelling an already-created numerical job is an explicit separate request.
+async function requestSkana(sessionId, path, { signal, body, ...options } = {}, download = false) {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  signal?.addEventListener('abort', cancel);
+  if (signal?.aborted) controller.abort();
+  let timedOut = false;
+  const timer = window.setTimeout(() => { timedOut = true; controller.abort(); }, DEFAULT_TIMEOUT_MS);
+  const url = `/api/treatment/skana${path}`;
+  try {
+    const response = await fetch(url, withCsrfToken(url, {
+      credentials: 'same-origin', ...options,
+      headers: buildHeaders(sessionId, body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: controller.signal,
+    }));
+    if (download && response.ok) return await response.blob();
+    return await parseResponse(response);
+  } catch (error) {
+    if (timedOut) throw new Error('SK-Ana request timed out after 30 seconds. Check job status before starting another fit.');
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
+  }
+}
+
+export const fetchSkanaDataset = (sessionId, source = 'od', signal) => requestSkana(
+  sessionId, `/dataset?source=${encodeURIComponent(source)}`, { signal });
+export const importSkanaDataset = (sessionId, payload, signal) => requestSkana(
+  sessionId, '/import', { method: 'POST', body: payload, signal });
+export const startSkanaJob = (sessionId, payload, signal) => requestSkana(
+  sessionId, '/jobs', { method: 'POST', body: payload, signal });
+export const fetchSkanaJob = (sessionId, jobId, signal) => requestSkana(
+  sessionId, `/jobs/${encodeURIComponent(jobId)}`, { signal });
+export const cancelSkanaJob = (sessionId, jobId, signal) => requestSkana(
+  sessionId, `/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', body: {}, signal });
+export const downloadSkanaResult = (sessionId, jobId, format = 'json', signal) => requestSkana(
+  sessionId, `/jobs/${encodeURIComponent(jobId)}/export?format=${encodeURIComponent(format)}`, { signal }, true);

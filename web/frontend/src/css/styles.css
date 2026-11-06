@@ -104,6 +104,9 @@ nav ul li a {
     transition: all 0.3s ease;
 }
 
+.navbar-list li { display: inline-block; }
+.navbar-list li a { display: inline-block; white-space: nowrap; }
+
 nav ul li a:hover {
     color: #f0c060;
     border: 1px solid #4a9eff;

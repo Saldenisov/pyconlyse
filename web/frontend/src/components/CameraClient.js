@@ -1,6 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { fetchWithHardwareApproval } from '../api/csrfRequest';
+import useFrameDisplayRate from '../useFrameDisplayRate';
+import FrameDisplayRate from './FrameDisplayRate';
 import './CameraClient.css';
+
+const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/$/, '');
+const toBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on', 'running'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off', 'stopped'].includes(normalized)) return false;
+  }
+  return Boolean(value);
+};
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const CameraClient = ({
   initialCamera = null,
@@ -18,54 +33,14 @@ const CameraClient = ({
   const [imageData, setImageData] = useState(null);
   const [cgPosition, setCgPosition] = useState(null);
   const canvasRef = useRef(null);
-
-  const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/$/, '');
-  const toBoolean = (value) => {
-    if (typeof value === 'boolean') {
-      return value;
-    }
-    if (typeof value === 'number') {
-      return value !== 0;
-    }
-    if (typeof value === 'string') {
-      const normalized = value.trim().toLowerCase();
-      if (['1', 'true', 'yes', 'on', 'running'].includes(normalized)) {
-        return true;
-      }
-      if (['0', 'false', 'no', 'off', 'stopped'].includes(normalized)) {
-        return false;
-      }
-    }
-    return Boolean(value);
-  };
-
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // Load cameras on mount
-  useEffect(() => {
-    loadCameras();
-  }, []);
+  const { hz, frameDisplayed } = useFrameDisplayRate(selectedCamera, isGrabbing);
 
   useEffect(() => {
     setImageData(null);
     setCgPosition(null);
   }, [selectedCamera]);
 
-  // Poll camera status when selected
-  useEffect(() => {
-    if (selectedCamera) {
-      loadCameraInfo();
-      const interval = setInterval(() => {
-        loadCameraInfo();
-        if (isGrabbing) {
-          loadImage();
-        }
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [selectedCamera, isGrabbing]);
-
-  const loadCameras = async () => {
+  const loadCameras = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/cameras`);
       const data = await response.json();
@@ -84,19 +59,19 @@ const CameraClient = ({
           return;
         }
 
-        if (data.cameras.length > 0 && !selectedCamera) {
+        if (data.cameras.length > 0) {
           const preferredCamera = initialCamera
             ? data.cameras.find((cam) => cam.name === initialCamera)
             : null;
-          setSelectedCamera(preferredCamera ? preferredCamera.name : data.cameras[0].name);
+          setSelectedCamera((current) => current || (preferredCamera ? preferredCamera.name : data.cameras[0].name));
         }
       }
     } catch (err) {
       setError('Failed to load cameras: ' + err.message);
     }
-  };
+  }, [initialCamera, lockCameraName]);
 
-  const loadCameraInfo = async () => {
+  const loadCameraInfo = useCallback(async () => {
     if (!selectedCamera) return;
     
     try {
@@ -117,7 +92,7 @@ const CameraClient = ({
     } catch (err) {
       console.error('Failed to load camera info:', err);
     }
-  };
+  }, [selectedCamera]);
 
   const pollGrabbingState = async (expectedState, attempts = 6, delayMs = 250) => {
     let latestState = null;
@@ -145,23 +120,7 @@ const CameraClient = ({
     return latestState;
   };
 
-  const loadImage = async () => {
-    if (!selectedCamera) return;
-    
-    try {
-      const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/image`);
-      const data = await response.json();
-      if (data.success && data.image) {
-        setImageData(data.image);
-        setCgPosition(data.cg_position);
-        drawImage(data.image, data.cg_position);
-      }
-    } catch (err) {
-      console.error('Failed to load image:', err);
-    }
-  };
-
-  const drawImage = (imageArray, cg) => {
+  const drawImage = useCallback((imageArray, cg) => {
     const canvas = canvasRef.current;
     if (!canvas || !imageArray) return;
 
@@ -206,7 +165,37 @@ const CameraClient = ({
       ctx.lineTo(cg.X, cg.Y + 15);
       ctx.stroke();
     }
-  };
+    frameDisplayed(imageArray, selectedCamera);
+  }, [frameDisplayed, selectedCamera]);
+
+  const loadImage = useCallback(async () => {
+    if (!selectedCamera) return;
+    try {
+      const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/image`);
+      const data = await response.json();
+      if (data.success && data.image) {
+        setImageData(data.image);
+        setCgPosition(data.cg_position);
+        drawImage(data.image, data.cg_position);
+      }
+    } catch (err) {
+      console.error('Failed to load image:', err);
+    }
+  }, [selectedCamera, drawImage]);
+
+  useEffect(() => {
+    loadCameras();
+  }, [loadCameras]);
+
+  useEffect(() => {
+    if (!selectedCamera) return undefined;
+    loadCameraInfo();
+    const interval = setInterval(() => {
+      loadCameraInfo();
+      if (isGrabbing) loadImage();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [selectedCamera, isGrabbing, loadCameraInfo, loadImage]);
 
   const handleStartGrabbing = async () => {
     setLoading(true);
@@ -466,6 +455,7 @@ const CameraClient = ({
             <h3>Live Preview</h3>
             <div className="preview-container">
               <canvas ref={canvasRef} className="camera-canvas" />
+              <FrameDisplayRate hz={hz} />
               {!imageData && (
                 <div className="no-image">
                   {isGrabbing ? 'Waiting for image...' : 'Start grabbing to see preview'}

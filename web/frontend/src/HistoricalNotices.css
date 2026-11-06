@@ -1,0 +1,4 @@
+.historical-notice-ack { flex: 0 0 auto; padding: 3px 8px; border: 1px solid #8c9dac; border-radius: 3px; background: #f6f9fc; color: #17354f; font: inherit; cursor: pointer; }
+.historical-notice-ack:hover { background: #fff; border-color: #456a88; }
+.historical-notice-error { font-size: 11px; color: #9b172b; }
+.cooling-alarm.cooling-alarm--history { border: 1px solid #b39343; background: #fff8e4; color: #674b16; }

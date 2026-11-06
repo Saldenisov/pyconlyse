@@ -1,0 +1,14 @@
+.error-journal { height: 100%; overflow: auto; padding: 16px; background: #f7f9fc; color: #182434; }
+.error-journal h2 { margin-top: 0; font-size: 1.2rem; }
+.error-journal__tools, .error-journal__days { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.error-journal__tools label { display: flex; gap: 8px; align-items: center; }
+.error-journal button, .error-journal input { padding: 6px 10px; font: inherit; }
+.error-journal button[aria-pressed="true"] { background: #d7e7fa; border-color: #345a8c; }
+.error-journal__days { max-height: 110px; overflow: auto; }
+.error-journal__sources { padding: 4px 10px; border-left: 3px solid #62738a; background: #eaf0f7; }
+.error-journal [role="alert"] { background: #fff0f0; color: #8b1731; padding: 10px; border: 1px solid currentColor; }
+.error-journal__scroll { overflow-x: auto; }
+.error-journal table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.error-journal th, .error-journal td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid #c9d4e0; }
+.error-journal time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.error-journal pre { max-width: 480px; max-height: 240px; overflow: auto; }

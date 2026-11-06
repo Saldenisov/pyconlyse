@@ -44,6 +44,19 @@ describe('pump-probe V0 request helpers', () => {
     });
   });
 
+  test('offline data load and corrections retain CSRF and do not consume hardware approval', async () => {
+    setHardwareApprovalNonce('e'.repeat(64));
+    for (const path of ['/data/load', '/data/treat']) {
+      const body = JSON.stringify({ path: 'sample.zip', operations: [] });
+      await pumpProbeRequest(path, { method: 'POST', body });
+      expect(global.fetch).toHaveBeenLastCalledWith(`/api/pump-probe-v0${path}`, {
+        method: 'POST', body, credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': 'v0 token' },
+      });
+      expect(getHardwareApprovalNonce()).toBe('e'.repeat(64));
+    }
+  });
+
   test('fetchJsonWithRetry adds CSRF to mutation requests', async () => {
     const body = JSON.stringify({ args: [1, 0] });
     await fetchJsonWithRetry('/api/device/v0/pdu/command/set_channels_states', {

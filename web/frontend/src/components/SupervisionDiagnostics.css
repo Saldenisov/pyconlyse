@@ -1,0 +1,105 @@
+.supervision-diagnostics { color: #183047; margin: 18px 0; }
+.supervision-diagnostics__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.supervision-diagnostics__heading h2 { margin: 0 0 4px; }
+.supervision-diagnostics__heading p { margin: 0; color: #51657b; }
+.supervision-diagnostics__selectors { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.supervision-diagnostics__selectors label { display: flex; gap: 8px; align-items: center; font-size: .9rem; }
+.supervision-diagnostics__selectors select { max-width: 220px; padding: 5px; }
+.supervision-diagnostics__source-note { padding: 9px 12px; border-left: 3px solid #5482ae; background: #edf4fa; margin: 14px 0; font-size: .9rem; }
+.supervision-diagnostics__layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
+.supervision-diagnostics__cameras { min-width: 0; }
+.supervision-diagnostics__cameras .acquisition-video { margin-top: 0; }
+.supervision-diagnostics__cameras--dual .acquisition-video canvas { max-height: 320px; }
+.supervision-diagnostics__panels { min-width: 0; border: 1px solid #b8c9d8; border-radius: 7px; overflow: hidden; }
+.supervision-diagnostics__tabs { display: flex; flex-wrap: wrap; background: #eaf0f5; border-bottom: 1px solid #b8c9d8; }
+.supervision-diagnostics [role=tab] { padding: 8px 11px; border: 0; border-right: 1px solid #b8c9d8; background: transparent; color: #29465f; cursor: pointer; }
+.supervision-diagnostics [role=tab][aria-selected=true] { background: #245690; color: #fff; }
+.supervision-diagnostics__panels > [role=tabpanel] { padding: 16px; }
+.supervision-diagnostics h3 { font-size: 1.05rem; margin: 0 0 10px; }
+.supervision-diagnostics h4 { font-size: .95rem; margin: 14px 0 7px; }
+.supervision-diagnostics__mode { display: flex; gap: 8px; margin: 12px 0; }
+.supervision-diagnostics__mode button { padding: 7px 16px; border: 1px solid #7694b0; border-radius: 4px; color: #244d75; background: #fff; }
+.supervision-diagnostics__mode button[aria-pressed=true] { color: #fff; background: #245690; }
+.supervision-diagnostics__motor-pad { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.supervision-diagnostics button:disabled { opacity: .55; cursor: not-allowed; }
+.supervision-diagnostics__actuator { padding: 12px; border: 1px solid #c7d5e1; margin-bottom: 16px; background: #fafcfe; }
+.supervision-diagnostics__actuator [role=tablist] { display: flex; flex-wrap: wrap; border: 1px solid #b8c9d8; }
+.supervision-diagnostics__actuator [role=tabpanel] { padding-top: 12px; }
+.supervision-diagnostics__actuator p { margin: 8px 0; }
+.supervision-diagnostics__profile { margin: 0 0 16px; }
+.supervision-diagnostics__profile svg { width: 100%; height: auto; background: #0d1926; }
+.supervision-diagnostics__profile polyline { fill: none; stroke: #7fe5ff; stroke-width: 1.2; }
+.supervision-diagnostics__profile polyline.supervision-diagnostics__cy { stroke: #ff9fc9; }
+.supervision-diagnostics__profiles fieldset { display: grid; gap: 9px; margin-top: 12px; }
+.supervision-diagnostics__profiles fieldset label { display: flex; justify-content: space-between; gap: 10px; }
+.supervision-diagnostics__profiles fieldset input { max-width: 100px; }
+.supervision-diagnostics__axis { fill: none; stroke: #6d8ba1; stroke-width: .7; }
+.supervision-diagnostics__profile figcaption, .supervision-diagnostics__profile p { font-size: .85rem; margin: 5px 0; }
+@media(max-width: 1000px) { .supervision-diagnostics__layout { grid-template-columns: 1fr; } }
+
+/* Native workspace density. Explicitly reset site-wide header/h2 styling. */
+.supervision-diagnostics { margin: 0; padding: 0; min-width: 0; color: #183047; background: #d4d7da; font: 11px/1.25 Arial, Helvetica, sans-serif; text-align: left; }
+.supervision-diagnostics p { margin: 3px 0; padding: 0; color: #34495c; background: transparent; font-size: 11px; line-height: 14px; }
+.supervision-diagnostics button, .supervision-diagnostics select, .supervision-diagnostics input { font: inherit; line-height: 15px; border-radius: 2px; }
+.supervision-diagnostics h2, .supervision-diagnostics h3, .supervision-diagnostics h4 { padding: 0; color: #073b68; background: transparent; font-family: Arial, Helvetica, sans-serif; font-weight: 700; letter-spacing: normal; text-transform: none; text-shadow: none; }
+.supervision-diagnostics h2 { margin: 0; font-size: 13px; line-height: 16px; }
+.supervision-diagnostics h3 { margin: 0 0 5px; font-size: 12px; line-height: 15px; }
+.supervision-diagnostics h4 { margin: 7px 0 4px; font-size: 11px; line-height: 14px; }
+.supervision-diagnostics > .supervision-diagnostics__heading {
+  position: static; inset: auto; z-index: auto; width: auto; height: auto; min-height: 0;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 10px;
+  margin: 0 0 4px; padding: 4px 6px; border: 1px solid #8f9aa4; border-radius: 0;
+  color: #073b68; background: linear-gradient(#eef2f5, #c5d1da); box-shadow: inset 1px 1px #fff; text-align: left;
+}
+.supervision-diagnostics__heading > div:first-child { flex: 0 1 auto; }
+.supervision-diagnostics .supervision-diagnostics__heading h2 { margin: 0; padding: 0; color: #073b68; font-size: 13px; line-height: 16px; }
+.supervision-diagnostics .supervision-diagnostics__heading p { margin: 0; font-size: 10px; line-height: 12px; }
+.supervision-diagnostics__selectors { flex: 1 1 480px; justify-content: flex-end; gap: 3px 10px; }
+.supervision-diagnostics__selectors label { gap: 4px; margin: 0; font-size: 11px; line-height: 16px; }
+.supervision-diagnostics__selectors select { width: auto; max-width: 145px; height: 21px; min-height: 0; padding: 1px 3px; color: #183047; background: #f5f6f7; }
+.supervision-diagnostics__selectors input[type=checkbox] { width: 12px; height: 12px; margin: 0 2px 0 0; }
+.supervision-diagnostics .supervision-diagnostics__source-note { margin: 3px 0 5px; padding: 3px 6px; max-height: 34px; overflow: auto; border: 1px solid #acb9c5; border-left: 3px solid #5482ae; border-radius: 0; color: #29465c; background: #e3eaf0; font-size: 10px; line-height: 13px; }
+.supervision-diagnostics__layout { grid-template-columns: minmax(0, 1.06fr) minmax(270px, 1fr); gap: 7px; }
+.supervision-diagnostics__cameras .acquisition-video { margin: 0 0 6px; }
+.supervision-diagnostics__cameras--dual .acquisition-video canvas { max-height: 140px; }
+.supervision-diagnostics__panels { border: 1px solid #8f9aa4; border-radius: 2px; background: #e0e3e6; }
+.supervision-diagnostics__tabs { background: linear-gradient(#ecf0f3, #bdc9d3); border-bottom: 1px solid #8f9aa4; }
+.supervision-diagnostics [role=tab] { min-width: 0; min-height: 23px; height: auto; padding: 3px 6px; border-right-color: #99a8b5; border-radius: 0; font-size: 11px; line-height: 16px; box-shadow: none; }
+.supervision-diagnostics [role=tab][aria-selected=true] { background: #23598a; }
+.supervision-diagnostics__panels > [role=tabpanel] { padding: 6px; max-height: 305px; overflow: auto; }
+.supervision-diagnostics__mode { gap: 5px; margin: 5px 0; }
+.supervision-diagnostics__mode button { min-height: 23px; height: auto; padding: 2px 9px; background: linear-gradient(#fff, #cdd7df); }
+.supervision-diagnostics__mode button[aria-pressed=true] { background: #245690; }
+.supervision-diagnostics__motor-pad { gap: 4px; margin: 5px 0; }
+.supervision-diagnostics__motor-pad button, .supervision-diagnostics__actuator button:disabled { min-height: 22px; padding: 2px 5px; }
+.supervision-diagnostics__actuator { padding: 5px; border-color: #a4b0ba; margin: 0 0 6px; background: #edf0f2; }
+.supervision-diagnostics__actuator [role=tabpanel] { padding-top: 5px; }
+.supervision-diagnostics__actuator p { margin: 4px 0; }
+.supervision-diagnostics__profile { margin: 0 0 7px; padding: 0; }
+.supervision-diagnostics__profile svg { display: block; width: 100%; height: 90px; max-height: 90px; }
+.supervision-diagnostics__evolution svg { height: 70px; max-height: 70px; }
+.supervision-diagnostics__profiles fieldset { gap: 4px; margin-top: 6px; padding: 4px; }
+.supervision-diagnostics__profiles fieldset legend { width: auto; margin: 0; font-size: 11px; line-height: 15px; }
+.supervision-diagnostics__profiles fieldset label { gap: 5px; margin: 0; }
+.supervision-diagnostics__profiles fieldset input { max-width: 85px; height: 21px; padding: 1px 3px; }
+.supervision-diagnostics .supervision-diagnostics__profile figcaption, .supervision-diagnostics .supervision-diagnostics__profile p { font-size: 10px; line-height: 13px; margin: 3px 0; }
+.supervision-diagnostics small { font-size: 10px; line-height: 13px; }
+.supervision-diagnostics .acquisition-video__status--current { color: #155724; background: #d4edda; }
+.supervision-diagnostics .acquisition-video__status--stale { color: #7a4800; background: #fff3cd; }
+.supervision-diagnostics .acquisition-video__status--unavailable { color: #721c24; background: #f4dddd; }
+.supervision-diagnostics .acquisition-video__status--waiting { color: #383d41; background: #d4d9de; }
+.supervision-diagnostics__native-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 9px; margin-bottom: 4px; }
+.supervision-diagnostics__native-state { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 4px; align-items: center; min-width: 0; font-size: 10px; }
+.supervision-diagnostics__unknown-lamp { display: block; width: 8px; height: 8px; border: 1px solid #758493; border-radius: 1px; background: #bdc7d0; }
+.supervision-diagnostics__native-state output { color: #596b7b; font-size: 10px; }
+.supervision-diagnostics__native-readout { display: grid; grid-template-columns: minmax(0, 1fr) 38px auto; align-items: center; gap: 4px; min-width: 0; font-size: 10px; }
+.supervision-diagnostics__native-readout output { padding: 1px 4px; border: 1px solid #a0abb4; background: #f3f5f7; text-align: right; color: #596b7b; }
+.supervision-diagnostics__native-input { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; margin: 0; min-width: 0; font-size: 10px; }
+.supervision-diagnostics__native-input select { width: 100%; min-width: 0; height: 21px; padding: 1px 3px; color: #40556a; background: #edf0f2; }
+.supervision-diagnostics__native-input input { width: 60px; min-width: 0; height: 21px; padding: 1px 3px; color: #40556a; background: #edf0f2; }
+.supervision-diagnostics__native-input small, .supervision-diagnostics__native-readout small { font-size: 9px; }
+@media(max-width: 760px) {
+  .supervision-diagnostics__layout { grid-template-columns: 1fr; }
+  .supervision-diagnostics__selectors { flex-basis: 100%; justify-content: flex-start; }
+  .supervision-diagnostics__panels > [role=tabpanel] { max-height: none; }
+}

@@ -1,0 +1,70 @@
+.electronics-page { min-height: 100vh; padding: 24px clamp(16px, 3vw, 42px) 56px; color: #e8edf4; background: radial-gradient(circle at 12% 0%, #24445a 0, transparent 34%), #20262f; }
+.electronics-page button, .electronics-page input, .electronics-page select { font: inherit; }
+.electronics-page button { padding: 8px 12px; border: 1px solid #647386; border-radius: 6px; color: #eef3f8; background: #354150; cursor: pointer; }
+.electronics-page button:hover:not(:disabled) { border-color: #62b6e9; background: #405167; }
+.electronics-page button.primary { color: #18202a; border-color: #e0b95f; background: #e0b95f; font-weight: 700; }
+.electronics-page button:disabled { opacity: .42; cursor: not-allowed; }
+.electronics-page-header { max-width: 1320px; margin: 0 auto 18px; display: flex; justify-content: space-between; gap: 18px; align-items: end; }
+.electronics-page-header h1 { margin: 2px 0 5px; color: #f0c96b; font-size: clamp(1.8rem, 3vw, 2.5rem); }
+.electronics-page-header p { margin: 0; color: #b8c3cf; }
+.electronics-eyebrow, .electronics-kind { color: #67c3d5 !important; text-transform: uppercase; letter-spacing: .1em; font-size: .76rem; font-weight: 700; }
+.electronics-back-link { color: #8ed9e8; white-space: nowrap; }
+.electronics-selector, .electronics-controller { max-width: 1320px; margin: 0 auto 18px; border: 1px solid #4d5b6a; border-radius: 10px; background: rgba(47, 57, 69, .96); box-shadow: 0 12px 32px rgba(0,0,0,.22); }
+.electronics-selector { padding: 16px; }
+.electronics-selector h2 { margin: 0 0 4px; color: #f0c96b; font-size: 1.15rem; }
+.electronics-selector p { margin: 0; color: #aeb9c6; }
+.electronics-selector-heading-row { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.electronics-selector-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.electronics-device-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 9px; margin-top: 14px; }
+.electronics-device-option { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #566575; border-radius: 7px; background: #29323d; cursor: pointer; }
+.electronics-device-option span { display: grid; gap: 2px; }
+.electronics-device-option small { color: #9eabb9; overflow-wrap: anywhere; }
+.electronics-controller { padding: 18px; }
+.electronics-controller-header { display: flex; justify-content: space-between; gap: 16px; align-items: start; }
+.electronics-controller-header h2 { margin: 3px 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+.electronics-controller-header p { margin: 0; }
+.electronics-idn { color: #aeb9c6; font-family: Consolas, monospace; font-size: .82rem; }
+.electronics-state { min-width: 76px; padding: 6px 10px; border-radius: 999px; text-align: center; font-weight: 800; font-size: .78rem; }
+.electronics-state.good { color: #a7f2c5; background: #174d35; }
+.electronics-state.bad { color: #ffc0c0; background: #682b32; }
+.electronics-state.idle { color: #ffe29b; background: #5a4a23; }
+.electronics-lifecycle { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 15px; }
+.electronics-lifecycle div { display: grid; gap: 3px; padding: 9px 11px; background: #28323d; border-radius: 6px; }
+.electronics-lifecycle span { color: #9facba; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.electronics-lifecycle strong { font-size: .88rem; }
+.power-on { color: #8fe1ad; } .power-off { color: #ff9999; }
+.electronics-lifecycle-note, .electronics-passive-note { margin: 10px 0 0; color: #aeb9c6; font-size: .85rem; }
+.electronics-passive-note { padding: 10px; border-left: 3px solid #e0b95f; background: #3b382c; }
+.electronics-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+.electronics-busy { color: #8ed9e8; }
+.electronics-alert { max-width: 1320px; margin: 10px auto; padding: 10px 12px; border-radius: 6px; background: #344250; }
+.electronics-alert.error { color: #ffd0d0; border: 1px solid #994852; background: #552e34; }
+.electronics-alert.success { color: #c4f2d5; border: 1px solid #3d7957; background: #294737; }
+.electronics-alert.warning { color: #ffe1a1; border: 1px solid #8a6f33; background: #51452c; }
+.electronics-alert a { color: #9ee5f1; }
+.electronics-control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.electronics-panel { padding: 14px; border: 1px solid #536172; border-radius: 8px; background: #28323d; }
+.electronics-panel h3 { margin: 0 0 12px; color: #efc76b; }
+.electronics-toggle-row { display: grid; grid-template-columns: minmax(120px, 1fr) auto auto; align-items: center; gap: 9px; padding: 8px 0; border-top: 1px solid #3f4b58; }
+.electronics-field { display: grid; grid-template-columns: minmax(120px, .9fr) minmax(100px, 1fr) minmax(110px, .8fr) auto; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid #3f4b58; }
+.electronics-field input, .electronics-field select, .electronics-delay-form input, .electronics-delay-form select { min-width: 0; padding: 7px 8px; border: 1px solid #5c6b7b; border-radius: 5px; color: #f3f6fa; background: #1f2730; }
+.electronics-readback { color: #9fabb8; font-size: .77rem; }
+.electronics-delay-form { display: grid; grid-template-columns: .65fr .8fr 1fr auto; gap: 8px; align-items: end; }
+.electronics-delay-form label { display: grid; gap: 5px; color: #aeb9c6; font-size: .8rem; }
+.electronics-delay-readbacks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+.electronics-delay-readbacks div { display: flex; justify-content: space-between; gap: 8px; padding: 7px; border-radius: 4px; background: #202933; font-family: Consolas, monospace; font-size: .78rem; }
+.electronics-upgrade-note { color: #d7bd7e; font-size: .8rem; }
+@media (max-width: 900px) {
+  .electronics-control-grid { grid-template-columns: 1fr; }
+  .electronics-field { grid-template-columns: minmax(110px, 1fr) 1fr auto; }
+  .electronics-readback { grid-column: 2 / 4; }
+  .electronics-delay-form { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 620px) {
+  .electronics-page-header, .electronics-selector-heading-row { align-items: stretch; flex-direction: column; }
+  .electronics-selector-actions { justify-content: flex-start; }
+  .electronics-field { grid-template-columns: 1fr auto; }
+  .electronics-field label, .electronics-readback { grid-column: 1 / 3; }
+  .electronics-delay-form { grid-template-columns: 1fr; }
+  .electronics-delay-readbacks { grid-template-columns: repeat(2, 1fr); }
+}

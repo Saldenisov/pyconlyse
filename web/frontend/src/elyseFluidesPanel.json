@@ -1,0 +1,236 @@
+{
+  "source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "hardware_commands": false,
+  "fields": {
+    "0": {
+      "control_uid": "22254",
+      "label": "Section Défauts",
+      "false_color": "#FF3333",
+      "true_color": "#00C82D",
+      "false_text": "SECTION\nEN DEFAUT",
+      "true_text": "SECTION\nAUCUN DEFAUT"
+    },
+    "1": {
+      "control_uid": "20137",
+      "label": "Section débimètre",
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "false_text": "SECTION\nDEBIMETRE",
+      "true_text": "SECTION\nDEBIMETRE"
+    },
+    "2": {
+      "control_uid": "22266",
+      "label": "VANNE SECTION",
+      "false_color": "#EE9A28",
+      "true_color": "#EE9A28",
+      "false_text": "VANNE SECTION\nFERMEE",
+      "true_text": "VANNE SECTION\nFERMEE"
+    },
+    "3": {
+      "control_uid": "47740",
+      "label": "Graphe Fluides"
+    },
+    "4": {
+      "control_uid": "11779",
+      "label": "T° CANON:",
+      "saved_format": "%.1g"
+    },
+    "5": {
+      "control_uid": "11724",
+      "label": "Lec T° CANON:",
+      "saved_format": "%.1g"
+    },
+    "6": {
+      "control_uid": "70575",
+      "label": "> Canon",
+      "false_color": "#BCBCBC",
+      "true_color": "#0041DC",
+      "false_text": ">",
+      "true_text": ">"
+    },
+    "7": {
+      "control_uid": "70599",
+      "label": "< Canon",
+      "false_color": "#BCBCBC",
+      "true_color": "#0041DC",
+      "false_text": "<",
+      "true_text": "<"
+    },
+    "8": {
+      "control_uid": "19132",
+      "label": "Arrêt régulation",
+      "false_color": "#BCBCBC",
+      "true_color": "#3399FF",
+      "false_text": "ARRET",
+      "true_text": "EN COURS"
+    },
+    "9": {
+      "control_uid": "14447",
+      "label": "Marche régulation",
+      "false_color": "#BCBCBC",
+      "true_color": "#3399FF",
+      "false_text": "MARCHE",
+      "true_text": "EN COURS"
+    },
+    "10": {
+      "control_uid": "55673",
+      "label": "VANNE CANON",
+      "false_color": "#EE9A28",
+      "true_color": "#EE9A28",
+      "false_text": "VANNE CANON\nFERMEE",
+      "true_text": "VANNE CANON\nFERMEE"
+    },
+    "11": {
+      "control_uid": "82",
+      "label": "Canon Défauts",
+      "false_color": "#FF3333",
+      "true_color": "#00C82D",
+      "false_text": "CANON\nEN DEFAUT",
+      "true_text": "CANON\nAUCUN DEFAUT"
+    },
+    "12": {
+      "control_uid": "23302",
+      "label": "Canon débimètre",
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "false_text": "CANON\nDEBIMETRE",
+      "true_text": "CANON\nDEBIMETRE"
+    },
+    "13": {
+      "control_uid": "20379",
+      "label": "Résistivité",
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "false_text": "RESISTIVITE",
+      "true_text": "RESISTIVITE"
+    },
+    "14": {
+      "control_uid": "26514",
+      "label": "Canon Pressostat",
+      "false_color": "#FF3333",
+      "true_color": "#00C82D",
+      "false_text": "CANON\nPRESSOSTAT",
+      "true_text": "CANON\nPRESSOSTAT"
+    },
+    "15": {
+      "control_uid": "416",
+      "label": "Canon 220V",
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "false_text": "CANON\nSecteur 220V",
+      "true_text": "CANON\nSecteur 220V"
+    },
+    "16": {
+      "control_uid": "36931",
+      "label": "Eau Foc défauts",
+      "false_color": "#FF3333",
+      "true_color": "#00C82D",
+      "false_text": "EAU FOCALE\nEN DEFAUT",
+      "true_text": "EAU FOCALE\nAUCUN DEFAUT"
+    },
+    "17": {
+      "control_uid": "22242",
+      "label": "Section 220V",
+      "false_color": "#00C82D",
+      "true_color": "#FF3333",
+      "false_text": "SECTION\nSecteur 220V",
+      "true_text": "SECTION\nSecteur 220V"
+    },
+    "18": {
+      "control_uid": "14266",
+      "label": "Section Pressostat",
+      "false_color": "#FF3333",
+      "true_color": "#00C82D",
+      "false_text": "SECTION\nPRESSOSTAT",
+      "true_text": "SECTION\nPRESSOSTAT"
+    },
+    "19": {
+      "control_uid": "82969",
+      "label": "> Section",
+      "false_color": "#BCBCBC",
+      "true_color": "#0041DC",
+      "false_text": ">",
+      "true_text": ">"
+    },
+    "20": {
+      "control_uid": "36235",
+      "label": "< Section",
+      "false_color": "#BCBCBC",
+      "true_color": "#0041DC",
+      "false_text": "<",
+      "true_text": "<"
+    },
+    "21": {
+      "control_uid": "53235",
+      "label": "T° SECTION:",
+      "saved_format": "%.1g"
+    },
+    "22": {
+      "control_uid": "53243",
+      "label": "Lec T° SECTION:",
+      "saved_format": "%.1g"
+    }
+  },
+  "valves": {
+    "CANON": {
+      "bank": "C3_IN_DIO96",
+      "indices": [
+        2,
+        3
+      ],
+      "encoding": "closed_bit + 2 * open_bit",
+      "case_uid": "59422",
+      "states": [
+        {
+          "color": "#00C82D",
+          "text": "VANNE CANON\nREGULATION"
+        },
+        {
+          "color": "#EE9A28",
+          "text": "VANNE CANON\nFERMEE"
+        },
+        {
+          "color": "#EE9A28",
+          "text": "VANNE CANON\nOUVERTE"
+        },
+        {
+          "color": "#FF3333",
+          "text": "VANNE CANON\nEN DEFAUT"
+        }
+      ]
+    },
+    "SECTION": {
+      "bank": "C3_IN_DIO96",
+      "indices": [
+        8,
+        9
+      ],
+      "encoding": "closed_bit + 2 * open_bit",
+      "case_uid": "51860",
+      "states": [
+        {
+          "color": "#00C82D",
+          "text": "VANNE SECTION\nREGULATION"
+        },
+        {
+          "color": "#EE9A28",
+          "text": "VANNE SECTION\nFERMEE"
+        },
+        {
+          "color": "#EE9A28",
+          "text": "VANNE SECTION\nOUVERTE"
+        },
+        {
+          "color": "#FF3333",
+          "text": "VANNE SECTION\nEN DEFAUT"
+        }
+      ]
+    }
+  },
+  "unavailable_live_fields": [
+    4,
+    16,
+    21
+  ],
+  "limits": "Local SUP setpoints and Eau Foc display not observed through ACQ telemetry"
+}

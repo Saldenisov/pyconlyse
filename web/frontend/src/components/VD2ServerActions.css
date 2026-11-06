@@ -1,0 +1,27 @@
+.vd2-restartable { position: relative; }
+.vd2-restart-hint { display: block; opacity: 0.72; margin-top: 0.8rem; }
+.vd2-server-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 220px;
+  max-width: min(320px, 100%);
+  padding: 0.3rem;
+  border: 1px solid #9aa9bc;
+  border-radius: 0.4rem;
+  background: #17212f;
+  box-shadow: 0 8px 24px #0008;
+}
+.vd2-server-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.vd2-server-menu button:hover { background: #354b66; }
+.vd2-restart-message { overflow-wrap: anywhere; }
+.vd2-restart-message button { margin-left: 0.4rem; }

@@ -1,0 +1,36 @@
+.modulator-panel { margin: 12px 0 18px; background: #b3b3b3; color: #001b77; border: 1px solid #8c8c8c; box-shadow: inset 1px 1px #ececec; padding: 12px; }
+.modulator-panel__sheet { display: grid; grid-template-columns: 1.13fr 1fr; gap: 20px; }
+.modulator-panel__half { min-width: 0; }
+.modulator-panel__half h3 { font-size: 14px; margin: 0 0 15px; text-align: center; letter-spacing: .3px; }
+.modulator-panel__half--kly { border-left: 1px solid #8a8a8a; padding-left: 18px; }
+.modulator-panel__mod-layout { display: grid; grid-template-columns: minmax(175px, 1.3fr) minmax(82px, .8fr) minmax(140px, 1.15fr); align-items: center; gap: 12px; }
+.modulator-panel__stages { border: 0; padding: 0; margin: 0; min-width: 0; }
+.modulator-panel__stages legend { font-size: 10px; margin-bottom: 8px; color: #3b4b61; }
+.modulator-panel__stage { display: grid; grid-template-columns: 10px 29px minmax(75px, 1fr) 29px; align-items: center; gap: 7px; margin-bottom: 10px; }
+.modulator-panel__stage strong { font-size: 11px; text-align: center; }
+.modulator-panel__lamp { display: block; width: 8px; height: 19px; border: 1px solid #707070; box-shadow: inset 1px 1px 2px #ffffff88, inset -1px -1px 2px #00000066; }
+.modulator-panel__command { color: #152c51; border: 1px solid #5d6e82; border-radius: 0; background: linear-gradient(#e7edf8, #a1b3d1); box-shadow: inset 1px 1px #f6f8fc; min-height: 24px; font-size: 11px; padding: 2px 6px; opacity: 1; cursor: not-allowed; }
+.modulator-panel__stages > .modulator-panel__command { margin-left: 20px; width: calc(100% - 20px); }
+.modulator-panel__indicator { display: flex; justify-content: center; align-items: center; min-height: 36px; color: #050505; text-align: center; white-space: pre-line; padding: 3px 4px; font-size: 10px; font-weight: 500; line-height: 1.12; border: 1px solid #787878; box-shadow: inset 1px 1px 3px #ffffff55, inset -1px -1px 3px #00000055; }
+.modulator-panel__measurement { display: grid; grid-template-columns: minmax(76px, 1.1fr) minmax(70px, .95fr); min-height: 35px; }
+.modulator-panel__measurement .modulator-panel__indicator { min-height: 35px; }
+.modulator-panel__number { background: #c6c6c6; color: #001f9f; border: 1px solid #8b8b8b; display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 3px 5px; }
+.modulator-panel__number output { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.modulator-panel__number > span { font-size: 10px; min-width: 16px; }
+.modulator-panel__measurement--unknown .modulator-panel__number { color: #475362; background: #dadfe3; }
+.modulator-panel__kly-layout { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; align-items: center; }
+.modulator-panel__water { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.modulator-panel__sources { margin-top: 14px; background: #dce3ea; padding: 7px; color: #273e58; font-size: 11px; overflow: auto; }
+.modulator-panel__sources summary { cursor: pointer; }
+.modulator-panel__sources table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+.modulator-panel__sources th, .modulator-panel__sources td { border: 1px solid #a2afbc; padding: 4px; text-align: left; }
+@media (max-width: 1100px) {
+  .modulator-panel__sheet { grid-template-columns: 1fr; gap: 22px; }
+  .modulator-panel__half--kly { border-left: 0; border-top: 1px solid #888; padding: 15px 0 0; }
+  .modulator-panel__mod-layout { grid-template-columns: minmax(180px, 1.2fr) minmax(105px, .8fr) minmax(170px, 1.1fr); }
+  .modulator-panel__kly-layout { grid-template-columns: 1.1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .modulator-panel { overflow-x: auto; }
+  .modulator-panel__sheet { min-width: 490px; }
+}

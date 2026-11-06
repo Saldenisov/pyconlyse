@@ -1,0 +1,16 @@
+.skana-panel { padding: 12px; color: #172338; }
+.skana-panel h2 { margin-top: 0; }
+.skana-source, .skana-options { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; padding: 14px; border: 1px solid #bdcadb; }
+.skana-panel label { display: flex; gap: 6px; align-items: center; }
+.skana-panel input:not([type="checkbox"]):not([type="file"]), .skana-panel select { max-width: 260px; padding: 6px; }
+.skana-panel input[type="number"] { width: 110px; }
+.skana-panel .skana-wide { flex: 1 1 100%; }
+.skana-panel textarea { width: 100%; min-width: 230px; font-family: Consolas, monospace; }
+.skana-panel button { padding: 7px 12px; cursor: pointer; }
+.skana-panel button:disabled { cursor: default; }
+.skana-panel .skana-warning { padding: 12px; color: #80520d; background: #fff0cd; border: 1px solid #dfb95d; }
+.skana-plots { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 12px; }
+.skana-plot { min-width: 0; overflow: hidden; border: 1px solid #d6deea; background: white; }
+.skana-panel pre { overflow: auto; max-height: 280px; }
+.skana-job { display: flex; gap: 15px; align-items: center; }
+@media (max-width: 600px) { .skana-panel label { flex-wrap: wrap; } .skana-plots { grid-template-columns: minmax(0, 1fr); } }

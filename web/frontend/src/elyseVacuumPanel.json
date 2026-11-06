@@ -1,0 +1,119 @@
+{
+  "source_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "hardware_commands": false,
+  "layout_basis": "Native Supervision Vide screen observed 2026-10-16",
+  "layout_is_physical_length_scale": false,
+  "canvas_width": 900,
+  "pressure_width": 158,
+  "pressures": [
+    {
+      "field": 3,
+      "control_uid": "32481",
+      "x": 0,
+      "y": 5
+    },
+    {
+      "field": 5,
+      "control_uid": "35582",
+      "x": 0,
+      "y": 75
+    },
+    {
+      "field": 1,
+      "control_uid": "28683",
+      "x": 0,
+      "y": 145
+    },
+    {
+      "field": 14,
+      "control_uid": "84017",
+      "x": 164,
+      "y": 55
+    },
+    {
+      "field": 7,
+      "control_uid": "62002",
+      "x": 164,
+      "y": 123
+    },
+    {
+      "field": 12,
+      "control_uid": "83992",
+      "x": 329,
+      "y": 87
+    },
+    {
+      "field": 9,
+      "control_uid": "83942",
+      "x": 493,
+      "y": 87
+    },
+    {
+      "field": 17,
+      "control_uid": "69689",
+      "x": 658,
+      "y": 55
+    }
+  ],
+  "valves": [
+    {
+      "name": "CATHODE",
+      "bank": "C5_IN_DIO96",
+      "indices": [
+        15,
+        14
+      ],
+      "states": [
+        {
+          "color": "#FF3333",
+          "text": "VANNE CATHODE\nENTROUVERTE"
+        },
+        {
+          "color": "#00C82D",
+          "text": "VANNE CATHODE\nOUVERTE"
+        },
+        {
+          "color": "#FF3333",
+          "text": "VANNE CATHODE\nFERMEE"
+        },
+        {
+          "color": "#FF3333",
+          "text": "VANNE CATHODE\nEN DEFAUT"
+        }
+      ],
+      "x": 562,
+      "y": 0,
+      "case_uid": "59063"
+    },
+    {
+      "name": "INJECTION",
+      "bank": "C5_IN_DIO96",
+      "indices": [
+        17,
+        16
+      ],
+      "states": [
+        {
+          "color": "#FF3333",
+          "text": "VANNE INJECTION\nENTROUVERTE"
+        },
+        {
+          "color": "#00C82D",
+          "text": "VANNE INJECTION\nOUVERTE"
+        },
+        {
+          "color": "#FF3333",
+          "text": "VANNE INJECTION\nFERMEE"
+        },
+        {
+          "color": "#FF3333",
+          "text": "VANNE INJECTION\nEN DEFAUT"
+        }
+      ],
+      "x": 808,
+      "y": 3,
+      "case_uid": "55405"
+    }
+  ],
+  "pressure_alarm_inputs_qualified": false
+}

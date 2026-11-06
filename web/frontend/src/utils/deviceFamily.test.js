@@ -11,6 +11,7 @@ describe('device family classification contracts', () => {
       { key: 'itest_psu', label: 'iTest PSU' },
       { key: 'netio', label: 'NETIO PDU' },
       { key: 'laser_pointing', label: 'Laser Pointing' },
+      { key: 'electronics', label: 'Electronics' },
       { key: 'camera', label: 'Cameras' },
       { key: 'motor', label: 'Motors' },
       { key: 'generic', label: 'Generic Tango' },
@@ -24,6 +25,8 @@ describe('device family classification contracts', () => {
     expect(resolveDeviceFamily('iTest PSU controller')).toBe('itest_psu');
     expect(resolveDeviceFamily('pdu-main')).toBe('netio');
     expect(resolveDeviceFamily('manip/v0/laserpointing-cam1')).toBe('laser_pointing');
+    expect(resolveDeviceFamily('manip/sync/DG645')).toBe('electronics');
+    expect(resolveDeviceFamily('keysight waveform generator')).toBe('electronics');
     expect(resolveDeviceFamily('basler acA')).toBe('camera');
     expect(resolveDeviceFamily('standa stage')).toBe('motor');
     expect(resolveDeviceFamily('custom/tango/device')).toBe('generic');
@@ -36,6 +39,7 @@ describe('device family classification contracts', () => {
     ).toBe('itest_psu');
     expect(resolveDeviceFamily({ name: 'pdu-1', class: 'NetioDevice' })).toBe('netio');
     expect(resolveDeviceFamily({ name: 'controller', class: 'DS_LaserPointing' })).toBe('laser_pointing');
+    expect(resolveDeviceFamily({ name: 'controller', class: 'DS_DG645' })).toBe('electronics');
     expect(resolveDeviceFamily({ name: 'axis', class: 'MotorController' })).toBe('motor');
     expect(resolveDeviceFamily(null)).toBe('generic');
   });

@@ -1,0 +1,9 @@
+.server-session-backdrop { position:fixed; inset:0; z-index:1200; background:#000a; display:grid; place-items:center; padding:16px; }
+.server-session-backdrop > section { width:min(600px,90vw); max-height:80vh; overflow:auto; padding:12px; border:1px solid #697785; border-radius:7px; background:#182129; color:#edf2f5; font-size:12px; }
+.server-session-backdrop header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.server-session-backdrop p { color:#bac9d5; }
+.server-session-backdrop [role=alert] { color:#ffb6ad; }
+.server-session-list { display:grid; gap:6px; }
+.server-session-list > button { display:grid; gap:4px; padding:9px; width:100%; text-align:left; background:#263440; color:#eef3fa; border:1px solid #617689; border-radius:4px; }
+.server-session-list span { overflow-wrap:anywhere; }
+.server-session-list small { color:#b1c5d6; }

@@ -419,7 +419,8 @@ function activeDelayPoints(settings) {
   return settings.delayPointsPs?.length ? settings.delayPointsPs : generatedDelayPoints(settings);
 }
 
-function parseDelayPointsText(text) {
+function parseSamplePositionsText(text) {
+  // Sample-marker editing keeps its existing permissive, partial-input contract.
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -429,6 +430,48 @@ function parseDelayPointsText(text) {
       return match ? Number(match[0].replace(',', '.')) : NaN;
     })
     .filter((value) => Number.isFinite(value));
+}
+
+function parseDelayPointsText(text, realZeroPs = 0) {
+  const numberToken = /^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?$/;
+  const zeroToken = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+  if ((typeof realZeroPs !== 'number' && typeof realZeroPs !== 'string')
+      || (typeof realZeroPs === 'string' && !zeroToken.test(realZeroPs.trim()))
+      || !Number.isFinite(Number(realZeroPs))) {
+    throw new Error('Real zero must be finite before importing delays.');
+  }
+  const realZero = Number(realZeroPs);
+  const points = [];
+  const pointLines = [];
+  text.split(/\r\n?|\n/).forEach((rawLine, index) => {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) return;
+    const columns = line.split(/\s+/);
+    if (!columns.every((column) => numberToken.test(column))) {
+      throw new Error(`Delay TXT line ${index + 1} contains an invalid number.`);
+    }
+    const value = Number(columns[0].replace(',', '.'));
+    if (!Number.isFinite(value)) {
+      throw new Error(`Delay TXT line ${index + 1} must contain a finite delay.`);
+    }
+    points.push(value);
+    pointLines.push(index + 1);
+  });
+  if (points.length < 2 || points.length > 400) {
+    throw new Error('Delay TXT must contain 2..400 numeric rows.');
+  }
+  if (!Number.isFinite(points[1] - points[0])
+      || !Number.isFinite(points[points.length - 1] - points[0])) {
+    throw new Error('Delay TXT spacing and span must remain finite.');
+  }
+  // Match the numeric preflight used by configure's existing V0 preview.
+  points.forEach((value, index) => {
+    if (!Number.isFinite(value + realZero)
+        || !Number.isFinite(0.18 * (1 - Math.exp(-(value + 30) / 42)))) {
+      throw new Error(`Delay TXT line ${pointLines[index]} exceeds the supported numeric range.`);
+    }
+  });
+  return points;
 }
 
 function settingsToApi(settings) {
@@ -459,7 +502,7 @@ function hardwareConfigToApi(hardwareConfig, deviceConfig) {
     sample_stage_device_name: deviceConfig.sampleStage.backendDeviceName || 'manip/V0/DLs_V0',
     andor_device: deviceConfig.spectrometer.tangoDevice || 'manip/CR/ANDOR_CCD1',
     dg645_device: 'manip/sync/DG645',
-    daqmx_device: 'control/DAQ/DAQMX_1',
+    daqmx_device: 'control/DAQ/TRANCON-DAQ',
     daqmx_counter_channel: 'ELYSE Pulse Counter',
   };
 }
@@ -480,6 +523,6 @@ export {
   nearestIndex, rangeAround, formatStageMm, formatBytes, displayPathTail, buildSyntheticRun,
   makeCurrentSpectra, DEFAULT_SETTINGS, DEFAULT_HARDWARE_CONFIG, DEFAULT_DEVICE_CONFIG,
   NETIO_POWER_CHANNELS, HARDWARE_TANGO_SERVERS, devicePath, normalizeNetioOutputs,
-  generatedDelayPoints, activeDelayPoints, parseDelayPointsText, settingsToApi,
+  generatedDelayPoints, activeDelayPoints, parseDelayPointsText, parseSamplePositionsText, settingsToApi,
   hardwareConfigToApi, hardwareConfigFromApi,
 };

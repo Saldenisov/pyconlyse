@@ -296,16 +296,133 @@
   background-color: #0056b3;
 }
 
+.itest-current-editor .slot-control {
+  align-items: stretch;
+  height: 24px;
+  margin-bottom: 2px;
+}
+
+.itest-current-editor .current-input {
+  width: 0;
+  min-width: 0;
+  padding-block: 0;
+  font-size: 12px;
+  appearance: textfield;
+}
+
+.itest-current-editor .btn-set-current {
+  min-height: 0;
+  padding-block: 0;
+  font-size: 12px;
+}
+
+.itest-current-editor .current-input::-webkit-inner-spin-button,
+.itest-current-editor .current-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.itest-current-arrows {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.itest-current-arrows button,
+.itest-step-menu button {
+  color: #233c57;
+  background: #f4f8fc;
+  border: 1px solid #bac9d8;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.itest-current-editor .itest-current-arrows button {
+  display: grid;
+  place-content: center;
+  min-height: 0;
+  min-width: 22px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.itest-current-arrows button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.itest-current-editor .slot-limits .itest-step-trigger {
+  min-height: 0;
+  padding: 0 2px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.itest-step-menu {
+  position: absolute;
+  z-index: 10;
+  inset-inline-end: 0;
+  top: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid #bac9d8;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 3px 9px #0003;
+}
+
+.itest-step-menu button {
+  padding: 4px 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.itest-current-arrows button:not(:disabled):hover,
+.itest-step-menu button:hover,
+.itest-step-menu button[aria-pressed="true"] {
+  background: #dceaff;
+}
+
+.itest-client.is-compact .itest-current-editor .slot-control {
+  gap: 4px;
+}
+
+.itest-client.is-compact .itest-current-editor .current-input {
+  padding-inline: 4px;
+}
+
+.itest-client.is-compact .itest-current-editor .btn-set-current {
+  padding-inline: 7px;
+}
+
 .slot-limits {
-  text-align: center;
-  padding-top: 6px;
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  padding-top: 2px;
   border-top: 1px solid #e9ecef;
+  color: #6c757d;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .slot-limits small {
-  color: #6c757d;
-  font-size: 11px;
-  font-style: italic;
+  font-size: inherit;
+}
+
+.itest-client.is-compact .slot-limits {
+  color: #bdcad8;
+  font-size: 9px;
 }
 
 

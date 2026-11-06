@@ -526,7 +526,8 @@
   border-color: #4ade80;
 }
 
-.treatment-queue-jobs li.is-failed {
+.treatment-queue-jobs li.is-failed,
+.treatment-queue-jobs li.is-interrupted {
   border-color: #f87171;
 }
 
@@ -1263,4 +1264,221 @@
 .treatment-layout-classic .horizontal-layout.is-v0-profile {
   grid-template-columns: minmax(0, 1fr) !important;
   grid-template-areas: "source";
+}
+
+.layout-mode-studio .treatment-preview-workspace { padding: 8px; }
+.layout-mode-studio .workspace-section-heading { margin-bottom: 5px; }
+.layout-mode-studio .workspace-section-heading h2 { font-size: 12px; }
+.layout-mode-studio .graph-window { margin-top: 8px; }
+
+/* Routine treatment follows the numbered workflow; tools keep their own views. */
+.treatment-layout-studio .bottom-section { min-height: 0; margin: 0; padding: 10px; overflow: visible; }
+.treatment-layout-studio .treatment-preview-workspace { margin-top: 10px; }
+.treatment-layout-studio .horizontal-layout:not(.is-v0-profile) {
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr) !important;
+  grid-template-areas: "source roles" "source processing";
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  width: 100%; height: auto; min-height: 0;
+}
+.treatment-layout-studio .column-resizer { display: none; }
+.treatment-layout-studio .files-folder { max-height: 480px; min-height: 200px; }
+.treatment-layout-studio .zone { padding: 9px; }
+.treatment-layout-studio .zone-heading h3,
+.treatment-layout-studio .parameters-zone-header h3,
+.treatment-step h3 { margin: 0; font-size: 13px; color: #e5e7eb; }
+.treatment-layout-studio .parameters-zone-header span { color: #a8b5c5; font-size: 11px; }
+.treatment-layout-studio .parameters-zone .parameter-field-wide { grid-template-columns: 105px minmax(0, 1fr); align-items: center; }
+.treatment-layout-studio .parameters-zone .parameter-field-wide input { min-height: 27px; font-size: 12px; }
+.treatment-selected-folder { display: block; color: #d7e7f9; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.treatment-layout-studio .folder-selection-header { display: flex; flex-wrap: wrap; gap: 5px; }
+.treatment-layout-studio button { min-height: 27px; font-size: 12px; padding: 3px 8px; }
+.treatment-step { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 3px 6px; align-items: center; padding: 7px 0; border-bottom: 1px solid #526170; }
+.treatment-step h3 { grid-row: 1 / 3; text-align: left; }
+.treatment-step button { width: auto; justify-self: start; }
+.treatment-step > span { grid-column: 2; text-align: left; font-size: 11px; color: #bdc9d8; }
+.treatment-assigned-inputs { font-size: 12px; padding-bottom: 6px; }
+.treatment-advanced-settings, .treatment-source-settings, .treatment-batch-options { font-size: 12px; margin-top: 6px; }
+.treatment-advanced-settings summary, .treatment-source-settings summary,
+.treatment-batch-options summary, .treatment-assigned-inputs summary { cursor: pointer; padding: 4px 0; color: #cbd5e1; }
+.treatment-settings-fields { display: grid; gap: 7px; padding-top: 7px; }
+.treatment-layout-studio .treatment-queue { padding: 6px 0 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.treatment-layout-studio .treatment-queue-heading { margin-bottom: 0; }
+.treatment-layout-studio .treatment-queue h4 { font-size: 12px; }
+.treatment-layout-studio .treatment-queue-jobs { max-height: 180px; overflow: auto; }
+.treatment-layout-studio .treatment-queue-jobs li { padding: 6px; }
+.treatment-job-details { margin-top: 4px; font-size: 11px; }
+.treatment-job-details summary { cursor: pointer; color: #bdc9d8; }
+.treatment-more-tools { margin-left: auto; font-size: 12px; }
+.treatment-more-tools > summary { padding: 6px 8px; cursor: pointer; color: #cbd5e1; }
+.treatment-more-tools > div { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 5px; }
+.treatment-layout-studio .tabs { align-items: flex-start; overflow: visible; flex-wrap: wrap; }
+.treatment-more-tools .secondary-tab { margin-left: 0; }
+.treatment-layout-studio .cleaning-controls { gap: 6px; }
+.treatment-layout-studio .cleaning-actions { display: flex; flex-wrap: wrap; }
+.treatment-layout-studio .cleaning-actions .treatment-advanced-settings { width: 100%; }
+.treatment-layout-studio .top-section-container.is-empty { flex-basis: auto; margin: 0; }
+.top-section-container.is-empty p { margin: 6px 0; font-size: 12px; }
+@media (max-width: 760px) {
+  .treatment-layout-studio .horizontal-layout:not(.is-v0-profile) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas: "source" "roles" "processing";
+  }
+  .treatment-layout-studio .files-folder { max-height: 330px; }
+  .treatment-layout-studio .parameters-zone .parameter-field-wide { grid-template-columns: minmax(0, 1fr); }
+}
+
+.graph-window.treatment-tree-workspace { max-width: none; }
+
+.treatment-tree-and-preview {
+  display: grid;
+  grid-template-columns: min(var(--tree-width), 38%) 12px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.treatment-tree-separator {
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 4px;
+  background: linear-gradient(#64748b, #64748b) center / 2px 36px no-repeat;
+}
+
+.treatment-tree-separator:hover,
+.treatment-tree-separator:focus-visible {
+  background-color: rgba(96, 165, 250, 0.16);
+}
+
+.treatment-tree-and-preview > .files-folder {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-height: clamp(420px, 66vh, 710px);
+  padding: 6px;
+}
+
+.treatment-tree-and-preview .treatment-preview-workspace {
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.treatment-tree-and-preview .selection-path {
+  display: none;
+}
+
+.treatment-tree-and-preview .selection-controls label {
+  margin: 0;
+}
+
+.treatment-tree-and-preview .selection-controls :is(input, select, button) {
+  height: 27px;
+  min-height: 27px;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.treatment-tree-and-preview .top-section-container {
+  flex: 0 0 auto;
+  height: clamp(390px, 60vh, 660px);
+}
+
+.treatment-tree-and-preview .top-plot-grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+}
+
+.treatment-tree-and-preview .imshow-wrapper {
+  aspect-ratio: auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.treatment-tree-first .explorer-tree-row {
+  grid-template-columns: 21px minmax(0, 1fr);
+}
+
+.treatment-tree-first .explorer-tree-row.with-folder-selection {
+  grid-template-columns: 21px 18px minmax(0, 1fr);
+}
+
+.explorer-folder-checkbox {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  justify-self: center;
+}
+
+.treatment-tree-first .explorer-tree-file-row {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  gap: 0;
+}
+
+.treatment-tree-first .explorer-tree-file-name {
+  grid-area: auto;
+}
+
+.treatment-tree-first .explorer-tree-toggle {
+  width: 21px;
+  padding: 2px;
+}
+
+.treatment-tree-first .tabs {
+  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+}
+
+.treatment-experiment-type {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.treatment-experiment-type select {
+  min-height: 27px;
+  font: inherit;
+}
+
+.treatment-tree-first .files-tab.horizontal-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+}
+
+.treatment-tree-first .files-tab > .zone {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.treatment-tree-first .treatment-queue summary,
+.treatment-tree-status,
+.treatment-menu-count {
+  font-size: 12px;
+}
+
+.treatment-menu-count { margin: 4px 8px; }
+.treatment-manual-inputs {
+  margin-top: 5px;
+  font-size: 12px;
+}
+.treatment-manual-inputs summary { cursor: pointer; }
+.treatment-manual-inputs p { margin: 5px 0; }
+.treatment-file-details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; }
+.treatment-file-details dt { font-weight: 600; }
+.treatment-file-details dd { margin: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .treatment-tree-and-preview { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .treatment-tree-separator { display: none; }
+  .treatment-tree-and-preview > .files-folder { max-height: 210px; }
+  .treatment-tree-and-preview .top-section-container { height: 420px; }
+  .treatment-tree-and-preview .right-column { display: flex; }
 }

@@ -1,0 +1,9 @@
+.supervision-sync { margin: 16px 0; padding: 16px; border: 1px solid #ced4da; border-radius: 8px; }
+.supervision-sync header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
+.supervision-sync h2 { font-size: 1.2rem; }
+.supervision-sync header span, .supervision-sync caption { color: #495057; }
+.supervision-sync table { width: 100%; border-collapse: collapse; }
+.supervision-sync th, .supervision-sync td { text-align: left; padding: 6px 12px; border-bottom: 1px solid #dee2e6; }
+.supervision-sync output { font-variant-numeric: tabular-nums; }
+.supervision-sync [role="status"] { font-weight: 600; }
+.supervision-sync [role="alert"] { color: #721c24; }

@@ -1,0 +1,88 @@
+.experiment-preparation-page { min-height: calc(100vh - 56px); padding: 20px; background: #252c35; color: #e7eaf0; box-sizing: border-box; }
+.experiment-preparation-shell { width: min(980px, 100%); margin: 0 auto; padding: 16px; border: 1px solid #526170; border-radius: 6px; background: #303844; box-sizing: border-box; }
+.experiment-preparation-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.experiment-preparation-header h1 { margin: 0; color: #e1c36c; font-size: 20px; }
+.experiment-preparation-selector { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.experiment-preparation-selector select { padding: 6px 10px; color: #fff; border: 1px solid #6d7d90; border-radius: 4px; background: #252b34; font: inherit; }
+.experiment-preparation-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.experiment-prepare-button, .experiment-shutdown-button, .experiment-control-link { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 14px; border-radius: 4px; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.experiment-prepare-button { border: 1px solid #69afff; color: #fff; background: #2868af; }
+.experiment-shutdown-button { border: 1px solid #d7906c; color: #fff; background: #744a3a; }
+.experiment-control-link { border: 1px solid #697789; color: #dce4ee; background: #303844; }
+.experiment-prepare-button:disabled, .experiment-shutdown-button:disabled { cursor: wait; opacity: .55; }
+.experiment-current-action { margin: 0; padding: 10px 12px; border-left: 3px solid #76b8ff; background: #252c35; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.experiment-current-action.is-error { border-color: #e87979; color: #ffc1b5; }
+.experiment-current-action.is-warning { border-color: #e1b84f; color: #ffe3a3; }
+.experiment-history-label { color: #c4ccd6; }
+@media (max-width: 600px) { .experiment-preparation-page { padding: 10px; } .experiment-preparation-header { flex-wrap: wrap; } }
+
+.experiment-confirmation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 15, 22, 0.82);
+}
+
+.experiment-shutdown-confirmation {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 28px;
+  border: 2px solid #d7906c;
+  border-radius: 10px;
+  background: #2b323d;
+  color: #e7eaf0;
+  text-align: left;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.experiment-shutdown-confirmation h2 {
+  margin: 0 0 18px;
+  color: #f0bd9f;
+}
+
+.experiment-shutdown-confirmation p {
+  margin: 12px 0;
+  color: #d3dae4;
+  line-height: 1.5;
+}
+
+.experiment-confirmation-hint {
+  font-weight: 700;
+}
+
+.experiment-confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.experiment-confirmation-cancel {
+  min-height: 46px;
+  padding: 0 22px;
+  border: 1px solid #697789;
+  border-radius: 6px;
+  background: #303844;
+  color: #dce4ee;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.experiment-confirmation-actions button:focus-visible {
+  outline: 3px solid #76b8ff;
+  outline-offset: 3px;
+}
+
+.experiment-restore-choice { border-color: #76b8ff; }
+.experiment-restore-choice h2 { color: #d5e9ff; }
+.experiment-restore-option { display: flex; align-items: center; gap: 12px; padding: 10px; cursor: pointer; }
+.experiment-restore-option small { display: block; margin-top: 4px; color: #b8c6d8; font-size: 12px; }
+.experiment-restore-option:has(input:checked) { background: #354c68; border-radius: 4px; }
+.experiment-restore-option.is-disabled { opacity: .55; cursor: default; }
+

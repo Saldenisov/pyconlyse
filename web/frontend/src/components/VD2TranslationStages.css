@@ -1,0 +1,167 @@
+.vd2-translation-stages {
+  margin: 1.5rem 0;
+}
+
+.vd2-translation-stages > header {
+  margin-bottom: 1rem;
+}
+
+.vd2-translation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.vd2-translation-stage {
+  padding: 1.25rem;
+  border: 1px solid #6d7888;
+  border-radius: 0.75rem;
+  background: #17212f;
+  color: #f5f7fa;
+}
+
+.vd2-translation-stage h3 {
+  margin: 0 0 0.5rem;
+}
+
+.vd2-stage-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin: 1rem 0;
+}
+
+.vd2-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.vd2-stage-actions label {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+}
+
+.vd2-stage-actions input {
+  width: 10rem;
+  padding: 0.45rem;
+}
+
+.vd2-stage-actions button {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.vd2-stage-actions input,
+.vd2-stage-actions button { box-sizing: border-box; height: 44px; margin: 0; }
+
+.vd2-zaber-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1.2rem 0;
+}
+
+.vd2-zaber-presets button {
+  display: grid;
+  place-content: center;
+  gap: 0.35rem;
+  min-height: 76px;
+  padding: 0.65rem;
+  border: 1px solid #94a3b8;
+  border-radius: 0.5rem;
+  background: #24354b;
+  color: #fff;
+  cursor: pointer;
+}
+
+.vd2-zaber-presets button.is-selected {
+  border-color: #e8cb63;
+  background: #4c441f;
+}
+
+.vd2-zaber-presets button:disabled { cursor: not-allowed; opacity: 0.55; }
+.vd2-zaber-presets button span { font-size: 0.85rem; }
+
+.vd2-zaber-manual { margin: 1rem 0 0; }
+.vd2-zaber-manual-row {
+  display: grid;
+  width: min(100%, 24rem);
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: end;
+  gap: 0.65rem;
+}
+.vd2-zaber-manual-row label { display: grid; gap: 0.35rem; margin: 0; text-align: left; }
+.vd2-zaber-manual-row input,
+.vd2-zaber-manual-row button,
+.vd2-zaber-utility-actions button {
+  box-sizing: border-box;
+  height: 44px;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.35rem;
+}
+.vd2-zaber-manual-row input { width: 100%; }
+.vd2-zaber-manual-row button,
+.vd2-zaber-utility-actions button { cursor: pointer; }
+.vd2-zaber-utility-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin: 0.85rem 0 1rem; }
+.vd2-zaber-manual-row button:disabled,
+.vd2-zaber-utility-actions button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+@media (max-width: 420px) {
+  .vd2-zaber-presets { grid-template-columns: 1fr; }
+}
+
+.vd2-stage-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.vd2-stage-error {
+  color: #ffb4b4;
+  overflow-wrap: anywhere;
+}
+
+.vd2-stage-status {
+  overflow-wrap: anywhere;
+}
+
+.vd2-sample-target {
+  display: grid;
+  grid-template-columns: 74px max-content;
+  align-items: start;
+  gap: 2px 5px;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.vd2-sample-target > label {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #c4cbd4;
+  font-size: 10px;
+  line-height: 12px;
+}
+
+.vd2-sample-target > input,
+.vd2-sample-target .vd2-sample-move > button {
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0 5px;
+  border: 1px solid #68727d;
+  border-radius: 2px;
+  font-size: 10px;
+}
+
+.vd2-sample-target > input { width: 74px; background: #11161b; color: #fff; }
+.vd2-sample-move { display: grid; gap: 1px; }
+.vd2-sample-target .vd2-sample-move > button { background: #303943; color: #fff; cursor: pointer; }
+.vd2-sample-target .vd2-sample-move > button:disabled { opacity: 0.55; cursor: not-allowed; }
+.vd2-sample-move > output { color: #fff; font-size: 10px; line-height: 12px; text-align: center; }
+.vd2-sample-target > [role="alert"] { grid-column: 1 / -1; max-width: 190px; font-size: 10px; }

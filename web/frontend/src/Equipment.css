@@ -44,6 +44,82 @@
   text-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
 }
 
+.experiment-launcher {
+  max-width: 1360px;
+  margin: -24px auto 34px;
+  padding: 22px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
+  border: 1px solid #657588;
+  border-left: 4px solid #4a9eff;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(63, 70, 81, 0.98), rgba(48, 57, 69, 0.98));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.36), 0 0 22px rgba(74, 158, 255, 0.16);
+}
+
+.experiment-launcher h2 {
+  margin: 3px 0 6px;
+  color: #e0bd5d;
+}
+
+.experiment-launcher p {
+  max-width: 720px;
+  margin: 0;
+  color: #d4d8de;
+  line-height: 1.45;
+}
+
+.experiment-launcher-kicker {
+  color: #69afff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.experiment-launcher-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.experiment-launcher-controls label {
+  display: grid;
+  gap: 5px;
+  color: #cfd6df;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.experiment-launcher-controls select,
+.experiment-launcher-controls button {
+  min-height: 42px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  font: inherit;
+}
+
+.experiment-launcher-controls select {
+  min-width: 100px;
+  padding: 0 30px 0 11px;
+  border: 1px solid #77879a;
+  color: #fff;
+  background: #282f39;
+}
+
+.experiment-launcher-controls button {
+  padding: 0 24px;
+  border: 1px solid #69afff;
+  color: #fff;
+  background: linear-gradient(135deg, #4a9eff, #326da9);
+  cursor: pointer;
+  font-weight: 700;
+}
+
 /* Equipment Grid */
 .equipment-grid {
   max-width: 1400px;
@@ -173,6 +249,15 @@
   .card-image-wrapper {
     height: 220px;
   }
+
+  .experiment-launcher {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .experiment-launcher-controls {
+    align-items: stretch;
+  }
 }
 
 /* Modal Overlay - Protoss Theme */
@@ -217,6 +302,12 @@
   margin-bottom: 20px;
   color: #c4a853;
   text-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+}
+
+.modal-description {
+  margin: -8px 0 20px;
+  color: #d4d8de;
+  line-height: 1.45;
 }
 
 /* Modal Links Container */

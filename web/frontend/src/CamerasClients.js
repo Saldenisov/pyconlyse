@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import CameraClient from './components/CameraClient';
+import AcquisitionVideo from './components/AcquisitionVideo';
 import { fetchWithHardwareApproval } from './api/csrfRequest';
 import './css/DeviceClients.css';
 import './css/CamerasClients.css';
@@ -187,6 +188,7 @@ const CamerasClients = () => {
 
   return (
     <div className="device-clients-page camera-clients-page">
+      <AcquisitionVideo />
       <div className="page-header">
         <h1>Basler Cameras</h1>
         <p>Select one camera or all three, then load panels to monitor and control each camera.</p>

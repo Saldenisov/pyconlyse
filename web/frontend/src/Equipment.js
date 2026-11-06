@@ -14,7 +14,8 @@ const Equipment = () => {
   const [showCamerasModal, setShowCamerasModal] = useState(false);
   const [showDAQmxModal, setShowDAQmxModal] = useState(false);
   const [showVacuumModal, setShowVacuumModal] = useState(false);
-
+  const [showLaserPointingModal, setShowLaserPointingModal] = useState(false);
+  const [showElectronicsModal, setShowElectronicsModal] = useState(false);
   const openRoute = (path) => {
     navigate(path);
     setShowPDUModal(false);
@@ -23,6 +24,8 @@ const Equipment = () => {
     setShowMagnetsModal(false);
     setShowDAQmxModal(false);
     setShowVacuumModal(false);
+    setShowLaserPointingModal(false);
+    setShowElectronicsModal(false);
   };
 
   const openBackendPage = (path) => {
@@ -34,6 +37,8 @@ const Equipment = () => {
     setShowMagnetsModal(false);
     setShowDAQmxModal(false);
     setShowVacuumModal(false);
+    setShowLaserPointingModal(false);
+    setShowElectronicsModal(false);
   };
 
   const equipmentItems = [
@@ -43,7 +48,9 @@ const Equipment = () => {
     { id: 4, label: "Magnets", img: "/images/magnets.png" },
     { id: 5, label: "DAQmx", img: "/images/pumps.png" },
     { id: 6, label: "Vacuum", img: "/images/vacuum.png" },
-    { id: 7, label: "Pumps", img: "/images/pumps.png" }
+    { id: 7, label: "Pumps", img: "/images/pumps.png" },
+    { id: 8, label: "Laser Pointing", img: "/images/cameras.png" },
+    { id: 9, label: "Electronics", img: "/images/electronics.png" }
   ];
 
   const updateWidget = (equipmentId) => {
@@ -63,11 +70,17 @@ const Equipment = () => {
       setStatusMessage("Open the iTest client in a dedicated tab.");
       setShowMagnetsModal(true);
     } else if (equipmentId === 5) {
-      setStatusMessage("Open DAQmx / Supervision client in a dedicated tab.");
+      setStatusMessage("Open the physical TRANCON DAQ card and network supervision clients.");
       setShowDAQmxModal(true);
     } else if (equipmentId === 6) {
       setStatusMessage("Open the Vacuum real-time monitor in a dedicated tab.");
       setShowVacuumModal(true);
+    } else if (equipmentId === 8) {
+      setStatusMessage("Open the two LaserPointing controllers and automatic alignment controls.");
+      setShowLaserPointingModal(true);
+    } else if (equipmentId === 9) {
+      setStatusMessage("Open Keysight waveform generators and SRS DG645 timing controllers.");
+      setShowElectronicsModal(true);
     } else {
       setStatusMessage(
         `${equipment?.label || 'This equipment'} page is not wired yet.`
@@ -92,10 +105,10 @@ const Equipment = () => {
       {showDAQmxModal && (
         <div className="modal-overlay" onClick={() => setShowDAQmxModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>DAQmx - Supervision</h2>
+            <h2>DAQmx Control</h2>
             <div className="modal-links">
               <button type="button" className="modal-link" onClick={() => openRoute("/daqmx-clients")}>
-                Open DAQmx Clients
+                Open TRANCON DAQ Controls
               </button>
             </div>
             <button onClick={() => setShowDAQmxModal(false)} className="modal-close">Close</button>
@@ -145,6 +158,9 @@ const Equipment = () => {
               <button type="button" className="modal-link" onClick={() => openBackendPage("/owis_ps90.html")}>
                 OWIS PS90 Control
               </button>
+              <button type="button" className="modal-link" onClick={() => openRoute("/zaber-stage")}>
+                Zaber mirror stage
+              </button>
             </div>
             <button onClick={() => setShowMotorizedModal(false)} className="modal-close">Close</button>
           </div>
@@ -180,6 +196,39 @@ const Equipment = () => {
               </button>
             </div>
             <button onClick={() => setShowMagnetsModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Laser Pointing Modal */}
+      {showLaserPointingModal && (
+        <div className="modal-overlay" onClick={() => setShowLaserPointingModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Laser Pointing</h2>
+            <div className="modal-links">
+              <button type="button" className="modal-link" onClick={() => openRoute("/laser-pointing-clients")}>
+                Open Laser Pointing Controllers
+              </button>
+            </div>
+            <button onClick={() => setShowLaserPointingModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Electronics Modal */}
+      {showElectronicsModal && (
+        <div className="modal-overlay" onClick={() => setShowElectronicsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Electronics</h2>
+            <p className="modal-description">
+              Keysight waveform generators and SRS DG645 digital delay generators.
+            </p>
+            <div className="modal-links">
+              <button type="button" className="modal-link" onClick={() => openRoute("/electronics-clients")}>
+                Open Electronics Controllers
+              </button>
+            </div>
+            <button onClick={() => setShowElectronicsModal(false)} className="modal-close">Close</button>
           </div>
         </div>
       )}

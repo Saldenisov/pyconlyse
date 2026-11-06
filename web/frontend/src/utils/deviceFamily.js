@@ -2,6 +2,7 @@ export const DEVICE_FAMILY_DEFINITIONS = [
   { key: 'itest_psu', label: 'iTest PSU' },
   { key: 'netio', label: 'NETIO PDU' },
   { key: 'laser_pointing', label: 'Laser Pointing' },
+  { key: 'electronics', label: 'Electronics' },
   { key: 'camera', label: 'Cameras' },
   { key: 'motor', label: 'Motors' },
   { key: 'generic', label: 'Generic Tango' },
@@ -47,6 +48,16 @@ export function resolveDeviceFamily(deviceOrName, deviceClass = '') {
     server.includes('laserpointing')
   ) {
     return 'laser_pointing';
+  }
+  if (
+    name.includes('dg645') ||
+    name.includes('keysight') ||
+    familyClass.includes('dg645') ||
+    familyClass.includes('keysight') ||
+    server.includes('dg645') ||
+    server.includes('keysight')
+  ) {
+    return 'electronics';
   }
   if (
     name.includes('camera') ||

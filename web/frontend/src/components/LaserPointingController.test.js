@@ -15,9 +15,35 @@ import LaserPointingController, {
   pointAperture,
   pointNumber,
   roundnessError,
+  centeringError,
 } from './LaserPointingController';
 
 describe('LaserPointing optical point presentation', () => {
+  test('centering is never inferred from percent-valued legacy roundness', () => {
+    expect(centeringError({ centering_error_px: 0.25, roundness_error_pct: 25 })).toBe(0.25);
+    expect(centeringError({ roundness_error_pct: 25, error_px: 25 })).toBeNull();
+  });
+
+  test('centering verification does not claim ellipse convergence', () => {
+    expect(alignmentActivityText({ phase: 'finished', alignment_objective: 'centering',
+      centering_converged: true, ellipticity_passed: false })).toEqual({
+      title: 'Centering verified for selected points',
+      detail: 'Repeated centering checks passed; ellipticity remains outside its separate tolerance',
+    });
+    expect(alignmentActivityText({ phase: 'centering_probe_rejected', centering_error_px: 0.1,
+      ellipticity_error_pct: 20 }).title).toBe('Unconfirmed improvement rejected');
+  });
+
+  test('centering chart uses pixels and labels rejected candidates', () => {
+    render(<ConvergenceChart objective="centering" tolerance={1} history={[
+      { elapsed_s: 1, actuator_group: 1, centering_error_px: 0.25,
+        roundness_error_pct: 25, confirmed: false },
+    ]} />);
+    expect(screen.getByRole('img', { name: 'Centering error convergence in pixels' })).toBeInTheDocument();
+    expect(screen.getByText('Center spread (px)')).toBeInTheDocument();
+    expect(screen.getByText(/0.25 px center spread.*rejected: not confirmed/)).toBeInTheDocument();
+  });
+
   test('extracts numeric point names without treating working as a plane point', () => {
     expect(pointNumber('point1')).toBe(1);
     expect(pointNumber('POINT6')).toBe(6);
@@ -131,6 +157,21 @@ describe('LaserPointing optical point presentation', () => {
     })).toEqual({
       title: 'Calculating profiles at point 6',
       detail: 'Fitting nine iso-intensity contours from the outer beam to the core',
+    });
+    expect(alignmentActivityText({
+      phase: 'cycling_aperture', aperture_role: 'CrimpingDiaphragm2', aperture_cycle: 2,
+    })).toEqual({ title: 'Cycling CrimpingDiaphragm2', detail: 'Cycle 2' });
+    expect(alignmentActivityText({
+      phase: 'cancelling_keep_current', message: 'Waiting for current move',
+    })).toEqual({
+      title: 'Stopping — keeping current alignment',
+      detail: 'Waiting for current move',
+    });
+    expect(alignmentActivityText({
+      phase: 'restoring_initial_state', restoring_role: 'ActuatorY2',
+    })).toEqual({
+      title: 'Restoring pre-search alignment',
+      detail: 'ActuatorY2',
     });
   });
 
@@ -415,6 +456,68 @@ describe('LaserPointing optical point presentation', () => {
     global.fetch = originalFetch;
   });
 
+  test('draws camera-specific scoring contours on the current frame during alignment', async () => {
+    const originalFetch = global.fetch;
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
+      createImageData: (width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }),
+      putImageData: jest.fn(),
+      strokeStyle: '',
+      lineWidth: 1,
+      beginPath: jest.fn(),
+      arc: jest.fn(),
+      moveTo: jest.fn(),
+      lineTo: jest.fn(),
+      ellipse: jest.fn(),
+      stroke: jest.fn(),
+      save: jest.fn(),
+      restore: jest.fn(),
+      setLineDash: jest.fn(),
+    }));
+    global.fetch = jest.fn().mockImplementation((url) => {
+      if (url.endsWith('/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ success: true, camera_info: {} }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          success: true,
+          image: [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
+          cg_position: { X: 1, Y: 1 },
+          contours: [{
+            relative_height: 0.2,
+            centre: [1, 1],
+            radius_px: 0.5,
+            axis_roundness_pct: 95,
+            major_axis_angle_deg: 0,
+          }],
+        }),
+      });
+    });
+
+    const view = render(
+      <CameraPreview
+        camera="manip/V0/Cam2_V0"
+        enabled
+        state="ON"
+        showAutomaticContours
+      />
+    );
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/camera/manip%2FV0%2FCam2_V0/image?contours=1',
+      { credentials: 'include' }
+    ));
+    expect(await screen.findByText('Live scoring contours')).toBeInTheDocument();
+
+    view.unmount();
+    HTMLCanvasElement.prototype.getContext = originalGetContext;
+    global.fetch = originalFetch;
+  });
+
   test('separates automatic visualization from manual Standa and OWIS controls', async () => {
     const snapshot = {
       device: 'manip/V0/LaserPointing-Cam2',
@@ -422,6 +525,13 @@ describe('LaserPointing optical point presentation', () => {
       rules: {
         point3: { CrimpingDiaphragm1: 10, TranslationStage1: [3, 0] },
         point6: { CrimpingDiaphragm2: 10, TranslationStage1: [3, -700] },
+        working: {
+          HalfWavePlate1: 20.5,
+          CrimpingDiaphragm1: 100,
+          CrimpingDiaphragm2: 100,
+          Shutter1: 1,
+          Shutter2: 1,
+        },
       },
       groups: {
         'Actuators 1': ['ActuatorX1', 'ActuatorY1'],
@@ -431,7 +541,9 @@ describe('LaserPointing optical point presentation', () => {
         automatic_search: true,
         pause_search: true,
         resume_search: true,
+        cancel_search_keep_current: true,
         accept_alignment_reference: true,
+        save_current_alignment_reference: true,
         apply_point: true,
         manual_point_selection: true,
         initialize_active_pair: true,
@@ -547,13 +659,34 @@ describe('LaserPointing optical point presentation', () => {
     expect(await screen.findByRole('tab', { name: 'Automatic' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Convergence over time')).toBeInTheDocument();
     expect(screen.getByLabelText('Roundness error (%)')).toHaveValue(7);
+    expect(screen.getByLabelText('Coarse step')).toHaveAttribute('max', '50');
+    expect(screen.getByLabelText('Radius')).toHaveAttribute('max', '100');
+    expect(screen.getByLabelText('Evaluations')).toHaveAttribute('max', '500');
+    expect(screen.getByLabelText('Samples')).toHaveAttribute('max', '5');
     expect(screen.getByRole('img', { name: /beam roundness error convergence/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Current beam roundness metrics')).toHaveTextContent('Reference 96.00%');
     expect(screen.getByLabelText('Accepted alignment reference')).toHaveTextContent('Revision 1');
     expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancel and restore' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel + restore' })).toBeDisabled();
+    expect(screen.getByRole('button', {
+      name: 'Save current manual alignment as next-day reference',
+    })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', {
+      name: 'Save current manual alignment as next-day reference',
+    }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/device/manip%2FV0%2FLaserPointing-Cam2/command/save_current_alignment_reference',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ args: JSON.stringify({ client: 'web' }) }),
+      })
+    ));
     expect(screen.queryByText('Standa alignment mounts')).not.toBeInTheDocument();
     expect(screen.getByText('Optical points')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Working / open beam' })).toHaveAttribute(
+      'title',
+      'DS sequence: set λ/2 working target, apply all Working optics, then lower and verify all shutters'
+    );
     const componentStatus = screen.getByRole('region', { name: 'Main components live status' });
     expect(within(componentStatus).getByText('Camera')).toBeInTheDocument();
     expect(within(componentStatus).getByText('Standa 1')).toBeInTheDocument();
@@ -659,7 +792,9 @@ describe('LaserPointing optical point presentation', () => {
         automatic_search: true,
         pause_search: true,
         resume_search: true,
+        cancel_search_keep_current: true,
         accept_alignment_reference: true,
+        save_current_alignment_reference: true,
         apply_point: true,
         manual_point_selection: true,
         initialize_active_pair: true,
@@ -696,6 +831,7 @@ describe('LaserPointing optical point presentation', () => {
 
     const view = render(<LaserPointingController deviceName={snapshot.device} />);
     expect(await screen.findByRole('button', { name: 'Accept as next-day reference' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Keep current alignment' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Discard and restore' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Start automatic search' })).toBeDisabled();
 
@@ -705,6 +841,15 @@ describe('LaserPointing optical point presentation', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ args: JSON.stringify({ client: 'web' }) }),
+      })
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep current alignment' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/device/manip%2FV0%2FLaserPointing-Cam1/command/cancel_automatic_search',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({}),
       })
     ));
 

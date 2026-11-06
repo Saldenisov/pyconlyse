@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Plotly from 'plotly.js-dist';
 import {
   SAMPLE_STAGE_MIN_MM, SAMPLE_STAGE_MAX_MM, STAGE_MIN_MM, STAGE_MAX_MM, MM_PER_PS,
-  clamp, formatStageMm, formatBytes, displayPathTail, normalizeRange, parseDelayPointsText,
+  clamp, formatStageMm, formatBytes, displayPathTail, normalizeRange, parseSamplePositionsText,
 } from './shared';
 
 // Presentational V0 panels. State and hardware actions remain in PumpProbeV0.
@@ -222,7 +222,7 @@ function DeviceConfigModal({
             <textarea
               value={samplePositions.join('\n')}
               onChange={(event) => {
-                const nextPositions = parseDelayPointsText(event.target.value)
+                const nextPositions = parseSamplePositionsText(event.target.value)
                   .map((value) => clamp(value, SAMPLE_STAGE_MIN_MM, SAMPLE_STAGE_MAX_MM));
                 if (nextPositions.length) {
                   onSamplePositionsChange(nextPositions);

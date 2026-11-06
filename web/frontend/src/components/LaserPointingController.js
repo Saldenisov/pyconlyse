@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import useFrameDisplayRate from '../useFrameDisplayRate';
+import FrameDisplayRate from './FrameDisplayRate';
 import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './LaserPointingController.css';
 
@@ -74,6 +76,8 @@ export const roundnessError = (observation = {}) => (
   finiteNumber(observation.roundness_error_pct)
   ?? finiteNumber(observation.error_px)
 );
+
+export const centeringError = (observation = {}) => finiteNumber(observation.centering_error_px);
 
 export const formatOpticalStatusValue = (role, value) => {
   const normalized = String(role || '').toLowerCase().replace(/[ -]/g, '_');
@@ -336,8 +340,28 @@ export const alignmentActivityText = (progress = {}) => {
   const phase = String(progress.phase || '').toLowerCase();
   const point = String(progress.point || progress.measured_point || '').replace(/^point/i, 'point ');
   if (!phase) return null;
+  if (phase === 'confirming_centering') return {
+    title: 'Confirming centering with independent repeats',
+    detail: 'Rechecking reference and candidate after return; ellipticity is separate',
+  };
+  if (phase === 'centering_confirmed' || phase === 'centering_probe_rejected') return {
+    title: phase === 'centering_confirmed' ? 'Centering confirmed' : 'Unconfirmed improvement rejected',
+    detail: `Center spread ${centeringError(progress)?.toFixed(2) ?? '—'} px · ellipticity ${finiteNumber(progress.ellipticity_error_pct)?.toFixed(2) ?? '—'}% (diagnostic)`,
+  };
+  if (phase === 'finished' && progress.alignment_objective === 'centering') return {
+    title: 'Centering verified for selected points',
+    detail: progress.ellipticity_passed === false
+      ? 'Repeated centering checks passed; ellipticity remains outside its separate tolerance'
+      : 'Repeated centering checks passed; shape is reported separately',
+  };
   if (phase === 'starting') {
     return { title: 'Preparing automatic alignment', detail: 'Checking camera and optical sequence' };
+  }
+  if (phase === 'baseline_captured') {
+    return {
+      title: 'Initial alignment captured',
+      detail: progress.message || 'Pre-search actuator and optical state is ready for restore',
+    };
   }
   if (phase === 'applying_point') {
     const role = progress.optical_role ? ` · ${progress.optical_role}` : '';
@@ -377,6 +401,50 @@ export const alignmentActivityText = (progress = {}) => {
   }
   if (phase === 'verifying') {
     return { title: 'Verifying both optical planes', detail: `Motor step ${formatOpticalValue(progress.motor_step)}` };
+  }
+  if (phase === 'cycling_aperture') {
+    const cycle = progress.aperture_cycle ? `Cycle ${progress.aperture_cycle}` : '';
+    return {
+      title: `Cycling ${progress.aperture_role || 'aperture'}`,
+      detail: progress.message || cycle,
+    };
+  }
+  if (phase === 'aperture_cycle_measured') {
+    const error = roundnessError(progress);
+    return {
+      title: 'Aperture response measured',
+      detail: progress.message || (error === null ? 'Evaluating drift and roundness' : `Roundness error ${error.toFixed(2)}%`),
+    };
+  }
+  if (phase === 'probe_rejected') {
+    return { title: 'Probe rejected — beam disappeared', detail: progress.message || 'Returning to the last visible position' };
+  }
+  if (phase === 'restoring_last_visible_position') {
+    return { title: 'Restoring last visible position', detail: progress.message || 'Rejected actuator move is being reversed' };
+  }
+  if (phase === 'retaining_last_measured_good_position') {
+    return { title: 'Keeping latest measured-good alignment', detail: progress.message || 'Cancellation will not restore the pre-search state' };
+  }
+  if (phase === 'stopped_no_improvement') {
+    return { title: 'Stopped after no roundness improvement', detail: progress.message || 'Latest measured-good alignment is retained' };
+  }
+  if (phase === 'cancelling_keep_current') {
+    return { title: 'Stopping — keeping current alignment', detail: progress.message || 'Waiting for the current hardware operation to finish' };
+  }
+  if (phase === 'cancelled_keep_current') {
+    return { title: 'Stopped — current alignment kept', detail: progress.message || 'No pre-search restore was requested' };
+  }
+  if (phase === 'restoring_initial_state') {
+    return { title: 'Restoring pre-search alignment', detail: progress.message || progress.restoring_role || 'Restoring actuators and optics' };
+  }
+  if (phase === 'restored_initial_state') {
+    return { title: 'Pre-search alignment restored', detail: progress.message || 'Automatic alignment was discarded' };
+  }
+  if (phase === 'restore_failed') {
+    return { title: 'Restore failed', detail: progress.message || 'Check hardware state before moving again' };
+  }
+  if (phase === 'saving_manual_reference') {
+    return { title: 'Saving current manual alignment', detail: progress.message || 'Creating the next-day reference' };
   }
   if (phase === 'finished') return { title: 'Alignment converged', detail: 'Final verification passed' };
   if (phase === 'not_converged') return { title: 'Alignment did not converge', detail: 'Best measured positions were retained' };
@@ -473,12 +541,14 @@ export const CameraPreview = ({
   progress = {},
   tolerance = 0,
   hasTranslation = false,
+  showAutomaticContours = false,
   onRefresh,
 }) => {
   const canvasRef = useRef(null);
   const frameRequestInFlight = useRef(false);
   const [frame, setFrame] = useState(null);
   const [centroid, setCentroid] = useState(null);
+  const [liveContours, setLiveContours] = useState([]);
   const [frameError, setFrameError] = useState('');
   const [controlError, setControlError] = useState('');
   const [cameraAction, setCameraAction] = useState('');
@@ -499,6 +569,10 @@ export const CameraPreview = ({
     () => measuredProfileSnapshot(progress),
     [progress]
   );
+  const displayedContours = showAutomaticContours ? liveContours : beamContours;
+  const useMeasuredSnapshot = !showAutomaticContours && profileSnapshot && beamContours.length > 0;
+  const { hz, frameDisplayed } = useFrameDisplayRate(camera,
+    Boolean(previewEnabled && !useMeasuredSnapshot));
 
   useEffect(() => {
     if (requestedGrabbing !== null
@@ -557,7 +631,7 @@ export const CameraPreview = ({
     frameRequestInFlight.current = true;
     try {
       const response = await fetch(
-        `${API_BASE}/camera/${encodeURIComponent(camera)}/image`,
+        `${API_BASE}/camera/${encodeURIComponent(camera)}/image${showAutomaticContours ? '?contours=1' : ''}`,
         { credentials: 'include' }
       );
       const payload = await response.json();
@@ -565,6 +639,7 @@ export const CameraPreview = ({
         if (response.status === 409 && payload.grabbing === false) {
           setFrame(null);
           setCentroid(null);
+          setLiveContours([]);
           setFrameError('');
           return;
         }
@@ -572,18 +647,20 @@ export const CameraPreview = ({
       }
       setFrame(payload.image);
       setCentroid(payload.cg_position || null);
+      setLiveContours(Array.isArray(payload.contours) ? payload.contours : []);
       setFrameError('');
     } catch (requestError) {
       setFrameError(requestError.message);
     } finally {
       frameRequestInFlight.current = false;
     }
-  }, [camera]);
+  }, [camera, showAutomaticContours]);
 
   useEffect(() => {
     if (!previewEnabled) {
       setFrame(null);
       setCentroid(null);
+      setLiveContours([]);
       setFrameError('');
       return undefined;
     }
@@ -596,7 +673,7 @@ export const CameraPreview = ({
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
 
-    if (profileSnapshot && beamContours.length) {
+    if (useMeasuredSnapshot) {
       let active = true;
       const measuredImage = new Image();
       measuredImage.onload = () => {
@@ -637,9 +714,10 @@ export const CameraPreview = ({
       }
     }
     context.putImageData(image, 0, 0);
-    drawBeamOverlays(context, width, centroid, []);
+    drawBeamOverlays(context, width, centroid, displayedContours);
+    frameDisplayed(frame, camera);
     return undefined;
-  }, [frame, centroid, beamContours, profileSnapshot]);
+  }, [frame, centroid, beamContours, displayedContours, profileSnapshot, useMeasuredSnapshot, frameDisplayed, camera]);
 
   const setCameraGrabbing = async (action) => {
     if (!camera || cameraAction) return;
@@ -774,7 +852,13 @@ export const CameraPreview = ({
       )}
       <div className="laser-camera-frame">
         <canvas ref={canvasRef} />
-        {profileSnapshot && beamContours.length > 0 && (
+        <FrameDisplayRate hz={hz} />
+        {showAutomaticContours && displayedContours.length > 0 && (
+          <div className="laser-profile-frame-label">
+            Live scoring contours
+          </div>
+        )}
+        {useMeasuredSnapshot && (
           <div className="laser-profile-frame-label">
             {`Measured profile frame${profileSnapshot.point ? ` · ${String(profileSnapshot.point).replace(/point/i, 'point ')}` : ''}`}
           </div>
@@ -785,9 +869,9 @@ export const CameraPreview = ({
             {activity.detail && <span>{activity.detail}</span>}
           </div>
         )}
-        {beamContours.length > 0 && (
+        {displayedContours.length > 0 && (
           <div className="laser-profile-legend" aria-hidden="true">
-            {beamContours.map((contour, index) => (
+            {displayedContours.map((contour, index) => (
               <span key={`${contour.relative_height}-${index}`}>
                 <i style={{ backgroundColor: PROFILE_COLORS[index % PROFILE_COLORS.length] }} />
                 {Math.round(Number(contour.relative_height) * 100)}%
@@ -840,7 +924,9 @@ export const CameraPreview = ({
       )}
       <div className="laser-delta-heading">
         <strong>Centroid diagnostic</strong>
-        <span>Display only · automatic alignment minimizes beam roundness error</span>
+          <span>{progress.score_metric === 'centering_error_px'
+            ? 'Absolute camera position is diagnostic · alignment compares contour and aperture centers'
+            : 'Display only · automatic alignment minimizes beam roundness error'}</span>
       </div>
       <DeltaVectorChart
         history={history}
@@ -852,19 +938,21 @@ export const CameraPreview = ({
   );
 };
 
-export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation = false }) => {
+export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation = false, objective = 'roundness' }) => {
+  const centering = objective === 'centering';
   const observations = history
     .map((item) => ({
       elapsed: Number(item.elapsed_s),
-      error: roundnessError(item),
+      error: centering ? centeringError(item) : roundnessError(item),
       group: Number(item.actuator_group),
+      confirmed: item.confirmed,
     }))
     .filter((item) => Number.isFinite(item.elapsed) && Number.isFinite(item.error));
 
   if (!observations.length) {
     return (
       <div className="laser-convergence-empty">
-        The first beam-roundness measurement will appear here when automatic alignment starts.
+        {centering ? 'The first centering measurement will appear here when automatic alignment starts.' : 'The first beam-roundness measurement will appear here when automatic alignment starts.'}
       </div>
     );
   }
@@ -889,7 +977,7 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
         className="laser-convergence-chart"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Beam roundness error convergence over elapsed time"
+        aria-label={centering ? 'Centering error convergence in pixels' : 'Beam roundness error convergence over elapsed time'}
       >
         {[0, 0.5, 1].map((fraction) => (
           <line
@@ -913,10 +1001,10 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
             r="4"
             className={`laser-chart-point group-${item.group}`}
           >
-            <title>{`${item.elapsed.toFixed(1)} s · ${item.error.toFixed(2)}% roundness error · ${item.group === 1 ? group1Label : group2Label}`}</title>
+            <title>{`${item.elapsed.toFixed(1)} s · ${item.error.toFixed(2)}${centering ? ' px center spread' : '% roundness error'} · ${item.group === 1 ? group1Label : group2Label}${item.confirmed === false ? ' · rejected: not confirmed' : ''}`}</title>
           </circle>
         ))}
-        <text x="8" y={margin.top + plotHeight / 2} className="laser-chart-label" transform={`rotate(-90 8 ${margin.top + plotHeight / 2})`}>Roundness error (%)</text>
+        <text x="8" y={margin.top + plotHeight / 2} className="laser-chart-label" transform={`rotate(-90 8 ${margin.top + plotHeight / 2})`}>{centering ? 'Center spread (px)' : 'Roundness error (%)'}</text>
         <text x={margin.left + plotWidth / 2} y={height - 7} className="laser-chart-label">Elapsed time (s)</text>
         <text x={margin.left - 7} y={margin.top + 4} textAnchor="end" className="laser-chart-tick">{maxError.toFixed(1)}</text>
         <text x={margin.left - 7} y={height - margin.bottom + 4} textAnchor="end" className="laser-chart-tick">0</text>
@@ -926,7 +1014,7 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
       <div className="laser-convergence-legend">
         <span><i className="group-1" />{group1Label}</span>
         <span><i className="group-2" />{group2Label}</span>
-        <span><i className="tolerance" />Roundness tolerance</span>
+        <span><i className="tolerance" />{centering ? 'Centering tolerance' : 'Roundness tolerance'}</span>
       </div>
     </div>
   );
@@ -1422,8 +1510,36 @@ const LaserPointingController = ({ deviceName }) => {
       Number(config.step_middle),
       Number(config.step_fine),
     ];
+    if (schedule.some((value) => !Number.isFinite(value) || value < 0.1 || value > 50)) {
+      setError('Coarse, middle and fine steps must be between 0.1 and 50.');
+      return;
+    }
     if (!(schedule[0] > schedule[1] && schedule[1] > schedule[2])) {
       setError('Coarse, middle and fine steps must be strictly decreasing.');
+      return;
+    }
+    const boundedInputs = [
+      ['Radius', Number(config.radius), 0.1, 100],
+      ['Roundness error', Number(config.roundness_tolerance_pct), 0, 100],
+      ['Evaluations', Number(config.max_evaluations), 1, 500],
+      ['Samples', Number(config.samples), 1, 5],
+      ...(config.alignment_objective === 'centering' ? [
+        ['Centering tolerance', Number(config.centering_tolerance_px ?? 1), 0, 100],
+        ['Repeat measurements', Number(config.measurement_repetitions ?? 3), 3, 5],
+      ] : []),
+    ];
+    const invalidInput = boundedInputs.find(([, value, minimum, maximum]) => (
+      !Number.isFinite(value) || value < minimum || value > maximum
+    ));
+    if (invalidInput) {
+      const [label, , minimum, maximum] = invalidInput;
+      setError(`${label} must be between ${minimum} and ${maximum}.`);
+      return;
+    }
+    if (!Number.isInteger(Number(config.max_evaluations))
+      || !Number.isInteger(Number(config.samples))
+      || (config.alignment_objective === 'centering' && !Number.isInteger(Number(config.measurement_repetitions ?? 3)))) {
+      setError('Evaluations and samples must be whole numbers.');
       return;
     }
     execute(
@@ -1491,9 +1607,12 @@ const LaserPointingController = ({ deviceName }) => {
   const searchStatus = snapshot?.automatic_search?.status || 'loading';
   const running = [
     'running', 'pausing', 'paused', 'cancelling', 'restoring',
+    'cancelling; keeping current',
   ].includes(searchStatus);
   const paused = searchStatus === 'paused' || searchStatus === 'pausing';
-  const cancelling = searchStatus === 'cancelling' || searchStatus === 'restoring';
+  const cancelling = [
+    'cancelling', 'restoring', 'cancelling; keeping current',
+  ].includes(searchStatus);
   const progress = snapshot?.automatic_search?.progress || {};
   const pointApplying = progress.phase === 'manual_point';
   const pointApplicationError = progress.phase === 'manual_point_error'
@@ -1505,6 +1624,8 @@ const LaserPointingController = ({ deviceName }) => {
   const hasPendingReference = Object.keys(pendingReference).length > 0;
   const referenceRevision = snapshot?.automatic_search?.reference_revision || 0;
   const roundnessTolerance = finiteNumber(config?.roundness_tolerance_pct) ?? 7;
+  const centeringMode = config?.alignment_objective === 'centering';
+  const centeringTolerance = finiteNumber(config?.centering_tolerance_px) ?? 1;
   const centroidGuidePx = finiteNumber(config?.tolerance_px) ?? 2;
   const progressRoundnessError = roundnessError(progress);
   const referenceRoundness = finiteNumber(progress.reference_roundness_pct);
@@ -1609,8 +1730,9 @@ const LaserPointingController = ({ deviceName }) => {
             name: workingPoint[0], settings: workingPoint[1], number: 'working',
           })}
           disabled={pointControlsDisabled}
+          title="DS sequence: set λ/2 working target, apply all Working optics, then lower and verify all shutters"
         >
-          Working / open configuration
+          Working / open beam
         </button>
       )}
       <OpticalPointState
@@ -1687,12 +1809,14 @@ const LaserPointingController = ({ deviceName }) => {
         || !snapshot.capabilities?.apply_point
         || !snapshot.capabilities?.manual_point_selection
         || !snapshot.capabilities?.initialize_active_pair
+        || !snapshot.capabilities?.cancel_search_keep_current
+        || !snapshot.capabilities?.save_current_alignment_reference
         || !snapshot.capabilities?.interlocked_motion) && (
         <div className="laser-warning-banner">
           This controller is still running the previous DS version. Restart DS_LaserPointing
           during the next safe maintenance window to enable automatic search, point presets,
           manual pair selection, pair initialisation, convergence history, and the mount
-          safety interlock.
+          safety interlock, both cancellation modes, and manual reference saving.
         </div>
       )}
 
@@ -1743,6 +1867,7 @@ const LaserPointingController = ({ deviceName }) => {
           progress={progress}
           tolerance={centroidGuidePx}
           hasTranslation={hasTranslation}
+          showAutomaticContours={['running', 'pausing', 'paused'].includes(searchStatus)}
           onRefresh={loadSnapshot}
         />
 
@@ -1754,18 +1879,31 @@ const LaserPointingController = ({ deviceName }) => {
               <div className="laser-section-heading">
                 <strong>Automatic alignment</strong>
                 <span>
-                  {busy || (progressRoundnessError !== null
+                  {busy || (centeringMode
+                    ? (centeringError(progress) !== null
+                      ? `${progress.stage || progress.phase || 'Measuring'} · center spread ${centeringError(progress).toFixed(2)} px`
+                      : (progress.message || progress.phase || 'Ready'))
+                    : progressRoundnessError !== null
                     ? `${progress.stage || progress.phase || 'Measuring'} · roundness error ${progressRoundnessError.toFixed(2)}%`
                     : (progress.message || progress.phase || 'Ready'))}
                 </span>
               </div>
               <div className="laser-search-form">
                 <label>
+                  Objective
+                  <select value={config.alignment_objective || 'roundness'}
+                    disabled={running || snapshot?.automatic_search?.config?.alignment_objective === undefined}
+                    onChange={(event) => updateConfig('alignment_objective', event.target.value)}>
+                    <option value="roundness">Roundness (legacy)</option>
+                    <option value="centering">Centering with repeat confirmation</option>
+                  </select>
+                </label>
+                <label>
                   Sequence
                   <select value={config.mode} onChange={(event) => updateConfig('mode', event.target.value)}>
+                    <option value="staged">2 ↔ 5, then 3 ↔ 6</option>
                     <option value="sensitive">Points 3 ↔ 6 (sensitive)</option>
                     <option value="medium">Points 2 ↔ 5 (medium)</option>
-                    <option value="staged">2 ↔ 5, then 3 ↔ 6</option>
                   </select>
                 </label>
                 {['coarse', 'middle', 'fine'].map((level) => (
@@ -1774,6 +1912,7 @@ const LaserPointingController = ({ deviceName }) => {
                     <input
                       type="number"
                       min="0.1"
+                      max="50"
                       step="0.1"
                       value={config[`step_${level}`] ?? ''}
                       onChange={(event) => updateConfig(`step_${level}`, Number(event.target.value))}
@@ -1782,21 +1921,34 @@ const LaserPointingController = ({ deviceName }) => {
                 ))}
                 <label>
                   Radius
-                  <input type="number" min="0.1" value={config.radius} onChange={(event) => updateConfig('radius', Number(event.target.value))} />
+                  <input type="number" min="0.1" max="100" value={config.radius} onChange={(event) => updateConfig('radius', Number(event.target.value))} />
                 </label>
                 <label>
-                  Roundness error (%)
-                  <input type="number" min="0" max="100" step="0.1" value={roundnessTolerance} onChange={(event) => updateConfig('roundness_tolerance_pct', Number(event.target.value))} />
+                  {centeringMode ? 'Centering tolerance (px)' : 'Roundness error (%)'}
+                  <input type="number" min="0" max="100" step="0.1" value={centeringMode ? centeringTolerance : roundnessTolerance}
+                    onChange={(event) => updateConfig(centeringMode ? 'centering_tolerance_px' : 'roundness_tolerance_pct', Number(event.target.value))} />
                 </label>
+                {centeringMode && <label>
+                  Repeat measurements
+                  <input type="number" min="3" max="5" step="1" value={config.measurement_repetitions ?? 3}
+                    onChange={(event) => updateConfig('measurement_repetitions', Number(event.target.value))} />
+                </label>}
                 <label>
                   Evaluations
-                  <input type="number" min="1" value={config.max_evaluations} onChange={(event) => updateConfig('max_evaluations', Number(event.target.value))} />
+                  <input type="number" min="1" max="500" value={config.max_evaluations} onChange={(event) => updateConfig('max_evaluations', Number(event.target.value))} />
                 </label>
                 <label>
                   Samples
-                  <input type="number" min="1" value={config.samples} onChange={(event) => updateConfig('samples', Number(event.target.value))} />
+                  <input type="number" min="1" max="5" value={config.samples} onChange={(event) => updateConfig('samples', Number(event.target.value))} />
                 </label>
               </div>
+              {centeringMode && <div className="laser-roundness-metrics" aria-label="Separate centering and ellipticity metrics">
+                <span>Center spread <strong>{centeringError(progress)?.toFixed(2) ?? '—'} px</strong></span>
+                <span>Ellipticity <strong>{finiteNumber(progress.ellipticity_error_pct)?.toFixed(2) ?? '—'}%</strong> · diagnostic only</span>
+                {(progress.verification || []).map((item) => <span key={`${item.group}-${item.point}`}>
+                  {item.point}: centers {item.centering_passed ? 'verified' : 'not verified'} · ellipse {item.ellipticity_passed ? 'within tolerance' : 'outside tolerance'}
+                </span>)}
+              </div>}
               {(referenceRoundness !== null || testRoundness !== null || progressRoundnessError !== null) && (
                 <div className="laser-roundness-metrics" aria-label="Current beam roundness metrics">
                   <span>Reference <strong>{referenceRoundness === null ? '—' : `${referenceRoundness.toFixed(2)}%`}</strong></span>
@@ -1817,8 +1969,22 @@ const LaserPointingController = ({ deviceName }) => {
                     Continue
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => execute(
+                    'cancel_automatic_search',
+                    undefined,
+                    'Stopping and keeping current alignment'
+                  )}
+                  disabled={Boolean(busy)
+                    || (!running && !hasPendingReference)
+                    || cancelling
+                    || !snapshot.capabilities?.cancel_search_keep_current}
+                >
+                  {hasPendingReference ? 'Keep current alignment' : 'Cancel — keep current'}
+                </button>
                 <button type="button" className="stop" onClick={() => execute('stop_automatic_search', undefined, 'Cancelling and restoring initial state')} disabled={Boolean(busy) || (!running && !hasPendingReference) || cancelling || !snapshot.capabilities?.automatic_search}>
-                  {hasPendingReference ? 'Discard and restore' : 'Cancel and restore'}
+                  {hasPendingReference ? 'Discard and restore' : 'Cancel + restore'}
                 </button>
               </div>
               {hasPendingReference && (
@@ -1843,6 +2009,23 @@ const LaserPointingController = ({ deviceName }) => {
                   </button>
                 </div>
               )}
+              {!running && !hasPendingReference && (
+                <div className="laser-reference-card" aria-label="Save current alignment reference">
+                  <strong>Current manual alignment</strong>
+                  <span>Store the present actuator and optical state as tomorrow's reference.</span>
+                  <button
+                    type="button"
+                    onClick={() => execute(
+                      'save_current_alignment_reference',
+                      JSON.stringify({ client: 'web' }),
+                      'Saving current manual alignment'
+                    )}
+                    disabled={Boolean(busy) || !snapshot.capabilities?.save_current_alignment_reference}
+                  >
+                    Save current manual alignment as next-day reference
+                  </button>
+                </div>
+              )}
               <div className="laser-reference-card" aria-label="Accepted alignment reference">
                 <strong>Stored reference</strong>
                 {hasAcceptedReference ? (
@@ -1861,11 +2044,12 @@ const LaserPointingController = ({ deviceName }) => {
             <section className="laser-panel">
               <div className="laser-section-heading">
                 <strong>Convergence over time</strong>
-                <span>Closed-aperture beam-shape error after each Standa correction</span>
+                <span>{centeringMode ? 'Center spread in pixels; accepted improvements require repeat confirmation' : 'Closed-aperture beam-shape error after each Standa correction'}</span>
               </div>
               <ConvergenceChart
                 history={convergenceHistory}
-                tolerance={roundnessTolerance}
+                tolerance={centeringMode ? centeringTolerance : roundnessTolerance}
+                objective={centeringMode ? 'centering' : 'roundness'}
                 hasTranslation={hasTranslation}
               />
             </section>

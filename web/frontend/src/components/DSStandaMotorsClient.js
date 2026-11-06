@@ -1,5 +1,5 @@
 // DSStandaMotorsClient.js - Multi-motor Standa web client with config selection
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import io from 'socket.io-client';
 import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './DSStandaMotorsClient.css';
@@ -173,9 +173,10 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
   const updateTimers = useRef({});
   const overrideMotors = Array.isArray(motorOverride) ? motorOverride.filter(Boolean) : [];
   const usingOverride = overrideMotors.length > 0;
-  const currentMotorNames = usingOverride
+  const motorNamesKey = JSON.stringify(usingOverride
     ? overrideMotors
-    : (MOTOR_CONFIGS[selectedConfig]?.selection || []);
+    : (MOTOR_CONFIGS[selectedConfig]?.selection || []));
+  const currentMotorNames = useMemo(() => JSON.parse(motorNamesKey), [motorNamesKey]);
   const gridWidth = usingOverride
     ? Math.max(1, Math.min(currentMotorNames.length, 2))
     : (MOTOR_CONFIGS[selectedConfig]?.width || 4);
@@ -271,7 +272,7 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
       Object.values(pendingTimers).forEach((timer) => clearTimeout(timer));
       updateTimers.current = {};
     };
-  }, [selectedConfig, usingOverride, currentMotorNames.join('|')]);
+  }, [currentMotorNames]);
 
   const fetchAllMotorsData = async () => {
     try {

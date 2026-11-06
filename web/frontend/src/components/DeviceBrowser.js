@@ -5,6 +5,7 @@ import ITestPSUClient from './ITestPSUClient';
 import CameraClient from './CameraClient';
 import DSNetioPDUClient from './DSNetioPDUClient';
 import DSStandaMotorsClient from './DSStandaMotorsClient';
+import LaserPointingController from './LaserPointingController';
 import { resolveDeviceFamily } from '../utils/deviceFamily';
 import './DeviceBrowser.css';
 
@@ -58,6 +59,8 @@ const DeviceBrowser = () => {
         return `📷 ${stateColor}`;
       case 'motor':
         return `⚙️ ${stateColor}`;
+      case 'laser_pointing':
+        return `🎯 ${stateColor}`;
       default:
         return `🔧 ${stateColor}`;
     }
@@ -90,6 +93,8 @@ const DeviceBrowser = () => {
         return <DSNetioPDUClient deviceNames={[selectedDevice.name]} />;
       case 'motor':
         return <DSStandaMotorsClient defaultConfig="test" motorOverride={[selectedDevice.name]} />;
+      case 'laser_pointing':
+        return <LaserPointingController deviceName={selectedDevice.name} />;
       default:
         return <DeviceControl deviceName={selectedDevice.name} deviceType={clientType} />;
     }
@@ -117,6 +122,13 @@ const DeviceBrowser = () => {
     if (selectedType === 'motor') {
       return [
         { value: 'motor', label: 'Motor Client' },
+        { value: 'generic', label: 'Generic Control' },
+      ];
+    }
+
+    if (selectedType === 'laser_pointing') {
+      return [
+        { value: 'laser_pointing', label: 'Laser Pointing Controller' },
         { value: 'generic', label: 'Generic Control' },
       ];
     }

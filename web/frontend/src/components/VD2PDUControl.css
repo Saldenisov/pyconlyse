@@ -1,0 +1,15 @@
+.vd2-pdu-panel { margin: 1.5rem 0; }
+.vd2-pdu-panel > header { display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem 1rem; }
+.vd2-pdu-panel > header h2 { margin: 0; }
+.vd2-pdu-panel > header p { margin: 0; }
+.vd2-pdu-panel > header button { margin-left: auto; }
+.vd2-pdu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.vd2-pdu-card { padding: 1.25rem; border: 1px solid #6d7888; border-radius: 0.75rem; background: #17212f; color: #f5f7fa; }
+.vd2-pdu-card h3 { margin: 0 0 0.5rem; }
+.vd2-pdu-device { overflow-wrap: anywhere; opacity: 0.8; }
+.vd2-pdu-output { display: flex; align-items: center; gap: 0.7rem; padding: 0.65rem 0; border-top: 1px solid #5b6776; cursor: pointer; }
+.vd2-pdu-output > span:first-child { flex: 1; }
+.vd2-pdu-output > span:nth-child(2) { font-weight: 700; }
+.vd2-pdu-output input { width: 1.2rem; height: 1.2rem; cursor: pointer; }
+.vd2-pdu-output input:disabled { cursor: not-allowed; }
+.vd2-pdu-error { color: #ffb4b4; overflow-wrap: anywhere; }

@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './css/PumpProbeV0.css';
+import TreatmentPanel from './pump-probe-v0/TreatmentPanel';
+import DerivedSourcePanel from './pump-probe-v0/DerivedSourcePanel';
+import { heatmapAxis, selectionAround, physicalSelection } from './pump-probe-v0/heatmapAxes';
 import {
   STAGE_MIN_MM, STAGE_MAX_MM, SAMPLE_STAGE_MIN_MM, SAMPLE_STAGE_MAX_MM,
   SAMPLE_STAGE_SPEED_MM_PER_SEC, DEFAULT_SAMPLE_POSITIONS_MM, MM_PER_PS, API_BASE,
   pumpProbeRequest, compactHardwareError, fetchJsonWithRetry, clamp, indexesInRange,
-  averageRows, averageColumns, nearestIndex, rangeAround,
+  averageRows, averageColumns, nearestIndex,
   buildSyntheticRun, makeCurrentSpectra, DEFAULT_SETTINGS, DEFAULT_HARDWARE_CONFIG,
   DEFAULT_DEVICE_CONFIG, NETIO_POWER_CHANNELS, HARDWARE_TANGO_SERVERS, devicePath,
   normalizeNetioOutputs, activeDelayPoints, parseDelayPointsText, displayPathTail, settingsToApi,
@@ -28,6 +31,12 @@ function PumpProbeV0() {
   const fallbackRun = useMemo(() => buildSyntheticRun(plannedDelays.length), [plannedDelays.length]);
   const [backendState, setBackendState] = useState(null);
   const [backendError, setBackendError] = useState('');
+  const [configurationError, setConfigurationError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [runBusy, setRunBusy] = useState(false);
+  const runBusyRef = useRef(false);
+  const [tangoRunPreview, setTangoRunPreview] = useState(null);
+  const [delayImportError, setDelayImportError] = useState('');
   const [localIndex, setLocalIndex] = useState(0);
   const localRunning = false;
   const [localPositionMm, setLocalPositionMm] = useState(0);
@@ -59,13 +68,30 @@ function PumpProbeV0() {
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState('');
   const [loadedOdDataset, setLoadedOdDataset] = useState(null);
+  const [odDisplayOwner, setOdDisplayOwner] = useState('live');
+  const odDisplayEpochRef = useRef(0);
+  const [sourceOdDataset, setSourceOdDataset] = useState(null);
+  const [treatmentPreview, setTreatmentPreview] = useState(null);
+  const [treatmentOpen, setTreatmentOpen] = useState(false);
   const [rawDataset, setRawDataset] = useState(null);
+  const [derivedSources, setDerivedSources] = useState([]);
+  const [deriveBusy, setDeriveBusy] = useState(false);
+  const [deriveError, setDeriveError] = useState('');
+  const deriveControllerRef = useRef(null);
   const [spectraViewMode, setSpectraViewMode] = useState('current');
   const [savedKinetics, setSavedKinetics] = useState([]);
   const [kineticCounter, setKineticCounter] = useState(1);
   const [savedOdSpectra, setSavedOdSpectra] = useState([]);
   const [odSpectrumCounter, setOdSpectrumCounter] = useState(1);
   const refreshRequestRef = useRef({ inFlight: false, controller: null });
+  const configQueueRef = useRef(Promise.resolve());
+  const configRequestRef = useRef(null);
+  const desiredConfigRef = useRef(null);
+  const stateMutationRevisionRef = useRef(0);
+  useEffect(() => () => {
+    odDisplayEpochRef.current += 1;
+    deriveControllerRef.current?.abort();
+  }, []);
 
   const closeHardwareModal = useCallback(() => {
     setNetioOpen(false);
@@ -78,14 +104,17 @@ function PumpProbeV0() {
       return;
     }
     const controller = new AbortController();
+    const mutationRevision = stateMutationRevisionRef.current;
     const timeoutId = window.setTimeout(() => controller.abort(), 2000);
     refreshRequestRef.current = { inFlight: true, controller };
     try {
       const state = await pumpProbeRequest('/state', { signal: controller.signal });
-      setBackendState(state);
-      setBackendError('');
+      if (mutationRevision === stateMutationRevisionRef.current) {
+        setBackendState(state);
+        setBackendError('');
+      }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name !== 'AbortError' && mutationRevision === stateMutationRevisionRef.current) {
         setBackendError(error.message);
       }
     } finally {
@@ -97,16 +126,18 @@ function PumpProbeV0() {
   }, []);
 
   const postAndRefresh = useCallback(async (path, payload = {}) => {
+    setActionError('');
     try {
       const state = await pumpProbeRequest(path, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
+      stateMutationRevisionRef.current += 1;
       setBackendState(state);
       setBackendError('');
       return state;
     } catch (error) {
-      setBackendError(error.message);
+      setActionError(error.message);
       return null;
     }
   }, []);
@@ -381,42 +412,81 @@ function PumpProbeV0() {
     if (!filePath) {
       return;
     }
+    deriveControllerRef.current?.abort();
+    deriveControllerRef.current = null;
+    setDeriveBusy(false);
+    const loadEpoch = ++odDisplayEpochRef.current;
     setDataLoading(true);
     setDataError('');
     try {
-      const response = await fetch(`${API_BASE}/data/load`, {
+      const payload = await pumpProbeRequest('/data/load', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ path: filePath }),
       });
-      const payload = await response.json();
-      if (!response.ok || payload.success === false) {
-        throw new Error(payload.error || `Failed to load data file (${response.status})`);
-      }
+      if (loadEpoch !== odDisplayEpochRef.current) return;
       setDataSelectedPath(payload.path || filePath);
-      if (payload.kind === 'od') {
+      setTreatmentPreview(null);
+      setTreatmentOpen(false);
+      if (payload.heatmap) {
+        setSourceOdDataset(payload);
+        if (!payload.source_spec) {
+          setDerivedSources((current) => current.some((item) => item.path === payload.path && item.source_sha256 === payload.source_sha256)
+            ? current : [...current, { path: payload.path, source_sha256: payload.source_sha256, file_name: payload.file_name }]);
+        }
         setLoadedOdDataset(payload);
+        setOdDisplayOwner('file');
         setSelectedWavelengthRange(null);
         setSelectedDelayRange(null);
         setPlotRevision((value) => value + 1);
-      } else if (payload.kind === 'raw') {
-        setRawDataset(payload);
-        setSpectraViewMode('raw');
-      } else if (payload.kind === 'h5') {
-        setLoadedOdDataset(payload);
-        setRawDataset(payload);
-        setSelectedWavelengthRange(null);
-        setSelectedDelayRange(null);
-        setSpectraViewMode('raw');
-        setPlotRevision((value) => value + 1);
+      } else {
+        setSourceOdDataset(null);
+        setLoadedOdDataset(null);
+        setOdDisplayOwner('live');
       }
+      setRawDataset(payload.channels?.length ? payload : null);
+      setSpectraViewMode(payload.channels?.length ? 'raw' : 'current');
     } catch (error) {
-      setDataError(error.message);
+      if (loadEpoch === odDisplayEpochRef.current) setDataError(error.message);
     } finally {
       setDataLoading(false);
     }
   }, []);
+
+  const updateDerivedSources = (update) => {
+    if (deriveControllerRef.current) {
+      odDisplayEpochRef.current += 1;
+      deriveControllerRef.current.abort();
+      deriveControllerRef.current = null;
+      setDeriveBusy(false);
+    }
+    setDerivedSources(update);
+    setDeriveError('');
+  };
+  const deriveDatasets = useCallback(async (method) => {
+    if (derivedSources.length < 2) return;
+    deriveControllerRef.current?.abort();
+    const controller = new AbortController(); deriveControllerRef.current = controller;
+    const epoch = ++odDisplayEpochRef.current;
+    setDeriveBusy(true); setDeriveError(''); setTreatmentOpen(false);
+    try {
+      const payload = await pumpProbeRequest('/data/derive', {
+        method: 'POST', signal: controller.signal,
+        body: JSON.stringify({ method, sources: derivedSources.map(({ path, source_sha256 }) => ({ path, source_sha256 })) }),
+      });
+      if (epoch !== odDisplayEpochRef.current) return;
+      if (!payload.source_spec || !payload.heatmap?.length || payload.delays?.length !== payload.heatmap.length
+          || !payload.heatmap.every((row) => row.length === payload.wavelengths?.length)) throw new Error('Derived result has inconsistent data or axes.');
+      setSourceOdDataset(payload); setLoadedOdDataset(payload); setTreatmentPreview(null);
+      setOdDisplayOwner('file'); setRawDataset(payload.channels?.length ? payload : null);
+      setSpectraViewMode(payload.channels?.length ? 'raw' : 'current');
+      setSelectedWavelengthRange(null); setSelectedDelayRange(null); setLocalIndex(0);
+      setPlotRevision((value) => value + 1);
+    } catch (error) {
+      if (epoch === odDisplayEpochRef.current && error.name !== 'AbortError') setDeriveError(error.message);
+    } finally {
+      if (deriveControllerRef.current === controller) { deriveControllerRef.current = null; setDeriveBusy(false); }
+    }
+  }, [derivedSources]);
 
   const handleSettingChange = useCallback((key, value) => {
     setSettings((current) => {
@@ -453,13 +523,14 @@ function PumpProbeV0() {
   }, []);
 
   const handleDelayPointsLoad = useCallback((text) => {
-    const points = parseDelayPointsText(text).slice(0, 400);
-    if (points.length >= 2) {
+    try {
+      const points = parseDelayPointsText(text, settings.realZeroPs);
       handleSettingChange('delayPointsPs', points);
-    } else {
-      setBackendError('Delay TXT must contain at least 2 numeric rows.');
+      setDelayImportError('');
+    } catch (error) {
+      setDelayImportError(error.message);
     }
-  }, [handleSettingChange]);
+  }, [handleSettingChange, settings.realZeroPs]);
 
   const handleHardwareModeChange = useCallback((mode) => {
     setHardwareConfig((current) => ({
@@ -595,12 +666,56 @@ function PumpProbeV0() {
     };
   }, [refreshState]);
 
-  useEffect(() => {
-    postAndRefresh('/config', {
-      ...settingsToApi(settings),
-      hardware_config: hardwareConfigToApi(hardwareConfig, deviceConfig),
+  const configurationPayload = useMemo(() => ({
+    ...settingsToApi(settings),
+    hardware_config: hardwareConfigToApi(hardwareConfig, deviceConfig),
+  }), [settings, hardwareConfig, deviceConfig]);
+  desiredConfigRef.current = configurationPayload;
+
+  const queueConfiguration = useCallback((payload) => {
+    const signature = JSON.stringify(payload);
+    const previous = configRequestRef.current;
+    if (previous?.signature === signature && previous.status !== 'rejected') {
+      return previous.promise;
+    }
+    const pending = { signature, status: 'pending', promise: null };
+    // Serialize writes: an older request cannot finish after the latest ACK.
+    pending.promise = configQueueRef.current.catch(() => {}).then(async () => {
+      try {
+        const state = await pumpProbeRequest('/config', {
+          method: 'POST', body: JSON.stringify(payload),
+        });
+        pending.status = 'fulfilled';
+        if (signature === JSON.stringify(desiredConfigRef.current)) {
+          stateMutationRevisionRef.current += 1;
+          setBackendState(state);
+          setConfigurationError('');
+        }
+        return state;
+      } catch (error) {
+        pending.status = 'rejected';
+        if (signature === JSON.stringify(desiredConfigRef.current)) setConfigurationError(error.message);
+        throw error;
+      }
     });
-  }, [settings, hardwareConfig, deviceConfig, postAndRefresh]);
+    configQueueRef.current = pending.promise;
+    configRequestRef.current = pending;
+    return pending.promise;
+  }, []);
+
+  const awaitLatestConfiguration = useCallback(async () => {
+    // Settings may change while an older request is pending.
+    while (true) {
+      const payload = desiredConfigRef.current;
+      const signature = JSON.stringify(payload);
+      const state = await queueConfiguration(payload);
+      if (signature === JSON.stringify(desiredConfigRef.current)) return state;
+    }
+  }, [queueConfiguration]);
+
+  useEffect(() => {
+    queueConfiguration(configurationPayload).catch(() => {});
+  }, [configurationPayload, queueConfiguration]);
 
   useEffect(() => {
     if (netioOpen) {
@@ -615,30 +730,52 @@ function PumpProbeV0() {
     }
   }, [dataBrowserOpen, dataLoading, dataPath, dataSelectedPath, loadDataPath]);
 
-  const fileOdLoaded = ['od', 'h5'].includes(loadedOdDataset?.kind);
-  const wavelengths = fileOdLoaded ? loadedOdDataset.wavelengths : (backendState?.wavelengths || fallbackRun.wavelengths);
-  const delays = fileOdLoaded ? loadedOdDataset.delays : (backendState?.delays || fallbackRun.delays);
-  const heatmap = fileOdLoaded ? loadedOdDataset.heatmap : (backendState?.heatmap || fallbackRun.heatmap);
+  const treatmentRequestEpoch = odDisplayEpochRef.current;
+  const displayedOdDataset = odDisplayOwner === 'file' ? (treatmentPreview || loadedOdDataset) : null;
+  const fileOdLoaded = Boolean(displayedOdDataset?.heatmap);
+  const liveWavelengths = backendState?.wavelengths || fallbackRun.wavelengths;
+  const wavelengths = fileOdLoaded ? displayedOdDataset.wavelengths : liveWavelengths;
+  const visibleRawDataset = fileOdLoaded ? displayedOdDataset : rawDataset;
+  const delays = fileOdLoaded ? displayedOdDataset.delays : (backendState?.delays || fallbackRun.delays);
+  const heatmap = fileOdLoaded ? displayedOdDataset.heatmap : (backendState?.heatmap || fallbackRun.heatmap);
   const liveOd = backendState?.live_od || null;
-  const currentIndex = backendState?.current_index ?? localIndex;
+  const currentIndex = fileOdLoaded ? localIndex : (backendState?.current_index ?? localIndex);
   const activeCurrentIndex = clamp(currentIndex, 0, Math.max(0, delays.length - 1));
   const running = backendState?.running ?? localRunning;
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async (action = 'new') => {
+    if (runBusyRef.current) return;
+    setActionError('');
     if (running) {
       postAndRefresh('/run', { running: false });
       return;
     }
+    runBusyRef.current = true;
+    setRunBusy(true);
     try {
-      const savePath = await createRunFolder();
-      await postAndRefresh('/run', {
-        running: true,
-        save_path: savePath,
-        sample_name: sampleName,
-      });
-    } catch (error) {
-      setBackendError(error.message);
-    }
-  }, [createRunFolder, postAndRefresh, running, sampleName]);
+      await awaitLatestConfiguration();
+      const savePath = action === 'continue' ? backendState?.run?.output_dir : await createRunFolder();
+      const configured = await awaitLatestConfiguration();
+      const payload = {
+        running: true, run_action: action,
+        ...(savePath ? { save_path: savePath } : {}), sample_name: sampleName,
+      };
+      if (configured?.control_mode === 'tango') {
+        const preview = await pumpProbeRequest('/run/plan', { method: 'POST', body: JSON.stringify(payload) });
+        setTangoRunPreview(preview);
+        if (!preview.commissioned) throw new Error('Tango RAW profile requires BG_level verification for the configured Andor readout.');
+        payload.plan_fingerprint = preview.fingerprint;
+      }
+      const startedState = await postAndRefresh('/run', payload);
+      if (startedState?.running) {
+        odDisplayEpochRef.current += 1;
+        deriveControllerRef.current?.abort(); deriveControllerRef.current = null; setDeriveBusy(false);
+        setOdDisplayOwner('live'); setSpectraViewMode('current'); setTreatmentOpen(false);
+        setSelectedWavelengthRange(null); setSelectedDelayRange(null);
+        setPlotRevision((value) => value + 1);
+      }
+    } catch (error) { setActionError(error.message); }
+    finally { runBusyRef.current = false; setRunBusy(false); }
+  }, [awaitLatestConfiguration, backendState, createRunFolder, postAndRefresh, running, sampleName]);
   const realTime = backendState?.real_time ?? false;
   const faradayClosed = backendState?.faraday_closed ?? localFaradayClosed;
   const electronState = backendState?.electron_state || localElectronState;
@@ -695,8 +832,8 @@ function PumpProbeV0() {
   }, [backendState, currentIndex, delays, settings.realZeroPs]);
 
   const spectra = useMemo(
-    () => backendState?.spectra || makeCurrentSpectra(wavelengths, activeCurrentIndex, electronState),
-    [backendState, wavelengths, activeCurrentIndex, electronState]
+    () => backendState?.spectra || makeCurrentSpectra(liveWavelengths, activeCurrentIndex, electronState),
+    [backendState, liveWavelengths, activeCurrentIndex, electronState]
   );
 
   const completedHeatmap = backendState || fileOdLoaded
@@ -711,12 +848,14 @@ function PumpProbeV0() {
       : bestIndex
   ), 0);
   const delayStep = Math.abs((delays[1] ?? delays[0] + 1) - (delays[0] ?? 0)) || 1;
-  const defaultWavelengthRange = rangeAround(wavelengths, wavelengths[kineticIndex], 10);
-  const defaultDelayRange = rangeAround(delays, delays[activeCurrentIndex] || delays[0] || 0, delayStep);
+  const wavelengthAxis = heatmapAxis(wavelengths);
+  const delayAxis = heatmapAxis(delays);
+  const defaultWavelengthRange = selectionAround(wavelengthAxis, kineticIndex, wavelengthAxis.positional ? 0.49 : 10);
+  const defaultDelayRange = selectionAround(delayAxis, activeCurrentIndex, delayAxis.positional ? 0.49 : delayStep);
   const activeWavelengthRange = selectedWavelengthRange || defaultWavelengthRange;
   const activeDelayRange = selectedDelayRange || defaultDelayRange;
-  const selectedWavelengthIndexes = indexesInRange(wavelengths, activeWavelengthRange);
-  const selectedDelayIndexes = indexesInRange(delays, activeDelayRange);
+  const selectedWavelengthIndexes = indexesInRange(wavelengthAxis.coordinates, activeWavelengthRange);
+  const selectedDelayIndexes = indexesInRange(delayAxis.coordinates, activeDelayRange);
   const safeWavelengthIndexes = selectedWavelengthIndexes.length
     ? selectedWavelengthIndexes
     : [kineticIndex];
@@ -725,24 +864,25 @@ function PumpProbeV0() {
     : [activeCurrentIndex];
   const selectedRowsOd = averageRows(heatmap, safeDelayIndexes);
   const selectedRowsHaveData = selectedRowsOd.some((value) => value !== null && value !== undefined);
-  const selectedOd = (selectedRowsHaveData ? selectedRowsOd : (liveOd || selectedRowsOd))
-    .map((value) => value ?? 0);
+  const selectedOd = fileOdLoaded ? selectedRowsOd : (selectedRowsHaveData ? selectedRowsOd : (liveOd || selectedRowsOd));
   const kineticTrace = averageColumns(heatmap, safeWavelengthIndexes);
-  const selectedWavelengthLabel = `${activeWavelengthRange[0].toFixed(1)}-${activeWavelengthRange[1].toFixed(1)} nm`;
-  const selectedDelayLabel = `${activeDelayRange[0].toFixed(2)}-${activeDelayRange[1].toFixed(2)} ps`;
-  const rawDelayIndexes = rawDataset?.delays?.length
-    ? indexesInRange(rawDataset.delays, activeDelayRange)
+  const selectedPhysicalWavelengths = physicalSelection(wavelengths, safeWavelengthIndexes);
+  const selectedPhysicalDelays = physicalSelection(delays, safeDelayIndexes);
+  const selectedWavelengthLabel = `${selectedPhysicalWavelengths[0].toFixed(1)}-${selectedPhysicalWavelengths[1].toFixed(1)} nm${wavelengthAxis.positional ? `; pixels ${safeWavelengthIndexes[0]}-${safeWavelengthIndexes[safeWavelengthIndexes.length - 1]}` : ''}`;
+  const selectedDelayLabel = `${selectedPhysicalDelays[0].toFixed(2)}-${selectedPhysicalDelays[1].toFixed(2)} ps${delayAxis.positional ? `; rows ${safeDelayIndexes[0]}-${safeDelayIndexes[safeDelayIndexes.length - 1]}` : ''}`;
+  const rawDelayIndexes = fileOdLoaded ? safeDelayIndexes : visibleRawDataset?.delays?.length
+    ? indexesInRange(visibleRawDataset.delays, selectedPhysicalDelays)
     : [];
   const rawSafeDelayIndexes = rawDelayIndexes.length
     ? rawDelayIndexes
-    : (rawDataset?.delays?.length
-      ? [nearestIndex(rawDataset.delays, (activeDelayRange[0] + activeDelayRange[1]) / 2)]
+    : (visibleRawDataset?.delays?.length
+      ? [nearestIndex(visibleRawDataset.delays, (selectedPhysicalDelays[0] + selectedPhysicalDelays[1]) / 2)]
       : []);
-  const showRawSpectra = spectraViewMode === 'raw' && rawDataset?.channels?.length;
+  const showRawSpectra = spectraViewMode === 'raw' && visibleRawDataset?.channels?.length;
   const rawColors = ['#f1c84b', '#33c5ff', '#f05d5e', '#c798ff', '#7ee787', '#ff9f43'];
   const savedKineticColors = ['#33c5ff', '#f1c84b', '#c798ff', '#ff9f43', '#7ee787', '#ff6b9a', '#9fb7ff'];
   const currentOdSource = fileOdLoaded
-    ? (loadedOdDataset.file_name || 'OD file')
+    ? `${displayedOdDataset.file_name || 'OD file'}${treatmentPreview ? ' (preview)' : ''}`
     : 'live';
 
   const addKineticTrace = () => {
@@ -810,9 +950,9 @@ function PumpProbeV0() {
   };
 
   const spectraData = showRawSpectra
-    ? rawDataset.channels.map((channel, index) => ({
-      x: rawDataset.wavelengths,
-      y: averageRows(channel.values || [], rawSafeDelayIndexes).map((value) => value ?? 0),
+    ? visibleRawDataset.channels.map((channel, index) => ({
+      x: visibleRawDataset.wavelengths,
+      y: averageRows(channel.values || [], rawSafeDelayIndexes),
       type: 'scatter',
       mode: 'lines',
       name: channel.label || channel.key,
@@ -820,7 +960,7 @@ function PumpProbeV0() {
     }))
     : [
       {
-        x: wavelengths,
+        x: liveWavelengths,
         y: spectra.signal,
         type: 'scatter',
         mode: 'lines',
@@ -828,7 +968,7 @@ function PumpProbeV0() {
         line: { color: '#f05d5e', width: 2 },
       },
       {
-        x: wavelengths,
+        x: liveWavelengths,
         y: spectra.reference,
         type: 'scatter',
         mode: 'lines',
@@ -836,7 +976,7 @@ function PumpProbeV0() {
         line: { color: '#33c5ff', width: 2 },
       },
       ...(spectra.background_available === false ? [] : [{
-        x: wavelengths,
+        x: liveWavelengths,
         y: spectra.background,
         type: 'scatter',
         mode: 'lines',
@@ -845,7 +985,7 @@ function PumpProbeV0() {
       }]),
     ];
   const spectraTitle = showRawSpectra
-    ? `Raw spectrum (${rawDataset.file_name || 'ZIP'})`
+    ? `Raw spectrum (${visibleRawDataset.file_name || 'ZIP'})`
     : 'Current spectra';
 
   const spectraLayout = {
@@ -918,9 +1058,11 @@ function PumpProbeV0() {
 
   const heatmapData = [
     {
-      x: wavelengths,
-      y: delays,
+      x: wavelengthAxis.coordinates,
+      y: delayAxis.coordinates,
       z: completedHeatmap,
+      customdata: delays.map((delay, row) => wavelengths.map((wavelength, column) =>
+        [wavelength, delay, column, row, displayedOdDataset?.source_row_indices?.[row] ?? row])),
       type: 'heatmap',
       colorscale: [
         [0, '#13294b'],
@@ -931,7 +1073,7 @@ function PumpProbeV0() {
       zmin: -0.12,
       zmax: 0.25,
       colorbar: { title: 'delta O.D.' },
-      hovertemplate: 'wl=%{x:.1f} nm<br>delay=%{y:.2f} ps<br>OD=%{z:.4f}<extra></extra>',
+      hovertemplate: 'wl=%{customdata[0]:.1f} nm<br>delay=%{customdata[1]:.2f} ps<br>pixel=%{customdata[2]}, row=%{customdata[3]} (source %{customdata[4]})<br>OD=%{z:.4f}<extra></extra>',
     },
   ];
 
@@ -941,13 +1083,16 @@ function PumpProbeV0() {
     margin: { l: 64, r: 78, t: 20, b: 48 },
     xaxis: {
       ...plotTheme.xaxis,
-      range: [wavelengths[0], wavelengths[wavelengths.length - 1]],
+      range: wavelengthAxis.range,
+      ...wavelengthAxis.ticks,
+      title: { text: wavelengthAxis.positional ? 'Wavelength, nm [pixel]' : 'Wavelength, nm' },
       fixedrange: true,
     },
     yaxis: {
       ...plotTheme.yaxis,
-      title: { text: 'Time delay, ps' },
-      range: [delays[0], delays[delays.length - 1]],
+      title: { text: delayAxis.positional ? 'Time delay, ps [row]' : 'Time delay, ps' },
+      range: delayAxis.range,
+      ...delayAxis.ticks,
       fixedrange: true,
     },
   };
@@ -1033,10 +1178,17 @@ function PumpProbeV0() {
           </button>
           <button
             type="button"
-            onClick={handleRun}
+            disabled={runBusy || backendState?.run?.status === 'stopping'}
+            onClick={() => handleRun('new')}
           >
-            {running ? 'Stop' : 'Start'}
+            {runBusy ? 'Preparing...' : running ? 'Stop' : backendState?.run?.status === 'stopping' ? 'Stopping...' : 'Start'}
           </button>
+          {!running && backendState?.run?.resume_available && (
+            <button type="button" disabled={runBusy} onClick={() => handleRun('continue')}>Continue</button>
+          )}
+          {(running || backendState?.run?.resume_available) && (
+            <button type="button" onClick={() => postAndRefresh('/run', { running: false, run_action: 'cancel' })}>Cancel run</button>
+          )}
           <button
             type="button"
             className={faradayClosed ? 'pp-action-ok' : 'pp-action-warn'}
@@ -1123,8 +1275,18 @@ function PumpProbeV0() {
         </div>
         <div><span>run</span>{backendState?.run?.status || 'idle'}</div>
       </section>
-      {backendError ? <div className="pp-api-error">{backendError}</div> : null}
+      {[...new Set([configurationError, actionError, backendError].filter(Boolean))].map((message) => (
+        <div className="pp-api-error" role="alert" key={message}>{message}</div>
+      ))}
+      {delayImportError ? <div className="pp-api-error" role="alert">{delayImportError}</div> : null}
       {backendState?.hardware_error ? <div className="pp-api-error">{backendState.hardware_error}</div> : null}
+      {activeControlMode === 'tango' && tangoRunPreview ? (
+        <div className="pp-run-profile" role="status">
+          RAW: track 1 → I, track 2 → II; BG_level = {tangoRunPreview.plan?.profile?.background_level};
+          {' '}{tangoRunPreview.commissioned ? 'profile verified' : 'profile requires verification'}.
+          {' '}Rejected cycles: {backendState?.run?.rejected_cycles || 0}.
+        </div>
+      ) : null}
       {hardwareInitStatus ? (
         <section className={`pp-hw-init ${hardwareInitStatus.success ? 'pp-hw-init-ok' : 'pp-hw-init-fail'}`}>
           <div className="pp-hw-init-head">
@@ -1163,6 +1325,15 @@ function PumpProbeV0() {
         </button>
       </section>
 
+      <DerivedSourcePanel sources={derivedSources} busy={deriveBusy} error={deriveError}
+        onDerive={deriveDatasets}
+        onRemove={(index) => updateDerivedSources((current) => current.filter((_source, i) => i !== index))}
+        onClear={() => updateDerivedSources([])}
+        onMove={(index, offset) => updateDerivedSources((current) => {
+          const next = [...current]; const target = index + offset;
+          if (target >= 0 && target < next.length) [next[index], next[target]] = [next[target], next[index]];
+          return next;
+        })} />
       <section className="pp-layout">
         <div className="pp-left-column">
           <PlotPanel
@@ -1181,7 +1352,7 @@ function PumpProbeV0() {
                   type="button"
                   className={spectraViewMode === 'raw' ? 'pp-panel-toggle-active' : ''}
                   onClick={() => setSpectraViewMode('raw')}
-                  disabled={!rawDataset}
+                  disabled={!visibleRawDataset?.channels?.length}
                 >
                   Raw
                 </button>
@@ -1209,7 +1380,28 @@ function PumpProbeV0() {
         </div>
 
         <div className="pp-center-grid">
-          <PlotPanel title="OD heatmap" className="pp-panel-fill">
+          <PlotPanel title={`OD heatmap · ${fileOdLoaded ? currentOdSource : 'Live'}`} className="pp-panel-fill" actions={(
+            <div className="pp-panel-toggle">
+              {['live', 'file'].map((owner) => (
+                <button key={owner} type="button"
+                  aria-pressed={odDisplayOwner === owner}
+                  className={odDisplayOwner === owner ? 'pp-panel-toggle-active' : ''}
+                  disabled={owner === 'file' && !loadedOdDataset}
+                  onClick={() => {
+                    odDisplayEpochRef.current += 1;
+                    setTreatmentOpen(false);
+                    setOdDisplayOwner(owner);
+                    setSelectedWavelengthRange(null);
+                    setSelectedDelayRange(null);
+                    setPlotRevision((value) => value + 1);
+                  }}>
+                  {owner === 'live' ? 'Live OD' : 'File OD'}
+                </button>
+              ))}
+              <button type="button" className="pp-icon-button" disabled={!fileOdLoaded || !sourceOdDataset}
+                onClick={() => setTreatmentOpen(true)}>Corrections</button>
+            </div>
+          )}>
             <HeatmapSelectorChart
               className="pp-plot pp-plot-heatmap"
               data={heatmapData}
@@ -1356,6 +1548,28 @@ function PumpProbeV0() {
           />
         </aside>
       </section>
+      {treatmentOpen && sourceOdDataset && (
+        <TreatmentPanel key={`${sourceOdDataset.path}:${sourceOdDataset.source_sha256}`}
+          source={sourceOdDataset} applied={loadedOdDataset}
+          selection={{ wavelength_pixels: [Math.min(...safeWavelengthIndexes), Math.max(...safeWavelengthIndexes)],
+            delay_pixels: [Math.min(...safeDelayIndexes), Math.max(...safeDelayIndexes)] }}
+          onPreview={(preview) => {
+            if (treatmentRequestEpoch === odDisplayEpochRef.current) {
+              setTreatmentPreview(preview);
+              if (preview || treatmentPreview) {
+                setSelectedWavelengthRange(null); setSelectedDelayRange(null); setLocalIndex(0);
+                setPlotRevision((value) => value + 1);
+              }
+            }
+          }}
+          onApply={(applied) => {
+            if (treatmentRequestEpoch === odDisplayEpochRef.current) {
+              setLoadedOdDataset(applied); setSelectedWavelengthRange(null); setSelectedDelayRange(null); setLocalIndex(0);
+              setPlotRevision((value) => value + 1);
+            }
+          }}
+          onClose={() => { setTreatmentPreview(null); setTreatmentOpen(false); }} />
+      )}
       <DeviceConfigModal
         deviceKey={deviceConfigKey}
         config={deviceConfig}

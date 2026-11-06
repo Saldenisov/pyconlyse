@@ -1,0 +1,16 @@
+.frame-display-rate {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  pointer-events: none;
+  padding: 4px 7px;
+  border: 1px solid #9bbfd780;
+  border-radius: 3px;
+  background: #07111de6;
+  color: #e3f6ff;
+  font: 600 12px/16px Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: none;
+}

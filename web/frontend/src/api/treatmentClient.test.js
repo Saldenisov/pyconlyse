@@ -1,4 +1,5 @@
 import {
+  TREATMENT_AUTH_MESSAGE,
   fetchCleaningView,
   fetchCompressionJob,
   fetchFileSummary,
@@ -16,6 +17,12 @@ import {
   startFolderSetJob,
   fetchTreatmentSession,
   updateSelectionConfig,
+  fetchSkanaDataset,
+  importSkanaDataset,
+  startSkanaJob,
+  fetchSkanaJob,
+  cancelSkanaJob,
+  downloadSkanaResult,
 } from './treatmentClient';
 import {
   clearHardwareApprovalNonce,
@@ -24,6 +31,56 @@ import {
 } from './csrfRequest';
 
 const originalFetch = global.fetch;
+
+describe('SK-Ana session request contracts', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200,
+      json: async () => ({ success: true }), blob: async () => new Blob(['{}']) });
+    document.cookie = 'csrf_access_token=; Max-Age=0; path=/';
+  });
+  afterEach(() => { global.fetch = originalFetch; jest.useRealTimers(); });
+
+  test('matrix reads are same-origin and session-specific', async () => {
+    await fetchSkanaDataset('s-one', 'od');
+    expect(fetch).toHaveBeenCalledWith('/api/treatment/skana/dataset?source=od', expect.objectContaining({
+      credentials: 'same-origin', headers: { 'X-Treatment-Session-Id': 's-one' }, signal: expect.any(AbortSignal) }));
+    expect(fetch.mock.calls[0][1].body).toBeUndefined();
+  });
+  test('import/start/cancel preserve JSON and CSRF without hardware approval', async () => {
+    document.cookie = 'csrf_access_token=skana-token; path=/';
+    await importSkanaDataset('s-one', { text: '0 400\n0 1', orientation: 'time_rows' });
+    await startSkanaJob('s-one', { method: 'svd', fingerprint: 'first', source: 'od', options: { rank: 2 } });
+    await fetchSkanaJob('s-one', 'job/one');
+    await cancelSkanaJob('s-one', 'job/one');
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(['/api/treatment/skana/import', '/api/treatment/skana/jobs',
+      '/api/treatment/skana/jobs/job%2Fone', '/api/treatment/skana/jobs/job%2Fone/cancel']);
+    expect(fetch.mock.calls[1][1].headers).toEqual({ 'X-Treatment-Session-Id': 's-one', 'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': 'skana-token' });
+    expect(JSON.parse(fetch.mock.calls[1][1].body).fingerprint).toBe('first');
+    expect(fetch.mock.calls.every(([, options]) => !options.headers['X-PYCONLYSE-HARDWARE-APPROVAL'])).toBe(true);
+    document.cookie = 'csrf_access_token=; Max-Age=0; path=/';
+  });
+  test('external abort reaches fetch and downloads remain blobs', async () => {
+    const abort = new AbortController();
+    await fetchSkanaDataset('s-one', 'od', abort.signal);
+    expect(fetch.mock.calls[0][1].signal.aborted).toBe(false);
+    const blob = await downloadSkanaResult('s-one', 'job-one', 'csv');
+    expect(blob).toBeInstanceOf(Blob);
+    expect(fetch.mock.calls[1][0]).toBe('/api/treatment/skana/jobs/job-one/export?format=csv');
+    const alreadyAborted = new AbortController(); alreadyAborted.abort();
+    await fetchSkanaJob('s-one', 'job-one', alreadyAborted.signal);
+    expect(fetch.mock.calls[2][1].signal.aborted).toBe(true);
+  });
+  test('request abort stays cancellation, not an invented timeout', async () => {
+    const abort = new AbortController();
+    fetch.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(Object.assign(new Error('Cancelled'), { name: 'AbortError' })));
+    }));
+    const pending = fetchSkanaJob('s-one', 'job-one', abort.signal);
+    abort.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError', message: 'Cancelled' });
+  });
+});
 
 describe('treatmentClient request contracts', () => {
   beforeEach(() => {
@@ -145,6 +202,32 @@ describe('treatmentClient request contracts', () => {
     await expect(fetchTreatmentSession()).rejects.toThrow(
       'Failed to fetch /api/treatment/session. Check backend connection.'
     );
+  });
+
+  test.each([
+    { msg: 'Missing or invalid authentication credentials' },
+    { msg: 'Token has expired' },
+    null,
+  ])('offers authentication recovery for a 401 response: %j', async (payload) => {
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: jest.fn().mockResolvedValue(payload),
+    });
+    await expect(postTreatment('sid', '/api/treatment/session/config')).rejects.toMatchObject({
+      message: TREATMENT_AUTH_MESSAGE,
+      status: 401,
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('preserves server msg errors outside authentication failures', async () => {
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: jest.fn().mockResolvedValue({ msg: 'Access denied' }),
+    });
+    await expect(fetchTreatmentSession()).rejects.toThrow('Access denied');
   });
 
   test('uses encoded query parameters and maps AbortError to timeout message', async () => {

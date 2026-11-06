@@ -7,6 +7,8 @@ import React, {
   useState,
 } from 'react';
 import Plotly from 'plotly.js-dist';
+import TreatmentError from './components/TreatmentError';
+import SkanaPanel from './SkanaPanel';
 import { TreatmentContext } from './DataWindowVD2';
 import {
   fetchCleaningView,
@@ -19,6 +21,7 @@ import {
   enqueueTreatmentRecipe,
   postTreatment,
   removeTreatmentQueueJob,
+  runTreatmentQueue,
   startCompressionJob,
   updateSelectionConfig,
 } from './api/treatmentClient';
@@ -44,10 +47,17 @@ const REQUIRED_DATA_TYPES = {
   'ABS+BASE+NOISE': ['ABS', 'BASE', 'NOISE'],
 };
 const FILES_LAYOUT_STORAGE_KEY = 'pyconlyse.treatment.filesLayout';
+const SESSION_BACKUP_STORAGE_PREFIX = 'pyconlyse.treatment.sessionBackup.';
+const CLEANING_DRAFT_STORAGE_PREFIX = 'pyconlyse.treatment.cleaningDraft.';
+const FOLDER_TREE_OPEN_STORAGE_PREFIX = 'pyconlyse.treatment.folderTreeOpen.';
 const DEFAULT_FILES_LAYOUT = {
   parameters: 300,
   selected: 320,
+  tree: 252,
 };
+const MIN_TREE_WIDTH = 180;
+const MAX_TREE_WIDTH = 460;
+const isProjectManifest = file => String(file?.name || pathName(file?.path || '')).toLowerCase() === 'vd2-manifest.json';
 
 function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -59,6 +69,7 @@ function readFilesLayout() {
     return {
       parameters: clampNumber(Number(saved.parameters) || DEFAULT_FILES_LAYOUT.parameters, 240, 520),
       selected: clampNumber(Number(saved.selected) || DEFAULT_FILES_LAYOUT.selected, 260, 520),
+      tree: clampNumber(Number(saved.tree) || DEFAULT_FILES_LAYOUT.tree, MIN_TREE_WIDTH, MAX_TREE_WIDTH),
     };
   } catch (_error) {
     return DEFAULT_FILES_LAYOUT;
@@ -73,6 +84,49 @@ function saveFilesLayout(layout) {
   }
 }
 
+function sessionBackupKey(sessionId) {
+  return `${SESSION_BACKUP_STORAGE_PREFIX}${sessionId}`;
+}
+
+function isEmptyTreatmentSession(sessionState) {
+  return sessionState?.status_label === 'Treatment session is ready.'
+    && Object.keys(sessionState?.paths || {}).length === 0
+    && !sessionState?.save_file_name;
+}
+
+function hasRecoverableTreatmentWork(sessionState) {
+  return Object.keys(sessionState?.paths || {}).length > 0
+    || Boolean(sessionState?.save_file_name)
+    || Object.keys(sessionState?.selection || {}).length > 0
+    || Boolean(sessionState?.cleaning_preview_request);
+}
+
+function readSessionBackup(sessionId) {
+  try {
+    return JSON.parse(window.localStorage.getItem(sessionBackupKey(sessionId)) || 'null');
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveSessionBackup(sessionId, sessionState) {
+  if (!sessionId || !hasRecoverableTreatmentWork(sessionState)) return;
+  try {
+    window.localStorage.setItem(sessionBackupKey(sessionId), JSON.stringify(sessionState));
+  } catch (_error) {
+    // The server-side session remains usable when browser storage is unavailable.
+  }
+}
+
+function readCleaningDraft(sessionId, field) {
+  try {
+    return window.localStorage.getItem(`${CLEANING_DRAFT_STORAGE_PREFIX}${sessionId}.${field}`)
+      || '1.0';
+  } catch (_error) {
+    return '1.0';
+  }
+}
+
 function requiredDataTypesForExpType(expType) {
   return REQUIRED_DATA_TYPES[String(expType || '').trim().toUpperCase()] || [];
 }
@@ -83,6 +137,12 @@ function shouldApplyAutoPreset(sessionState, preset) {
   }
   const assignedPaths = Object.keys(sessionState.paths || {});
   if (assignedPaths.length > 0) {
+    return false;
+  }
+  // A restored or edited session can be meaningful before files are assigned.
+  // Only an untouched session or a new folder link may receive defaults.
+  if (sessionState.status_label && sessionState.status_label !== 'Treatment session is ready.'
+      && !sessionState.status_label.startsWith('Folder selected:')) {
     return false;
   }
   return (
@@ -106,20 +166,44 @@ const ParametersZone = ({
   onReset,
   profileName,
   layoutMode,
+  onSave,
+  onAverageNoise,
+  canAverageNoise,
+  compact = false,
+  busy = false,
 }) => {
   const isAbsBaseNoiseMode = session.exp_type === 'ABS+BASE+NOISE';
 
   return (
     <div className="parameters-zone">
+      {(!compact || session.result_ready) && <>
       <div className="parameters-zone-header">
-        <h3>{layoutMode === 'studio' ? 'Processing' : 'Treatment Session'}</h3>
+        <h3>{layoutMode === 'studio' ? '4 Save' : 'Treatment Session'}</h3>
         <span>
           Profile: <strong>{profileName}</strong>
         </span>
       </div>
+      <div className="parameter-field parameter-field-wide">
+        <label htmlFor="treatment-save-folder">Save Folder</label>
+        <input id="treatment-save-folder" type="text" value={draftSaveFolder} disabled={busy}
+          onChange={event => onDraftSaveFolderChange(event.target.value)} onBlur={onCommitSaveFolder}
+          placeholder="Select a folder inside the treatment root" />
+      </div>
+      <div className="parameter-field parameter-field-wide">
+        <label htmlFor="treatment-save-name">Save File Name</label>
+        <input id="treatment-save-name" type="text" value={draftSaveFileName} disabled={busy}
+          onChange={event => onDraftSaveFileNameChange(event.target.value)} onBlur={onCommitSaveFileName}
+          placeholder="result.dat" />
+      </div>
+      {onSave && <button type="button" onPointerDown={event => event.preventDefault()} onClick={onSave} disabled={busy || !session.result_ready}>Save Result</button>}
+      </>}
+      {!compact && <details className="treatment-advanced-settings">
+        <summary>Advanced settings</summary>
+        <div className="treatment-settings-fields">
       <div className="parameter-field">
         <label>Experiment Type:</label>
         <select
+          aria-label="Experiment type" disabled={busy}
           value={session.exp_type}
           onChange={(event) => onConfigChange({ exp_type: event.target.value })}
         >
@@ -133,6 +217,7 @@ const ParametersZone = ({
       <div className="parameter-field">
         <label>Assign As:</label>
         <select
+          aria-label="Assign as" disabled={busy}
           value={session.selected_data_type}
           onChange={(event) =>
             onConfigChange({ selected_data_type: event.target.value })
@@ -148,8 +233,9 @@ const ParametersZone = ({
       <div className="parameter-field">
         <label>Calculation Mode:</label>
         <select
+          aria-label="Calculation mode"
           value={session.calc_mode}
-          disabled={isAbsBaseNoiseMode}
+          disabled={busy || isAbsBaseNoiseMode}
           onChange={(event) => onConfigChange({ calc_mode: event.target.value })}
         >
           {(isAbsBaseNoiseMode ? ['averaged'] : calcModes).map((item) => (
@@ -164,7 +250,7 @@ const ParametersZone = ({
           <input
             type="checkbox"
             checked={session.first_map_with_electrons}
-            disabled={isAbsBaseNoiseMode}
+            disabled={busy || isAbsBaseNoiseMode}
             onChange={(event) =>
               onConfigChange({
                 first_map_with_electrons: event.target.checked,
@@ -174,29 +260,12 @@ const ParametersZone = ({
           First map with electrons
         </label>
       </div>
-      <div className="parameter-field parameter-field-wide">
-        <label>Save Folder:</label>
-        <input
-          type="text"
-          value={draftSaveFolder}
-          onChange={(event) => onDraftSaveFolderChange(event.target.value)}
-          onBlur={onCommitSaveFolder}
-          placeholder="Select a folder inside the treatment root"
-        />
-      </div>
-      <div className="parameter-field parameter-field-wide">
-        <label>Save File Name:</label>
-        <input
-          type="text"
-          value={draftSaveFileName}
-          onChange={(event) => onDraftSaveFileNameChange(event.target.value)}
-          onBlur={onCommitSaveFileName}
-          placeholder="result.dat"
-        />
-      </div>
       <div className="parameter-actions">
-        <button onClick={onReset}>Reset Session</button>
+        {onAverageNoise && <button type="button" onClick={onAverageNoise} disabled={busy || !canAverageNoise}>Average Noise</button>}
+        <button onClick={onReset} disabled={busy}>Reset Session</button>
       </div>
+        </div>
+      </details>}
     </div>
   );
 };
@@ -995,16 +1064,28 @@ function StitchProfilePlot({ spectra, title, mode = 'selected' }) {
   return <div className="stitch-profile" ref={plotRef} />;
 }
 
-const TabsControl = () => {
+const TabsControl = ({ preview = null }) => {
+  const treeFirst = Boolean(preview);
   const treatmentContext = useContext(TreatmentContext);
   const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
   const treatmentProfile = String(treatmentContext?.treatmentProfile || 'VD2').toUpperCase();
+  const manifestProjectFolder=treatmentContext?.manifestProjectFolder||'';
   const treatmentLayoutMode = treatmentContext?.treatmentLayoutMode || 'classic';
   const isStudioLayout = treatmentLayoutMode === 'studio';
   const requestSelectionRefresh = treatmentContext?.requestSelectionRefresh;
-  const [activeTab, setActiveTab] = useState('files');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(`pyconlyse.treatment.activeTab.${treatmentSessionId}`);
+      return !saved || (treeFirst && saved === 'info') ? 'files' : saved;
+    } catch (_error) {
+      return 'files';
+    }
+  });
   const [treatment, setTreatment] = useState(null);
   const filesLayoutRef = useRef(null);
+  const treeResizeRef = useRef(null);
+  const queueWasRunningRef = useRef(false);
+  const folderQueueActiveRef = useRef(false);
   const stitchAutoPreviewAttemptKeyRef = useRef('');
   const skipNextStitchCoefficientRefreshRef = useRef(false);
   const [filesLayout, setFilesLayout] = useState(readFilesLayout);
@@ -1013,7 +1094,17 @@ const TabsControl = () => {
   const [expandedFolders, setExpandedFolders] = useState(() => new Set());
   const [fileContextMenu, setFileContextMenu] = useState(null);
   const [folderContextMenu, setFolderContextMenu] = useState(null);
-  const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(false);
+  const [detailFile, setDetailFile] = useState(null);
+  const [selectedFolders, setSelectedFolders] = useState([]);
+  const folderSelectionAnchor = useRef(null);
+  const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(`${FOLDER_TREE_OPEN_STORAGE_PREFIX}${treatmentSessionId}`)
+        === 'true' || treeFirst;
+    } catch (_error) {
+      return treeFirst;
+    }
+  });
   const [isSelectingFolderRoot, setIsSelectingFolderRoot] = useState(false);
   const [treeRoot, setTreeRoot] = useState('');
   const [draftSaveFolder, setDraftSaveFolder] = useState('');
@@ -1021,8 +1112,12 @@ const TabsControl = () => {
   const [draftAllowedRoot, setDraftAllowedRoot] = useState('');
   const [draftKineticsRanges, setDraftKineticsRanges] = useState('');
   const [draftSpectraRanges, setDraftSpectraRanges] = useState('');
-  const [cleaningAngleThreshold, setCleaningAngleThreshold] = useState('1.0');
-  const [cleaningSurfaceThreshold, setCleaningSurfaceThreshold] = useState('1.0');
+  const [cleaningAngleThreshold, setCleaningAngleThreshold] = useState(
+    () => readCleaningDraft(treatmentSessionId, 'angle')
+  );
+  const [cleaningSurfaceThreshold, setCleaningSurfaceThreshold] = useState(
+    () => readCleaningDraft(treatmentSessionId, 'surface')
+  );
   const [error, setError] = useState('');
   const [operationMessage, setOperationMessage] = useState('');
   const [selectionMessage, setSelectionMessage] = useState('');
@@ -1058,7 +1153,52 @@ const TabsControl = () => {
   const profilePreset = PROFILE_PRESETS[treatmentProfile] || PROFILE_PRESETS.VD2;
   const isV0Profile = treatmentProfile === 'V0';
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        `pyconlyse.treatment.activeTab.${treatmentSessionId}`,
+        activeTab
+      );
+    } catch (_error) {
+      // Treatment remains usable when localStorage is unavailable.
+    }
+  }, [activeTab, treatmentSessionId]);
+
   const session = treatment ? treatment.session : null;
+  const sourceFolder = treeRoot || session?.folder_path || treatment?.allowed_root || '';
+  const cleaningFolders = selectedFolders.length > 0
+    ? selectedFolders
+    : sourceFolder && sourceFolder !== treatment?.allowed_root ? [sourceFolder] : [];
+
+  useEffect(() => {
+    saveSessionBackup(treatmentSessionId, session);
+  }, [session, treatmentSessionId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        `${FOLDER_TREE_OPEN_STORAGE_PREFIX}${treatmentSessionId}`,
+        String(isFolderTreeOpen)
+      );
+    } catch (_error) {
+      // Server-side folder selection remains available without browser storage.
+    }
+  }, [isFolderTreeOpen, treatmentSessionId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        `${CLEANING_DRAFT_STORAGE_PREFIX}${treatmentSessionId}.angle`,
+        cleaningAngleThreshold
+      );
+      window.localStorage.setItem(
+        `${CLEANING_DRAFT_STORAGE_PREFIX}${treatmentSessionId}.surface`,
+        cleaningSurfaceThreshold
+      );
+    } catch (_error) {
+      // The server-side treatment session remains usable.
+    }
+  }, [cleaningAngleThreshold, cleaningSurfaceThreshold, treatmentSessionId]);
   const persistedCleaningPreview = useMemo(() => backendCleaningPreview(session), [session]);
   const requiredDataTypes =
     session?.required_data_types || requiredDataTypesForExpType(session?.exp_type);
@@ -1134,6 +1274,7 @@ const TabsControl = () => {
     const onMove = (moveEvent) => {
       const delta = moveEvent.clientX - startX;
       nextLayout = {
+        ...startLayout,
         parameters:
           edge === 'parameters'
             ? clampNumber(startLayout.parameters + delta, minParameters, maxParameters)
@@ -1155,6 +1296,45 @@ const TabsControl = () => {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   }, [filesLayout]);
+
+  const resizeTree = (separator, requestedWidth) => {
+    const maxWidth = Math.min(MAX_TREE_WIDTH, Math.floor(separator.parentElement.clientWidth * 0.38));
+    const tree = clampNumber(Math.round(requestedWidth), MIN_TREE_WIDTH, maxWidth);
+    const layout = { ...filesLayout, tree };
+    setFilesLayout(layout);
+    return layout;
+  };
+
+  const handleTreePointerDown = (event) => {
+    if (event.button !== 0 || !event.isPrimary) return;
+    const separator = event.currentTarget;
+    treeResizeRef.current = {
+      x: event.clientX,
+      width: separator.previousElementSibling.getBoundingClientRect().width,
+    };
+    separator.setPointerCapture(event.pointerId);
+  };
+
+  const handleTreePointerMove = (event) => {
+    const drag = treeResizeRef.current;
+    if (drag && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      drag.layout = resizeTree(event.currentTarget, drag.width + event.clientX - drag.x);
+    }
+  };
+
+  const finishTreeResize = () => {
+    const layout = treeResizeRef.current?.layout;
+    treeResizeRef.current = null;
+    if (layout) saveFilesLayout(layout);
+  };
+
+  const handleTreeResizeKey = (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const separator = event.currentTarget;
+    const width = separator.previousElementSibling.getBoundingClientRect().width;
+    saveFilesLayout(resizeTree(separator, width + (event.key === 'ArrowLeft' ? -16 : 16)));
+  };
 
   useEffect(() => {
     if (!isOperationRunning) {
@@ -1191,10 +1371,24 @@ const TabsControl = () => {
   const refreshTreatmentQueue = useCallback(async (isCurrent = () => true) => {
     const payload = await fetchTreatmentQueue(treatmentSessionId);
     if (isCurrent()) {
-      setTreatmentQueue(payload?.queue || { running: false, jobs: [] });
+      const queue = payload?.queue || { running: false, jobs: [] };
+      const finished = queueWasRunningRef.current && !queue.running;
+      // Fetch before publishing running=false. Publishing it first cleans up
+      // the poll effect and cancels its own pending session read.
+      if (finished) {
+        const sessionPayload = await fetchTreatmentSession(treatmentSessionId);
+        if (isCurrent()) {
+          setTreatment(sessionPayload);
+          requestSelectionRefresh?.();
+        }
+      }
+      if (isCurrent()) {
+        queueWasRunningRef.current = Boolean(queue.running);
+        setTreatmentQueue(queue);
+      }
     }
     return payload;
-  }, [treatmentSessionId]);
+  }, [requestSelectionRefresh, treatmentSessionId]);
 
   const handleQueueEnqueue = async () => {
     if (requireAppliedCleaningPreview()) {
@@ -1243,16 +1437,27 @@ const TabsControl = () => {
 
   const handleQueueStandardFolder = async (
     folderPath,
-    { label, convert, clean, calculate }
+    { label, convert, clean, calculate, returnToFiles = true }
   ) => {
-    if (!folderPath) {
+    const folders = Array.isArray(folderPath) ? folderPath : [folderPath];
+    if (!folders[0] || (treeFirst && folderQueueActiveRef.current)) {
       return;
     }
+    if (treeFirst) {
+      folderQueueActiveRef.current = true;
+      setIsQueueLoading(true);
+      if (returnToFiles) setActiveTab('files');
+    }
+    const target = folders.length === 1 ? pathName(folders[0]) : `${folders.length} folders`;
     setError('');
+    setFolderContextMenu(null);
+    setOperationMessage(`Starting ${label} for ${target}…`);
     try {
       const payload = await enqueueStandardFolderTreatment(treatmentSessionId, {
-        folder_path: folderPath,
-        label: pathName(folderPath) || label,
+        ...(treeFirst ? { folder_paths: folders, output_naming: 'sample',
+          exp_type: shouldApplyAutoPreset(session, profilePreset) ? profilePreset.exp_type : session.exp_type }
+          : { folder_path: folders[0] }),
+        label: folders.length === 1 ? pathName(folders[0]) || label : undefined,
         profile: treatmentProfile,
         convert,
         clean,
@@ -1260,14 +1465,48 @@ const TabsControl = () => {
         angle_threshold: Number(cleaningAngleThreshold),
         surface_threshold: Number(cleaningSurfaceThreshold),
       });
+      const saveTarget = payload?.queue_job?.recipe?.save_target;
+      if (saveTarget) {
+        setDraftSaveFolder(saveTarget.save_folder || '');
+        setDraftSaveFileName(saveTarget.save_file_name || '');
+        setTreatment((current) => current ? {
+          ...current,
+          session: {
+            ...current.session,
+            save_folder: saveTarget.save_folder || '',
+            save_file_name: saveTarget.save_file_name || '',
+          },
+        } : current);
+      }
+      queueWasRunningRef.current = true;
       setTreatmentQueue((current) => mergeTreatmentQueue(current, payload?.queue));
+      // A short Set can finish before its enqueue response reaches the browser.
+      if (!payload?.queue?.running) await refreshTreatmentQueue();
       setOperationMessage(
-        `${label} ${payload?.started ? 'started' : 'queued'} for ${pathName(folderPath)}.`
+        `${label} ${payload?.started ? 'started' : 'queued'} for ${target}.`
       );
     } catch (err) {
+      setOperationMessage('');
       setError(err.message);
     } finally {
-      setFolderContextMenu(null);
+      if (treeFirst) {
+        folderQueueActiveRef.current = false;
+        setIsQueueLoading(false);
+      }
+    }
+  };
+
+  const handleLoadFolderInputs = async () => {
+    if (!sourceFolder || isSelectingFolderRoot || folderQueueActiveRef.current) return;
+    folderQueueActiveRef.current = true;
+    setIsQueueLoading(true);
+    try {
+      await handleQueueStandardFolder(sourceFolder, {
+        label: 'Load folder inputs', convert: true, clean: false, calculate: false,
+      });
+    } finally {
+      folderQueueActiveRef.current = false;
+      setIsQueueLoading(false);
     }
   };
 
@@ -1289,7 +1528,7 @@ const TabsControl = () => {
 
   const loadFileSummary = useCallback(
     async (file) => {
-      if (!file?.path || !['.his', '.h5'].includes(String(file.suffix || '').toLowerCase())) {
+      if (!file?.path || !['.his', '.h5', '.dat'].includes(String(file.suffix || '').toLowerCase())) {
         return;
       }
       if (fileSummaryCache[file.path]) {
@@ -1317,10 +1556,6 @@ const TabsControl = () => {
   );
 
   const refreshCleaningView = useCallback(async () => {
-    if (!treatmentSessionId) {
-      return null;
-    }
-
     setIsCleaningViewLoading(true);
     try {
       const payload = await fetchCleaningView(treatmentSessionId);
@@ -1397,14 +1632,50 @@ const TabsControl = () => {
     let cancelled = false;
 
     const loadSession = async () => {
+      let presetError = null;
+      let restoreError = null;
       try {
         let payload = await fetchTreatmentSession(treatmentSessionId);
+        if (cancelled) return;
+        if (payload.session_persistence === 'sqlite' && isEmptyTreatmentSession(payload.session)) {
+          const backup = readSessionBackup(treatmentSessionId);
+          if (hasRecoverableTreatmentWork(backup)) {
+            try {
+              payload = await postTreatment(treatmentSessionId, '/api/treatment/session/restore', {
+                session: backup,
+              });
+            } catch (err) {
+              restoreError = err;
+              if (!cancelled) setError(`Saved treatment session could not be restored: ${err.message}`);
+            }
+          }
+        }
+        if (treatmentContext?.initialFolder && payload.session.folder_path !== treatmentContext.initialFolder) {
+          try {
+            payload = await postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
+              folder_path: treatmentContext.initialFolder,
+            });
+            if (!cancelled) {
+              setTreeRoot(treatmentContext.initialFolder);
+              setIsFolderTreeOpen(true);
+            }
+          } catch (err) {
+            // Keep Data Root controls available when a linked folder cannot be selected.
+            if (!cancelled) setError(`Cannot open selected folder: ${err.message}. Check Data Root.`);
+          }
+        }
         if (shouldApplyAutoPreset(payload.session, profilePreset)) {
-          payload = await postTreatment(
-            treatmentSessionId,
-            '/api/treatment/session/config',
-            profilePreset
-          );
+          try {
+            payload = await postTreatment(
+              treatmentSessionId,
+              '/api/treatment/session/config',
+              profilePreset
+            );
+          } catch (err) {
+            // Keep the readable session available when applying the preset fails.
+            presetError = err;
+            if (!cancelled) setError(err.message);
+          }
         }
 
         if (!cancelled) {
@@ -1430,7 +1701,8 @@ const TabsControl = () => {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err.message);
+          // A subsequent folder error must not hide authentication recovery.
+          setError(restoreError?.message || presetError?.message || err.message);
         }
       }
     };
@@ -1447,10 +1719,11 @@ const TabsControl = () => {
     refreshFolderListing,
     requestSelectionRefresh,
     treatmentSessionId,
+    treatmentContext?.initialFolder,
   ]);
 
   useEffect(() => {
-    if (!isStudioLayout || !treatmentSessionId) {
+    if (!isStudioLayout) {
       return undefined;
     }
     let cancelled = false;
@@ -1515,8 +1788,8 @@ const TabsControl = () => {
     }
     setDraftSaveFolder(session.save_folder || '');
     setDraftSaveFileName(session.save_file_name || '');
-    setDraftAllowedRoot(treatment?.allowed_root || '');
-  }, [session, treatment?.allowed_root]);
+    setDraftAllowedRoot(manifestProjectFolder?(session.folder_path||manifestProjectFolder):(treatment?.allowed_root || ''));
+  }, [session, treatment?.allowed_root,manifestProjectFolder]);
 
   useEffect(() => {
     if (!persistedCleaningPreview) {
@@ -1554,6 +1827,7 @@ const TabsControl = () => {
   }, [session?.folder_path, treatment?.allowed_root]);
 
   useEffect(() => {
+    if (treeFirst) return;
     const visibleFiles = [];
     Object.entries(folderTreeCache).forEach(([folderPath, listing]) => {
       if (folderPath !== treeRoot && !expandedFolders.has(folderPath)) {
@@ -1569,7 +1843,7 @@ const TabsControl = () => {
     visibleFiles.slice(0, 40).forEach((file) => {
       loadFileSummary(file);
     });
-  }, [expandedFolders, fileSummaryCache, folderTreeCache, loadFileSummary, treeRoot]);
+  }, [expandedFolders, fileSummaryCache, folderTreeCache, loadFileSummary, treeRoot, treeFirst]);
 
   const applyPayload = async (requestPromise, refreshListing = false) => {
     setError('');
@@ -1583,8 +1857,10 @@ const TabsControl = () => {
       if (refreshListing && payload.session.folder_path) {
         await refreshFolderListing(payload.session.folder_path);
       }
+      return payload;
     } catch (err) {
       setError(err.message);
+      return null;
     } finally {
       setIsBusy(false);
     }
@@ -1614,11 +1890,40 @@ const TabsControl = () => {
     applyPayload(postTreatment(treatmentSessionId, '/api/treatment/session/config', normalizedPatch));
   };
 
-  const handleReset = () =>
-    applyPayload(postTreatment(treatmentSessionId, '/api/treatment/session/reset'), true);
+  const handleReset = async () => {
+    const payload = await applyPayload(
+      postTreatment(treatmentSessionId, '/api/treatment/session/reset'), true
+    );
+    if (payload) {
+      try {
+        window.localStorage.removeItem(sessionBackupKey(treatmentSessionId));
+      } catch (_error) {
+        // The server-side reset already succeeded.
+      }
+    }
+  };
+
+  const handleQueueRun = async () => {
+    setError('');
+    setIsQueueLoading(true);
+    try {
+      const payload = await runTreatmentQueue(treatmentSessionId);
+      setTreatmentQueue(payload?.queue || { running: false, jobs: [] });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsQueueLoading(false);
+    }
+  };
 
   const handleAllowedRootChange = async () => {
     const nextAllowedRoot = draftAllowedRoot.trim();
+    if(manifestProjectFolder){
+      if(!nextAllowedRoot||nextAllowedRoot===session.folder_path)return;
+      const payload=await applyPayload(postTreatment(treatmentSessionId,'/api/treatment/session/folder',{folder_path:nextAllowedRoot}),true);
+      if(payload){setTreeRoot(payload.session.folder_path);setDraftAllowedRoot(payload.session.folder_path);setIsFolderTreeOpen(true);}
+      return;
+    }
     if (!nextAllowedRoot || nextAllowedRoot === treatment.allowed_root) {
       return;
     }
@@ -1626,9 +1931,21 @@ const TabsControl = () => {
     setError('');
     setIsBusy(true);
     try {
-      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/root', {
+      let payload = await postTreatment(treatmentSessionId, '/api/treatment/session/root', {
         allowed_root: nextAllowedRoot,
       });
+      if (treatmentContext?.initialFolder) {
+        try {
+          payload = await postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
+            folder_path: treatmentContext.initialFolder,
+          });
+        } catch (err) {
+          setError(`Cannot open selected folder: ${err.message}. Check Data Root.`);
+        }
+      }
+      if (shouldApplyAutoPreset(payload.session, profilePreset)) {
+        payload = await postTreatment(treatmentSessionId, '/api/treatment/session/config', profilePreset);
+      }
       setTreatment(payload);
       setDraftAllowedRoot(payload.allowed_root || '');
       setCleaningSummary(null);
@@ -1638,7 +1955,7 @@ const TabsControl = () => {
       await refreshFolderListing(payload.session.folder_path || payload.allowed_root);
       const rootPayload = await fetchFolderListing(treatmentSessionId, payload.allowed_root);
       cacheFolderListing(payload.allowed_root, rootPayload);
-      setTreeRoot(payload.allowed_root || '');
+      setTreeRoot(payload.session.folder_path || payload.allowed_root || '');
       setIsSelectingFolderRoot(true);
       setIsFolderTreeOpen(true);
       setExpandedFolders((current) => {
@@ -1688,6 +2005,27 @@ const TabsControl = () => {
       setFileContextMenu(null);
       setIsBusy(false);
     }
+  };
+
+  const handlePreviewDat = async filePath => {
+    if (isBusy) return;
+    setIsBusy(true); setError(''); setFileContextMenu(null);
+    try {
+      await postTreatment(treatmentSessionId, '/api/treatment/preview/dat', { file_path: filePath });
+      requestSelectionRefresh?.();
+      setOperationMessage(`Preview: ${pathName(filePath)}`);
+    } catch (cause) { setError(cause.message); }
+    finally { setIsBusy(false); }
+  };
+  const handleManifestFolder = async folder => {
+    setFolderContextMenu(null); setIsBusy(true); setError('');
+    try {
+      const listing = await fetchFolderListing(treatmentSessionId, folder);
+      const manifest = listing.files.find(isProjectManifest);
+      if (!manifest) throw new Error('No vd2-manifest.json in this project folder.');
+      treatmentContext?.onOpenManifest?.(manifest.path);
+    } catch (cause) { setError(cause.message); }
+    finally { setIsBusy(false); }
   };
 
   const handleSetStitchFile = (filePath, side) => {
@@ -1795,6 +2133,8 @@ const TabsControl = () => {
       true
     );
     setTreeRoot(folderPath);
+    setSelectedFolders([]);
+    folderSelectionAnchor.current = null;
     setIsSelectingFolderRoot(false);
     setExpandedFolders((current) => {
       const next = new Set(current);
@@ -1816,14 +2156,15 @@ const TabsControl = () => {
     setError('');
     setIsFolderTreeOpen(true);
     setIsSelectingFolderRoot(true);
-    setTreeRoot(treatment.allowed_root);
+    const root=manifestProjectFolder?(session?.folder_path||manifestProjectFolder):treatment.allowed_root;
+    setTreeRoot(root);
     setExpandedFolders((current) => {
       const next = new Set(current);
-      next.add(treatment.allowed_root);
+      next.add(root);
       return next;
     });
     try {
-      await loadFolderTreeNode(treatment.allowed_root);
+      await loadFolderTreeNode(root);
     } catch (err) {
       setError(err.message);
     }
@@ -1832,14 +2173,15 @@ const TabsControl = () => {
   const handleFileContextMenu = (event, file) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!file.supported || isBusy) {
+    if ((!treeFirst && !file.supported && !isProjectManifest(file)) || isBusy) {
       return;
     }
     setFolderContextMenu(null);
+    const bounds = event.currentTarget.getBoundingClientRect();
     setFileContextMenu({
       file,
-      x: event.clientX,
-      y: event.clientY,
+      x: event.clientX ?? bounds.left,
+      y: event.clientY ?? bounds.bottom,
     });
   };
 
@@ -1850,11 +2192,39 @@ const TabsControl = () => {
       return;
     }
     setFileContextMenu(null);
+    const paths = selectedFolders.includes(folder.path) ? selectedFolders : [folder.path];
+    if (treeFirst) setSelectedFolders(paths);
     setFolderContextMenu({
       folder,
+      paths,
       x: event.clientX,
       y: event.clientY,
     });
+  };
+
+  const handleTreeFolderClick = (event, folderPath, siblings) => {
+    if (!treeFirst || isSelectingFolderRoot) {
+      handleExplorerFolderSelect(folderPath);
+      return;
+    }
+    const anchor = siblings.indexOf(folderSelectionAnchor.current);
+    const clicked = siblings.indexOf(folderPath);
+    if (event.shiftKey && anchor >= 0) {
+      setSelectedFolders(siblings.slice(Math.min(anchor, clicked), Math.max(anchor, clicked) + 1));
+      return;
+    }
+    folderSelectionAnchor.current = folderPath;
+    setSelectedFolders(current => event.ctrlKey || event.metaKey
+      ? current.includes(folderPath) ? current.filter(path => path !== folderPath) : [...current, folderPath]
+      : [folderPath]);
+  };
+
+  const toggleBatchFolder = (folderPath) => {
+    setIsSelectingFolderRoot(false);
+    folderSelectionAnchor.current = folderPath;
+    setSelectedFolders(current => current.includes(folderPath)
+      ? current.filter(path => path !== folderPath)
+      : [...current, folderPath]);
   };
 
   const handleAverageNoise = async () => {
@@ -1882,6 +2252,7 @@ const TabsControl = () => {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/calc-abs');
       setTreatment(payload);
       setSavedResultPath('');
+      if (treeFirst) setActiveTab('files');
       if (requestSelectionRefresh) {
         requestSelectionRefresh();
       }
@@ -1897,6 +2268,12 @@ const TabsControl = () => {
     setError('');
     setIsBusy(true);
     try {
+      const output = {};
+      if (draftSaveFolder !== session.save_folder) output.save_folder = draftSaveFolder;
+      if (draftSaveFileName !== session.save_file_name) output.save_file_name = draftSaveFileName;
+      if (Object.keys(output).length) {
+        await postTreatment(treatmentSessionId, '/api/treatment/session/config', output);
+      }
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/save');
       setTreatment(payload);
       const savePath = String(payload?.saved?.save_path || '');
@@ -2375,19 +2752,25 @@ const TabsControl = () => {
       return (
         <div
           key={file.path}
-          className={`explorer-tree-file-row ${file.supported ? '' : 'is-disabled'}`}
-          style={{ paddingLeft: `${level * 14 + 28}px` }}
+          className={`explorer-tree-file-row ${file.supported || isProjectManifest(file) ? '' : 'is-disabled'}`}
+          style={{ paddingLeft: `${treeFirst ? level * 10 + 13 : level * 14 + 28}px` }}
           onContextMenu={isV0Profile ? undefined : (event) => handleFileContextMenu(event, file)}
-          title={file.path}
+          title={treeFirst ? file.name : file.path}
         >
           <button
             className="explorer-tree-file-name"
-            onContextMenu={isV0Profile ? undefined : (event) => handleFileContextMenu(event, file)}
-            disabled={!file.supported || isBusy}
+            onDoubleClick={() => {
+              if (String(file.suffix).toLowerCase() === '.dat') handlePreviewDat(file.path);
+              else if (isProjectManifest(file)) treatmentContext?.onOpenManifest?.(file.path);
+            }}
+            onKeyDown={treeFirst ? event => {
+              if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) handleFileContextMenu(event, file);
+            } : undefined}
+            disabled={(!treeFirst && !file.supported && !isProjectManifest(file)) || isBusy}
           >
             {file.name}
           </button>
-          <span className="explorer-file-meta explorer-file-size" title={`Size: ${formatFileSize(file.size_bytes)}`}>
+          {!treeFirst && <><span className="explorer-file-meta explorer-file-size" title={`Size: ${formatFileSize(file.size_bytes)}`}>
             S:{formatFileSize(file.size_bytes)}
           </span>
           <span className="explorer-file-meta explorer-file-frames" title={`Frames: ${frames}`}>
@@ -2399,6 +2782,7 @@ const TabsControl = () => {
           <span className="explorer-file-meta explorer-file-wavelength" title={`Wavelength: ${wavelengths}`}>
             W:{wavelengths}
           </span>
+          </>}
         </div>
       );
     });
@@ -2407,13 +2791,14 @@ const TabsControl = () => {
     (folders || []).map((folder) => {
       const isExpanded = expandedFolders.has(folder.path);
       const cachedListing = folderTreeCache[folder.path];
-      const isSelected = session.folder_path === folder.path;
+      const isSelected = treeFirst ? selectedFolders.includes(folder.path) : session.folder_path === folder.path;
+      const folderName = folder.name || pathName(folder.path);
 
       return (
         <React.Fragment key={folder.path}>
           <div
-            className={`explorer-tree-row ${isSelected ? 'is-selected' : ''}`}
-            style={{ paddingLeft: `${level * 14}px` }}
+            className={`explorer-tree-row ${treeFirst ? 'with-folder-selection ' : ''}${isSelected ? 'is-selected' : ''}`}
+            style={{ paddingLeft: `${level * (treeFirst ? 10 : 14)}px` }}
             onContextMenu={isV0Profile ? undefined : (event) => handleFolderContextMenu(event, folder)}
           >
             <button
@@ -2423,12 +2808,17 @@ const TabsControl = () => {
             >
               {isExpanded ? 'v' : '>'}
             </button>
+            {treeFirst && <input type="checkbox" className="explorer-folder-checkbox"
+              aria-label={`Select ${folderName} for batch`} checked={isSelected}
+              disabled={isBusy || isQueueLoading || treatmentQueue?.running}
+              onChange={() => toggleBatchFolder(folder.path)} />}
             <button
               className="explorer-tree-name"
-              onClick={() => handleExplorerFolderSelect(folder.path)}
+              onClick={(event) => handleTreeFolderClick(event, folder.path, folders.map(item => item.path))}
+              aria-pressed={treeFirst ? isSelected : undefined}
               title={folder.path}
             >
-              {folder.name || pathName(folder.path)}
+              {folderName}
             </button>
           </div>
           {isExpanded && cachedListing && (
@@ -2441,8 +2831,29 @@ const TabsControl = () => {
       );
     });
 
-  const explorerRoot = treeRoot || session?.folder_path || treatment?.allowed_root || '';
+  const explorerRoot = sourceFolder;
   const explorerRootListing = folderTreeCache[explorerRoot] || { folders: [], files: [] };
+  const refreshVisibleFolders = useCallback(async (isCurrent = () => true) => {
+    const paths = [explorerRoot, ...Array.from(expandedFolders).filter(path =>
+      path !== explorerRoot && folderPathChain(path, explorerRoot).length > 0)];
+    await Promise.all(paths.filter(Boolean).map(async path => {
+      const listing = await fetchFolderListing(treatmentSessionId, path);
+      if (isCurrent()) cacheFolderListing(path, listing);
+    }));
+  }, [cacheFolderListing, expandedFolders, explorerRoot, treatmentSessionId]);
+
+  useEffect(() => {
+    if (!treeFirst || !explorerRoot) return undefined;
+    let active = true;
+    let timer;
+    const poll = async () => {
+      try { await refreshVisibleFolders(() => active); }
+      catch (_error) { /* Keep the current listing during a transient read failure. */ }
+      if (active) timer = window.setTimeout(poll, 5000);
+    };
+    timer = window.setTimeout(poll, 5000);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [explorerRoot, refreshVisibleFolders, treeFirst]);
   const stitchDatFiles = useMemo(() => {
     const byPath = new Map();
     Object.values(folderTreeCache).forEach((listing) => {
@@ -2500,288 +2911,404 @@ const TabsControl = () => {
   if (!session) {
     return (
       <div className="tabs-control">
-        <p>{error || 'Loading treatment session...'}</p>
+        {error ? <TreatmentError message={error} /> : <p>Loading treatment session...</p>}
         <button onClick={refreshSession}>Retry</button>
       </div>
     );
   }
 
+  const dataLocation = (
+      <details className="treatment-source-settings">
+        <summary>Data location</summary>
+      <div className="data-root-control">
+        <label>
+          Data Root
+          <input
+            type="text"
+            value={draftAllowedRoot}
+            onChange={(event) => setDraftAllowedRoot(event.target.value)}
+            onBlur={handleAllowedRootChange}
+            onKeyDown={handleAllowedRootKeyDown}
+            placeholder={treatment.allowed_root || 'E:/Data/DATA_VD2'}
+          />
+        </label>
+      </div>
+      </details>
+  );
+  const sourceBrowser = (
+    <div className="zone files-folder">
+      {!treeFirst && <>
+        {isStudioLayout ? <div className="zone-heading"><h3>1 Source</h3></div> : <h3>Files</h3>}
+        <code className="treatment-selected-folder" title={explorerRoot}>{explorerRoot || 'No folder selected'}</code>
+        {dataLocation}
+      </>}
+      <div className="folder-selection-header">
+        <button onClick={handleFolderTreeOpen} disabled={!explorerRoot || (treeFirst && (isQueueLoading || treatmentQueue?.running))}>
+          Select Folder
+        </button>
+        {treeFirst && <button type="button" aria-label="Refresh tree" title="Refresh tree"
+          onClick={() => refreshVisibleFolders().catch(cause => setError(cause.message))}>↻</button>}
+        {treeFirst && selectedFolders.length > 0 && (
+          <button type="button" aria-label={`Run selected folders (${selectedFolders.length})`}
+            title="Calculate and save the selected measurement folders"
+            disabled={isBusy || isQueueLoading || treatmentQueue?.running}
+            onClick={() => handleQueueStandardFolder(selectedFolders, {
+              label: 'Calculate & save', convert: false, clean: false, calculate: true,
+            })}>
+            Run ({selectedFolders.length})
+          </button>
+        )}
+        {!treeFirst && !isV0Profile && <button type="button" disabled={!explorerRoot || isSelectingFolderRoot || isBusy || isQueueLoading || treatmentQueue?.running}
+          onClick={handleLoadFolderInputs}>
+          Load folder inputs
+        </button>}
+        {!treeFirst && !isV0Profile && <button type="button" onClick={() => treatmentContext?.onOpenManifest?.('')}
+          disabled={isBusy || !treatmentContext?.onOpenManifest}>Open manifest…</button>}
+      </div>
+      {treeFirst && isSelectingFolderRoot && <small role="status">Open a folder by name, or tick folders to run together.</small>}
+      {isFolderTreeOpen && (
+      <div className="explorer-panel">
+        <div className="explorer-tree" role="tree" aria-label="Files" onKeyDown={treeFirst ? event => {
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+            event.preventDefault();
+            setSelectedFolders(explorerRootListing.folders.map(folder => folder.path));
+          }
+        } : undefined}>
+          <div
+            className={`explorer-tree-row ${
+                  (treeFirst ? selectedFolders.includes(explorerRoot) : session.folder_path === explorerRoot) ? 'is-selected' : ''
+            }`}
+            onContextMenu={
+              isV0Profile
+                ? undefined
+                : (event) =>
+                    handleFolderContextMenu(event, {
+                      name: pathName(explorerRoot) || explorerRoot,
+                      path: explorerRoot,
+                    })
+            }
+          >
+            <button
+              className="explorer-tree-toggle"
+              onClick={() => handleFolderTreeToggle(explorerRoot)}
+              aria-label="Expand root"
+            >
+              {expandedFolders.has(explorerRoot) ? 'v' : '>'}
+            </button>
+            <button
+              className="explorer-tree-name"
+              onClick={event => handleTreeFolderClick(event, explorerRoot, [explorerRoot])}
+              title={explorerRoot}
+            >
+              {pathName(explorerRoot) || explorerRoot}
+            </button>
+          </div>
+          {(expandedFolders.has(explorerRoot) || session.folder_path === explorerRoot) &&
+            (
+              <>
+                {renderFolderTreeRows(explorerRootListing.folders, 1)}
+                {renderFolderTreeFiles(explorerRootListing.files, 1)}
+              </>
+            )}
+        </div>
+      </div>
+      )}
+      {!isV0Profile && fileContextMenu && (
+        <div
+          className="file-context-menu"
+          style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {treeFirst && <button type="button" onClick={() => {
+            const file = fileContextMenu.file;
+            setDetailFile(file);
+            setFileContextMenu(null);
+            loadFileSummary(file);
+          }}>Details</button>}
+          {isProjectManifest(fileContextMenu.file) ? <button type="button" onClick={() => {
+            treatmentContext?.onOpenManifest?.(fileContextMenu.file.path); setFileContextMenu(null);
+          }}>Calculate according to manifest…</button> : fileContextMenu.file.supported && <>
+          {String(fileContextMenu.file.suffix).toLowerCase() === '.dat' && <button type="button"
+            onClick={() => handlePreviewDat(fileContextMenu.file.path)}>Open in Preview</button>}
+          {(treeFirst ? assignableDataTypes : ['ABS', 'BASE', 'NOISE']).map((dataType) => (
+            <button
+              key={dataType}
+              onClick={() => handleAssignFile(fileContextMenu.file.path, dataType)}
+                disabled={isBusy || (treeFirst && treatmentQueue?.running)}
+            >
+              Set {dataType}
+            </button>
+          ))}
+          <div className="file-context-menu-separator" />
+          <button
+            onClick={() => handleCompressFile(fileContextMenu.file.path)}
+              disabled={isBusy || (treeFirst && treatmentQueue?.running)}
+          >
+            Convert/Compress
+          </button>
+          {String(fileContextMenu.file.suffix || '').toLowerCase() === '.dat' && (
+            <>
+              <div className="file-context-menu-separator" />
+              <div className="file-context-submenu">
+                <button type="button" disabled={isBusy}>
+                  Stitch
+                </button>
+                <div className="file-context-submenu-panel">
+                  <button
+                    onClick={() => handleSetStitchFile(fileContextMenu.file.path, 'A')}
+                    disabled={isBusy}
+                  >
+                    Stitch A
+                  </button>
+                  <button
+                    onClick={() => handleSetStitchFile(fileContextMenu.file.path, 'B')}
+                    disabled={isBusy}
+                  >
+                    Stitch B
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+          </>}
+        </div>
+      )}
+      {!isV0Profile && folderContextMenu && (
+        <div
+          className="file-context-menu"
+          style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {folderContextMenu.paths.length > 1 && <p className="treatment-menu-count">{folderContextMenu.paths.length} folders</p>}
+          <button type="button" disabled={isBusy || folderContextMenu.paths.length !== 1} onClick={() => handleManifestFolder(folderContextMenu.folder.path)}>
+            Calculate according to manifest…
+          </button>
+          {treeFirst ? [
+            ['Set', false, false, false],
+            ['Convert', true, false, false],
+            ['Clean', true, true, false],
+            ['Calculate & save', false, false, true],
+            ['Clean, calculate & save', true, true, true],
+          ].map(([label, convert, clean, calculate]) => (
+            <button key={label} type="button" disabled={isBusy || isQueueLoading || treatmentQueue?.running}
+              onClick={() => handleQueueStandardFolder(folderContextMenu.paths, { label, convert, clean, calculate })}>
+              {label}
+            </button>
+          )) : <>
+          <button
+            onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+              label: 'Set/Convert',
+              convert: true,
+              clean: false,
+              calculate: false,
+            })}
+            disabled={isBusy || isQueueLoading}
+          >
+            Set/Convert
+          </button>
+          <button
+            onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+              label: 'Set/Convert/Clean',
+              convert: true,
+              clean: true,
+              calculate: false,
+            })}
+            disabled={isBusy || isQueueLoading}
+          >
+            Set/Convert/Clean
+          </button>
+          <button
+            onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+              label: 'Set/Convert/Calc (all maps)',
+              convert: true,
+              clean: false,
+              calculate: true,
+            })}
+            disabled={isBusy || isQueueLoading}
+          >
+            Set/Convert/Calc (all maps)
+          </button>
+          <button
+            onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+              label: 'Set/Convert/Clean/Calc',
+              convert: true,
+              clean: true,
+              calculate: true,
+            })}
+            disabled={isBusy || isQueueLoading}
+          >
+            Set/Convert/Clean/Calc
+          </button>
+          <button
+            onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+              label: 'Set',
+              convert: false,
+              clean: false,
+              calculate: false,
+            })}
+            disabled={isBusy || isQueueLoading}
+          >
+            Set
+          </button>
+          </>}
+        </div>
+      )}
+    </div>
+  );
+  const detailSummary = detailFile && fileSummaryCache[detailFile.path];
+  const QueuePanel = treeFirst ? 'details' : 'section';
+  const activeQueueJob = queueJobs.find(job => job.status === 'running');
+  const lastFolderJob = [...queueJobs].reverse().find(job => job.recipe?.kind === 'standard_folder_set');
+
   return (
-    <div className="tabs-control">
+    <div className={`tabs-control${treeFirst ? ' treatment-tree-first' : ''}`}>
+      {treeFirst && <div className="treatment-tree-and-preview" style={{ '--tree-width': `${filesLayout.tree}px` }}>
+        {sourceBrowser}
+        <div className="treatment-tree-separator" role="separator" tabIndex={0} aria-label="Resize folders"
+          aria-orientation="vertical" aria-valuemin={MIN_TREE_WIDTH} aria-valuemax={MAX_TREE_WIDTH} aria-valuenow={filesLayout.tree}
+          onPointerDown={handleTreePointerDown} onPointerMove={handleTreePointerMove}
+          onLostPointerCapture={finishTreeResize} onKeyDown={handleTreeResizeKey} />
+        {preview}
+      </div>}
+      {detailFile && <div className="treatment-dialog-backdrop">
+        <section role="dialog" aria-modal="true" aria-label="File details" className="treatment-manifest-dialog"
+          onKeyDown={event => { if (event.key === 'Escape') setDetailFile(null); }}>
+          <header><h2>{detailFile.name}</h2><button type="button" autoFocus aria-label="Close file details" onClick={() => setDetailFile(null)}>×</button></header>
+          <dl className="treatment-file-details">
+            <dt>Path</dt><dd>{detailFile.path}</dd>
+            <dt>Size</dt><dd>{formatFileSize(detailFile.size_bytes)}</dd>
+            {detailSummary && !detailSummary.loading && !detailSummary.error && <>
+              <dt>Frames</dt><dd>{formatFrameCount(detailSummary)}</dd>
+              <dt>Time</dt><dd>{formatTimeRange(detailSummary)}</dd>
+              <dt>Wavelength</dt><dd>{formatWavelengthRange(detailSummary)}</dd>
+            </>}
+          </dl>
+          {detailSummary?.loading && <p role="status">Reading file details…</p>}
+          {detailSummary?.error && <TreatmentError message={detailSummary.error} />}
+        </section>
+      </div>}
       {!isV0Profile && (
         <div className="tabs">
-          <button
+          {treeFirst ? <label className="treatment-experiment-type">Experiment type
+            <select aria-label="Experiment type" disabled={isBusy || treatmentQueue?.running}
+              value={session.exp_type} onChange={event => handleConfigChange({ exp_type: event.target.value })}>
+              {(treatment.exp_types || []).map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </label> : <button
             className={activeTab === 'files' ? 'is-active' : ''}
             onClick={() => setActiveTab('files')}
             aria-pressed={activeTab === 'files'}
           >
-            {isStudioLayout ? 'Workspace' : 'Files'}
-          </button>
+            {isStudioLayout ? 'Treatment' : 'Files'}
+          </button>}
+          {treeFirst && <button type="button" onClick={handleCalcAbs}
+            disabled={isBusy || isQueueLoading || treatmentQueue?.running || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
+            Calculate OD
+          </button>}
           <button
             className={activeTab === 'cleaning' ? 'is-active' : ''}
-            onClick={() => setActiveTab('cleaning')}
+            onClick={() => setActiveTab(treeFirst && activeTab === 'cleaning' ? 'files' : 'cleaning')}
             aria-pressed={activeTab === 'cleaning'}
-            disabled={isBusy}
+            disabled={isBusy || (treeFirst && treatmentQueue?.running)}
           >
-            Cleaning
+            {treeFirst && activeTab === 'cleaning' ? 'Close Cleaning' : 'Cleaning'}
           </button>
+          {treeFirst && <button type="button" className={activeTab === 'skana' ? 'is-active' : ''}
+            onClick={() => setActiveTab(activeTab === 'skana' ? 'files' : 'skana')}
+            aria-pressed={activeTab === 'skana'} disabled={isBusy}>
+            SK-Ana
+          </button>}
+          <details className="treatment-more-tools"
+            open={(treeFirst ? activeTab === 'stitch' : ['stitch', 'info', 'skana'].includes(activeTab)) || undefined}>
+          <summary>{treeFirst ? 'Tools' : 'More tools'}</summary>
+          <div>
           <button
             className={`secondary-tab ${activeTab === 'stitch' ? 'is-active' : ''}`}
-            onClick={() => setActiveTab('stitch')}
+            onClick={() => setActiveTab(treeFirst && activeTab === 'stitch' ? 'files' : 'stitch')}
             aria-pressed={activeTab === 'stitch'}
             disabled={isBusy}
           >
-            {isStudioLayout ? 'Advanced: Stitch' : 'Stitch'}
+            Stitch
           </button>
-          <button
+          {!treeFirst && <><button
             className={activeTab === 'info' ? 'is-active' : ''}
-            onClick={() => setActiveTab('info')}
+            onClick={() => setActiveTab(treeFirst && activeTab === 'info' ? 'files' : 'info')}
             aria-pressed={activeTab === 'info'}
           >
             Info
           </button>
+          <button type="button" className={activeTab === 'skana' ? 'is-active' : ''}
+            onClick={() => setActiveTab('skana')} aria-pressed={activeTab === 'skana'} disabled={isBusy}>
+            SK-Ana
+          </button></>}
+          </div>
+          </details>
         </div>
       )}
+      {treeFirst && !isV0Profile && <details className="treatment-manual-inputs">
+        <summary>Manual inputs · {assignedCleaningTypes.length}/{assignableDataTypes.length}</summary>
+        <p>For older projects, right-click each input file and choose its role
+          {assignableDataTypes.length > 0 && ` (${assignableDataTypes.map(type => `Set ${type}`).join(', ')})`}.
+          Then click Calculate OD.
+          {assignableDataTypes.includes('ABS') && ' ABS is the absorption file.'}</p>
+        <AssignedPaths session={session} />
+      </details>}
+      <TreatmentError message={error} />
+      {treeFirst && treatmentQueue?.running && <p className="treatment-tree-status" role="status">
+        {activeQueueJob?.label || 'Processing folders'} · {activeQueueJob?.phase || 'running'}
+      </p>}
+      {treeFirst && lastFolderJob?.status === 'failed' && (
+        <TreatmentError message={`${lastFolderJob.label}: ${lastFolderJob.error || lastFolderJob.message}`} />
+      )}
+      {treeFirst && !treatmentQueue?.running && lastFolderJob?.status === 'completed' && (
+        <p className="treatment-tree-status" role="status">{lastFolderJob.label} · completed</p>
+      )}
+                  {operationMessage && (
+                  <p className={`treatment-operation-message ${isOperationRunning ? 'is-active' : ''}`}>
+                    {isOperationRunning && (
+                        <span className="treatment-operation-live">
+                          <span className="treatment-operation-spinner" aria-hidden="true"></span>
+                          <span>{busyElapsedSeconds}s</span>
+                        </span>
+                      )}
+                      {operationMessage}
+                    </p>
+                  )}
       <div className="tab-content">
+        {activeTab === 'skana' && <SkanaPanel />}
         {activeTab === 'files' && (
           <div
             className={`files-tab horizontal-layout ${isV0Profile ? 'is-v0-profile' : ''}`}
             ref={filesLayoutRef}
-            style={isV0Profile ? undefined : { gridTemplateColumns: filesGridTemplate }}
+            style={isV0Profile || isStudioLayout ? undefined : { gridTemplateColumns: filesGridTemplate }}
           >
+            {!treeFirst && sourceBrowser}
             {!isV0Profile && (
               <>
-                <div className="zone parameters">
-                  <ParametersZone
-                    session={session}
-                    expTypes={treatment.exp_types}
-                    dataTypes={assignableDataTypes}
-                    calcModes={treatment.calc_modes}
-                    draftSaveFolder={draftSaveFolder}
-                    draftSaveFileName={draftSaveFileName}
-                    onConfigChange={handleConfigChange}
-                    onDraftSaveFolderChange={setDraftSaveFolder}
-                    onDraftSaveFileNameChange={setDraftSaveFileName}
-                    onCommitSaveFolder={handleCommitSaveFolder}
-                    onCommitSaveFileName={handleCommitSaveFileName}
-                    onReset={handleReset}
-                    profileName={treatmentProfile}
-                    layoutMode={treatmentLayoutMode}
-                  />
-                </div>
-                <div
-                  className="column-resizer source-resizer"
-                  role="separator"
-                  aria-label="Resize source files"
-                  onMouseDown={(event) => handleFilesColumnResizeStart('parameters', event)}
-                />
-              </>
-            )}
-            <div className="zone files-folder">
-              {isStudioLayout ? (
-                <div className="zone-heading">
-                  <h3>Source files</h3>
-                </div>
-              ) : <h3>Files</h3>}
-              <div className="data-root-control">
-                <label>
-                  Data Root
-                  <input
-                    type="text"
-                    value={draftAllowedRoot}
-                    onChange={(event) => setDraftAllowedRoot(event.target.value)}
-                    onBlur={handleAllowedRootChange}
-                    onKeyDown={handleAllowedRootKeyDown}
-                    placeholder={treatment.allowed_root || 'E:/Data/DATA_VD2'}
-                  />
-                </label>
-              </div>
-              <div className="folder-selection-header">
-                <button onClick={handleFolderTreeOpen} disabled={!explorerRoot}>
-                  Select Folder
-                </button>
-              </div>
-              {error && <p className="treatment-error">{error}</p>}
-              {isFolderTreeOpen && (
-              <div className="explorer-panel">
-                <div className="explorer-tree" role="tree">
-                  <div
-                    className={`explorer-tree-row ${
-                      session.folder_path === explorerRoot ? 'is-selected' : ''
-                    }`}
-                    onContextMenu={
-                      isV0Profile
-                        ? undefined
-                        : (event) =>
-                            handleFolderContextMenu(event, {
-                              name: pathName(explorerRoot) || explorerRoot,
-                              path: explorerRoot,
-                            })
-                    }
-                  >
-                    <button
-                      className="explorer-tree-toggle"
-                      onClick={() => handleFolderTreeToggle(explorerRoot)}
-                      aria-label="Expand root"
-                    >
-                      {expandedFolders.has(explorerRoot) ? 'v' : '>'}
-                    </button>
-                    <button
-                      className="explorer-tree-name"
-                      onClick={() => handleExplorerFolderSelect(explorerRoot)}
-                      title={explorerRoot}
-                    >
-                      {pathName(explorerRoot) || explorerRoot}
-                    </button>
-                  </div>
-                  {(expandedFolders.has(explorerRoot) || session.folder_path === explorerRoot) &&
-                    (
-                      <>
-                        {renderFolderTreeRows(explorerRootListing.folders, 1)}
-                        {renderFolderTreeFiles(explorerRootListing.files, 1)}
-                      </>
-                    )}
-                </div>
-              </div>
-              )}
-              {!isV0Profile && fileContextMenu && (
-                <div
-                  className="file-context-menu"
-                  style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {['ABS', 'BASE', 'NOISE'].map((dataType) => (
-                    <button
-                      key={dataType}
-                      onClick={() => handleAssignFile(fileContextMenu.file.path, dataType)}
-                      disabled={isBusy}
-                    >
-                      Set {dataType}
-                    </button>
-                  ))}
-                  <div className="file-context-menu-separator" />
-                  <button
-                    onClick={() => handleCompressFile(fileContextMenu.file.path)}
-                    disabled={isBusy}
-                  >
-                    Convert/Compress
-                  </button>
-                  {String(fileContextMenu.file.suffix || '').toLowerCase() === '.dat' && (
-                    <>
-                      <div className="file-context-menu-separator" />
-                      <div className="file-context-submenu">
-                        <button type="button" disabled={isBusy}>
-                          Stitch
-                        </button>
-                        <div className="file-context-submenu-panel">
-                          <button
-                            onClick={() => handleSetStitchFile(fileContextMenu.file.path, 'A')}
-                            disabled={isBusy}
-                          >
-                            Stitch A
-                          </button>
-                          <button
-                            onClick={() => handleSetStitchFile(fileContextMenu.file.path, 'B')}
-                            disabled={isBusy}
-                          >
-                            Stitch B
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-              {!isV0Profile && folderContextMenu && (
-                <div
-                  className="file-context-menu"
-                  style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <button
-                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
-                      label: 'Set/Convert',
-                      convert: true,
-                      clean: false,
-                      calculate: false,
-                    })}
-                    disabled={isBusy || isQueueLoading}
-                  >
-                    Set/Convert
-                  </button>
-                  <button
-                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
-                      label: 'Set/Convert/Clean',
-                      convert: true,
-                      clean: true,
-                      calculate: false,
-                    })}
-                    disabled={isBusy || isQueueLoading}
-                  >
-                    Set/Convert/Clean
-                  </button>
-                  <button
-                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
-                      label: 'Set/Convert/Calc',
-                      convert: true,
-                      clean: false,
-                      calculate: true,
-                    })}
-                    disabled={isBusy || isQueueLoading}
-                  >
-                    Set/Convert/Calc
-                  </button>
-                  <button
-                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
-                      label: 'Set/Convert/Clean/Calc',
-                      convert: true,
-                      clean: true,
-                      calculate: true,
-                    })}
-                    disabled={isBusy || isQueueLoading}
-                  >
-                    Set/Convert/Clean/Calc
-                  </button>
-                  <button
-                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
-                      label: 'Set',
-                      convert: false,
-                      clean: false,
-                      calculate: false,
-                    })}
-                    disabled={isBusy || isQueueLoading}
-                  >
-                    Set
-                  </button>
-                </div>
-              )}
-            </div>
-            {!isV0Profile && (
-              <>
-                <div
+                {!treeFirst && <div
                   className="column-resizer roles-resizer"
                   role="separator"
                   aria-label="Resize processing controls"
                   onMouseDown={(event) => handleFilesColumnResizeStart('selected', event)}
-                />
-                <div className="zone raw-data-kinetics">
-                  {isStudioLayout ? (
-                    <div className="zone-heading">
-                      <h3>Input roles</h3>
-                    </div>
-                  ) : <h3>Selected Files</h3>}
-                  <AssignedPaths session={session} />
-                  <div className="treatment-primary-actions">
-                    <button onClick={handleAverageNoise} disabled={isBusy || !canAverageNoise}>
-                      Average Noise
-                    </button>
+                />}
+                {(!treeFirst || queueJobs.length > 0) && <div className="zone raw-data-kinetics">
+                  {!treeFirst && <>
+                  <details className="treatment-assigned-inputs">
+                    <summary>Input files · {Object.keys(session.paths || {}).length} assigned</summary>
+                    <AssignedPaths session={session} />
+                  </details>
+                  <section className="treatment-step">
+                    <h3>2 Cleaning</h3>
+                    <button type="button" onClick={() => setActiveTab('cleaning')} disabled={isBusy || !assignedCleaningTypes.length}>Review cleaning</button>
+                    <span>{pendingCleaningPreview ? 'Preview needs review' : 'Inspect and apply map selection'}</span>
+                  </section>
+                  <section className="treatment-step">
+                    <h3>3 Calculate</h3>
                     <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
                       Calculate OD
                     </button>
-                    <button onClick={handleSave} disabled={isBusy || !session.result_ready}>
-                      Save Result
-                    </button>
-                  </div>
+                    <span>{session.result_ready ? 'Result ready to save' : session.ready_for_calc ? session.calc_mode : 'Assign the required input files'}</span>
+                  </section>
                   {pendingCleaningPreview && (
                     <div className="treatment-cleaning-pending" role="status">
                       <strong>Cleaning preview not applied</strong>
@@ -2790,9 +3317,6 @@ const TabsControl = () => {
                           ? `${pendingCleaningPreview.dataType} has a backend cleaning preview. Preview again with the current thresholds before applying it.`
                           : `${pendingCleaningPreview.dataType} still uses its previous H5 map selection for processing.`}
                       </span>
-                      <button type="button" onClick={() => setActiveTab('cleaning')} disabled={isBusy}>
-                        Review cleaning
-                      </button>
                     </div>
                   )}
                   {savedResultPath && (
@@ -2804,14 +3328,17 @@ const TabsControl = () => {
                       </button>
                     </div>
                   )}
+                  </>}
                   {isStudioLayout && (
-                    <section className="treatment-queue" aria-labelledby="treatment-queue-heading">
-                      <div className="treatment-queue-heading">
+                    <QueuePanel className="treatment-queue" aria-labelledby="treatment-queue-heading">
+                      {treeFirst ? <summary id="treatment-queue-heading">Queue · {queueJobs.length} jobs</summary> : <div className="treatment-queue-heading">
                         <h4 id="treatment-queue-heading">Queue</h4>
                         <span className={`treatment-queue-status ${treatmentQueue?.running ? 'is-running' : ''}`}>
                           {treatmentQueue?.running ? 'Running' : 'Idle'}
                         </span>
-                      </div>
+                      </div>}
+                      {!treeFirst && <details className="treatment-batch-options">
+                        <summary>Batch options</summary>
                       <input
                         className="treatment-queue-label-input"
                         type="text"
@@ -2852,6 +3379,10 @@ const TabsControl = () => {
                           Add recipe
                         </button>
                       </div>
+                      </details>}
+                      {!treatmentQueue?.running && Number(treatmentQueue?.pending_count || 0) > 0 && (
+                        <button type="button" onClick={handleQueueRun} disabled={isQueueLoading || isBusy}>Resume queue</button>
+                      )}
                       {queueJobs.length > 0 ? (
                         <ol className="treatment-queue-jobs" aria-live="polite">
                           {queueJobs.map((job) => (
@@ -2870,7 +3401,40 @@ const TabsControl = () => {
                                   Remove
                                 </button>
                               )}
-                              {(job.message || job.error) && <p>{job.error || job.message}</p>}
+                              {job.error && <p role="alert">{job.error}</p>}
+                              {(job.message || job.preparation) && <details className="treatment-job-details">
+                              <summary>Processing details</summary>
+                              {job.message && <p>{job.message}</p>}
+                              {Object.entries(
+                                job.preparation?.folder_set?.cleaned || job.preparation?.cleaned || {}
+                              ).map(([role, summary]) => {
+                                const total = Number(summary?.original_measurements);
+                                const kept = Number(summary?.cleaned_measurements);
+                                const removed = Number(summary?.removed_measurements);
+                                if (!Number.isFinite(total) || !Number.isFinite(kept) || !Number.isFinite(removed)) {
+                                  return null;
+                                }
+                                return (
+                                  <p key={`cleaned-${role}`}>
+                                    {role}: {kept}/{total} maps retained · {removed} removed
+                                    {total > 0 ? ` (${(removed / total * 100).toFixed(1)}%)` : ''}
+                                  </p>
+                                );
+                              })}
+                              {job.preparation?.folder_set?.map_policy === 'all_raw_maps' && (
+                                <>
+                                  <p>Uncleaned calculation · all raw maps used; saved H5 masks unchanged.</p>
+                                  {Object.entries(job.preparation.folder_set.map_counts || {}).map(([role, counts]) => (
+                                    <p key={`raw-${role}`}>
+                                      {role}: {counts.used_count}/{counts.total_count} raw maps used
+                                      {counts.stored_mask_included_count < counts.total_count
+                                        ? ` · prior mask ${counts.stored_mask_included_count}/${counts.total_count} ignored`
+                                        : ''}
+                                    </p>
+                                  ))}
+                                </>
+                              )}
+                              </details>}
                               {(job.saved?.save_path || job.result?.save_path) && (
                                 <code>{job.saved?.save_path || job.result?.save_path}</code>
                               )}
@@ -2878,31 +3442,66 @@ const TabsControl = () => {
                           ))}
                         </ol>
                       ) : null}
-                    </section>
+                    </QueuePanel>
                   )}
-                  {operationMessage && (
-                  <p className={`treatment-operation-message ${isOperationRunning ? 'is-active' : ''}`}>
-                    {isOperationRunning && (
-                        <span className="treatment-operation-live">
-                          <span className="treatment-operation-spinner" aria-hidden="true"></span>
-                          <span>{busyElapsedSeconds}s</span>
-                        </span>
-                      )}
-                      {operationMessage}
-                    </p>
-                  )}
+                </div>}
+              </>
+            )}
+            {!isV0Profile && (!treeFirst || session.result_ready) && (
+              <>
+                <div className="zone parameters">
+                  <ParametersZone
+                    session={session}
+                    expTypes={treatment.exp_types}
+                    dataTypes={assignableDataTypes}
+                    calcModes={treatment.calc_modes}
+                    draftSaveFolder={draftSaveFolder}
+                    draftSaveFileName={draftSaveFileName}
+                    onConfigChange={handleConfigChange}
+                    onDraftSaveFolderChange={setDraftSaveFolder}
+                    onDraftSaveFileNameChange={setDraftSaveFileName}
+                    onCommitSaveFolder={handleCommitSaveFolder}
+                    onCommitSaveFileName={handleCommitSaveFileName}
+                    onReset={handleReset}
+                    profileName={treatmentProfile}
+                    layoutMode={treatmentLayoutMode}
+                    onSave={handleSave}
+                    onAverageNoise={handleAverageNoise}
+                    canAverageNoise={canAverageNoise}
+                    compact={treeFirst}
+                    busy={isBusy || (treeFirst && treatmentQueue?.running)}
+                  />
                 </div>
+                {!treeFirst && <div
+                  className="column-resizer source-resizer"
+                  role="separator"
+                  aria-label="Resize source files"
+                  onMouseDown={(event) => handleFilesColumnResizeStart('parameters', event)}
+                />}
               </>
             )}
           </div>
         )}
         {activeTab === 'cleaning' && (
           <div className="tab-panel cleaning-tab">
-            {error && <p className="treatment-error">{error}</p>}
             <div className="cleaning-main">
               <CleaningKineticsPreview view={cleaningView} />
               <div className="cleaning-controls">
                 {isCleaningViewLoading && <p>Loading cleaning preview...</p>}
+                <div role="group" aria-label="Cleaning input files" className="cleaning-role-switch">
+                  {assignableDataTypes.map(dataType => {
+                    const source = session.path_sources?.[dataType] || session.paths?.[dataType];
+                    const label = { ABS: 'Absorption', BASE: 'Base', NOISE: 'Bruit / Noise' }[dataType] || dataType;
+                    return <button key={dataType} type="button" aria-pressed={cleaningActiveDataType === dataType}
+                      disabled={isBusy || !source} title={source || `${label}: no file assigned. Set the sample folder in Treatment.`}
+                      onClick={() => handleCleaningTargetChange(dataType)}>
+                      {label}<small>{source ? pathName(source) : 'Not assigned'}</small>
+                    </button>;
+                  })}
+                </div>
+                <details className="treatment-advanced-settings">
+                <summary>Cleaning settings</summary>
+                <div className="treatment-settings-fields">
                 <label>
                   Clean File
                   <select
@@ -2952,16 +3551,33 @@ const TabsControl = () => {
                     placeholder="source-name.h5"
                   />
                 </label>
+                </div>
+                </details>
+                {treeFirst && assignedCleaningTypes.length === 0 && !cleaningFolders.length && (
+                  <p>Select a sample folder in the file tree to start cleaning.</p>
+                )}
                 <div className="cleaning-actions">
-                  <button onClick={() => handleCleaningAction('analyze')} disabled={isBusy}>
+                  {treeFirst && assignedCleaningTypes.length === 0 && (
+                    <button type="button"
+                      disabled={isBusy || isQueueLoading || treatmentQueue?.running || !cleaningFolders.length}
+                      onClick={() => handleQueueStandardFolder(cleaningFolders, {
+                        label: 'Clean', convert: true, clean: true, calculate: false, returnToFiles: false,
+                      })}>
+                      Clean session
+                    </button>
+                  )}
+                  <button onClick={() => handleCleaningAction('analyze')} disabled={isBusy || !cleaningActiveDataType}>
                     Preview cleaning
                   </button>
                   <button onClick={() => handleCleaningAction('reset')} disabled={isBusy}>
                     Reset preview
                   </button>
-                  <button onClick={() => handleCleaningAction('restore')} disabled={isBusy || !String(cleaningSourcePath || '').toLowerCase().endsWith('.h5')}>
-                    Restore raw-map selection
-                  </button>
+                  <details className="treatment-advanced-settings">
+                    <summary>Recovery options</summary>
+                    <button onClick={() => handleCleaningAction('restore')} disabled={isBusy || !String(cleaningSourcePath || '').toLowerCase().endsWith('.h5')}>
+                      Restore raw-map selection
+                    </button>
+                  </details>
                   <button
                     onClick={() => handleCleaningAction('save')}
                     disabled={
@@ -2994,6 +3610,8 @@ const TabsControl = () => {
                   <p>
                     <strong>Overall Retained:</strong> {cleaningSummary.cleaned_measurements} / {cleaningSummary.original_measurements}
                     {' | '}
+                    <strong>Removed:</strong> {cleaningSummary.removed_measurements}
+                    {' | '}
                     <strong>Overall Retention:</strong> {cleaningSummary.retention_rate.toFixed(1)}%
                   </p>
                   <p>
@@ -3015,7 +3633,6 @@ const TabsControl = () => {
         )}
         {activeTab === 'stitch' && (
           <div className="tab-panel stitch-tab">
-            {error && <p className="treatment-error">{error}</p>}
             <div className="stitch-controls">
               <div className="stitch-control-grid stitch-control-grid-wide">
                 <label>
@@ -3241,7 +3858,7 @@ const TabsControl = () => {
             </div>
           </div>
         )}
-        {activeTab === 'info' && (
+        {!treeFirst && activeTab === 'info' && (
           <div className="tab-panel">
             <p>
               <strong>Allowed Root:</strong> {treatment.allowed_root}

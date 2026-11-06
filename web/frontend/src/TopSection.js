@@ -3,8 +3,10 @@ import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
 import { fetchSelection, updateSelectionConfig } from './api/treatmentClient';
 import './css/TopSection.css';
+import TreatmentError from './components/TreatmentError';
 
 const HEATMAP_MARGIN = { t: 14, r: 8, b: 8, l: 8 };
+const FULL_HEATMAP_MARGIN = { t: 12, r: 56, b: 46, l: 62 };
 const HEATMAP_X_DOMAIN = [0.15, 0.83];
 const HEATMAP_Y_DOMAIN = [0.18, 0.8];
 
@@ -15,12 +17,12 @@ function safePlot(plotNode, traces, layout, config) {
   return Plotly.react(plotNode, traces, layout, config).catch(() => undefined);
 }
 
-function safeResize(plotNode) {
+async function safeResize(plotNode) {
   if (!plotNode?.isConnected || !plotNode._fullLayout) {
     return;
   }
   try {
-    Plotly.Plots.resize(plotNode);
+    await Plotly.Plots.resize(plotNode);
   } catch (_error) {
     // Plotly can briefly lose internal layout while React/hot reload redraws.
   }
@@ -87,7 +89,7 @@ function nearestFullIndex(value, fullLength, values) {
   return Math.max(0, Math.min(fullLength - 1, Math.round(ratio * (fullLength - 1))));
 }
 
-function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
+function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel }) {
   const shellRef = useRef(null);
   const plotRef = useRef(null);
   const dragStateRef = useRef(null);
@@ -96,19 +98,20 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
   const previewFrameRef = useRef(null);
   const [metrics, setMetrics] = useState(null);
   const [visualSelection, setVisualSelection] = useState(null);
+  const margin = fillPanel ? FULL_HEATMAP_MARGIN : HEATMAP_MARGIN;
 
   const readPlotMetrics = useCallback((rect) => {
     const plotNode = plotRef.current;
     const xAxis = plotNode?._fullLayout?.xaxis;
     const yAxis = plotNode?._fullLayout?.yaxis;
-    const xOffset = Number.isFinite(xAxis?._offset) ? xAxis._offset : HEATMAP_MARGIN.l;
-    const yOffset = Number.isFinite(yAxis?._offset) ? yAxis._offset : HEATMAP_MARGIN.t;
+    const xOffset = Number.isFinite(xAxis?._offset) ? xAxis._offset : margin.l;
+    const yOffset = Number.isFinite(yAxis?._offset) ? yAxis._offset : margin.t;
     const innerWidth = Number.isFinite(xAxis?._length)
       ? xAxis._length
-      : rect.width - HEATMAP_MARGIN.l - HEATMAP_MARGIN.r;
+      : rect.width - margin.l - margin.r;
     const innerHeight = Number.isFinite(yAxis?._length)
       ? yAxis._length
-      : rect.height - HEATMAP_MARGIN.t - HEATMAP_MARGIN.b;
+      : rect.height - margin.t - margin.b;
 
     return {
       width: rect.width,
@@ -118,7 +121,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
       innerWidth: Math.max(1, innerWidth),
       innerHeight: Math.max(1, innerHeight),
     };
-  }, []);
+  }, [margin]);
 
   useEffect(() => {
     if (dragStateRef.current) {
@@ -196,6 +199,9 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
       return undefined;
     }
 
+    const timeTitle = timeScaleForPlot && timeScaleForPlot !== '??'
+      ? `Time delay, ${timeScaleForPlot}`
+      : 'Time delay';
     safePlot(
       plotNode,
       [
@@ -205,7 +211,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
           y: heatmapForPlot.timedelays,
           type: 'heatmap',
           colorscale: 'Viridis',
-          colorbar: {
+          colorbar: fillPanel ? { x: 1, y: 0.5, len: 1, thickness: 14 } : {
             x: 0.9,
             y: 0.49,
             len: 0.62,
@@ -214,20 +220,20 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
         },
       ],
       {
-        margin: HEATMAP_MARGIN,
+        margin,
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
         font: { color: '#e5e7eb' },
         xaxis: {
-          domain: HEATMAP_X_DOMAIN,
-          title: 'Wavelength, nm',
+          domain: fillPanel ? [0, 1] : HEATMAP_X_DOMAIN,
+          title: fillPanel ? { text: 'Wavelength, nm' } : 'Wavelength, nm',
           gridcolor: 'rgba(148, 163, 184, 0.26)',
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
           fixedrange: true,
         },
         yaxis: {
-          domain: HEATMAP_Y_DOMAIN,
-          title: `Time delay, ${timeScaleForPlot}`.trim(),
+          domain: fillPanel ? [0, 1] : HEATMAP_Y_DOMAIN,
+          title: fillPanel ? { text: timeTitle } : `Time delay, ${timeScaleForPlot}`.trim(),
           gridcolor: 'rgba(148, 163, 184, 0.26)',
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
           fixedrange: true,
@@ -240,23 +246,21 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
         doubleClick: false,
         scrollZoom: false,
       }
-    );
+    ).then(updateMetricsFromShell);
 
     const resizeObserver = new ResizeObserver(() => {
-      safeResize(plotNode);
-      window.requestAnimationFrame(updateMetricsFromShell);
+      safeResize(plotNode).then(updateMetricsFromShell);
     });
     resizeObserver.observe(plotNode);
-
-    window.requestAnimationFrame(updateMetricsFromShell);
 
     return () => {
       resizeObserver.disconnect();
       safePurge(plotNode);
     };
   }, [
+    fillPanel,
     heatmapForPlot,
-    readPlotMetrics,
+    margin,
     timeScaleForPlot,
     updateMetricsFromShell,
   ]);
@@ -735,7 +739,7 @@ function buildPreviewCurves(selection, selectedRange) {
   };
 }
 
-const TopSection = () => {
+const TopSection = ({ fillPanel = false }) => {
   const treatmentContext = useContext(TreatmentContext);
   const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
   const selectionRefreshToken = treatmentContext?.selectionRefreshToken || 0;
@@ -781,7 +785,8 @@ const TopSection = () => {
       .catch((err) => {
         if (!cancelled) {
           setSelection(null);
-          setError(err.message);
+          setError(err.message === 'Assign at least one input file before using selection tools'
+            ? '' : err.message);
         }
       })
       .finally(() => {
@@ -916,7 +921,9 @@ const TopSection = () => {
     if (!selection) {
       return (
         <div style={{ padding: '16px' }}>
-          <p>{error || 'Assign an input file in the Files tab to start previewing treatment data.'}</p>
+          {error ? <TreatmentError message={error} /> : (
+            <p>Choose a folder or manifest, then assign input files to preview.</p>
+          )}
         </div>
       );
     }
@@ -978,12 +985,13 @@ const TopSection = () => {
           </button>
         </div>
         <div className="selection-path">{selection.file_info.file_path}</div>
-        {error && <p>{error}</p>}
+        <TreatmentError message={error} />
         <div className="top-plot-grid">
           <div className="left-column">
             <div className="imshow-wrapper">
               <SelectionHeatmap
                 selection={selection}
+                fillPanel={fillPanel}
                 onSelectRange={handleHeatmapSelection}
                 onPreviewRange={handleHeatmapPreview}
               />
@@ -1012,7 +1020,7 @@ const TopSection = () => {
     );
   };
 
-  return <div className="top-section-container">{renderContent()}</div>;
+  return <div className={`top-section-container${!selection ? ' is-empty' : ''}`}>{renderContent()}</div>;
 };
 
 export default TopSection;

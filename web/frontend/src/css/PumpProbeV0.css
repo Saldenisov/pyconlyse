@@ -874,6 +874,37 @@
   white-space: nowrap;
 }
 
+.pp-treatment-window {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  width: min(430px, calc(100vw - 32px));
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  z-index: 60;
+  border: 1px solid #59636d;
+  background: #252b32;
+  color: #d9dde4;
+  box-shadow: 0 8px 28px #0009;
+}
+
+.pp-treatment-body { padding: 12px; display: grid; gap: 10px; }
+.pp-treatment-body label { display: grid; gap: 4px; font-size: 12px; }
+.pp-treatment-body input, .pp-treatment-body select {
+  min-width: 0; width: 100%; box-sizing: border-box; padding: 5px;
+  color: #d9dde4; background: #20262d; border: 1px solid #59636d;
+}
+.pp-treatment-body button, .pp-treatment-window .pp-panel-title button {
+  padding: 4px 8px; color: #d9dde4; background: #303740;
+  border: 1px solid #59636d; cursor: pointer;
+}
+.pp-treatment-body button:disabled { opacity: .5; cursor: default; }
+.pp-treatment-source { overflow-wrap: anywhere; font-size: 12px; }
+.pp-treatment-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-treatment-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pp-treatment-body p { margin: 0; font-size: 11px; }
+.pp-treatment-error { color: #ff9f9f; }
+
 .pp-panel-actions {
   display: flex;
   align-items: center;

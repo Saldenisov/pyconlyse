@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { fetchWithHardwareApproval } from '../api/csrfRequest';
 
 const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/$/, '');
@@ -27,7 +27,7 @@ const AndorSpectrographClient = ({ deviceName }) => {
   });
   const [error, setError] = useState('');
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!deviceName) {
       return;
     }
@@ -49,13 +49,13 @@ const AndorSpectrographClient = ({ deviceName }) => {
     } catch (err) {
       setError(err.message);
     }
-  };
+  }, [deviceName]);
 
   useEffect(() => {
     refresh();
     const interval = window.setInterval(refresh, 1500);
     return () => window.clearInterval(interval);
-  }, [deviceName]);
+  }, [refresh]);
 
   const writeParameters = async (updates) => {
     try {

@@ -2,49 +2,28 @@
 import React, { useCallback, useMemo, useState, createContext } from 'react';
 import TopSection from './TopSection';
 import TabsControl from './TabsControl';
+import { getBrowserNamespace, namespaceToken } from './browserWorkspaceIdentity';
 import './css/DataWindowVD2.css';
+export { getBrowserNamespace } from './browserWorkspaceIdentity';
 
 // Create context for sharing state between components
 export const TreatmentContext = createContext();
 
-const TREATMENT_NAMESPACE_KEY = 'pyconlyse_treatment_namespace';
-let inMemoryNamespace = '';
+const workspaceMemoryNamespace = namespaceToken();
 
-function createNamespaceToken() {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function getBrowserNamespace() {
-  try {
-    const stored = window.localStorage.getItem(TREATMENT_NAMESPACE_KEY);
-    if (stored) {
-      return stored;
-    }
-
-    const created = createNamespaceToken();
-    window.localStorage.setItem(TREATMENT_NAMESPACE_KEY, created);
-    return created;
-  } catch (_error) {
-    if (!inMemoryNamespace) {
-      inMemoryNamespace = createNamespaceToken();
-    }
-    return inMemoryNamespace;
-  }
-}
-
-function buildTreatmentSessionId(profile) {
+export function buildTreatmentSessionId(profile, workspace = 'main', windowId = '') {
   const normalizedProfile = String(profile || 'VD2').trim().toLowerCase();
-  return `browser:${getBrowserNamespace()}:profile:${normalizedProfile}`;
+  const namespace = getBrowserNamespace();
+  if (!namespace && workspace === 'main' && !windowId) return '';
+  const base = `browser:${namespace || workspaceMemoryNamespace}${windowId?`:window:${windowId}`:''}:profile:${normalizedProfile}`;
+  return workspace === 'main' ? base : `${base}:workspace:${workspace}`;
 }
 
-const DataWindowVD2 = ({ profile = 'VD2', layoutMode = 'classic' }) => {
+const DataWindowVD2 = ({ profile = 'VD2', layoutMode = 'studio', workspace = 'main', initialFolder = '', windowId = '', manifestProjectFolder='', onOpenManifest }) => {
   const treatmentProfile = String(profile || 'VD2').trim().toUpperCase();
   const treatmentSessionId = useMemo(
-    () => buildTreatmentSessionId(treatmentProfile),
-    [treatmentProfile]
+    () => buildTreatmentSessionId(treatmentProfile, workspace, windowId),
+    [treatmentProfile, workspace, windowId]
   );
 
   // State for file paths
@@ -94,24 +73,25 @@ const DataWindowVD2 = ({ profile = 'VD2', layoutMode = 'classic' }) => {
     treatmentProfile,
     treatmentSessionId,
     treatmentLayoutMode: layoutMode,
+    initialFolder,
+    manifestProjectFolder,
+    onOpenManifest,
   };
-  
+  const treeFirst = layoutMode === 'studio' && treatmentProfile === 'VD2';
+  const preview = (
+    <section className="treatment-preview-workspace" aria-labelledby="treatment-preview-title">
+      <div className="workspace-section-heading"><h2 id="treatment-preview-title">Preview</h2></div>
+      <TopSection fillPanel={treeFirst} />
+    </section>
+  );
+
   return (
     <TreatmentContext.Provider value={contextValue}>
-      <main className={`graph-window treatment-layout-${layoutMode}`}>
-        <section className="treatment-preview-workspace" aria-labelledby="treatment-preview-title">
-          <div className="workspace-section-heading">
-            <div>
-              <p className="workspace-kicker">Workspace</p>
-              <h2 id="treatment-preview-title">Preview</h2>
-            </div>
-            <p>Inspect an assigned map, then define wavelength and delay ranges.</p>
-          </div>
-          <TopSection />
-        </section>
+      <main className={`graph-window treatment-layout-${layoutMode}${treeFirst ? ' treatment-tree-workspace' : ''}`}>
         <section className="bottom-section" aria-label="Treatment inputs and processing">
-          <TabsControl />
+          <TabsControl preview={treeFirst ? preview : null} />
         </section>
+        {!treeFirst && preview}
       </main>
     </TreatmentContext.Provider>
   );

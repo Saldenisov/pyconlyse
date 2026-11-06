@@ -1,8 +1,21 @@
 // DeviceControl.js - Generic device control component
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './DeviceControl.css';
+
+const parseJsonOrThrow = async (response, fallbackMessage) => {
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (_err) {
+    payload = null;
+  }
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.error || fallbackMessage || `HTTP ${response.status}`);
+  }
+  return payload;
+};
 
 const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
   const [deviceInfo, setDeviceInfo] = useState(null);
@@ -19,88 +32,13 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
   const [monitoring, setMonitoring] = useState(false);
 
   const socketRef = useRef(null);
-
-  const parseJsonOrThrow = async (response, fallbackMessage) => {
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch (_err) {
-      payload = null;
-    }
-    if (!response.ok || payload?.success === false) {
-      throw new Error(payload?.error || fallbackMessage || `HTTP ${response.status}`);
-    }
-    return payload;
-  };
+  const attributesLoadedRef = useRef(false);
 
   useEffect(() => {
-    setDeviceInfo(null);
-    setAttributes({});
-    setCommands({});
-    setAttributesLoaded(false);
-    setCommandsLoaded(false);
-    setError(null);
-    setRealTimeData({});
-    setLoadingSummary(true);
+    attributesLoadedRef.current = attributesLoaded;
+  }, [attributesLoaded]);
 
-    if (deviceName) {
-      fetchDeviceSummary();
-      initializeWebSocket();
-    }
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
-  }, [deviceName]);
-
-  const initializeWebSocket = () => {
-    socketRef.current = io('/', {
-      withCredentials: true,
-    });
-
-    socketRef.current.on('connect', () => {
-      console.log('WebSocket connected');
-      setConnected(true);
-    });
-
-    socketRef.current.on('disconnect', () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-      setMonitoring(false);
-    });
-
-    socketRef.current.on('device_update', (data) => {
-      if (data.device === deviceName) {
-        setRealTimeData(data);
-      }
-    });
-
-    socketRef.current.on('device_error', (data) => {
-      if (data.device === deviceName) {
-        console.error('Device error:', data.error);
-        setError(data.error);
-      }
-    });
-
-    socketRef.current.on('command_result', (data) => {
-      if (data.device === deviceName) {
-        console.log('Command result:', data);
-        fetchDeviceSummary();
-        if (attributesLoaded) {
-          fetchAttributes(true);
-        }
-      }
-    });
-
-    socketRef.current.on('error', (data) => {
-      console.error('WebSocket error:', data.message);
-      setError(data.message);
-    });
-  };
-
-  const fetchDeviceSummary = async () => {
+  const fetchDeviceSummary = useCallback(async () => {
     try {
       setLoadingSummary(true);
       const response = await fetch(`/api/device/${deviceName}/summary`, {
@@ -116,10 +54,10 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
     } finally {
       setLoadingSummary(false);
     }
-  };
+  }, [deviceName]);
 
-  const fetchAttributes = async (force = false) => {
-    if (!force && attributesLoaded) {
+  const fetchAttributes = useCallback(async (force = false) => {
+    if (!force && attributesLoadedRef.current) {
       return;
     }
 
@@ -138,7 +76,51 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
     } finally {
       setLoadingAttributes(false);
     }
-  };
+  }, [deviceName]);
+
+  useEffect(() => {
+    setDeviceInfo(null);
+    setAttributes({});
+    setCommands({});
+    setAttributesLoaded(false);
+    attributesLoadedRef.current = false;
+    setCommandsLoaded(false);
+    setError(null);
+    setRealTimeData({});
+    setLoadingSummary(true);
+    if (!deviceName) return undefined;
+
+    fetchDeviceSummary();
+    const socket = io('/', { withCredentials: true });
+    socketRef.current = socket;
+    socket.on('connect', () => {
+      if (socketRef.current !== socket) return;
+      setConnected(true);
+    });
+    socket.on('disconnect', () => {
+      if (socketRef.current !== socket) return;
+      setConnected(false);
+      setMonitoring(false);
+    });
+    socket.on('device_update', (data) => {
+      if (socketRef.current === socket && data.device === deviceName) setRealTimeData(data);
+    });
+    socket.on('device_error', (data) => {
+      if (socketRef.current === socket && data.device === deviceName) setError(data.error);
+    });
+    socket.on('command_result', (data) => {
+      if (socketRef.current !== socket || data.device !== deviceName) return;
+      fetchDeviceSummary();
+      if (attributesLoadedRef.current) fetchAttributes(true);
+    });
+    socket.on('error', (data) => {
+      if (socketRef.current === socket) setError(data.message);
+    });
+    return () => {
+      if (socketRef.current === socket) socketRef.current = null;
+      socket.disconnect();
+    };
+  }, [deviceName, fetchDeviceSummary, fetchAttributes]);
 
   const fetchCommands = async (force = false) => {
     if (!force && commandsLoaded) {

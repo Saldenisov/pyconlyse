@@ -1,0 +1,9 @@
+.pp-treatment-window { max-height: 90vh; overflow: auto; }
+.pp-treatment-body fieldset { border: 1px solid #394653; margin: 8px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+.pp-treatment-body fieldset label { flex: 1; min-width: 110px; }
+.pp-treatment-import { font-size: 12px; max-width: 240px; }
+.pp-derived-panel { padding: 10px 14px; background: #151c25; border: 1px solid #354250; border-radius: 6px; margin: 8px 0; }
+.pp-derived-panel ol { padding-left: 22px; margin: 6px 0; }
+.pp-derived-panel li { margin: 4px 0; overflow-wrap: anywhere; }
+.pp-derived-panel button, .pp-derived-panel select { margin-left: 6px; }
+.pp-derived-source-label { display: inline-block; max-width: 60%; vertical-align: middle; }
