@@ -201,8 +201,11 @@ class DS_HAMAMATSU_STREAK(DS_General):
         return result
 
     def get_controller_status_local(self) -> Union[int, str]:
-        # AppStart and its optical setup own the RemoteEx command socket.
-        if self._application_start_thread is not None and self._application_start_thread.is_alive():
+        # The start workers own the RemoteEx command socket until they finish.
+        if any(
+            thread is not None and thread.is_alive()
+            for thread in (self._application_start_thread, self._live_start_thread)
+        ):
             return 0
         if self.controller is None or not self.controller.is_connected:
             self.connected_value = False

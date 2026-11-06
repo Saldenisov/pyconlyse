@@ -7,6 +7,8 @@ from typing import Dict, List, Optional
 from .remoteex_client import RemoteExClient
 from .remoteex_protocol import (
     RemoteExCommandError,
+    RemoteExErrorCode,
+    RemoteExProtocolError,
     RemoteExResponse,
     RemoteExTransportError,
     build_app_start_command,
@@ -705,22 +707,29 @@ class HamamatsuStreakController:
         return path
 
     def refresh_cached_state(self) -> HamamatsuStreakSnapshot:
-        self.status()
         # HPD-TA only services RemoteEx during brief DoEvents while Live/Sequence
-        # runs. Querying every control there can stall the acquisition and loses the
-        # persistent command connection. ``Status()`` is obsolete and can retain
-        # a completed command such as ``AcqStop()``; only an active acquisition
-        # must suppress the hardware readback.
-        busy_command = self.snapshot.busy_command.lower()
-        acquisition_active = any(
-            marker in busy_command
-            for marker in ("acqstart", "seqstart", "hacq_mlive")
-        )
-        if self.snapshot.remoteex_status.lower() == "busy" and acquisition_active:
+        # runs. Only a confirmed idle camera can service a full settings read.
+        try:
+            response = self.execute_raw("AcqStatus()")
+        except RemoteExCommandError as exc:
+            if (exc.response.error_code != RemoteExErrorCode.ECCommandNotPossible
+                    or exc.response.command_name.lower() != "acqstatus"
+                    or (exc.response.parameter(0) or "").strip().lower() != "application not running"):
+                raise
+            self.snapshot.application_running = False
+            self.snapshot.application_version = ""
+            self.snapshot.remoteex_status = "idle"
+            self.snapshot.busy_command = ""
             return self.snapshot
 
-        self.snapshot.remoteex_status = "idle"
-        self.snapshot.busy_command = ""
+        status = (response.parameter(0) or "").strip().lower()
+        if response.command_name.lower() != "acqstatus" or status not in {"idle", "busy"}:
+            raise RemoteExProtocolError(f"Unrecognized acquisition status: {response.raw_line}")
+        self.snapshot.application_running = True
+        self.snapshot.remoteex_status = status
+        self.snapshot.busy_command = (response.parameter(1) or "") if status == "busy" else ""
+        if status == "busy":
+            return self.snapshot
 
         self.snapshot.application_version = self._safe_query(self.get_app_info, "Version")
         self.snapshot.application_running = bool(self.snapshot.application_version)
@@ -866,6 +875,10 @@ class HamamatsuStreakController:
     def _safe_query(self, func, *args) -> str:
         try:
             return str(func(*args))
+        except RemoteExTransportError:
+            # End the snapshot on connection loss. Otherwise each subsequent
+            # optional setting would try to reconnect within the same poll.
+            raise
         except Exception:
             return ""
 

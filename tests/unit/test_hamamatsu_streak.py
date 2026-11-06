@@ -29,6 +29,7 @@ from DeviceServers.cameras.hamamatsu_streak.DS_HAMAMATSU_STREAK import (
 )
 from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import (
     RemoteExCommandError,
+    RemoteExProtocolError,
     RemoteExResponse,
     RemoteExTransportError,
     build_app_start_command,
@@ -86,14 +87,13 @@ class TestRemoteExProtocol(unittest.TestCase):
 class TestHamamatsuStreakController(unittest.TestCase):
     def test_stopped_application_status_does_not_query_device_or_camera_parameters(self):
         fake = FakeRemoteExClient({
-            "Status()": [parse_response_line("0,Status,0,")],
-            "AppInfo(Version)": [parse_response_line("3,AppInfo,Application not running")],
+            "AcqStatus()": [parse_response_line("3,AcqStatus,Application not running")],
         })
         controller = HamamatsuStreakController(fake)
         fake.connect()
         snapshot = controller.refresh_cached_state()
         self.assertFalse(snapshot.application_running)
-        self.assertEqual(fake.sent_commands, ["Status()", "AppInfo(Version)"])
+        self.assertEqual(fake.sent_commands, ["AcqStatus()"])
 
     def test_application_start_uses_initialization_budget_not_status_timeout(self):
         class StartupClient(FakeRemoteExClient):
@@ -114,6 +114,7 @@ class TestHamamatsuStreakController(unittest.TestCase):
         device = SimpleNamespace(
             _startup_configuration_error="",
             _application_start_thread=None,
+            _live_start_thread=None,
             controller=None,
             _reset_remoteex_connection=lambda reason: states.append(DevState.ON),
             set_state=states.append,
@@ -131,6 +132,14 @@ class TestHamamatsuStreakController(unittest.TestCase):
         DS_HAMAMATSU_STREAK.get_controller_status_local(device)
         self.assertEqual(states[-1], DevState.FAULT)
         self.assertFalse(device.application_running_value)
+
+    def test_periodic_status_leaves_the_live_start_socket_to_its_worker(self):
+        device = SimpleNamespace(
+            _application_start_thread=None,
+            _live_start_thread=SimpleNamespace(is_alive=lambda: True),
+        )
+
+        self.assertEqual(DS_HAMAMATSU_STREAK.get_controller_status_local(device), 0)
 
     def test_start_reconnect_keeps_readonly_probe_socket_for_initialization_budget(self):
         class ResetClient(FakeRemoteExClient):
@@ -286,27 +295,55 @@ class TestHamamatsuStreakController(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Close HPD-TA"):
             DS_HAMAMATSU_STREAK.StopRemoteEx(device)
 
-    def test_refresh_cached_state_does_not_poll_controls_while_live_is_busy(self):
-        fake = FakeRemoteExClient(
-            {
-                "Status()": [
-                    RemoteExResponse(
-                        raw_line="0,Status,1,AcqStart(Live)",
-                        error_code=0,
-                        command_name="Status",
-                        parameters=["1", "AcqStart(Live)"],
-                    )
-                ]
-            }
-        )
+    def test_refresh_cached_state_does_not_poll_controls_during_acquisition(self):
+        for mode in ("Live", "Acquire", "Sequence", ""):
+            with self.subTest(mode=mode):
+                fake = FakeRemoteExClient({
+                    "AcqStatus()": [parse_response_line(f"0,AcqStatus,busy,{mode}")],
+                    "Status()": [parse_response_line("0,Status,0,AcqStop()")],
+                })
+                controller = HamamatsuStreakController(fake)
+                controller.snapshot.live_exposure_time = "20"
+                fake.connect()
+
+                snapshot = controller.refresh_cached_state()
+
+                self.assertTrue(snapshot.application_running)
+                self.assertEqual(snapshot.remoteex_status, "busy")
+                self.assertEqual(snapshot.busy_command, mode)
+                self.assertEqual(snapshot.live_exposure_time, "20")
+                self.assertEqual(fake.sent_commands, ["AcqStatus()"])
+
+    def test_refresh_cached_state_requires_confirmed_idle_before_reading_settings(self):
+        fake = FakeRemoteExClient({
+            "AcqStatus()": [parse_response_line("0,AcqStatus,unknown")],
+        })
         controller = HamamatsuStreakController(fake)
         fake.connect()
 
-        snapshot = controller.refresh_cached_state()
+        with self.assertRaisesRegex(RemoteExProtocolError, "Unrecognized acquisition status"):
+            controller.refresh_cached_state()
+        self.assertEqual(fake.sent_commands, ["AcqStatus()"])
 
-        self.assertEqual(snapshot.remoteex_status, "busy")
-        self.assertEqual(snapshot.busy_command, "AcqStart(Live)")
-        self.assertEqual(fake.sent_commands, ["Status()"])
+    def test_refresh_cached_state_ends_on_first_transport_error(self):
+        class TimeoutClient(FakeRemoteExClient):
+            def send_command_checked(self, command, timeout=None):
+                if command == "CamParamGet(Live,Exposure)":
+                    self.sent_commands.append(command)
+                    raise RemoteExTransportError("Failed reading RemoteEx socket: timed out")
+                return super().send_command_checked(command, timeout=timeout)
+
+        fake = TimeoutClient({
+            "AcqStatus()": [parse_response_line("0,AcqStatus,idle")],
+            "AppInfo(Version)": [parse_response_line("0,AppInfo,9.5")],
+        })
+        controller = HamamatsuStreakController(fake)
+        fake.connect()
+
+        with self.assertRaisesRegex(RemoteExTransportError, "timed out"):
+            controller.refresh_cached_state()
+        self.assertFalse(fake.is_connected)
+        self.assertEqual(fake.sent_commands, ["AcqStatus()", "AppInfo(Version)", "CamParamGet(Live,Exposure)"])
 
     def test_wait_for_async_idle(self):
         fake = FakeRemoteExClient(
@@ -473,14 +510,7 @@ class TestHamamatsuStreakController(unittest.TestCase):
     def test_refresh_cached_state_reads_key_parameters(self):
         fake = FakeRemoteExClient(
             {
-                "Status()": [
-                    RemoteExResponse(
-                        raw_line="0,Status,idle",
-                        error_code=0,
-                        command_name="Status",
-                        parameters=["idle"],
-                    )
-                ],
+                "AcqStatus()": [parse_response_line("0,AcqStatus,idle")],
                 "AppInfo(Version)": [
                     RemoteExResponse(
                         raw_line="0,AppInfo,9.5",

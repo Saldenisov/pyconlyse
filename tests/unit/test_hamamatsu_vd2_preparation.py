@@ -61,6 +61,13 @@ class ProfileClient:
         parameters = []
         if name == "Status":
             parameters = ["1", "AcqStart(Live)"] if self.acquisition_active else ["0", ""]
+        elif name == "AcqStatus":
+            if not self.application_running:
+                response = RemoteExResponse(
+                    "3,AcqStatus,Application not running", 3, name, ["Application not running"]
+                )
+                raise RemoteExCommandError("Application not running", response)
+            parameters = ["busy", "Live"] if self.acquisition_active else ["idle"]
         elif name == "AppInfo":
             parameters = ["9.5" if self.application_running else ""]
         elif name == "DevParamSet":
