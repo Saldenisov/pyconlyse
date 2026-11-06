@@ -1670,20 +1670,15 @@ def _shutdown_hpdta(streak, steps):
         _wait_shutdown_readback(streak, lambda: bool(_value(streak, "application_running")),
                                 False, "HPD-TA closed")
         steps.append({"step": "HPD-TA", "status": "closed"})
-    else:
-        # Do not restart camera software just to repeat an already completed
-        # shutdown. An absent application is not evidence of a safe camera mode.
-        pdu = _wait_for_device(VD2_PDU_DEVICE, timeout_s=2.0)
-        power = dict(zip(_value(pdu, "ids"), _value(pdu, "states")))
-        if int(power.get(1, -1)) != 0:
-            raise RuntimeError("Cannot confirm streak camera Focus while HPD-TA is stopped; camera power retained")
-        steps.append({"step": "Streak mode", "status": "camera already unpowered; no software restart"})
-    # This command checks actual local process exit, not just Tango's cache.
+    # This command refuses to stop RemoteEx while the HPD-TA process exists,
+    # even when the Tango application flag is false.
     _progress(steps, "Stopping RemoteEx and verifying SDK release", stage=0)
     streak.command_inout("StopRemoteEx")
     _wait_shutdown_readback(streak, lambda: bool(_value(streak, "connected")) or bool(_value(streak, "application_running")),
                             False, "RemoteEx/HPD-TA stopped")
     steps.append({"step": "RemoteEx", "status": "stopped; SDK released"})
+    if not application_running:
+        steps.append({"step": "Streak mode", "status": "Focus unavailable; HPD-TA and RemoteEx verified stopped"})
 
 
 def _shutdown_equipment(steps):

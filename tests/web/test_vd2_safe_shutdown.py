@@ -101,6 +101,8 @@ def rig(monkeypatch):
                 native.update(application_running=True, streak_shutter="Closed", spectrograph_shutter="Open", streak_mode="Operate", time_range="1 us")
             elif command == "DevGetRunningServers":
                 return list(running)
+            elif command == "DevStart":
+                running.append(arg)
             elif command == "DevStop":
                 running.remove(arg)
             elif command == "PrepareVD2Grating":
@@ -228,9 +230,20 @@ def test_repeat_unprepare_does_not_reopen_camera_to_set_focus(rig):
 
 
 @pytest.mark.parametrize("connected", [False, True])
-def test_stopped_hpdta_cannot_prove_focus_while_camera_is_still_powered(rig, connected):
+def test_stopped_hpdta_allows_power_off_after_process_exit_check(rig, connected):
     rig.native.update(application_running=False, connected=connected, remoteex_status="disconnected")
-    with pytest.raises(api.PreparationFailure, match="Cannot confirm.*Focus"):
+    result = api._deinitialize_experiment()
+    exit_verified = rig.events.index((api.STREAK_DEVICE, "StopRemoteEx", None))
+    assert exit_verified < rig.events.index(power_events(rig)[0])
+    assert rig.power[api.VD2_PDU_DEVICE][1] == 0
+    assert not any(command in {"StartApplication", "StartRemoteEx", "streak_mode"} for _, command, _ in rig.events)
+    assert {"step": "Streak mode", "status": "Focus unavailable; HPD-TA and RemoteEx verified stopped"} in result["steps"]
+
+
+def test_stopped_hpdta_flag_cannot_bypass_actual_process_check(rig):
+    rig.native.update(application_running=False, connected=False, remoteex_status="disconnected")
+    rig.faults["StopRemoteEx"] = True
+    with pytest.raises(api.PreparationFailure, match="StopRemoteEx failed"):
         api._deinitialize_experiment()
     assert not power_events(rig)
     assert rig.power[api.VD2_PDU_DEVICE][1] == 1
