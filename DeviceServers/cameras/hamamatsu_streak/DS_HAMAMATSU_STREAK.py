@@ -60,6 +60,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def init_device(self):
         self.client = None
         self.controller = None
+        self._sequence_reconnect_pending = False
         self._application_start_thread = None
         self._live_start_thread = None
         self.connected_value = False
@@ -878,19 +879,20 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.controller = None
             self.connected_value = False
 
-        task_name = str(self.remoteex_task_name or "Pyconlyse-TaRemoteEx")
-        completed = subprocess.run(
-            ["schtasks.exe", "/run", "/tn", f"\\{task_name}"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-        if completed.returncode != 0:
-            detail = (completed.stderr or completed.stdout or "scheduled task failed").strip()
-            raise RuntimeError(f"Could not start RemoteEx task {task_name}: {detail}")
+        if not self._windows_process_running("TaRemoteEx.exe"):
+            task_name = str(self.remoteex_task_name or "Pyconlyse-TaRemoteEx")
+            completed = subprocess.run(
+                ["schtasks.exe", "/run", "/tn", f"\\{task_name}"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if completed.returncode != 0:
+                detail = (completed.stderr or completed.stdout or "scheduled task failed").strip()
+                raise RuntimeError(f"Could not start RemoteEx task {task_name}: {detail}")
 
-        deadline = time.monotonic() + float(self.remoteex_start_timeout_s or 12.0)
+        deadline = time.monotonic() + max(30.0, float(self.remoteex_start_timeout_s or 0))
         last_error = None
         while time.monotonic() < deadline:
             try:
@@ -912,7 +914,8 @@ class DS_HAMAMATSU_STREAK(DS_General):
     @command
     def StopRemoteEx(self):
         """Stop RemoteEx after HPD-TA has been closed."""
-        if self.application_running_value and self._windows_process_running("HPDTA95.exe"):
+        # A disconnected/stale application_running flag is not proof of exit.
+        if self._windows_process_running("HPDTA95.exe"):
             raise RuntimeError("Close HPD-TA before stopping RemoteEx")
         self.application_running_value = False
         controller = self.controller
@@ -1181,6 +1184,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def StartSequence(self):
         controller = self._require_controller()
         controller.start_sequence(wait=False)
+        self._sequence_reconnect_pending = False
         self.remoteex_status_value = "busy"
         self.set_state(DevState.RUNNING)
 
@@ -1256,10 +1260,32 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command(dtype_in=str, dtype_out=str)
     def ExecuteRaw(self, command_text: str):
-        controller = self._require_controller()
-        response = controller.execute_raw(command_text)
-        self.last_command_value = controller.last_command
-        self.last_response_value = controller.last_response_text
+        if command_text == "AsyncCommandStatus()":
+            controller = self.controller
+            if controller is None or not controller.is_connected:
+                if not self._windows_process_running("TaRemoteEx.exe"):
+                    raise RuntimeError("RemoteEx sequence connection unavailable; sequence completion unconfirmed")
+                self._sequence_reconnect_pending = True
+                if controller is None:
+                    try:
+                        self._connect_remoteex()
+                    except RemoteExTransportError as exc:
+                        raise RemoteExTransportError(f"{command_text}: {exc}") from exc
+                    controller = self._require_controller()
+            response = controller.execute_raw(command_text, reconnect_timeout=2.0, timeout=3.0)
+            if self._sequence_reconnect_pending and response.parameters[:3] == ["0", "0", "0"]:
+                try:
+                    version = controller.execute_raw("AppInfo(Version)", timeout=3.0)
+                except RemoteExTransportError as exc:
+                    raise RemoteExTransportError(f"{command_text}: cannot verify HPD-TA after reconnect: {exc}") from exc
+                if not (version.parameter(0) or "").strip():
+                    raise RuntimeError("HPD-TA application unverified after reconnect; sequence completion unconfirmed")
+                self._sequence_reconnect_pending = False
+        else:
+            controller = self._require_controller()
+            response = controller.execute_raw(command_text)
+        self.last_command_value = command_text
+        self.last_response_value = response.raw_line
         return response.raw_line
 
     @command(dtype_out=str)

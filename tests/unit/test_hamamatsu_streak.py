@@ -250,7 +250,9 @@ class TestHamamatsuStreakController(unittest.TestCase):
             def __init__(self):
                 self._process_states = iter([True, False, False])
 
-            def _windows_process_running(self, _name):
+            def _windows_process_running(self, name):
+                if name == "HPDTA95.exe":
+                    return False
                 return next(self._process_states)
 
             def set_state(self, state):
@@ -275,6 +277,14 @@ class TestHamamatsuStreakController(unittest.TestCase):
         self.assertFalse(device.connected_value)
         self.assertEqual(device.remoteex_status_value, "disconnected")
         self.assertEqual(device.state, DevState.ON)
+
+    def test_stop_remoteex_refuses_live_hpdta_even_with_false_cache(self):
+        device = SimpleNamespace(
+            application_running_value=False,
+            _windows_process_running=lambda name: name == "HPDTA95.exe",
+        )
+        with self.assertRaisesRegex(RuntimeError, "Close HPD-TA"):
+            DS_HAMAMATSU_STREAK.StopRemoteEx(device)
 
     def test_refresh_cached_state_does_not_poll_controls_while_live_is_busy(self):
         fake = FakeRemoteExClient(
