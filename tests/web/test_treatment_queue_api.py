@@ -33,53 +33,6 @@ def test_allowed_root_treats_windows_drive_paths_as_case_insensitive():
     )
 
 
-def test_treatment_worker_count_uses_up_to_six_available_cpus(monkeypatch):
-    monkeypatch.setenv("PYCONLYSE_TREATMENT_MAX_WORKERS", "6")
-    monkeypatch.setattr(treatment_api_module.os, "cpu_count", lambda: 12)
-
-    assert treatment_api_module._treatment_worker_count(10) == 6
-    assert treatment_api_module._treatment_worker_count(3) == 3
-
-    monkeypatch.setattr(treatment_api_module.os, "cpu_count", lambda: 4)
-    assert treatment_api_module._treatment_worker_count(10) == 4
-
-
-def test_independent_manifest_samples_overlap_but_following_folder_waits(monkeypatch):
-    from threading import Barrier, Event, Lock
-    monkeypatch.setenv('PYCONLYSE_TREATMENT_MAX_WORKERS', '2')
-    monkeypatch.setattr(treatment_api_module.os, 'cpu_count', lambda: 2)
-    store = TreatmentQueueStore()
-    gate, done, lock = Barrier(2), Event(), Lock()
-    finished = []
-    def execute(job_id, recipe):
-        if recipe['label'] != 'folder':
-            assert treatment_api_module._treatment_thread_context.parallel_sample
-            gate.wait(timeout=3)
-        else:
-            assert set(finished) == {'one', 'two'}
-            done.set()
-        with lock: finished.append(recipe['label'])
-        return {}
-    store.enqueue_batch('parallel', [
-        {'label':name, 'provenance':{'vd2_project':{'sample':name}}} for name in ['one','two']
-    ] + [{'label':'folder', 'kind':'standard_folder_set'}])
-    store.start('parallel', execute)
-    assert done.wait(5)
-    while store.snapshot('parallel')['running']:
-        time.sleep(.01)
-    assert all(job['status']=='completed' for job in store.snapshot('parallel')['jobs'])
-    assert finished[-1] == 'folder'
-
-
-def test_parallel_sample_uses_inline_roles_instead_of_nested_pools(monkeypatch):
-    monkeypatch.setattr(treatment_api_module, '_cpu_executor', lambda count: pytest.fail('nested pool'))
-    treatment_api_module._treatment_thread_context.parallel_sample = True
-    try:
-        assert treatment_api_module._run_parallel_cpu_jobs({'ABS':(2,), 'BASE':(3,)}, lambda role,n,progress:n*2) == {'ABS':4,'BASE':6}
-    finally:
-        treatment_api_module._treatment_thread_context.parallel_sample = False
-
-
 def test_dated_folder_save_name_uses_selected_folder_and_local_date(tmp_path):
     folder = tmp_path / "12893-water_600_1us-x0"
     assert treatment_api_module._dated_save_file_name_for_folder(
@@ -590,8 +543,11 @@ def test_folder_enqueue_autostarts_once_and_drains_jobs_sequentially(
     assert max_active == 1
 
 
-def test_standard_folder_queue_honors_clean_setting(queue_client):
+def test_standard_folder_queue_honors_clean_setting(queue_client, monkeypatch):
     test_client, tmp_path, headers = queue_client
+    monkeypatch.setattr(
+        treatment_api_module, "_execute_treatment_queue_job", lambda *_args: {}
+    )
     folder = tmp_path / "12893-water_600_1us-x1"
     folder.mkdir()
     (folder / "ABS12893.his").write_bytes(b"abs")

@@ -13,7 +13,9 @@ BACKEND = Path(__file__).resolve().parents[2] / "web" / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
+import treatment_api as treatment_api_module
 from treatment_api import (
+    TreatmentQueueStore,
     _convert_folder_source_worker,
     _convert_staged_h5_worker,
     _queue_clean_worker,
@@ -156,3 +158,50 @@ def test_abs_and_base_clean_in_distinct_spawned_processes(tmp_path):
         with h5py.File(output, "r") as h5_file:
             assert h5_file["raw_data"].compression == "gzip"
             assert h5_file["raw_data"].compression_opts == 4
+
+
+def test_treatment_worker_count_uses_up_to_six_available_cpus(monkeypatch):
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_MAX_WORKERS", "6")
+    monkeypatch.setattr(treatment_api_module.os, "cpu_count", lambda: 12)
+
+    assert treatment_api_module._treatment_worker_count(10) == 6
+    assert treatment_api_module._treatment_worker_count(3) == 3
+
+    monkeypatch.setattr(treatment_api_module.os, "cpu_count", lambda: 4)
+    assert treatment_api_module._treatment_worker_count(10) == 4
+
+
+def test_independent_manifest_samples_overlap_but_following_folder_waits(monkeypatch):
+    from threading import Barrier, Event, Lock
+    monkeypatch.setenv('PYCONLYSE_TREATMENT_MAX_WORKERS', '2')
+    monkeypatch.setattr(treatment_api_module.os, 'cpu_count', lambda: 2)
+    store = TreatmentQueueStore()
+    gate, done, lock = Barrier(2), Event(), Lock()
+    finished = []
+    def execute(job_id, recipe):
+        if recipe['label'] != 'folder':
+            assert treatment_api_module._treatment_thread_context.parallel_sample
+            gate.wait(timeout=3)
+        else:
+            assert set(finished) == {'one', 'two'}
+            done.set()
+        with lock: finished.append(recipe['label'])
+        return {}
+    store.enqueue_batch('parallel', [
+        {'label':name, 'provenance':{'vd2_project':{'sample':name}}} for name in ['one','two']
+    ] + [{'label':'folder', 'kind':'standard_folder_set'}])
+    store.start('parallel', execute)
+    assert done.wait(5)
+    while store.snapshot('parallel')['running']:
+        time.sleep(.01)
+    assert all(job['status']=='completed' for job in store.snapshot('parallel')['jobs'])
+    assert finished[-1] == 'folder'
+
+
+def test_parallel_sample_uses_inline_roles_instead_of_nested_pools(monkeypatch):
+    monkeypatch.setattr(treatment_api_module, '_cpu_executor', lambda count: pytest.fail('nested pool'))
+    treatment_api_module._treatment_thread_context.parallel_sample = True
+    try:
+        assert treatment_api_module._run_parallel_cpu_jobs({'ABS':(2,), 'BASE':(3,)}, lambda role,n,progress:n*2) == {'ABS':4,'BASE':6}
+    finally:
+        treatment_api_module._treatment_thread_context.parallel_sample = False

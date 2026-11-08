@@ -183,7 +183,7 @@ def test_queue_execution_is_job_local_and_resets_runtime_on_success_or_failure(
 
     monkeypatch.setattr(treatment_api_module, "_queue_convert_to_job_h5", convert)
 
-    def assign(job_state, data_type, output_path):
+    def assign(job_state, data_type, output_path, *, local_artifact=False):
         assigned_paths.append((data_type, output_path))
         job_state.setdefault("paths", {})[data_type] = output_path
 
