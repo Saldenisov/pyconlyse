@@ -7,6 +7,7 @@ import uuid
 RUNTIME_PROTOCOL_VERSION = 2
 SOURCE_MODULES = (
     "__init__.py", "acquisition_backend.py", "acquisition_gui.py", "acquisition_http.py",
+    "acquisition_backend_parts_json_helper_diagnostics.py",
     "acquisition_runtime.py", "acquisition_startup.py", "acquisition_procedures.py", "hardware_tasks.py",
     "acquisition_ht_shutdown.py", "hardware_plan.py", "input_tasks.py", "transforms.py", "errors.py",
     "chroma_focal_stop.py", "chroma_focal_command.py", "acquisition_stage_model.py",
