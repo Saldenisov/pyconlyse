@@ -21,6 +21,7 @@ from utilities.datastructures.mes_independent.measurments_dataclass import (
     Cursors2D,
 )
 from utilities.myfunc import info_msg
+from gui.views.skana_panel import SkAnaPanel
 
 module_logger = logging.getLogger(__name__)
 
@@ -181,6 +182,11 @@ class TreatmentView(QMainWindow):
 
         self.ui = Ui_GraphWindow()
         self.ui.setupUi(self, data_folder=in_controller.model.data_folder)
+        self.skana_panel = SkAnaPanel(
+            self, protected_paths=lambda: tuple(self.controller.model.paths.values())
+        )
+        self.ui.tabs.addTab(self.skana_panel, "SK-Ana")
+        self.controller.model.add_measurement_observer(self.skana_panel)
 
         # Top menu: add a simple Settings menu with an entry to edit
         # Treatment/config.json (data folder and other options).
@@ -320,7 +326,10 @@ class TreatmentView(QMainWindow):
         self.close()
 
     def closeEvent(self, ce) -> None:  # noqa: N802, D401
-        self.fileQuit()
+        if self.skana_panel.prepare_close():
+            ce.accept()
+        else:
+            ce.ignore()
 
     def modelIsChanged_ui(self, ui: dict) -> None:
         for name, value in ui.items():

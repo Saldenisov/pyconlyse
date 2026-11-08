@@ -4,6 +4,7 @@ from enum import Enum
 from types import SimpleNamespace
 
 import numpy as np
+import pyqtgraph as pg
 import tango
 import taurus.core
 from PyQt5 import QtWidgets
@@ -68,7 +69,7 @@ def test_camera_image_autoranges_when_calibrated_roi_shape_changes():
 
 
 def test_laser_camera_editor_forces_initial_value_and_range_refresh():
-    value = SimpleNamespace(wvalue=300)
+    value = SimpleNamespace(value=300, rvalue=300, wvalue=0)
 
     class FakeLineEdit:
         refreshed_with = None
@@ -152,6 +153,76 @@ def test_laser_camera_controls_are_collapsed_and_bind_offsets_on_open(monkeypatc
     Basler_camera.enable_laser_camera_controls(widget)
     assert widget.laser_camera_controls_panel.isHidden()
     assert layout.count() == 1
+
+
+def test_automatic_contour_overlay_replaces_paths_for_every_frame(monkeypatch):
+    class FakeItem:
+        def __init__(self, x, y, pen):
+            self.x = list(x)
+            self.y = list(y)
+            self.pen = pen
+            self.z = None
+
+        def setZValue(self, value):
+            self.z = value
+
+    class FakeView:
+        def __init__(self):
+            self.added = []
+            self.removed = []
+
+        def addItem(self, item):
+            self.added.append(item)
+
+        def removeItem(self, item):
+            self.removed.append(item)
+
+    class Widget:
+        _clear_automatic_contour_overlay = (
+            Basler_camera._clear_automatic_contour_overlay
+        )
+
+    calls = []
+
+    def contours(image, **_kwargs):
+        calls.append(image)
+        offset = float(image[0, 0])
+        return [{
+            "points": np.array([
+                [offset, 1.0], [offset + 1.0, 2.0], [offset, 1.0]
+            ])
+        }]
+
+    monkeypatch.setitem(
+        Basler_camera._update_automatic_contour_overlay.__globals__,
+        "beam_threshold_contours",
+        contours,
+    )
+    monkeypatch.setattr(pg, "PlotDataItem", FakeItem)
+    monkeypatch.setattr(pg, "mkPen", lambda colour, width: (colour, width))
+
+    widget = Widget()
+    widget.view = FakeView()
+    widget._automatic_contour_overlay_enabled = True
+    widget._automatic_contour_items = []
+    camera = SimpleNamespace(
+        center_gravity_threshold=50, width=2, height=2
+    )
+
+    Basler_camera._update_automatic_contour_overlay(
+        widget, np.zeros((2, 2)), camera
+    )
+    first_item = widget._automatic_contour_items[0]
+    Basler_camera._update_automatic_contour_overlay(
+        widget, np.full((2, 2), 5.0), camera
+    )
+
+    assert len(calls) == 2
+    assert widget.view.removed == [first_item]
+    assert len(widget._automatic_contour_items) == 1
+    assert widget._automatic_contour_items[0].x == [5.0, 6.0, 5.0]
+    assert widget._automatic_contour_items[0].pen[1] == 0.65
+    assert widget._automatic_contour_items[0].z == 20
 
 
 class FakeButton:

@@ -24,7 +24,7 @@ class DAQmxClient:
         Initialize DAQmx client.
 
         Args:
-            device_name: Full Tango device name, e.g. 'control/DAQ/DAQMX_1'.
+            device_name: Full Tango device name, e.g. 'control/DAQ/TRANCON-DAQ'.
         """
         self.device = tango.DeviceProxy(device_name)
 
@@ -73,8 +73,8 @@ class DAQmxClient:
 
 
 layouts = {
-    "DAQMX_1": {
-        "selection": ["control/DAQ/DAQMX_1"],
+    "TRANCON-DAQ": {
+        "selection": ["control/DAQ/TRANCON-DAQ"],
         "width": 1,
     },
 }
@@ -100,4 +100,5 @@ def start_daqmx_client(instance: Optional[str] = None, vis_type=None, standalone
 
 
 if __name__ == "__main__":
-    main(GeneralPanel, "DAQmx", DAQmx_Widget, "bin/icons/NETIO.ico", layouts)
+    selected_instance = sys.argv[1] if len(sys.argv) >= 2 else "TRANCON-DAQ"
+    start_daqmx_client(instance=selected_instance)

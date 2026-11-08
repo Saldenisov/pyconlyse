@@ -28,7 +28,7 @@ if "%DEVICE_SCRIPT%"=="" (
 )
 
 if not defined PYCONLYSE set "PYCONLYSE=C:\dev\pyconlyse"
-if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse39"
+if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"
 if not defined PYCONLYSE_LOG_DIR set "PYCONLYSE_LOG_DIR=C:\temp\ds.log"
 if not "%SERVER_ENVIRONMENT%"=="" set "%SERVER_ENVIRONMENT%"
 
@@ -38,7 +38,9 @@ if exist "C:\ProgramData\Pyconlyse\device-runtime-override.cmd" call "C:\Program
 
 if not exist "%PYCONLYSE_LOG_DIR%" mkdir "%PYCONLYSE_LOG_DIR%"
 set "PYCONLYSE_DS_LOG_FILE=%PYCONLYSE_LOG_DIR%\%SERVER_NAME%_%INSTANCE_NAME%.log"
-echo ==== %date% %time% runner entered %SERVER_NAME%/%INSTANCE_NAME% ==== >> "%PYCONLYSE_DS_LOG_FILE%"
+REM Each server run starts a fresh temporary log. Using append here allowed
+REM repeated restarts to grow a single file without any bound.
+echo ==== %date% %time% runner entered %SERVER_NAME%/%INSTANCE_NAME% ==== > "%PYCONLYSE_DS_LOG_FILE%"
 set "PYCONLYSE_DS_SCRIPT=%DEVICE_SCRIPT%"
 set "PYCONLYSE_DS_INSTANCE=%INSTANCE_NAME%"
 set "PYCONLYSE_DS_EXTRA_ARGUMENT=%SERVER_EXTRA_ARGUMENT%"

@@ -4,13 +4,16 @@ import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtCore as PyQtCore, QtWidgets
 from taurus import Device
-from taurus.core import TaurusDevState
 from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueComboBox, TaurusValueSpinBox
 
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.control.laser_pointing.beam_metrics import (
+    beam_threshold_contours,
+    camera_contour_profile,
+)
 
 
 class Basler_camera(DS_General_Widget):
@@ -37,7 +40,7 @@ class Basler_camera(DS_General_Widget):
         super(Basler_camera, self).register_DS_full()
         dev_name = self.dev_name
 
-        ds: Device = getattr(self, f"ds_{dev_name}")
+        _ds: Device = getattr(self, f"ds_{dev_name}")
         lo_group: Qt.QHBoxLayout = getattr(self, f"lo_group_{group_number}")
 
         lo_device: Qt.QLayout = getattr(self, f"layout_main_{dev_name}")
@@ -219,7 +222,14 @@ class Basler_camera(DS_General_Widget):
             model = editor.getModelObj()
             value = model.read(cache=False)
             editor.lineEdit()._updateValidator(value)
-            editor.setValue(value.wvalue)
+            # ``wvalue`` is the last requested write value.  Before the user
+            # has written anything Taurus commonly reports it as numeric zero,
+            # even while the camera's current read value is non-zero.  Camera
+            # controls must display the live hardware value instead.
+            live_value = getattr(value, "rvalue", None)
+            if live_value is None:
+                live_value = value.value
+            editor.setValue(live_value)
         except Exception:
             # The normal Taurus event path remains available if a camera is
             # temporarily unreachable while the controls are opened.
@@ -239,6 +249,9 @@ class Basler_camera(DS_General_Widget):
 
         self.offsetY = TaurusValueSpinBox()
         self.offsetY.model = f"{dev_name}/offsetY"
+
+        for editor in (self.width, self.height, self.offsetX, self.offsetY):
+            self._synchronize_laser_camera_editor(editor)
 
         lo_parameters: Qt.QLayout = getattr(self, f"layout_parameters_{dev_name}")
         lo_parameters2: Qt.QLayout = getattr(self, f"layout_parameters2_{dev_name}")
@@ -268,14 +281,8 @@ class Basler_camera(DS_General_Widget):
 
         self.exposure_time = TaurusValueSpinBox()
         self.exposure_time.model = f"{dev_name}/exposure_time"
-
-        if ds.state == TaurusDevState.Ready:
-            self.width.setValue(ds.width)
-            self.height.setValue(ds.height)
-            self.offsetX.setValue(ds.offsetX)
-            self.offsetY.setValue(ds.offsetY)
-            self.trigger_delay.setValue(ds.trigger_delay)
-            self.exposure_time.setValue(ds.exposure_time)
+        self._synchronize_laser_camera_editor(self.trigger_delay)
+        self._synchronize_laser_camera_editor(self.exposure_time)
 
         lo_parameters2.addWidget(TaurusLabel("Trigger"))
         lo_parameters2.addWidget(self.trigger_mode)
@@ -297,6 +304,8 @@ class Basler_camera(DS_General_Widget):
         # 108x108 beam image fills the ImageView instead of occupying a small
         # corner of the initial 512x512 range.
         self._display_image_shape = None
+        self._automatic_contour_overlay_enabled = False
+        self._automatic_contour_items = []
         self.view.setMinimumSize(300, 300)
         lo_image.addWidget(self.view)
 
@@ -495,7 +504,9 @@ class Basler_camera(DS_General_Widget):
 
     def image_listener(self):
         ds: Device = getattr(self, f"ds_{self.dev_name}")
-        self._show_camera_image(ds.image)
+        image = ds.image
+        self._show_camera_image(image)
+        self._update_automatic_contour_overlay(image, ds)
 
         positions = eval(ds.cg)
         x_pos = self.positions["X"]
@@ -511,6 +522,59 @@ class Basler_camera(DS_General_Widget):
         self.x_pos.setData(self.positions["X"])
         self.y_pos.setData(self.positions["Y"])
         self.roi_circle.setPos([x, y])
+
+    def set_automatic_contour_overlay(self, enabled):
+        """Draw live beam-score thresholds only during automatic search."""
+
+        self._automatic_contour_overlay_enabled = bool(enabled)
+        if not enabled:
+            self._clear_automatic_contour_overlay()
+
+    def _clear_automatic_contour_overlay(self):
+        for item in getattr(self, "_automatic_contour_items", []):
+            try:
+                self.view.removeItem(item)
+            except Exception:
+                pass
+        self._automatic_contour_items = []
+
+    def _update_automatic_contour_overlay(self, image, ds=None):
+        """Replace old paths with contours calculated from this exact frame."""
+
+        self._clear_automatic_contour_overlay()
+        if not getattr(self, "_automatic_contour_overlay_enabled", False):
+            return
+        ds = ds or self.ds
+        try:
+            contour_profile = camera_contour_profile(
+                getattr(self, "dev_name", ""),
+                float(ds.center_gravity_threshold),
+            )
+            paths = beam_threshold_contours(
+                image,
+                **contour_profile,
+                width=int(ds.width),
+                height=int(ds.height),
+            )
+        except Exception:
+            return
+
+        colours = (
+            "#58e6ff", "#6df2de", "#82f6c2", "#a0f5a0", "#c6ef7d",
+            "#ece563", "#ffd05c", "#ffac67", "#ff8a7a",
+        )
+        for index, path in enumerate(paths):
+            points = np.asarray(path["points"], dtype=float)
+            if points.ndim != 2 or points.shape[1] != 2:
+                continue
+            item = pg.PlotDataItem(
+                points[:, 0],
+                points[:, 1],
+                pen=pg.mkPen(colours[index % len(colours)], width=0.65),
+            )
+            item.setZValue(20)
+            self.view.addItem(item)
+            self._automatic_contour_items.append(item)
 
     def _show_camera_image(self, image):
         """Scale a new camera ROI to the complete ImageView display area."""

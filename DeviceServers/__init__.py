@@ -26,6 +26,8 @@ def get_class_match():
         from DeviceServers.motion.owis.DS_OWIS_Aggregator import DS_OWIS_Aggregator
         from DeviceServers.motion.owis.DS_OWIS_PS90 import DS_OWIS_PS90
         from DeviceServers.motion.owis.DS_OWIS_widget import OWIS_motor
+        from DeviceServers.motion.zaber.DS_Zaber import DS_Zaber
+        from DeviceServers.motion.zaber.DS_Zaber_Widget import ZaberStageWidget
         from DeviceServers.motion.standa.DS_Standa_Motor import DS_Standa_Motor
         from DeviceServers.motion.standa.DS_STANDA_Widget import Standa_motor
         from DeviceServers.motion.topdirect.DS_TopDirect_Motor import DS_TopDirect_Motor
@@ -44,6 +46,7 @@ def get_class_match():
             DS_Netio_pdu.__name__: Netio_pdu,
             DS_OWIS_PS90.__name__: OWIS_motor,
             DS_OWIS_Aggregator.__name__: OWIS_motor,
+            DS_Zaber.__name__: ZaberStageWidget,
             DS_Standa_Motor.__name__: Standa_motor,
             DS_TopDirect_Motor.__name__: TopDirect_Motor,
             DS_KEYSIGHT_33509B.__name__: Keysight_33509B,

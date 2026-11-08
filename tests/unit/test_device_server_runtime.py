@@ -4,7 +4,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from DeviceServers.python_runtime import direct_python_candidates, resolve_direct_python
+from DeviceServers.python_runtime import (
+    DEFAULT_ENVIRONMENT,
+    direct_python_candidates,
+    resolve_direct_python,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +73,48 @@ def test_resolver_skips_a_different_active_conda_environment():
     )
 
     assert all(candidate.source != "CONDA_PREFIX" for candidate in candidates)
+
+
+def test_default_runtime_is_pyconlyse312_for_command_and_python_resolvers():
+    device_servers = PROJECT_ROOT / "DeviceServers"
+    resolver = (device_servers / "resolve_python.cmd").read_text(encoding="utf-8")
+    preparer = (device_servers / "prepare_python_runtime.cmd").read_text(encoding="utf-8")
+
+    assert DEFAULT_ENVIRONMENT == "pyconlyse312"
+    assert r'if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"' in resolver
+    assert r'if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"' in preparer
+    candidates = direct_python_candidates({"USERPROFILE": r"C:\Users\operator"})
+    assert candidates[0].executable == r"C:\Users\operator\.conda\envs\pyconlyse312\python.exe"
+
+
+def test_device_wrappers_default_to_pyconlyse312_but_preserve_environment_override():
+    device_servers = PROJECT_ROOT / "DeviceServers"
+    default = r'if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"'
+
+    for wrapper_name in WRAPPER_NAMES:
+        wrapper = (device_servers / wrapper_name).read_text(encoding="utf-8")
+        assert default in wrapper
+
+
+def test_web_and_gui_launchers_default_to_pyconlyse312_with_explicit_rollback_overrides():
+    web_launcher = (PROJECT_ROOT / "web" / "bin" / "start_pyconlyse_local.ps1").read_text(
+        encoding="utf-8"
+    )
+    dev_backend = (PROJECT_ROOT / "web" / "bin" / "start_dev_backend.bat").read_text(
+        encoding="utf-8"
+    )
+    gui_launcher = (PROJECT_ROOT / "bin" / "start_main_gui.bat").read_text(encoding="utf-8")
+    elysium_starter = (
+        PROJECT_ROOT / "bin" / "windows_startup" / "start_elysium2.bat"
+    ).read_text(encoding="utf-8")
+
+    assert "pyconlyse312\\python.exe" in web_launcher
+    assert "$env:PYCONLYSE_PYTHON" in web_launcher
+    assert 'if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"' in dev_backend
+    assert "prepare_python_runtime.cmd" in dev_backend
+    assert 'if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"' in gui_launcher
+    assert "if defined PYCONLYSE_PYTHON" in gui_launcher
+    assert 'if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"' in elysium_starter
 
 
 def test_all_device_server_wrappers_use_shared_launcher_without_conda_activation():

@@ -623,7 +623,7 @@ def test_bounded_optional_and_pattern_schemas_are_strict(tmp_path, schema):
     assert config.strict is True
 
 
-def test_malformed_oversized_and_symlink_policy_are_rejected(tmp_path):
+def test_malformed_and_oversized_policy_are_rejected(tmp_path):
     malformed = tmp_path / "bad.json"
     malformed.write_text("not-json", encoding="utf-8")
     with pytest.raises(AuthorizationError) as exc:
@@ -635,10 +635,20 @@ def test_malformed_oversized_and_symlink_policy_are_rejected(tmp_path):
     with pytest.raises(AuthorizationError):
         load_policy(oversized, strict=True)
 
+def _symlink_or_skip(link, target):
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Native Windows symlink creation requires a privilege unavailable to this test process")
+        raise
+
+
+def test_symlink_policy_is_rejected(tmp_path):
     target = tmp_path / "target.json"
     target.write_text("{}", encoding="utf-8")
     link = tmp_path / "policy-link.json"
-    link.symlink_to(target)
+    _symlink_or_skip(link, target)
     with pytest.raises(AuthorizationError):
         load_policy(link, strict=True)
 
@@ -648,7 +658,57 @@ def test_symlink_approval_is_rejected(tmp_path):
     config = write_contract(tmp_path, approval=None)
     target = tmp_path / "approval-target.json"
     target.write_text(json.dumps(approval(op)), encoding="utf-8")
-    (config.approval_dir / f"{NONCE}.json").symlink_to(target)
+    _symlink_or_skip(config.approval_dir / f"{NONCE}.json", target)
     with pytest.raises(AuthorizationError) as exc:
         authorize_operation(config, subject="alice", role="operator", operation=op, nonce=NONCE)
     assert exc.value.status_code == 428
+
+
+def _report_symlink_metadata(monkeypatch, path):
+    """Exercise rejection even when the OS cannot create a real symlink."""
+    import os
+    import stat
+
+    actual_lstat = os.lstat
+    def lstat(candidate, *args, **kwargs):
+        metadata = actual_lstat(candidate, *args, **kwargs)
+        if Path(candidate) == path:
+            values = list(metadata)
+            values[0] = stat.S_IFLNK | stat.S_IMODE(metadata.st_mode)
+            return os.stat_result(values)
+        return metadata
+    monkeypatch.setattr(os, "lstat", lstat)
+
+
+def test_policy_rejects_symlink_metadata_before_read(monkeypatch, tmp_path):
+    policy = tmp_path / "policy.json"
+    policy.write_text("{}", encoding="utf-8")
+    _report_symlink_metadata(monkeypatch, policy)
+    with pytest.raises(AuthorizationError) as exc:
+        load_policy(policy, strict=True)
+    assert exc.value.status_code == 403
+
+
+def test_approval_rejects_nonregular_metadata_without_consuming(monkeypatch, tmp_path):
+    op = operation()
+    config = write_contract(tmp_path, approval=approval(op))
+    path = config.approval_dir / f"{NONCE}.json"
+    _report_symlink_metadata(monkeypatch, path)
+    with pytest.raises(AuthorizationError) as exc:
+        authorize_operation(config, subject="alice", role="operator", operation=op, nonce=NONCE)
+    assert exc.value.status_code == 409
+    assert path.exists()
+    assert not list(config.consumed_dir.iterdir())
+
+
+def test_symlink_approval_is_rejected_before_read(monkeypatch, tmp_path):
+    op = operation()
+    config = write_contract(tmp_path, approval=approval(op))
+    path = config.approval_dir / f"{NONCE}.json"
+    actual_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda candidate: candidate == path or actual_is_symlink(candidate))
+    with pytest.raises(AuthorizationError) as exc:
+        authorize_operation(config, subject="alice", role="operator", operation=op, nonce=NONCE)
+    assert exc.value.status_code == 428
+    assert path.exists()
+    assert not list(config.consumed_dir.iterdir())

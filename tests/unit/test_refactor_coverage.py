@@ -58,6 +58,9 @@ class TestCoverageGate(unittest.TestCase):
                 "utilities/dataio/h5_opener.py": 70.0,
                 "utilities/dataio/hamamatsu_file_opener.py": 55.0,
                 "utilities/dataio/opener.py": 75.0,
+                "utilities/dataio/laser_shot_correction.py": 80.0,
+                "utilities/dataio/measurement_correction.py": 80.0,
+                "utilities/dataio/temporal_outlier_correction.py": 80.0,
             },
             {
                 path: verify_coverage.MINIMUM_MODULE_COVERAGE.get(path)

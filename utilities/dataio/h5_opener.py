@@ -225,8 +225,8 @@ class H5Opener(Opener):
             return (measurement, "")
             return False, comments
 
-    def average_map(self, file_path: Path, call_back_func=None):
-        """Average all maps and return (wavelengths, timedelays).
+    def average_map(self, file_path: Path, call_back_func=None, include_excluded: bool = False):
+        """Average selected maps, or the complete raw archive when requested.
 
         ``raw_data`` may be stored either as (n_maps, timedelays, wavelengths)
         or (n_maps, wavelengths, timedelays). We detect and transpose as needed.
@@ -242,8 +242,16 @@ class H5Opener(Opener):
         with h5py.File(file_path, "r") as f:
             data3d = np.array(f[self._data_key(f)])
             selection_mask = self._selection_mask(f, data3d.shape[0])
+            original_measurements = self._original_measurements(f)
 
-        data3d = data3d[selection_mask]
+        if include_excluded and original_measurements is not None and original_measurements > data3d.shape[0]:
+            raise ValueError(
+                "Legacy H5 does not contain all original maps in raw_data; "
+                "restore its raw-map selection before uncleaned calculation"
+            )
+
+        if not include_excluded:
+            data3d = data3d[selection_mask]
         if data3d.shape[0] == 0:
             raise ValueError("H5 map selection excludes every map")
 

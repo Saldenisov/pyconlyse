@@ -1,0 +1,149 @@
+{
+  "scope": "PINNED_SOURCE_REQUESTS_WATER_INDICATORS_AND_CHROMA_POWER_INTENT_NOT_ELECTRICAL_PERMISSION",
+  "date": "2026-10-19",
+  "source_acquisition_vi_sha256": "6FE801E023CF755FBDE89B4AD17854D5FC08447517010C2122E66C9F3DF5C3CF",
+  "source_supervision_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "observations": {
+    "actual_cluster_labels": {
+      "C4_OUT_DIO96": {
+        "2": "02 CPC2 b61 RAZ modulateur Bas Niveau",
+        "3": "03 CPC3 b59 Marche Chauffage",
+        "5": "05 CPC5 b55 Marche prémagnétisation",
+        "7": "07 CPC7 b51 Marche focale Klystron"
+      },
+      "C4_IN_DIO96": {
+        "0": "00 APA0 b47 Eau corps Klystron",
+        "1": "01 APA1 b45 Eau collecteur Klystron",
+        "2": "02 APA2 b43 Eau cuve Klystron",
+        "19": "19 APC3 b09 Débit EAU CANON",
+        "20": "20 APC4 b07 Eau focale Klystron",
+        "38": "38 BPB6 b20 Débit EAU SECTION"
+      },
+      "focal_annotations": {
+        "40228": "\"Marche des alimentations\ndes focales du modulateur\"",
+        "40319": "\"Délais pour les alimentations CHROMA\""
+      }
+    },
+    "water_displays": [
+      {"raw_c4_field": 20, "page_field": 15, "label": "Eau focale Klystron", "false_color": "#00C82D", "true_color": "#FF3333", "transform": "identity", "electrical_polarity_qualified": false},
+      {"raw_c4_field": 0, "page_field": 16, "label": "Eau corps Klystron", "false_color": "#00C82D", "true_color": "#FF3333", "transform": "identity", "electrical_polarity_qualified": false},
+      {"raw_c4_field": 1, "page_field": 17, "label": "Eau collecteur Klystron", "false_color": "#00C82D", "true_color": "#FF3333", "transform": "identity", "electrical_polarity_qualified": false},
+      {"raw_c4_field": 2, "page_field": 18, "label": "eau cuve Klystron", "false_color": "#00C82D", "true_color": "#FF3333", "transform": "identity", "electrical_polarity_qualified": false},
+      {"raw_c4_field": 19, "page_field": 19, "label": "Eau section et canon", "false_color": "#00C82D", "true_color": "#FF3333", "transform": "identity", "electrical_polarity_qualified": false},
+      {"raw_c4_field": 38, "page_field": 45, "label": "EAU SECTION", "false_color": "#00C82D", "true_color": "#FF3333", "transform": "identity", "electrical_polarity_qualified": false}
+    ],
+    "supervision_request_gate": "All 29 local DPS bits False; not a water or preceding-stage gate",
+    "source_stage_paths": [
+      {
+        "operation": "chauffage.start",
+        "supervision_page_field": 46,
+        "dps_field": 4,
+        "acq_event": 12,
+        "c4_command_label": "03 CPC3 b59 Marche Chauffage",
+        "c4_assignments": [["38074", 3, true], ["38157", 3, false], ["38235", 2, true], ["38295", 2, false]],
+        "requested_waits_ms": [150, 3000, 150, 100],
+        "helper_frames": [],
+        "source_entry_predicate": "Boolean event NewVal=True only",
+        "software_water_admission_predicate_found": false,
+        "eps_ok_is_hardware_ack": false
+      },
+      {
+        "operation": "prema.start",
+        "supervision_page_field": 48,
+        "dps_field": 6,
+        "acq_event": 13,
+        "c4_command_label": "05 CPC5 b55 Marche prémagnétisation",
+        "c4_assignments": [["24338", 5, true], ["25366", 5, false], ["28837", 2, true], ["28946", 2, false]],
+        "requested_waits_ms": [150, 500, 150, 250, 100],
+        "helper_frames": [],
+        "source_entry_predicate": "Boolean event NewVal=True only",
+        "software_water_admission_predicate_found": false,
+        "eps_ok_is_hardware_ack": false
+      },
+      {
+        "operation": "focales.start",
+        "supervision_page_field": 52,
+        "dps_field": 10,
+        "acq_event": 15,
+        "c4_command_label": "07 CPC7 b51 Marche focale Klystron",
+        "c4_assignments": [["40162", 7, true], ["40245", 7, false], ["40323", 2, true], ["40383", 2, false]],
+        "requested_waits_ms": [150, 29000, 1500, 150, 250, 100],
+        "helper_frames": [["48404", "1_Focales ON.vi"]],
+        "source_entry_predicate": "Boolean event NewVal=True only",
+        "software_water_admission_predicate_found": false,
+        "eps_ok_is_hardware_ack": false
+      }
+    ],
+    "acq_c4_local_consumers": {
+      "references": [
+        {"uid": "8346", "access": "read", "peer_class": "sharedVariableDynamicOpen", "peer_uid": "1168", "net_uid": "1171"},
+        {"uid": "19587", "access": "write", "peer_class": "prim", "peer_uid": "19515", "net_uid": "18857"},
+        {"uid": "2352", "access": "write", "peer_class": "prim", "peer_uid": "7748", "net_uid": "4165"},
+        {"uid": "25024", "access": "read", "peer_class": "sharedVariableDynamicWrite", "peer_uid": "4245", "net_uid": "42839"},
+        {"uid": "10202", "access": "read", "peer_class": "nMux", "peer_uid": "39336", "net_uid": "40077"},
+        {"uid": "55726", "access": "write", "peer_class": "prim", "peer_uid": "55654", "net_uid": "42946"}
+      ],
+      "only_direct_local_unbundle_fields": [19, 38],
+      "klystron_fields_0_1_20_not_selected_on_these_local_read_nets": true,
+      "limit": "Main-VI C4 local-reference census; not external control access or electrical interlocks"
+    },
+    "dio_dataflow": {
+      "helper": "DIO96: Read C3/C4/C5 -> Write C3/C4/C5; public error chain; read data assigned without error guard; independent DI/DO task fields; autoStart True; timeout/task/count ports unwired",
+      "root_callers": "DIO96 root: all three callers preserve C3/C4/C5 banks via locals OUT 17/15/13, IN 18/16/14; task local 22; NI6071E error -> DIO96 -> NI6703",
+      "software_water_mask_in_reviewed_dio_writer": false
+    },
+    "focal_on_helpers": {
+      "branches": [
+        {"focal": 3, "resource": "COM10", "voltage_v": 70.0, "current_slew": 0.02, "current_a": 15.1},
+        {"focal": 2, "resource": "COM11", "voltage_v": 80.0, "current_slew": 0.02, "current_a": 20.9},
+        {"focal": 1, "resource": "COM12", "voltage_v": 80.0, "current_slew": 0.02, "current_a": 13.73}
+      ],
+      "ordered_calls": ["Initialize", "Set Voltage", "Set Current Slew", "Set Current", "Set Output", "Close"],
+      "parallel_branches": true,
+      "id_query": false,
+      "reset": true,
+      "output_on": {"1_Focales ON.vi": true, "1_Focales OFF.vi": false},
+      "resources_are_saved_defaults_not_verified_ports": true,
+      "unused_baud_literal_is_not_a_serial_configuration": true
+    },
+    "focal_power_sequence": [
+      "C4_OUT_DIO96[7]=True with independent Wait(150 ms), then next frame [7]=False",
+      "Nested cell 46840: Wait(29000 ms); no supply-ready polling or water input",
+      "Nested cell 48404: 1_Focales ON.vi -> Simple Error Handler",
+      "Three independent branches: Initialize(query=False, reset=True) -> V -> current slew -> I -> Set Output(True) -> Close",
+      "Nested cell 49054: Wait(1500 ms)",
+      "C4_OUT_DIO96[2]=True with independent Wait(150 ms), then next frame [2]=False",
+      "Wait(250 ms), software EPS completion and DPS request reset/publication"
+    ],
+    "cooling_trip_predicate": "(C4_IN[19] OR C4_IN[38]) AND ((NOT C3_IN[0]) OR (NOT C3_IN[6]))",
+    "cooling_trip_source_proof": "PASS: cooling Timeout 12 diagrams / 38 nets / all seven trip frames",
+    "cooling_trip_direct_commands": "Stop Canon cooling C3_OUT[1] False->True, then Section cooling C3_OUT[4] False->True; not direct Chauffage/PREMA/Focal/General stop"
+  },
+  "supported_inferences": [
+    "The reviewed Supervision request, ACQ start events, Focales helper and DIO writer do not implement a software klystron-water admission gate",
+    "Saved C4[7] command and CHROMA delay annotation support intended cabinet focal-supply energization before serial DC-output enable",
+    "The DIO cabinet-start request and Chroma Set Output(True) are separate control layers; no serial call proves mains power was applied",
+    "Red water indicators and a dark Chroma display alone do not identify the electrical blocking contact or its per-stage truth table"
+  ],
+  "unresolved": [
+    "Which body/collector/tank/focal cooling contacts electrically block Chauffage, PREMA, Focales or the Chroma mains contactor",
+    "Whether C4_OUT[7], labeled CPC7 b51, actually energizes all three Chroma mains supplies, and through which relay/contactor",
+    "Hardware polarity, cable routing, independent safety logic and present physical state",
+    "Saved-source equality with currently deployed VI and external driver/instrument outcomes"
+  ],
+  "evidence_images": {
+    "C:\\dev\\ELYSE-ACQ-analysis\\runs\\20260922-085500-+0200\\images\\EV-ACQ-0033-event12-start-modulator-heating.png": "000F3F92AD1EB3C46B6A2B9A8B7B5DA3AB647CDEDDC6DE65D190F41B07D6A811",
+    "C:\\dev\\ELYSE-ACQ-analysis\\runs\\20260922-085500-+0200\\images\\EV-ACQ-0034-event13-start-premagnetization.png": "968B8033B022F8CBE164B2B5BFF51FCD96856DF42E5F2BA40A146372F025D9E8",
+    "C:\\dev\\ELYSE-ACQ-analysis\\runs\\20260922-085500-+0200\\images\\EV-ACQ-0046-event15-focal-modulator-psp-dps.png": "BCD43CD852DA3615103EAAFF93920DB5EF9A7E9A4D81C8FE0A77DF6646850F42",
+    "C:\\dev\\ELYSE-ACQ-analysis\\review_20261015\\native_evidence\\MAIN-timeout3-cooling-guard-enabled.png": "5BBC9C88C1144CD42EBFDAD12BC78E5CF4AD1DBA831BB75E5765933E7ED4FCEF",
+    "C:\\dev\\pyconlyse\\Supervision\\analysis\\screenshots\\0_SUP_ELYSE_outer_frame_2_event_case_18_full.png": "B89781EB37BBD22D782DA77305A29EAE42662C3D52C469B0A9573AA10A134AE8"
+  },
+  "image_limit": "Historical screenshots show selected frames only; complete command order is proved by pinned XML, not a new full native-frame sweep",
+  "user_reported_circulation": false,
+  "screen_used": false,
+  "vi_run_or_saved": false,
+  "serial_ports_opened": false,
+  "hardware_commands_sent": false,
+  "runtime_or_readiness_flags_changed": false,
+  "qualifies_hardware_start": false
+}

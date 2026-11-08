@@ -1,0 +1,45 @@
+diff --git a/src/LibHdb++MySQL.cpp b/src/LibHdb++MySQL.cpp
+index 011e6e2..8d0f891 100644
+--- a/src/LibHdb++MySQL.cpp
++++ b/src/LibHdb++MySQL.cpp
+@@ -1395,7 +1395,7 @@ void HdbPPMySQL::insert_param_event(Tango::AttrConfEventData *data, const HdbEve
+ 		plog_bind[10].length= &param_data_len[8];
+ 
+-		plog_bind[11].buffer_type= MYSQL_TYPE_JSON;
++		plog_bind[11].buffer_type= MYSQL_TYPE_STRING;
+ 		plog_bind[11].buffer= (void *)param_data[9].c_str();
+ 		plog_bind[11].is_null= 0;
+ 		plog_bind[11].length= &param_data_len[9];
+ 
+@@ -1883,8 +1883,11 @@ template <typename Type> void HdbPPMySQL::store_scalar(const vector<event_values
+ 				bind_value(plog_bind[plog_bind_ind],mysql_value_type,value_data[2*chunk_idx+0],value_data_len[2*chunk_idx+0],is_null[3*chunk_idx+0],is_unsigned);
+ 				plog_bind_ind++;
+ 
+-				bind_value(plog_bind[plog_bind_ind],mysql_value_type,value_data[2*chunk_idx+1],value_data_len[2*chunk_idx+1],is_null[3*chunk_idx+1],is_unsigned);
+-				plog_bind_ind++;
++				if(write_type != Tango::READ)
++				{
++					bind_value(plog_bind[plog_bind_ind],mysql_value_type,value_data[2*chunk_idx+1],value_data_len[2*chunk_idx+1],is_null[3*chunk_idx+1],is_unsigned);
++					plog_bind_ind++;
++				}
+ 			}
+ 
+ 			if (mysql_stmt_bind_param(pstmt, plog_bind))
+@@ -2655,7 +2658,7 @@ template <typename Type> void HdbPPMySQL::store_array_json(const vector<event_va
+ 				plog_bind[plog_bind_ind].length= 0;
+ 				plog_bind_ind++;
+ 
+-				plog_bind[plog_bind_ind].buffer_type= MYSQL_TYPE_JSON;
++				plog_bind[plog_bind_ind].buffer_type= MYSQL_TYPE_STRING;
+ 				plog_bind[plog_bind_ind].buffer= (void *)value_data[2*chunk_idx+0].c_str();
+ 				plog_bind[plog_bind_ind].is_null= &is_null[3*chunk_idx+0];
+ 				value_data_len[2*chunk_idx+0]=value_data[2*chunk_idx+0].length();
+@@ -2676,7 +2679,7 @@ template <typename Type> void HdbPPMySQL::store_array_json(const vector<event_va
+ 					plog_bind[plog_bind_ind].length= 0;
+ 					plog_bind_ind++;
+ 
+-					plog_bind[plog_bind_ind].buffer_type= MYSQL_TYPE_JSON;
++					plog_bind[plog_bind_ind].buffer_type= MYSQL_TYPE_STRING;
+ 					plog_bind[plog_bind_ind].buffer= (void *)value_data[2*chunk_idx+1].c_str();
+ 					plog_bind[plog_bind_ind].is_null= &is_null[3*chunk_idx+1];
+ 					value_data_len[2*chunk_idx+1]=value_data[2*chunk_idx+1].length();

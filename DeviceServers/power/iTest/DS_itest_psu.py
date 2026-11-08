@@ -25,13 +25,17 @@ Notes:
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union as Union
 
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, command, device_property
 
 from DeviceServers.base.general import DS_General
-from DeviceServers.power.iTest.scpi_client import ITestSCPI, SCPIError
+from DeviceServers.base.hardware_lifecycle import (
+    HardwareConnectionState,
+    InitializationState,
+)
+from DeviceServers.power.iTest.scpi_client import ITestSCPI, SCPIError as SCPIError
 
 
 class DS_iTest_PSU(DS_General):
@@ -107,10 +111,6 @@ class DS_iTest_PSU(DS_General):
 
         # Configure change events for attributes
         self._configure_change_events()
-        
-        # Final state - only set to INIT if connection failed
-        if self._device_id_internal == -1:
-            self.set_state(DevState.INIT)
         
         self.info(
             f"iTest PSU initialization completed. Current state: {self.get_state()}. Host: '{self._host or '(empty)'}", True)
@@ -254,7 +254,7 @@ class DS_iTest_PSU(DS_General):
                         self.info(f"Failed to push names change event: {e}", True)
                         
                 try:
-                    limits_array = self.current_limits()
+                    limits_array = self._current_limits_values()
                     self.push_change_event("current_limits", limits_array)
                     self.info("Pushed current_limits change event", True)
                 except Exception as e:
@@ -324,6 +324,9 @@ class DS_iTest_PSU(DS_General):
     )
     def current_limits(self) -> List[float]:
         """Return flattened list of [min_limit, max_limit] pairs for each slot"""
+        return self._current_limits_values()
+
+    def _current_limits_values(self) -> List[float]:
         result = []
         for slot_id in self._ids:
             limits = self._config_limits.get(slot_id, (-5.0, 15.0))
@@ -386,6 +389,11 @@ class DS_iTest_PSU(DS_General):
             
             # Set device ID to indicate successful connection (required by base class)
             self._device_id_internal = 1
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.CONNECTED,
+                InitializationState.NOT_REQUESTED,
+                "hardware transport connected; operational initialisation has not been requested",
+            )
             
             # Initial refresh
             self._log_normal("Getting initial controller status...", True)
@@ -394,9 +402,15 @@ class DS_iTest_PSU(DS_General):
             
         except Exception as exc:
             self._scpi = None
+            self._device_id_internal = -1
             self.error(f"Connection failed: {exc}")
             self.info(f"find_device() failed: {exc}", True)
             self.set_state(DevState.FAULT)
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.DISCONNECTED,
+                InitializationState.NOT_REQUESTED,
+                f"hardware transport connection failed: {exc}",
+            )
 
     @command
     def discover_slots(self):
@@ -464,9 +478,12 @@ class DS_iTest_PSU(DS_General):
         self._log_max("=== get_controller_status_local() called ===", True)
         
         if not self._scpi:
-            self._log_normal("No SCPI connection (_scpi is None) - setting state to STANDBY", True)
-            self.set_state(DevState.STANDBY)
-            return 1  # Error code
+            self._log_normal("No SCPI connection; attempting passive reconnect", True)
+            self.find_device()
+            if not self._scpi:
+                self.set_state(DevState.FAULT)
+                return 1  # Error code
+            return 0  # find_device performs the initial status refresh
             
         self._log_max(f"SCPI connection available - reading status for {self._slot_count} slots", True)
         
@@ -502,12 +519,19 @@ class DS_iTest_PSU(DS_General):
         except Exception as exc:
             self.error(f"Status refresh failed: {exc}")
             self._log_normal(f"get_controller_status_local() failed: {exc}", True)
+            try:
+                self._scpi.close()
+            except Exception:
+                pass
+            self._scpi = None
+            self._device_id_internal = -1
+            self.set_state(DevState.FAULT)
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.DISCONNECTED,
+                InitializationState.NOT_REQUESTED,
+                f"hardware status read failed: {exc}",
+            )
             return 1  # Error code
-    
-    @command
-    def get_controller_status(self):
-        """Manual command to refresh status - calls the local implementation"""
-        return self.get_controller_status_local()
 
     @command(dtype_in=[int])
     def set_output_state(self, args: List[int]):
@@ -555,7 +579,7 @@ class DS_iTest_PSU(DS_General):
                 self._log_normal(f"Failed to push states change event: {e}", True)
             
             self.set_state(DevState.ON)
-            self._log_normal(f"set_output_state() completed successfully", True)
+            self._log_normal("set_output_state() completed successfully", True)
         except Exception as exc:
             self.error(f"set_output_state failed: {exc}")
 
@@ -613,7 +637,7 @@ class DS_iTest_PSU(DS_General):
         
         try:
             self._scpi.set_current(idx, amps)
-            old_setpoints = self._currents_sp.copy()
+            _old_setpoints = self._currents_sp.copy()
             self._currents_sp[array_idx] = amps
             
             # Push change event for setpoint update
@@ -623,7 +647,7 @@ class DS_iTest_PSU(DS_General):
                 self._log_normal(f"Failed to push currents_setpoint change event: {e}", True)
             
             self._log_min(f"Successfully set slot {idx} current to {amps:.3f} A", True)
-            self._log_normal(f"set_current() completed successfully", True)
+            self._log_normal("set_current() completed successfully", True)
         except Exception as exc:
             self.error(f"set_current failed: {exc}")
 

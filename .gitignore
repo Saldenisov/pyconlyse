@@ -12,6 +12,24 @@
 *.json
 !web/frontend/package.json
 !web/frontend/package-lock.json
+!web/frontend/src/elyseLiveDisplayMap.json
+!web/frontend/src/elyseModulatorPanel.json
+!web/frontend/src/elyseFluidesPanel.json
+!web/frontend/src/elyseVacuumPanel.json
+!docs/ELYSE_ACQ_NATIVE_STATIC_OBSERVATIONS_2026-10-15.json
+!docs/ELYSE_ACQ_NATIVE_STOP_OBSERVATIONS_2026-10-15.json
+!docs/ELYSE_ACQ_NATIVE_INITIALIZER_OBSERVATIONS_2026-10-15.json
+!docs/ELYSE_ACQ_NATIVE_NESTED_STOP_2026-10-15.json
+!legacy/xp_acq_agent/data/modulator_stage_catalog.json
+!docs/ELYSE_MODULATOR_STAGE_SAFETY_2026-10-19.json
+!docs/ELYSE_PYTHON_ACQ_STAGE_TRANSFER_2026-10-19.json
+!docs/ELYSE_PYTHON_LABVIEW_GENERAL_AB_2026-10-19.json
+!docs/ELYSE_PYTHON_GENERAL_ARRET_EXTENDED_2026-10-19.json
+!docs/ELYSE_PYTHON_HT_READINESS_2026-10-19.json
+!docs/ELYSE_WATER_CHROMA_POWER_TRACE_2026-10-19.json
+!docs/ELYSE_MODULATOR_INDICATOR_CONDITIONS_2026-10-19.json
+!docs/ELYSE_ACQ_STAGE_ADMISSION_2026-10-19.json
+!docs/ELYSE_ACQ_RUNNING_FAULT_RESPONSE_2026-10-19.json
 
 *.xml
 
@@ -30,3 +48,16 @@
 /.coverage-refactor.json
 /dset.h5
 /tmp/
+
+# Local build products, caches, and runtime state
+/.pytest_cache/
+/.ruff_cache/
+/.tmp/
+/LOG/
+/outputs/
+/web/backend/instance/
+/web/frontend/build/
+/web/frontend/build-*/
+/web/frontend/build.*/
+/tools/xp_python34_extracted/
+/tools/xp_python34_testenv/

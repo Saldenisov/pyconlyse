@@ -251,6 +251,40 @@ def test_failed_recovery_keeps_fault_and_records_backend_error():
     )
 
 
+def test_common_lifecycle_timestamps_and_error_counter_are_updated():
+    device = DummyGeneral()
+    device._initialization_started_monotonic = general_module.time.monotonic()
+    device._initialization_started_at_utc = general_module._utc_now_iso()
+    device._initialization_completed_at_utc = ""
+    device._initialization_duration_ms = 0.0
+    device._error_count = 0
+    device._last_error_at_utc = ""
+
+    device.set_hardware_lifecycle(
+        general_module.HardwareConnectionState.CONNECTED,
+        general_module.InitializationState.SUCCEEDED,
+        "ready",
+    )
+    device.error("test failure")
+
+    assert device.initialization_completed_at_utc()
+    assert device.initialization_duration_ms() >= 0
+    assert device.last_error_at_utc()
+    assert device.error_count() == 1
+
+
+def test_tango_state_transition_updates_timestamp_only_on_real_change():
+    device = DummyGeneral()
+    device._tracked_tango_state = general_module.DevState.ON
+    device._last_state_change_at_utc = "before"
+
+    device.set_state(general_module.DevState.ON)
+    assert device.last_state_change_at_utc() == "before"
+
+    device.set_state(general_module.DevState.FAULT)
+    assert device.last_state_change_at_utc() != "before"
+
+
 def test_structured_config_rejects_nested_non_data_values_with_path():
     with pytest.raises(general_module.ConfigurationError, match=r"parameters\['bad'\]"):
         general_module.parse_structured_config({"bad": {1, 2}})
@@ -322,6 +356,15 @@ def test_multi_axis_move_rejects_invalid_input_before_local_call(args, message):
 
     assert message in device.move_axis(args)
     assert device.move_calls == []
+
+
+def test_multi_axis_move_accepts_pytango_array_payload():
+    device = DummyMultiAxis()
+
+    result = device.move_axis(np.array([1.0, 1.25]))
+
+    assert result == "0"
+    assert device.move_calls == [[1, 1.25]]
 
 
 def test_multi_axis_unknown_axis_read_returns_nan_without_local_access():

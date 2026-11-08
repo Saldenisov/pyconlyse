@@ -3,7 +3,7 @@ from enum import Enum
 from threading import Thread
 from typing import Optional
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QSizePolicy
 from taurus import Device
@@ -12,10 +12,193 @@ from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueCheckBox
 
+from DeviceServers.shared.device_recovery import (
+    get_power_cycle_config,
+    power_cycle_device,
+    restart_device_server,
+)
+
 
 class VisType(Enum):
     MIN = "min"
     FULL = "full"
+
+
+class DeviceRecoveryController(QtCore.QObject):
+    """Right-click recovery actions shared by normal and unavailable widgets."""
+
+    operation_finished = QtCore.pyqtSignal(str, bool, str)
+
+    def __init__(self, device_name: str, owner, status_label: QtWidgets.QLabel):
+        super().__init__(owner)
+        self.device_name = str(device_name)
+        self.power_mapping_device = self.device_name
+        self.owner = owner
+        self.status_label = status_label
+        self.busy = False
+        self.operation_finished.connect(self._finish_operation)
+
+    def install_on(self, widget):
+        widget.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        widget.customContextMenuRequested.connect(
+            lambda point, source=widget: self.show_menu(source, point)
+        )
+        current_tooltip = str(widget.toolTip() or "").strip()
+        recovery_hint = "Right-click for DS recovery"
+        if recovery_hint not in current_tooltip:
+            widget.setToolTip(
+                f"{current_tooltip}\n{recovery_hint}".strip()
+            )
+
+    def _set_status(self, message: str, level: str = "working"):
+        compact_renderer = getattr(self.owner, "_render_recovery_status", None)
+        if callable(compact_renderer):
+            try:
+                if compact_renderer(message, level):
+                    # Compact device rows render recovery in-place so a
+                    # temporary multi-line banner cannot consume their fixed
+                    # height and collapse the actual device controls.
+                    self.status_label.hide()
+                    return
+            except Exception:
+                pass
+
+        styles = {
+            "working": (
+                "background-color: #E8F1FD; color: #174A7E; "
+                "border: 1px solid #B6D4FE; border-radius: 4px; padding: 4px 6px;"
+            ),
+            "success": (
+                "background-color: #DFF3E4; color: #155724; "
+                "border: 1px solid #B7DFBF; border-radius: 4px; padding: 4px 6px;"
+            ),
+            "error": (
+                "background-color: #FDE2E1; color: #8B1E1E; "
+                "border: 1px solid #F2B8B5; border-radius: 4px; padding: 4px 6px;"
+            ),
+        }
+        self.status_label.setStyleSheet(styles[level])
+        self.status_label.setText(message)
+        self.status_label.show()
+
+    def show_menu(self, source, point):
+        menu = QtWidgets.QMenu(source)
+        restart_action = menu.addAction("Restart Tango DS…")
+        restart_action.setEnabled(not self.busy)
+
+        power_config = None
+        power_config_error = ""
+        try:
+            power_config = get_power_cycle_config(self.power_mapping_device)
+        except Exception as error:
+            power_config_error = str(error)
+            power_config = None
+
+        if power_config is not None:
+            power_action = menu.addAction(
+                f"Power cycle {power_config.pdu_device} output "
+                f"{power_config.output_id}…"
+            )
+            power_action.setEnabled(not self.busy)
+        else:
+            power_target = self.power_mapping_device.rsplit("/", 1)[-1]
+            power_action = menu.addAction(
+                f"Power cycle unavailable for {power_target}"
+            )
+            power_action.setToolTip(
+                power_config_error
+                or f"{self.power_mapping_device} has no configured PDU mapping"
+            )
+            power_action.setEnabled(False)
+
+        if self.busy:
+            menu.addSeparator()
+            busy_action = menu.addAction("Recovery is already running")
+            busy_action.setEnabled(False)
+
+        selected = menu.exec_(source.mapToGlobal(point))
+        if selected == restart_action:
+            self._confirm_restart()
+        elif selected == power_action and power_config is not None:
+            self._confirm_power_cycle(power_config)
+
+    def _confirm_restart(self):
+        answer = QtWidgets.QMessageBox.question(
+            self.owner,
+            "Restart Tango device server",
+            f"Restart the Tango device server for:\n\n{self.device_name}\n\n"
+            "The server will be stopped gracefully through Tango Starter and then "
+            "started again. No hardware power will be removed.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if answer == QtWidgets.QMessageBox.Yes:
+            self._start_operation("restart", None)
+
+    def _confirm_power_cycle(self, config):
+        answer = QtWidgets.QMessageBox.warning(
+            self.owner,
+            "Power cycle hardware",
+            f"Remove and restore hardware power for:\n\n{self.device_name}\n\n"
+            f"PDU: {config.pdu_device}\nOutput: {config.output_id}\n"
+            f"OFF time: {config.off_seconds:.1f} s\n"
+            f"Settle time: {config.settle_seconds:.1f} s\n\n"
+            "WARNING: this PDU output may supply other devices. Every device on "
+            "the same output will lose power. Other PDU outputs will not be changed.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if answer == QtWidgets.QMessageBox.Yes:
+            self._start_operation("power_cycle", config)
+
+    def _start_operation(self, operation: str, power_config):
+        if self.busy:
+            return
+        self.busy = True
+        label = "Restarting Tango DS…" if operation == "restart" else "Cycling hardware power…"
+        self._set_status(f"{label}  {self.device_name}", "working")
+
+        def worker():
+            try:
+                if operation == "restart":
+                    result = restart_device_server(self.device_name)
+                    message = (
+                        f"Restarted {result['server']} through {result['starter']}."
+                    )
+                else:
+                    result = power_cycle_device(
+                        self.power_mapping_device,
+                        config=power_config,
+                    )
+                    message = (
+                        f"Power restored: {result['pdu_device']} output "
+                        f"{result['output_id']}."
+                    )
+                self.operation_finished.emit(operation, True, message)
+            except Exception as error:
+                try:
+                    self.operation_finished.emit(operation, False, str(error))
+                except RuntimeError:
+                    pass
+
+        Thread(target=worker, daemon=True).start()
+
+    def _finish_operation(self, operation: str, success: bool, message: str):
+        self.busy = False
+        if success:
+            self._set_status(message, "success")
+            QtWidgets.QMessageBox.information(self.owner, "Recovery completed", message)
+            if operation == "restart":
+                reconnect = getattr(self.owner, "_try_reconnect_device", None)
+                if callable(reconnect):
+                    QTimer.singleShot(500, reconnect)
+        else:
+            self._set_status(f"Recovery failed: {message}", "error")
+            QtWidgets.QMessageBox.critical(
+                self.owner,
+                "Recovery failed",
+                f"{self.device_name}\n\n{message}",
+            )
 
 
 class DS_General_Widget(Qt.QWidget):
@@ -46,6 +229,17 @@ class DS_General_Widget(Qt.QWidget):
         )
         self._connection_banner.hide()
         self.layout_main.addWidget(self._connection_banner)
+        self._recovery_banner = QtWidgets.QLabel()
+        self._recovery_banner.setWordWrap(True)
+        self._recovery_banner.hide()
+        self.layout_main.addWidget(self._recovery_banner)
+        self._device_recovery = DeviceRecoveryController(
+            self.dev_name,
+            self,
+            self._recovery_banner,
+        )
+        self._device_recovery.install_on(self)
+        self._device_recovery.install_on(self._connection_banner)
         setattr(self, f"ds_{self.dev_name}", Device(self.dev_name))
         setattr(self, f"lo_group_{1}", Qt.QHBoxLayout())
         self.layout_main.addLayout(getattr(self, f"lo_group_{1}"))
@@ -92,12 +286,14 @@ class DS_General_Widget(Qt.QWidget):
             i += 1
         s1: TaurusLabel = getattr(self, f"s1_{dev_name}")  # Device name
         s2 = getattr(self, f"s2_{dev_name}")  # LED
-        s3 = getattr(self, f"s3_{dev_name}")  # Status text (unused)
+        _s3 = getattr(self, f"s3_{dev_name}")  # Status text (unused)
         s4: TaurusValueCheckBox = getattr(self, f"s4_{dev_name}")  # Always on
 
         s1.model = f"{dev_name}/device_friendly_name"
         s2.model = f"{dev_name}/state"
         s4.model = f"{dev_name}/always_on_value"
+        self._device_recovery.install_on(s1)
+        self._device_recovery.install_on(s2)
         try:
             always_on = True if self.ds.always_on_value == 1 else False
         except AttributeError:
@@ -165,7 +361,20 @@ class DS_General_Widget(Qt.QWidget):
         ds: Device = getattr(self, f"ds_{self.dev_name}")
         return ds
 
+    def set_recovery_power_device(self, device_name: str):
+        """Use another DS's explicit power mapping for this virtual widget."""
+        self._device_recovery.power_mapping_device = str(device_name)
+
     def _set_connection_banner(self, available: bool, error_text: str = ""):
+        compact_renderer = getattr(self, "_render_connection_status", None)
+        if callable(compact_renderer):
+            try:
+                if compact_renderer(available, error_text):
+                    self._connection_banner.hide()
+                    return
+            except Exception:
+                pass
+
         if available:
             self._connection_banner.hide()
             return

@@ -16,7 +16,11 @@ from DeviceServers.motion.standa.DS_STANDA_Widget import Standa_motor
 from DeviceServers.motion.topdirect.DS_TOPDIRECT_Widget import TopDirect_Motor
 from DeviceServers.power.netio.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.power.iTest.DS_iTest_PSU_Tabs import Itest_PSU
-from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.shared.DS_Widget import (
+    DS_General_Widget,
+    DeviceRecoveryController,
+    VisType,
+)
 from DeviceServers.spectrographs.andor.DS_ANDOR_SPECTROGRAPH_Widget import (
     ANDOR_SPECTROGRAPH,
 )
@@ -522,6 +526,18 @@ class UnavailableDeviceWidget(QtWidgets.QFrame):
         self._details.setWordWrap(True)
         layout.addWidget(self._details)
         self.set_error_text(error_text)
+
+        self._recovery_status = QtWidgets.QLabel()
+        self._recovery_status.setWordWrap(True)
+        self._recovery_status.hide()
+        layout.addWidget(self._recovery_status)
+        self._device_recovery = DeviceRecoveryController(
+            dev_name,
+            self,
+            self._recovery_status,
+        )
+        for recovery_target in (self, title, self._details):
+            self._device_recovery.install_on(recovery_target)
 
         if retry_callback is not None:
             retry_button = QtWidgets.QPushButton("Retry")

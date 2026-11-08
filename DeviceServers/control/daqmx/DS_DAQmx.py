@@ -11,6 +11,7 @@ from __future__ import annotations
 import configparser
 import json
 import sys
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from threading import RLock
@@ -54,6 +55,7 @@ class DaqmxChannel:
     kind: str
     counter: str = ""
     multiplier: float = 1.0
+    unit: str = ""
     alarm_path: str = ""
     limit_alarm_min: Optional[float] = None
     limit_alarm_max: Optional[float] = None
@@ -111,6 +113,7 @@ class DS_DAQmx(DS_General):
         self._channels: List[DaqmxChannel] = []
         self._channels_by_name: Dict[str, DaqmxChannel] = {}
         self._counter_tasks: Dict[str, nidaqmx.Task] = {}
+        self._digital_output_values: Dict[str, Optional[int]] = {}
         self._states: List[int] = []
         self._analog_values: List[float] = []
         self._counter_values: List[int] = []
@@ -169,6 +172,7 @@ class DS_DAQmx(DS_General):
                     kind=kind,
                     counter=counter,
                     multiplier=parser.getfloat(section, "multiplier", fallback=1.0),
+                    unit=parser.get(section, "unit", fallback="").strip(),
                     alarm_path=parser.get(section, "alarm_path", fallback=""),
                     limit_alarm_min=limit_min,
                     limit_alarm_max=limit_max,
@@ -205,6 +209,9 @@ class DS_DAQmx(DS_General):
 
         self._channels = channels
         self._channels_by_name = {channel.name: channel for channel in channels}
+        self._digital_output_values = {
+            channel.name: None for channel in channels if channel.kind == "DigitalOut"
+        }
         self._states = [-1 for channel in channels if channel.is_digital]
         self._analog_values = [0.0 for channel in channels if channel.is_analog]
         self._counter_values = [0 for channel in channels if channel.is_counter]
@@ -298,6 +305,11 @@ class DS_DAQmx(DS_General):
     def turn_off_local(self) -> Union[int, str]:
         with self._lock:
             self._close_counter_tasks()
+            self._digital_output_values = {
+                channel.name: None
+                for channel in self._channels
+                if channel.kind == "DigitalOut"
+            }
         self.set_state(DevState.OFF)
         return 0
 
@@ -348,6 +360,9 @@ class DS_DAQmx(DS_General):
             ) from exc
 
     def _read_digital(self, channel: DaqmxChannel) -> int:
+        if channel.kind == "DigitalOut":
+            cached = self._digital_output_values.get(channel.name)
+            return -1 if cached is None else int(cached)
         with nidaqmx.Task() as task:
             task.di_channels.add_di_chan(channel.channel)
             value = task.read(timeout=float(self.digital_read_timeout_s))
@@ -360,7 +375,9 @@ class DS_DAQmx(DS_General):
         with nidaqmx.Task() as task:
             task.do_channels.add_do_chan(channel.channel)
             task.write(bool_value, timeout=float(self.digital_read_timeout_s))
-        return int(bool_value)
+        written = int(bool_value)
+        self._digital_output_values[channel.name] = written
+        return written
 
     @staticmethod
     def _coerce_bool(value: Union[str, int, bool]) -> bool:
@@ -446,6 +463,9 @@ class DS_DAQmx(DS_General):
         payload = asdict(channel)
         payload["value"] = value
         payload["raw_value"] = raw_value
+        payload["value_known"] = not (
+            channel.kind == "DigitalOut" and int(value) < 0
+        )
         payload["alarm"] = self._is_alarm(channel, value)
         return payload
 
@@ -564,9 +584,27 @@ class DS_DAQmx(DS_General):
         self._refresh_cached_values()
         return self._last_snapshot_json
 
+    @attribute(label="Latest values JSON", dtype=str, access=AttrWriteType.READ)
+    def latest_values_json(self):
+        return self.get_latest_values_json()
+
     @command(dtype_out=str)
     def list_channels_json(self) -> str:
         return json.dumps([asdict(channel) for channel in self._channels], indent=2)
+
+    @command(dtype_out=str)
+    def get_latest_values_json(self) -> str:
+        """Return a web-friendly, self-describing snapshot of the physical card."""
+        self._refresh_cached_values()
+        return json.dumps(
+            {
+                "timestamp": time.time(),
+                "source": "direct",
+                "device": str(self.daq_device_name),
+                "data": json.loads(self._last_snapshot_json),
+            },
+            indent=2,
+        )
 
     @command(dtype_out=str)
     def discover_hardware_json(self) -> str:
@@ -617,8 +655,8 @@ class DS_DAQmx(DS_General):
     @command(dtype_in=str, dtype_out=int)
     def read_digital_input(self, name: str) -> int:
         channel = self._channel(name)
-        if not channel.is_digital:
-            raise ValueError(f"{name} is {channel.kind}, not DigitalIn/DigitalOut")
+        if channel.kind != "DigitalIn":
+            raise ValueError(f"{name} is {channel.kind}, not DigitalIn")
         return self._read_digital(channel)
 
     @command(dtype_in=str, dtype_out=float)

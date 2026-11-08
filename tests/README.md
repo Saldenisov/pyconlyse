@@ -114,6 +114,26 @@ python -m unittest tests.unit.test_imports
 python -m unittest tests.unit.netio.test_netio_state
 ```
 
+## Web equipment initialization and command round trips
+
+Run the software-only transport regression tests with the project Python environment:
+
+```powershell
+& $env:PYCONLYSE_PYTHON -m pytest tests/web/test_equipment_roundtrip.py tests/web/test_websocket_handler_contracts.py --deny-network
+```
+
+The round-trip suite uses real Flask HTTP and Socket.IO test clients against
+simulated Tango devices representing NETIO, iTest, Standa, OWIS, Basler, Andor,
+Avantes, DAQmx, PSP/vacuum, LaserPointing, Keysight, and DG645. It checks discovery,
+explicit initialization through HTTP or WebSocket, ready-state readback, command
+results, immediate status delivery to the requesting client only, failed
+initialization, and disconnected-device reporting without hiding healthy devices.
+
+These are shared web transport contracts, not real device-driver or live hardware
+acceptance tests. Discovery stays read-only; it does not initialize devices or
+energize outputs. Live readiness still requires a separate operator-approved
+hardware check. Equipment with no implemented web client is not validated here.
+
 ## Test Categories
 
 - **Unit Tests** (`unit/`): Fast, isolated tests for individual functions and classes

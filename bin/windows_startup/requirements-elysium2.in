@@ -1,0 +1,3 @@
+# Additional Elysium2 runtime dependency: Keysight TCPIP0::...::SOCKET transport.
+# Install with pip -r into the existing pyconlyse312 environment before boot setup.
+pyvisa-py==0.8.1

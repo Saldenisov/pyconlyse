@@ -111,3 +111,16 @@ def test_non_idempotent_write_reconnects_without_replaying_command():
 
     assert failed.calls == ["*TRG"]
     assert working.calls == []
+
+
+def test_delays_json_reads_all_user_channels_in_order():
+    calls = []
+    device = SimpleNamespace()
+    device._query = lambda command: calls.append(command) or f"value:{command}"
+    device._channel_id = DS_DG645._channel_id
+
+    payload = DS_DG645._delays_snapshot_json(device)
+
+    assert calls == [f"DLAY?{channel}" for channel in range(2, 10)]
+    assert '"A":"value:DLAY?2"' in payload
+    assert '"H":"value:DLAY?9"' in payload

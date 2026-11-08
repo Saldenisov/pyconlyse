@@ -1,0 +1,523 @@
+diff --git a/src/lvkit/codegen/builder.py b/src/lvkit/codegen/builder.py
+index 9258b7e..4c97f1b 100644
+--- a/src/lvkit/codegen/builder.py
++++ b/src/lvkit/codegen/builder.py
+@@ -89,7 +89,14 @@ def build_module(
+     # Top-level diagram nodes in dataflow order. Emitters walk structure
+     # contents from here via ``ctx.child_nodes`` / ``ctx.frame_children``.
+     top_nodes: list[AnyGraphNode] = (
+-        ctx.graph.top_level_nodes(vi_name) if ctx.graph is not None else []
++        ctx.graph.top_level_nodes(
++            vi_name,
++            extra_kinds=("local_variable",)
++            if ctx.graph.reviewed_local_bindings
++            else (),
++        )
++        if ctx.graph is not None
++        else []
+     )
+ 
+     # Determine if we need error handling infrastructure (graph-driven).
+@@ -568,6 +575,12 @@ def topological_sort_tiered(
+     return tiers
+ 
+ 
++def result_field_name(name: str) -> str:
++    """NamedTuple fields may not start with underscores (unlike variables)."""
++    name = to_var_name(name or "output")
++    return "output" + name if name.startswith("_") else name
++
++
+ def build_return_stmt(vi_context: VIContext, ctx: CodeGenContext) -> ast.Return | None:
+     """Build return statement for function.
+ 
+@@ -588,7 +601,7 @@ def build_return_stmt(vi_context: VIContext, ctx: CodeGenContext) -> ast.Return
+ 
+         out_id = out.id
+         out_name = out.name or "output"
+-        var_name = to_var_name(out_name)
++        var_name = result_field_name(out_name)
+ 
+         # Try to resolve from context. resolve() returns an EXPRESSION string
+         # (often compound, e.g. "low_000 + product" from an inlined output), so
+@@ -706,10 +719,13 @@ def build_result_class(vi_context: VIContext) -> ast.ClassDef | None:
+         if out.is_error_cluster:
+             continue
+ 
+-        name = to_var_name(out.name or "output")
+-        type_hint = out.python_type()
++        name = result_field_name(out.name or "output")
++        type_hint = _terminal_python_type(out)
+         fields.append((name, type_hint))
+ 
++    if len({name for name, _ in fields}) != len(fields):
++        raise ValueError("Output labels collide after Python field normalization")
++
+     # If all outputs were error clusters, no result class needed
+     if not fields:
+         return None
+@@ -752,7 +768,7 @@ def build_function_def(
+ 
+     # Build return annotation
+     returns = None
+-    if vi_context.outputs:
++    if any(not out.is_error_cluster for out in vi_context.outputs):
+         result_class = build_result_class_name(vi_context.name)
+         returns = ast.Name(id=result_class, ctx=ast.Load())
+ 
+@@ -792,7 +808,7 @@ def build_args(inputs: list[Terminal]) -> ast.arguments:
+ 
+         # Array inputs default to None (see build_array_input_normalization), so
+         # their annotation is honestly `<type> | None`.
+-        type_hint = inp.python_type()
++        type_hint = _terminal_python_type(inp)
+         if _is_array_input(inp):
+             type_hint = f"{type_hint} | None"
+         args.append(
+@@ -856,6 +872,18 @@ def _param_default_expr(inp: Terminal) -> ast.expr:
+     return default_value_expr(inp.lv_type)
+ 
+ 
++def _terminal_python_type(term: Terminal) -> str:
++    lv_type = term.lv_type
++    if (
++        lv_type is not None
++        and lv_type.kind == LVTypeKind.CLUSTER
++        and not lv_type.typedef_name
++        and not lv_type.classname
++    ):
++        return "tuple"
++    return term.python_type()
++
++
+ def build_result_class_name(vi_name: str) -> str:
+     """Build result class name from VI name."""
+     base = to_function_name(vi_name)
+diff --git a/src/lvkit/codegen/context.py b/src/lvkit/codegen/context.py
+index 4a1e308..41a58ef 100644
+--- a/src/lvkit/codegen/context.py
++++ b/src/lvkit/codegen/context.py
+@@ -352,7 +352,13 @@ class CodeGenContext:
+         graph."""
+         if self.graph is None:
+             return []
+-        return self.graph.child_nodes(node.id, self.vi_name or "")
++        return self.graph.child_nodes(
++            node.id,
++            self.vi_name or "",
++            extra_kinds=("local_variable",)
++            if self.graph.reviewed_local_bindings
++            else (),
++        )
+ 
+     def enriched_terminals(self, node: AnyGraphNode) -> list[Terminal]:
+         """``node``'s terminals with SubVI-call terminals enriched with the
+diff --git a/src/lvkit/codegen/nodes/__init__.py b/src/lvkit/codegen/nodes/__init__.py
+index 3afb68f..e652f13 100644
+--- a/src/lvkit/codegen/nodes/__init__.py
++++ b/src/lvkit/codegen/nodes/__init__.py
+@@ -18,6 +18,7 @@ from lvkit.graph.models import (
+     EventStructureNode,
+     FormulaNode,
+     InPlaceNode,
++    LocalVariableNode,
+     LoopNode,
+     PrimitiveNode,
+     SequenceNode,
+@@ -37,6 +38,7 @@ from . import (
+     formula,
+     in_place,
+     invoke_node,
++    local_variable,
+     loop,
+     nmux,
+     primitive,
+@@ -89,6 +91,8 @@ def generate(node: AnyGraphNode, ctx: CodeGenContext) -> CodeFragment:
+         return _generate_primitive(node, ctx)
+     if isinstance(node, ConstantNode):
+         return constant.generate(node, ctx)
++    if isinstance(node, LocalVariableNode):
++        return local_variable.generate(node, ctx)
+     return _generate_unknown(node)
+ 
+ 
+diff --git a/src/lvkit/codegen/nodes/nmux.py b/src/lvkit/codegen/nodes/nmux.py
+index a10cbb8..bebc3c8 100644
+--- a/src/lvkit/codegen/nodes/nmux.py
++++ b/src/lvkit/codegen/nodes/nmux.py
+@@ -98,9 +98,8 @@ def generate(node: PrimitiveNode, ctx: CodeGenContext) -> CodeFragment:
+         for t in sorted(list_out, key=lambda t: t.index):
+             if agg_var:
+                 if anon:
+-                    # Anonymous cluster = tuple; extract by position.
+-                    idx = t.nmux_field_index if t.nmux_field_index is not None else 0
+-                    bindings[t.id] = f"{agg_var}[{idx}]"
++                    path = _position_path(t, class_fields)
++                    bindings[t.id] = agg_var + "".join(f"[{i}]" for i in path)
+                 else:
+                     bindings[t.id] = _field_expr(t, agg_var, class_fields)
+ 
+@@ -116,6 +115,36 @@ def generate(node: PrimitiveNode, ctx: CodeGenContext) -> CodeFragment:
+             return CodeFragment.empty()
+ 
+         if agg_var:
++            if anon:
++                # nMux indices include intermediate nested clusters. A bundle
++                # produces a new value, not mutations of the input's fields.
++                updates = []
++                for t in sorted(list_in, key=lambda t: t.index):
++                    value = ctx.resolve(t.id)
++                    if value is None:
++                        raise TypeResolutionNeeded(
++                            type_name="wired bundle value", context=t.id
++                        )
++                    path = _position_path(t, class_fields)
++                    updates.append(f"({path!r}, {value})")
++                cluster_var = ctx.make_output_var(
++                    "cluster", node.id, agg_out[0].id if agg_out else None
++                )
++                statements.append(
++                    ast.Assign(
++                        targets=[ast.Name(id=cluster_var, ctx=ast.Store())],
++                        value=parse_expr(
++                            f"replace_fields({agg_var}, ({', '.join(updates)},))"
++                        ),
++                    )
++                )
++                for t in agg_out:
++                    bindings[t.id] = cluster_var
++                return CodeFragment(
++                    statements=statements,
++                    bindings=bindings,
++                    imports={"from lvkit.positional_cluster import replace_fields"},
++                )
+             # Assign fields on the aggregate cluster. Bundle By Name mutates the
+             # object in place, so the aggregate must be a single materialized
+             # VARIABLE — when it resolves to an EXPRESSION (a cluster constant
+@@ -164,7 +193,8 @@ def generate(node: PrimitiveNode, ctx: CodeGenContext) -> CodeFragment:
+             # to the agg output. Fields go in cluster-field-index order.
+             ordered = sorted(
+                 list_in,
+-                key=lambda t: t.nmux_field_index if t.nmux_field_index is not None
++                key=lambda t: t.nmux_field_index
++                if t.nmux_field_index is not None
+                 else t.index,
+             )
+             elts = [parse_expr(ctx.resolve(t.id) or "None") for t in ordered]
+@@ -175,6 +205,28 @@ def generate(node: PrimitiveNode, ctx: CodeGenContext) -> CodeFragment:
+     return CodeFragment(statements=statements, bindings=bindings)
+ 
+ 
++def _position_path(
++    term: Terminal, fields: list[ClusterField] | None
++) -> tuple[int, ...]:
++    """Depth-first nMux index to nested tuple path, including parent fields."""
++    paths: list[tuple[int, ...]] = []
++
++    def visit(current: list[ClusterField], prefix: tuple[int, ...]) -> None:
++        for i, field in enumerate(current):
++            path = prefix + (i,)
++            paths.append(path)
++            if field.type and field.type.fields:
++                visit(field.type.fields, path)
++
++    visit(fields or [], ())
++    index = term.nmux_field_index
++    if index is None or index < 0 or index >= len(paths):
++        raise TypeResolutionNeeded(
++            type_name=f"positional field[{index}]", context=term.id
++        )
++    return paths[index]
++
++
+ def _bundles_status(
+     list_in: list[Terminal],
+     class_fields: list[ClusterField] | None,
+diff --git a/src/lvkit/codegen/nodes/primitive.py b/src/lvkit/codegen/nodes/primitive.py
+index 8159869..645de08 100644
+--- a/src/lvkit/codegen/nodes/primitive.py
++++ b/src/lvkit/codegen/nodes/primitive.py
+@@ -136,6 +136,14 @@ def generate(node: PrimitiveNode, ctx: CodeGenContext) -> CodeFragment:
+         if op_template is not None:
+             resolved.python_code = op_template(node, resolved)
+ 
++    # Python '/' raises on zero; real DBL division in LabVIEW returns IEEE
++    # values. Restrict this override to source-declared DBL representations.
++    if prim_id == 1053 and node.terminals:
++        from .ops.real64_log10 import is_real64
++
++        if all(is_real64(t.lv_type) for t in node.terminals):
++            resolved.python_code = {"quotient": "_lv.real64_divide(in_2, in_1)"}
++
+     # Placeholder: emit warning comment + pass, don't raise
+     if resolved.confidence == "placeholder":
+         return _emit_placeholder(node, resolved, ctx)
+diff --git a/src/lvkit/data/primitives/exponential-functions.json b/src/lvkit/data/primitives/exponential-functions.json
+index e65d3e9..d21fdc1 100644
+--- a/src/lvkit/data/primitives/exponential-functions.json
++++ b/src/lvkit/data/primitives/exponential-functions.json
+@@ -21,6 +21,8 @@
+     },
+     "1210": {
+       "name": "Logarithm Base 10",
++      "op": "REAL64_LOG10",
++      "doc_url": "https://www.ni.com/docs/en-US/bundle/labview-api-ref/page/functions/logarithm-base-10.html",
+       "terminals": [
+         {
+           "index": 0,
+diff --git a/src/lvkit/graph/core.py b/src/lvkit/graph/core.py
+index d41ec81..f5237de 100644
+--- a/src/lvkit/graph/core.py
++++ b/src/lvkit/graph/core.py
+@@ -165,6 +165,9 @@ class InMemoryVIGraph(
+     """
+ 
+     def __init__(self) -> None:
++        # Explicit, externally reviewed node -> control bindings. An empty
++        # mapping never opts codegen into sequential local-variable handling.
++        self.reviewed_local_bindings: dict[str, str] = {}
+         # Unified graph: all VIs, all nodes, all edges
+         self._graph: nx.MultiDiGraph = nx.MultiDiGraph()
+         # Per-VI node index: vi_name -> set of node UIDs in that VI
+@@ -265,6 +268,7 @@ class InMemoryVIGraph(
+ 
+     def clear(self) -> None:
+         """Clear all loaded data."""
++        self.reviewed_local_bindings.clear()
+         self._graph.clear()
+         self._vi_nodes.clear()
+         self._term_to_node.clear()
+diff --git a/src/lvkit/runtime/lv.py b/src/lvkit/runtime/lv.py
+index 9fe79ed..4e0bdfb 100644
+--- a/src/lvkit/runtime/lv.py
++++ b/src/lvkit/runtime/lv.py
+@@ -53,6 +53,34 @@ def truediv(a, b):
+     return _binop(a, b, _op.truediv)
+ 
+ 
++def _real64_divide_scalar(a, b):
++    a, b = float(a), float(b)
++    if b == 0.0:
++        if a == 0.0 or _math.isnan(a):
++            return _math.nan
++        sign = _math.copysign(1.0, a) * _math.copysign(1.0, b)
++        return _math.copysign(_math.inf, sign)
++    return a / b
++
++
++def real64_divide(a, b):
++    """DBL division; list broadcasting follows existing runtime convention.
++
++    Nonzero/zero -> signed Inf; zero/zero and NaN/zero -> NaN. This does
++    not model LabVIEW floating-point status flags or other representations.
++    """
++    return _binop(a, b, _real64_divide_scalar)
++
++
++def _real64_log10_scalar(x):
++    x = float(x)
++    if x == 0.0:
++        return -_math.inf
++    if x < 0.0:
++        return _math.nan
++    return _math.log10(x)
++
++
+ def floordiv(a, b):
+     return _binop(a, b, _op.floordiv)
+ 
+@@ -203,9 +231,8 @@ def ln(x):
+ 
+ 
+ def log10(x):
+-    if x > 0:
+-        return _math.log10(x)
+-    return -_math.inf if x == 0 else _math.nan
++    """Real DBL base-10 logarithm, recursively over lists (not complex)."""
++    return _unop(x, _real64_log10_scalar)
+ 
+ 
+ def log2(x):
+diff --git a/src/lvkit/codegen/nodes/local_variable.py b/src/lvkit/codegen/nodes/local_variable.py
+new file mode 100644
+--- /dev/null
++++ b/src/lvkit/codegen/nodes/local_variable.py
+@@ -0,0 +1,43 @@
++"""Local reads/writes for an explicitly reviewed sequential simulation."""
++
++from __future__ import annotations
++
++import ast
++
++from lvkit.graph.models import CaseStructureNode, EventStructureNode, LoopNode
++
++from ..ast_utils import parse_expr
++from ..fragment import CodeFragment
++from .base import UnknownNodeError
++
++_CONDITIONAL_STRUCTURES = (CaseStructureNode, EventStructureNode, LoopNode)
++
++
++def generate(node, ctx) -> CodeFragment:
++    control = node.control_terminal_id
++    reviewed = getattr(ctx.graph, "reviewed_local_bindings", {})
++    if not control or reviewed.get(node.id) != control:
++        raise UnknownNodeError(f"unreviewed local control binding: {node.id}")
++    if node.is_write:
++        # Binding a write nested inside a branch as an unconditional function
++        # result loses the old indicator value (or creates an unbound local).
++        # The sequential adapter does not implement persistent panel state.
++        parent = node.parent
++        while parent:
++            ancestor = ctx.graph._graph.nodes[parent].get("node")
++            if isinstance(ancestor, _CONDITIONAL_STRUCTURES):
++                raise UnknownNodeError(
++                    "conditional local write requires persistent-state model: "
++                    f"{node.id}"
++                )
++            parent = ancestor.parent if ancestor else None
++    value = ctx.resolve(node.terminals[0].id if node.is_write else control)
++    if value is None:
++        raise UnknownNodeError(f"local value is not initialized/resolved: {node.id}")
++    if not node.is_write:
++        return CodeFragment(bindings={node.terminals[0].id: value})
++    variable = "local_" + control.rsplit("::", 1)[-1]
++    statement = ast.Assign(
++        targets=[ast.Name(id=variable, ctx=ast.Store())], value=parse_expr(value)
++    )
++    return CodeFragment(statements=[statement], bindings={control: variable})
+diff --git a/src/lvkit/codegen/nodes/ops/real64_log10.py b/src/lvkit/codegen/nodes/ops/real64_log10.py
+new file mode 100644
+--- /dev/null
++++ b/src/lvkit/codegen/nodes/ops/real64_log10.py
+@@ -0,0 +1,25 @@
++"""Real DBL log10, including arrays; reject unqualified representations."""
++
++from lvkit.models import LVTypeKind
++
++from ..base import CodeGenError
++from . import register_op
++
++
++def is_real64(lv_type):
++    if lv_type is None:
++        return False
++    if lv_type.kind == LVTypeKind.ARRAY:
++        return is_real64(lv_type.element_type)
++    return (
++        lv_type.kind == LVTypeKind.PRIMITIVE and lv_type.underlying_type == "NumFloat64"
++    )
++
++
++@register_op("REAL64_LOG10")
++def real64_log10(node, resolved):
++    if not node.terminals or not all(is_real64(t.lv_type) for t in node.terminals):
++        raise CodeGenError(
++            "log10 currently qualified only for real DBL/DBL arrays", node
++        )
++    return {"log(x)": "_lv.log10(in_1)"}
+diff --git a/src/lvkit/positional_cluster.py b/src/lvkit/positional_cluster.py
+new file mode 100644
+--- /dev/null
++++ b/src/lvkit/positional_cluster.py
+@@ -0,0 +1,23 @@
++"""By-value updates of anonymous nested clusters represented as tuples."""
++
++from __future__ import annotations
++
++
++def replace_fields(
++    cluster: tuple, updates: tuple[tuple[tuple[int, ...], object], ...]
++) -> tuple:
++    """Copy only changed tuple branches; never mutate the input cluster."""
++    if type(cluster) is not tuple:
++        raise TypeError("anonymous cluster must be a tuple")
++    result = cluster
++    for path, value in updates:
++        if not path or any(type(index) is not int or index < 0 for index in path):
++            raise ValueError("nonempty nonnegative cluster index path required")
++        index, *tail = path
++        if index >= len(result):
++            raise IndexError(path)
++        replacement = (
++            replace_fields(result[index], ((tuple(tail), value),)) if tail else value
++        )
++        result = result[:index] + (replacement,) + result[index + 1 :]
++    return result
+diff --git a/src/lvkit/reviewed_locals.py b/src/lvkit/reviewed_locals.py
+new file mode 100644
+--- /dev/null
++++ b/src/lvkit/reviewed_locals.py
+@@ -0,0 +1,72 @@
++"""Explicit source-reviewed local-variable binding, without FP-order guesses.
++
++This is an opt-in simulation profile for sequential diagrams. It does not
++infer bank/control correspondence, persistence, or concurrent scheduling.
++"""
++
++from __future__ import annotations
++
++from lvkit.graph.models import LocalVariableNode, WireEnd
++
++
++def _shape(lv_type):
++    if lv_type is None:
++        return None
++    return (
++        lv_type.kind,
++        lv_type.underlying_type,
++        lv_type.ref_type,
++        lv_type.classname,
++        tuple(_shape(field.type) for field in lv_type.fields or []),
++        _shape(lv_type.element_type),
++        lv_type.dimensions,
++    )
++
++
++def configure_reviewed_locals(graph, vi_key: str, bindings: dict[str, str]) -> None:
++    """Bind every local node UID to an explicitly reviewed FP terminal UID."""
++    locals_by_uid = {
++        uid.rsplit("::", 1)[-1]: data["node"]
++        for uid, data in graph._graph.nodes(data=True)
++        if isinstance(data.get("node"), LocalVariableNode)
++        and data["node"].vi_path == vi_key
++    }
++    if set(bindings) != set(locals_by_uid):
++        raise ValueError("every local UID needs an explicit reviewed binding")
++    controls = {
++        t.id.rsplit("::", 1)[-1]: t
++        for t in graph._graph.nodes[vi_key]["node"].terminals
++    }
++    if any(target not in controls for target in bindings.values()):
++        raise ValueError("reviewed control terminal UID not present")
++    for raw_uid, target in bindings.items():
++        local_type = _shape(locals_by_uid[raw_uid].terminals[0].lv_type)
++        if local_type is None or local_type != _shape(controls[target].lv_type):
++            raise ValueError("reviewed local/control type shape mismatch")
++    for raw_uid, target in bindings.items():
++        node = locals_by_uid[raw_uid]
++        control = controls[target]
++        # Remove only synthetic FP/local aliases, not the drawn diagram wires.
++        for src, dst, edge_key in list(graph._graph.edges(keys=True)):
++            if (src == node.id and dst == vi_key) or (src == vi_key and dst == node.id):
++                graph._graph.remove_edge(src, dst, edge_key)
++        node.name = node.control_name = control.name
++        node.control_terminal_id = control.id
++        fp_end = WireEnd(
++            terminal_id=control.id,
++            node_id=vi_key,
++            index=control.index,
++            name=control.name,
++            parent_kind="vi",
++        )
++        local_end = WireEnd(
++            terminal_id=node.terminals[0].id,
++            node_id=node.id,
++            index=0,
++            name=control.name,
++        )
++        if node.is_write:
++            graph._graph.add_edge(node.id, vi_key, source=local_end, dest=fp_end)
++        else:
++            graph._graph.add_edge(vi_key, node.id, source=fp_end, dest=local_end)
++        graph.reviewed_local_bindings[node.id] = control.id

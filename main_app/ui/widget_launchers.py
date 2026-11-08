@@ -437,6 +437,8 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
     """
     name = (device_name or "").lower()
 
+    if "zaber" in name:
+        return start_zaber_widget(device_name, parent, vis)
     if "netio" in name:
         return start_netio_widget(device_name, parent, vis)
     if "owis" in name or "delay" in name:
@@ -474,6 +476,8 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
             or getattr(info, "server", "")
         )
         s = srv.lower()
+        if "ds_zaber" in s or "zaber" in s:
+            return start_zaber_widget(device_name, parent, vis)
         if "ds_netio_pdu" in s or "netio" in s:
             return start_netio_widget(device_name, parent, vis)
         if "ds_owis_ps90" in s or "owis" in s:
@@ -494,3 +498,17 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
         pass
 
     raise RuntimeError(f"Could not determine widget for device: {device_name}")
+
+
+def start_zaber_widget(device_name: str = "manip/VD2/Zaber", parent=None, vis: str | VisType = "FULL"):
+    """Open the millimetre-only VD2 Zaber operator panel."""
+    if OFFLINE_MODE:
+        return _offline_placeholder(
+            "Zaber (offline)", f"Offline mode is enabled. Not connecting to {device_name}.", parent
+        )
+    from DeviceServers.motion.zaber.DS_Zaber_Widget import ZaberStageWidget
+
+    widget = ZaberStageWidget(device_name, parent, _to_vis(vis))
+    widget.resize(600, 220)
+    widget.show()
+    return widget

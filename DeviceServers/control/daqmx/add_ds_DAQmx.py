@@ -50,9 +50,10 @@ def _starter_host(server_name: str) -> str:
 
 
 def register_device():
-    device_name = "control/DAQ/DAQMX_1"
-    instance_name = "DAQMX_1"
-    server_name = f"DS_DAQmx/1_{instance_name}"
+    card_name = "TRANCON-DAQ"
+    device_name = f"control/DAQ/{card_name}"
+    instance_name = card_name
+    server_name = f"DS_DAQmx/{instance_name}"
     config_path = Path(__file__).with_name("daqmx_transcon.ini")
 
     dev_info = DbDevInfo()
@@ -69,10 +70,10 @@ def register_device():
     db.put_device_property(
         device_name,
         {
-            "device_id": "TRANCON-DAQ",
-            "friendly_name": "TRANCON DAQmx",
+            "device_id": card_name,
+            "friendly_name": card_name,
             "server_id": 1,
-            "daq_device_name": "TRANCON-DAQ",
+            "daq_device_name": card_name,
             "channel_config_path": str(config_path),
             "terminal_config": "RSE",
             "archive_enabled": 0,
@@ -105,7 +106,7 @@ def main():
     print("Done.")
     print("=" * 70)
     print("Start command:")
-    print("  python DS_DAQmx.py 1_DAQMX_1")
+    print("  python DS_DAQmx.py TRANCON-DAQ")
 
 
 if __name__ == "__main__":

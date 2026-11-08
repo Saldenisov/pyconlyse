@@ -136,4 +136,8 @@ class IsolatedPythonModule(pytest.Module):
 @pytest.hookimpl(tryfirst=True)
 def pytest_pycollect_makemodule(module_path, parent):
     """Use an isolated collector before pytest creates its default collector."""
+    # Explicit native integration owns its real standalone Tango context. It is
+    # outside the default software lane and cannot use import-only protocol shells.
+    if module_path.parent.name == "tango" and module_path.parent.parent.name == "integration":
+        return None
     return IsolatedPythonModule.from_parent(parent, path=module_path)

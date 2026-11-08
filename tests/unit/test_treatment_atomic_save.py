@@ -193,12 +193,14 @@ def test_queue_execution_is_job_local_and_resets_runtime_on_success_or_failure(
     monkeypatch.setattr(
         service, "reset_runtime", lambda runtime_id=None: reset_ids.append(runtime_id)
     )
-    monkeypatch.setattr(
-        service,
-        "save_sam_cleaned_h5",
-        lambda *_args, **_kwargs: order.append("clean")
-        or {"output_path": str(tmp_path / "cleaned.h5")},
-    )
+    def clean(worker_service, *_args, **_kwargs):
+        assert worker_service is not service
+        order.append("clean")
+        return {"output_path": str(tmp_path / "cleaned.h5")}
+
+    # Cleaning now owns a separate worker service. Mock that class boundary,
+    # rather than letting the worker parse the deliberately fake HDF5 bytes.
+    monkeypatch.setattr(treatment_api_module.TreatmentDataService, "save_sam_cleaned_h5", clean)
 
     def calc(runtime_id, _state):
         order.append("calc")

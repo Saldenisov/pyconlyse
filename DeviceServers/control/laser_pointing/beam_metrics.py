@@ -4,10 +4,60 @@ import base64
 
 import numpy as np
 
+from DeviceServers.control.laser_pointing.alignment_quality import contour_centering
+
 try:
     import cv2
 except ImportError:  # Keep the controller available for manual operation.
     cv2 = None
+
+
+CONTOUR_RELATIVE_HEIGHTS = (
+    0.10, 0.16, 0.23, 0.31, 0.40, 0.50, 0.61, 0.72, 0.82
+)
+
+# Cam2 has a substantially narrower intensity footprint than Cam1.  Reusing
+# Cam1's centroid threshold (50) made all useful iso-intensity rings collapse
+# into the bright core.  Its roundness profile therefore starts lower and
+# allocates more levels to the weak outer shoulder.  The camera's independent
+# centre-of-gravity threshold is deliberately left unchanged.
+CAM2_CONTOUR_RELATIVE_HEIGHTS = (
+    0.03, 0.05, 0.08, 0.13, 0.20, 0.30, 0.42, 0.57, 0.75
+)
+CAM2_CONTOUR_FLOOR_THRESHOLD = 20.0
+
+
+def camera_contour_profile(camera_name, configured_threshold):
+    """Return the roundness threshold profile for one pointing camera."""
+
+    name = str(camera_name or "").strip().lower()
+    if "cam2" in name:
+        return {
+            "threshold": CAM2_CONTOUR_FLOOR_THRESHOLD,
+            "relative_heights": CAM2_CONTOUR_RELATIVE_HEIGHTS,
+        }
+    return {
+        "threshold": float(configured_threshold),
+        "relative_heights": CONTOUR_RELATIVE_HEIGHTS,
+    }
+
+
+def _contour_relative_heights(relative_heights=None):
+    values = tuple(
+        float(value)
+        for value in (
+            CONTOUR_RELATIVE_HEIGHTS
+            if relative_heights is None
+            else relative_heights
+        )
+    )
+    if len(values) < 3:
+        raise ValueError("at least three contour heights are required")
+    if any(value <= 0 or value >= 1 for value in values):
+        raise ValueError("contour heights must be between zero and one")
+    if any(later <= earlier for earlier, later in zip(values, values[1:])):
+        raise ValueError("contour heights must be strictly increasing")
+    return values
 
 
 def _grayscale_camera_image(image, width=None, height=None):
@@ -63,6 +113,7 @@ def _fitted_contour(contour):
     axis_ratio = minor_axis / major_axis
     return {
         "centre": [float(centre_x), float(centre_y)],
+        "ellipse_centre": [float(ellipse[0][0]), float(ellipse[0][1])],
         "radius_px": radius,
         "axis_roundness_pct": 100.0 * axis_ratio,
         "ellipticity_error_pct": 100.0 * (1.0 - axis_ratio),
@@ -195,6 +246,85 @@ def beam_visibility(image, threshold, width=None, height=None):
     return _visibility_from_gray(gray, threshold)
 
 
+def beam_threshold_contours(
+    image, threshold, width=None, height=None, relative_heights=None
+):
+    """Return current-frame fitted circles used by the beam score.
+
+    This display helper deliberately performs no temporal averaging.  A GUI
+    caller can therefore replace its overlay after every acquired image and
+    never show contours calculated from an older frame.  The displayed paths
+    are smooth least-squares circles, not the pixel staircase returned by
+    ``cv2.findContours``.  Their fit diagnostics are calculated from that raw
+    iso-intensity border in exactly the same way as the alignment objective.
+    """
+
+    if cv2 is None:
+        raise ValueError("OpenCV is required for beam-contour display")
+    gray = _grayscale_camera_image(image, width=width, height=height)
+    if not np.isfinite(gray).all() or min(gray.shape) < 12:
+        raise ValueError("camera image is invalid for contour display")
+
+    smoothed = cv2.GaussianBlur(gray.astype(np.float32), (3, 3), 0)
+    border = np.concatenate(
+        (smoothed[0], smoothed[-1], smoothed[:, 0], smoothed[:, -1])
+    )
+    background = float(np.median(border))
+    noise = float(np.median(np.abs(border - background))) * 1.4826
+    peak = float(np.max(smoothed))
+    floor = max(float(threshold), background + max(3.0, 4.0 * noise))
+    if peak <= floor:
+        return []
+
+    peak_y, peak_x = np.unravel_index(int(np.argmax(smoothed)), smoothed.shape)
+    paths = []
+    fractions = _contour_relative_heights(relative_heights)
+    for fraction in fractions:
+        level = floor + fraction * (peak - floor)
+        binary = np.uint8(smoothed >= level)
+        contours, _hierarchy = cv2.findContours(
+            binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+        )
+        selected = [
+            contour for contour in contours
+            if cv2.pointPolygonTest(
+                contour, (float(peak_x), float(peak_y)), False
+            ) >= 0
+        ]
+        if not selected:
+            continue
+        contour = max(selected, key=cv2.contourArea)
+        x, y, contour_width, contour_height = cv2.boundingRect(contour)
+        if (
+            x <= 0
+            or y <= 0
+            or x + contour_width >= gray.shape[1]
+            or y + contour_height >= gray.shape[0]
+            or cv2.contourArea(contour) < 25.0
+        ):
+            continue
+        fit = _fitted_contour(contour)
+        if fit is None:
+            continue
+        centre_x, centre_y = fit["centre"]
+        radius = fit["radius_px"]
+        angle = np.linspace(0.0, 2.0 * np.pi, 181)
+        points = np.column_stack((
+            centre_x + radius * np.cos(angle),
+            centre_y + radius * np.sin(angle),
+        ))
+        paths.append({
+            "threshold": float(level),
+            "relative_height": float(fraction),
+            "points": points,
+            "centre": list(fit["centre"]),
+            "radius_px": float(radius),
+            "radial_error_pct": float(fit["radial_error_pct"]),
+            "ellipticity_error_pct": float(fit["ellipticity_error_pct"]),
+        })
+    return paths
+
+
 def _profile_preview(gray, threshold):
     """Encode the measured median frame and its threshold centroid for the UI."""
 
@@ -231,7 +361,12 @@ def _profile_preview(gray, threshold):
 
 
 def beam_contour_symmetry(
-    images, threshold, width=None, height=None, include_preview=False
+    images,
+    threshold,
+    width=None,
+    height=None,
+    include_preview=False,
+    relative_heights=None,
 ):
     """Score a few frames by sweeping beam contours from outer ring to core.
 
@@ -268,7 +403,8 @@ def beam_contour_symmetry(
     peak_y, peak_x = np.unravel_index(int(np.argmax(smoothed)), smoothed.shape)
     levels = []
     clipped_contours = False
-    for fraction in (0.10, 0.16, 0.23, 0.31, 0.40, 0.50, 0.61, 0.72, 0.82):
+    fractions = _contour_relative_heights(relative_heights)
+    for fraction in fractions:
         level = floor + fraction * (peak - floor)
         binary = np.uint8(smoothed >= level)
         contours, _hierarchy = cv2.findContours(
@@ -333,9 +469,12 @@ def beam_contour_symmetry(
         "major_axis_angle_deg": float(levels[0]["major_axis_angle_deg"]),
         "illuminated_pixels": int(np.count_nonzero(smoothed >= floor)),
         "contour_count": len(levels),
+        "contour_floor_threshold": float(floor),
+        "contour_relative_heights": list(fractions),
         "contours": levels,
         "sample_count": len(frames),
         "visibility": visibility,
+        **contour_centering(levels),
     }
     if include_preview:
         result.update(_profile_preview(gray, visibility["effective_threshold"]))

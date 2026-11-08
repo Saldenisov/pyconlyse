@@ -44,7 +44,7 @@ DEVICE_SERVER_CONFIGS = {
     },
     "NETIO": {"instances": ["all", "V0", "VD2"], "script": "NETIO"},
     "DG645": {"instances": ["1_DG645"], "script": "DG645"},
-    "DAQMX": {"instances": ["DAQMX_1"], "script": "DAQMX"},
+    "DAQMX": {"instances": ["TRANCON-DAQ"], "script": "DAQMX"},
     "TOPDIRECT": {"instances": ["VD2", "all"], "script": "TOPDIRECT"},
     "LASER_POINTING": {
         "instances": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
@@ -69,6 +69,7 @@ SERVER_CLASS_BY_TYPE: Dict[str, str] = {
     "BASLER": "DS_Basler_camera",
     "ARCHIVE": "DS_Archive",
     "OWIS": "DS_OWIS_PS90",
+    "ZABER": "DS_Zaber",
     "STANDA": "DS_Standa_Motor",
     "NETIO": "DS_Netio_pdu",
     "DG645": "DS_DG645",

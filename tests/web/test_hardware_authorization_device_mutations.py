@@ -33,6 +33,7 @@ MUTATIONS = [
     ("/api/camera/test/trigger", {}, "camera.trigger"),
     ("/api/psp/device/test/commands/ack", {"command": "ack"}, "psp.ack"),
     ("/api/daqmx/device/test/write", {"channel": "x", "value": 1}, "daqmx.write"),
+    ("/api/daqmx/device/test/counter/reset", {"channel": "counter"}, "daqmx.reset"),
     ("/api/spectrograph/test/parameters", {"wavelength_nm": 500}, "spectrograph.parameters"),
 ]
 
@@ -95,6 +96,7 @@ def test_every_device_mutation_is_guarded_before_tango(device_client, path, payl
     ("/api/camera/test/grabbing", {"action": "invalid"}),
     ("/api/device/itest/test/slot/1/output", {}),
     ("/api/daqmx/device/test/write", {"value": 1}),
+    ("/api/daqmx/device/test/counter/reset", {}),
 ])
 def test_invalid_mutation_input_does_not_reach_proxy(device_client, path, payload):
     response = device_client.post(path, json=payload)
@@ -112,6 +114,7 @@ def test_pending_pop_get_is_not_a_hidden_mutation(device_client):
 
 @pytest.mark.parametrize("path,payload,expected", [
     ("/api/daqmx/device/test/write", {"channel": "x", "value": 1}, "daqmx.write"),
+    ("/api/daqmx/device/test/counter/reset", {"channel": "counter"}, "daqmx.reset"),
     ("/api/device/camera/test/capture", {"exposure_time": 0.1}, "camera.capture"),
     ("/api/camera/test/grabbing", {"action": "start"}, "camera.grabbing"),
     ("/api/camera/test/grabbing", {"action": "stop"}, "camera.grabbing"),

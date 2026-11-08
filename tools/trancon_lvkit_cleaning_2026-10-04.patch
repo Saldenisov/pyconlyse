@@ -1,0 +1,13 @@
+--- a/src/lvkit/codegen/builder.py
++++ b/src/lvkit/codegen/builder.py
+@@ -859,6 +859,10 @@
+         return default_value_expr(inp.lv_type)
+     underlying = inp.lv_type.underlying_type if inp.lv_type else None
+     try:
++        # Enum storage is UnitUInt*, so the NumUInt scalar branch does not
++        # preserve a nonzero saved connector default (e.g. approx = 1).
++        if inp.lv_type is not None and inp.lv_type.kind == LVTypeKind.ENUM:
++            return ast.Constant(value=int(dv))
+         if underlying and underlying.startswith(("NumInt", "NumUInt")):
+             return ast.Constant(value=int(dv))
+         if underlying in ("NumFloat32", "NumFloat64"):

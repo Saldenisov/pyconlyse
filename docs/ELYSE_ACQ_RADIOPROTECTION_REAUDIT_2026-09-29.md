@@ -1,0 +1,26 @@
+# Acquisition radioprotection: focused re-audit (2026-09-29)
+
+## Question and source boundary
+
+If a rondier/interlock changes after the installation has started, does the copied Acquisition controller itself initiate the general-stop sequence? This note examines **LabVIEW controller logic**, not NI-DAQmx internals or the physical safety chain. Source: `C:\dev\ELYSE-ACQ-analysis\source\10.20.30.10\ACQUISITION.llb`, SHA-256 `EB7C08800823D025F1B4F9E8EEA89ED9878F0CF00A02427871583B99989B2F8A`. It is a saved copy; equality with the currently deployed binary was not rechecked in this pass. No VI was run or saved and no hardware command was issued.
+
+## Observations
+
+- The `C4_IN_DIO96` type maps DI46/47 to radioprotection HT/HF cuts, DI52–55 to doors, DI57–60 to rondiers, and DI61–62 to BACO positions. See `legacy/xp_acq_agent/data/channel_map.csv:304-320`. These are **input/readback** fields; their names alone do not define a LabVIEW transition or physical polarity.
+- All 17 copied LLB members have offline parsed bodies. The initial name search found the protection labels in C4 cluster types but not as separately named body instances. That search alone was insufficient because the parser's local-variable mapping is demonstrably wrong for many references (`ELYSE_ACQ_LOCAL_REFERENCE_MAPPING_AUDIT_2026-09-29.md`).
+- A subsequent **raw-wire** trace identifies `C4_IN_DIO96` as local `paramIdx=16` using the native water-flow diagram and the `/SUPERVISION/C4_IN_DIO96` PSP write. The root has exactly six local references with that index: three receive the results of DIO-array-to-cluster conversions in acquisition loops (`gRef` UIDs 19587, 2352, 55726); one supplies the startup dynamic-PSP-open type (`8346`); one publishes the cluster to PSP (`25024`); one unbundles **only** fields 19 and 38 for the cooling-flow guard (`10202`). The direct C4 front-panel terminal UID 5678 has no diagram signal. No use of C4 fields 46–62, or C4 whole-bank input to a stop Case/subVI, appears in those six reference paths. This is a bounded wire-level result for the saved root VI, not a proof about every external consumer of the PSP value.
+- The DIO exchange VI (`1_ACQ_RW_DIO96.vi`) reads C3/C4/C5 inputs, then writes C3/C4/C5 outputs; it has no visible controller interlock branch in its two native frames. The root acquisition loop publishes C3/C4/C5 input banks to PSP. See `docs/ELYSE_ACQ_NATIVE_FRAME_COVERAGE_LEDGER_2026-09-28.md:17,26`.
+- Positive control: the same C4 local reference feeds a demonstrable software guard for cooling-flow safety. The raw Boolean expression and seven ordered actions are in `ELYSE_ACQ_COOLING_FLOW_SAFETY_TRACE_2026-09-29.md`. This confirms that the trace can detect a real C4-dependent controller branch when present.
+- The root general-stop frame is selected by `TCP ED`, with an inner `Arrêt général` selector; its seven-phase stop sequence is documented in `docs/ELYSE_ACQ_LIFECYCLE_LOOP_AUDIT_2026-09-28.md:44-56`. A path from the C4 radioprotection/rondier inputs to these selectors has **not** been established. PSP failures do set the common `stop` flag in other inspected paths.
+
+## Bounded conclusion
+
+The earlier categorical statement that a rondier change *does not* make Acquisition react was too strong. In the **saved Acquisition root VI**, every identified `C4_IN_DIO96` local-reference path is now accounted for: card-read conversion, PSP setup/publication, or the two-bit cooling-flow guard. None unbundles the protection/rondier/door fields or directly drives the root general-stop selector. This supports the narrower conclusion that a **direct C4-input-to-general-stop software branch is absent in this saved root VI**. It does not exclude a Supervision-mediated command after PSP publication, another network/whole-bank path, a changed deployed VI, or a hardwired chain that cuts HT/HF without a LabVIEW general stop. The current physical response to a rondier change remains unverified.
+
+The wider audit indexed 510 diagram-enabled selector rows in the reachable graph, while complete trigger/guard/side-effect/error validation remains outstanding (`docs/ELYSE_ACQ_LIFECYCLE_LOOP_AUDIT_2026-09-28.md:58-70`). This focused re-audit is **not** a claim to have re-visited every native frame. An attempt to reopen the copied root VI in the shared local 32-bit LabVIEW session did not yield an Acquisition window, so no new native-frame observation is claimed here.
+
+## Discriminating review, without operating equipment
+
+1. Trace every writer of `stop`, `TCP ED`, `Arrêt général`, and `stop urgence`, including PSP-error branches and possible Supervision requests. Distinguish *controller requests stop* from *physical HT/HF readback changed*.
+2. Supervision's saved root now has a [12-field C4-to-display and eight-input graph trace](ELYSE_SUP_RADIOPROTECTION_DISPLAY_AND_GRAPH_2026-09-30.md). No direct root command wire from the radioprotection aggregate was identified; the graph subVI and any external/hardwired path remain to be reviewed.
+3. Compare the copy's hash with the deployed LLB before treating the result as current. Confirm any hardwired-interlock hypothesis from electrical documentation or an authorized, instrumented safety test—not by casually actuating a rondier on live equipment.

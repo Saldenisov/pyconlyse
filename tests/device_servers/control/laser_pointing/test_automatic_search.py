@@ -221,14 +221,12 @@ def test_numbered_point_attempts_all_diaphragms_before_reporting_failure():
     ]
 
 
-def test_working_point_forces_every_configured_diaphragm_to_100_first():
+def test_working_point_sets_waveplate_then_forces_every_diaphragm_open():
     controller = object.__new__(DS_LaserPointing)
     controller.ds_dict = {
         "MainLaserDiaphragm1": "main",
         "CrimpingDiaphragm1": "iris-1",
         "CrimpingDiaphragm2": "iris-2",
-        "Shutter1": "shutter-1",
-        "Shutter2": "shutter-2",
         "HalfWavePlate1": "wave-plate",
     }
     controller.controller_rules = {
@@ -250,12 +248,40 @@ def test_working_point_forces_every_configured_diaphragm_to_100_first():
     DS_LaserPointing._apply_point(controller, "working", {})
 
     assert events == [
+        ("HalfWavePlate1", 20.5),
         ("MainLaserDiaphragm1", 100.0),
         ("CrimpingDiaphragm1", 100.0),
         ("CrimpingDiaphragm2", 100.0),
-        ("HalfWavePlate1", 20.5),
     ]
     assert controller._active_point == "working"
+
+
+def test_effective_working_rule_exposes_open_diaphragms_and_down_shutters():
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {
+        "MainLaserDiaphragm1": "main",
+        "CrimpingDiaphragm1": "iris",
+        "HalfWavePlate1": "wave-plate",
+        "Shutter1": "shutter-1",
+        "Shutter2": "shutter-2",
+    }
+    controller.controller_rules = {
+        "working": {
+            "MainLaserDiaphragm1": 75.0,
+            "HalfWavePlate1": 20.5,
+            "Shutter1": -1.0,
+        }
+    }
+
+    DS_LaserPointing._normalise_working_rule(controller)
+
+    assert controller.controller_rules["working"] == {
+        "MainLaserDiaphragm1": 100.0,
+        "CrimpingDiaphragm1": 100.0,
+        "HalfWavePlate1": 20.5,
+        "Shutter1": 1.0,
+        "Shutter2": 1.0,
+    }
 
 
 def test_working_point_attempts_all_diaphragms_when_one_fails():
@@ -293,7 +319,31 @@ def test_working_point_attempts_all_diaphragms_when_one_fails():
     assert controller._active_point == ""
 
 
-def test_working_point_commands_only_the_registered_camera_route():
+def test_working_point_refuses_to_lower_shutters_without_waveplate_target():
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {
+        "HalfWavePlate1": "wave-plate",
+        "CrimpingDiaphragm1": "iris",
+        "Shutter1": "shutter-1",
+    }
+    controller.controller_rules = {
+        "working": {"CrimpingDiaphragm1": 100.0, "Shutter1": 1.0}
+    }
+    controller._active_point = "point3"
+    controller._raise_if_cancelled = lambda: None
+    moves = []
+    controller._move_single_axis = (
+        lambda device, target, _config: moves.append((device, target))
+    )
+
+    with pytest.raises(RuntimeError, match="no registered working target"):
+        DS_LaserPointing._apply_point(controller, "working", {})
+
+    assert moves == []
+    assert controller._active_point == "point3"
+
+
+def test_working_point_lowers_every_configured_shutter_even_with_stale_rule():
     class Flipper:
         def __init__(self):
             self.commanded_flipper_state = "UNKNOWN"
@@ -321,8 +371,10 @@ def test_working_point_commands_only_the_registered_camera_route():
 
     DS_LaserPointing._apply_point(controller, "working", {})
 
-    assert flippers["Shutter1"].commands == [-1.0]
-    assert flippers["Shutter2"].commands == []
+    assert flippers["Shutter1"].commands == [1.0]
+    assert flippers["Shutter2"].commands == [1.0]
+    assert flippers["Shutter1"].commanded_flipper_state == "DOWN_CLEAR"
+    assert flippers["Shutter2"].commanded_flipper_state == "DOWN_CLEAR"
     assert controller._active_point == "working"
 
 
@@ -333,7 +385,9 @@ def test_working_point_commands_only_the_registered_camera_route():
         (2, {"Shutter1": 1.0, "Shutter2": -1.0}),
     ],
 )
-def test_all_points_preserve_the_registered_camera_route(camera_number, route):
+def test_numbered_points_preserve_route_and_working_lowers_all_shutters(
+    camera_number, route
+):
     class Flipper:
         def __init__(self):
             self.commanded_flipper_state = "UNKNOWN"
@@ -366,21 +420,18 @@ def test_all_points_preserve_the_registered_camera_route(camera_number, route):
         DS_LaserPointing._apply_point(controller, f"point{number}", {})
     DS_LaserPointing._apply_point(controller, "working", {})
 
-    for role, target in route.items():
-        assert flippers[role].commands == [target]
-        assert flippers[role].position == 0.0
-    expected_states = {
-        role: ("UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR")
-        for role, target in route.items()
-    }
-    assert {
-        role: flippers[role].commanded_flipper_state for role in route
-    } == expected_states
-    for role in set(flippers) - set(route):
-        assert flippers[role].commands == []
+    for role, flipper in flippers.items():
+        expected = []
+        if role in route:
+            expected.append(route[role])
+        if not expected or expected[-1] != 1.0:
+            expected.append(1.0)
+        assert flipper.commands == expected
+        assert flipper.position == 0.0
+        assert flipper.commanded_flipper_state == "DOWN_CLEAR"
 
 
-def test_cam2_routes_flippers_before_applying_working_optics():
+def test_cam2_applies_waveplate_then_working_optics_then_lowers_shutters():
     events = []
 
     class Flipper:
@@ -433,14 +484,14 @@ def test_cam2_routes_flippers_before_applying_working_optics():
     DS_LaserPointing._apply_point(controller, "working", {})
 
     assert events == [
-        ("Shutter1", 1.0),
-        ("Shutter2", -1.0),
+        ("HalfWavePlate1", 20.5),
         ("MainLaserDiaphragm1", 100.0),
         ("MainLaserDiaphragm2", 100.0),
         ("CrimpingDiaphragm1", 100.0),
         ("CrimpingDiaphragm2", 100.0),
         ("TranslationStage1", (3, 0.0)),
-        ("HalfWavePlate1", 20.5),
+        ("Shutter1", 1.0),
+        ("Shutter2", 1.0),
     ]
     assert controller._active_point == "working"
 
@@ -799,7 +850,7 @@ def test_invisible_directional_probe_is_rejected_without_aborting_search(
     assert result["best_position"] == [5.0, 7.0]
     assert controller._search_history[-1]["roundness_error_pct"] == 100.0
     assert controller._search_history[-1]["message"].startswith(
-        "Rejected invisible probe"
+        "Beam disappeared; rejecting probe"
     )
 
 
@@ -817,11 +868,15 @@ def test_worse_probe_returns_to_last_good_actuator_position(monkeypatch):
     controller._fresh_position_and_state = lambda _device: (0.0, "ON")
     controller._search_bounds = lambda *_args: ((-2, 2), (-2, 2))
     moves = []
+    movement_messages = []
     position = [0.0, 0.0]
 
     def move(_devices, target, _config):
         position[:] = target
         moves.append(tuple(target))
+        movement_messages.append(
+            controller._search_progress.get("message", "")
+        )
 
     controller._move_pair = move
     measured_points = []
@@ -865,6 +920,10 @@ def test_worse_probe_returns_to_last_good_actuator_position(monkeypatch):
     assert moves[:4] == [
         (0.0, 0.0), (1.0, 0.0), (0.0, 0.0), (0.0, 1.0)
     ]
+    assert movement_messages[1] == (
+        "Moving near: ActuatorX1 to 1.000 (+1.000), "
+        "ActuatorY1 to 0.000 (+0.000)"
+    )
 
 
 def test_noisier_fine_pass_retains_better_position_from_coarse_pass(monkeypatch):
@@ -985,6 +1044,85 @@ def test_cancelled_search_does_not_issue_a_rollback_move(monkeypatch):
     assert moves == []
 
 
+def test_plain_cancel_retains_last_measured_good_position(monkeypatch):
+    controller = object.__new__(DS_LaserPointing)
+    controller.pid_groups = {"group1": ("point1", "point3")}
+    controller.groups = {"Actuators 1": ("ActuatorX1", "ActuatorY1")}
+    controller._search_stop = Event()
+    controller._restore_on_cancel = False
+    controller._search_history = []
+    controller._search_progress = {}
+    controller._search_started_at = None
+    controller._raise_if_cancelled = lambda: None
+    controller._adaptive_search_model = {}
+    controller._device_for_role = {
+        "ActuatorX1": "x", "ActuatorY1": "y"
+    }.__getitem__
+    position = [0.0, 0.0]
+    controller._fresh_position_and_state = lambda device: (
+        position[0] if device == "x" else position[1], "ON"
+    )
+    controller._search_bounds = lambda *_args: ((-10, 10), (-10, 10))
+    moves = []
+
+    def move(_devices, target, _config):
+        position[:] = target
+        moves.append(tuple(target))
+
+    controller._move_pair = move
+    controller._measure_point = lambda _point, _config: (40.0, 40.0)
+    controller._read_beam_shape = lambda: {
+        "roundness_error_pct": 5.0,
+        "roundness_pct": 95.0,
+        "contour_centre_drift_px": 0.0,
+    }
+
+    def interrupted_search(objective, **_kwargs):
+        assert objective((0.0, 0.0)) == 5.0
+        # Represent a cancellation received after a command began but before
+        # the new position obtained a valid camera measurement.
+        position[:] = (4.0, -3.0)
+        controller._search_stop.set()
+        raise SearchCancelled()
+
+    monkeypatch.setitem(
+        DS_LaserPointing._optimise_group.__globals__,
+        "bounded_pattern_search",
+        interrupted_search,
+    )
+    config = DS_LaserPointing._normalise_search_config({
+        "step_schedule": [2.0],
+    })
+
+    with pytest.raises(SearchCancelled):
+        DS_LaserPointing._optimise_group(
+            controller,
+            "group1",
+            ("point1", "point3"),
+            "sensitive",
+            1,
+            2.0,
+            config,
+            {},
+        )
+
+    assert position == [0.0, 0.0]
+    assert moves[-1] == (0.0, 0.0)
+    assert controller._search_stop.is_set()
+
+
+def test_parallel_pair_move_preserves_cancellation_signal():
+    controller = object.__new__(DS_LaserPointing)
+    controller._move_single_axis = lambda *_args: (_ for _ in ()).throw(
+        SearchCancelled()
+    )
+
+    with pytest.raises(SearchCancelled):
+        DS_LaserPointing._move_pair(
+            controller, ("x", "y"), (1.0, 2.0), {}
+        )
+
+
 def test_measurement_retries_a_transient_invalid_camera_frame():
     import numpy as np
 
@@ -1024,6 +1162,103 @@ def test_measurement_retries_a_transient_invalid_camera_frame():
     ) == pytest.approx((34.0, 42.0), abs=0.25)
     assert controller._read_beam_shape()["contour_count"] >= 3
     assert waits == [0.25, 0.25]
+
+
+def test_aperture_cycle_sweeps_repeats_and_finishes_closed():
+    controller = object.__new__(DS_LaserPointing)
+    controller.controller_rules = {
+        "point1": {"CrimpingDiaphragm1": 10.0},
+        "point3": {"CrimpingDiaphragm1": 5.0},
+    }
+    controller._active_point = "point3"
+    controller._search_stop = Event()
+    controller._search_progress = {}
+    controller._raise_if_cancelled = lambda: None
+    controller._device_for_role = lambda role: role
+    aperture_position = [5.0]
+    moves = []
+
+    def move(_device, target, _config):
+        aperture_position[0] = float(target)
+        moves.append(float(target))
+
+    def measure(_point, _config):
+        displacement = 0.2 * (aperture_position[0] - 5.0)
+        return 40.0 + displacement, 40.0
+
+    def shape():
+        return {
+            "roundness_error_pct": 4.0,
+            "roundness_pct": 96.0,
+            "shape_centroid": [40.0, 40.0],
+            "sigma_major_px": 10.0,
+        }
+
+    controller._move_single_axis = move
+    controller._measure_point = measure
+    controller._read_beam_shape = shape
+    config = DS_LaserPointing._normalise_search_config({
+        "aperture_sweep_positions": 3,
+        "aperture_cycle_count": 2,
+        "aperture_samples": 1,
+    })
+
+    centroid = DS_LaserPointing._measure_aperture_cycle(
+        controller, ("point1", "point3"), config
+    )
+
+    assert moves == [7.5, 10.0, 5.0, 10.0, 5.0, 10.0, 5.0]
+    assert aperture_position == [5.0]
+    assert centroid[0] == pytest.approx(40.25)
+    assert controller._last_beam_shape["aperture_measurement_count"] == 8
+    assert controller._last_beam_shape["aperture_centre_drift_px"] > 0
+    assert controller._last_beam_shape["roundness_error_pct"] > 4.0
+    assert controller._search_progress["phase"] == "aperture_cycle_measured"
+
+
+def test_failed_aperture_measurement_restores_closed_position():
+    controller = object.__new__(DS_LaserPointing)
+    controller.controller_rules = {
+        "point4": {"CrimpingDiaphragm2": 15.0},
+        "point6": {"CrimpingDiaphragm2": 5.0},
+    }
+    controller._active_point = "point6"
+    controller._search_stop = Event()
+    controller._search_progress = {}
+    controller._raise_if_cancelled = lambda: None
+    controller._device_for_role = lambda role: role
+    aperture_position = [5.0]
+    moves = []
+
+    def move(_device, target, _config):
+        aperture_position[0] = float(target)
+        moves.append(float(target))
+
+    def measure(_point, _config):
+        if aperture_position[0] > 5.0:
+            raise LaserNotVisible("beam disappeared")
+        return 40.0, 40.0
+
+    controller._move_single_axis = move
+    controller._measure_point = measure
+    controller._read_beam_shape = lambda: {
+        "roundness_error_pct": 4.0,
+        "roundness_pct": 96.0,
+        "shape_centroid": [40.0, 40.0],
+        "sigma_major_px": 10.0,
+    }
+    config = DS_LaserPointing._normalise_search_config({
+        "aperture_sweep_positions": 3,
+    })
+
+    with pytest.raises(LaserNotVisible, match="beam disappeared"):
+        DS_LaserPointing._measure_aperture_cycle(
+            controller, ("point4", "point6"), config
+        )
+
+    assert moves == [10.0, 5.0]
+    assert aperture_position == [5.0]
+    assert controller._active_point == "point6"
 
 
 def test_measurement_discards_a_beamless_pulsed_laser_frame():
@@ -1151,6 +1386,10 @@ def test_automatic_worker_revisits_both_points_before_declaring_convergence():
     }
     stored_candidates = []
     controller._store_pending_reference = stored_candidates.append
+    accepted_metadata = []
+    controller._accept_pending_alignment_reference = lambda metadata: (
+        accepted_metadata.append(metadata) or 2
+    )
     controller._record_alignment_event = lambda *_args, **_kwargs: None
     controller._raise_if_cancelled = lambda: None
     controller._validate_camera_verified_roles = lambda *_args: None
@@ -1190,8 +1429,14 @@ def test_automatic_worker_revisits_both_points_before_declaring_convergence():
 
     DS_LaserPointing._automatic_search_worker(controller, config)
 
-    assert controller._search_status == "awaiting acceptance"
+    assert controller._search_status == "finished"
     assert stored_candidates[0]["converged"] is True
+    assert accepted_metadata == [{
+        "client": "automatic-search",
+        "automatic": True,
+    }]
+    assert controller._search_progress["acceptance_required"] is False
+    assert controller._search_progress["accepted_reference_revision"] == 2
     assert [(item["point"], item["roundness_error_pct"])
             for item in controller._search_progress["verification"]] == [
         ("point3", 2.0), ("point6", 2.0)
@@ -1201,6 +1446,81 @@ def test_automatic_worker_revisits_both_points_before_declaring_convergence():
         ("measure", "point3"), ("measure", "point6"),
     ]
     assert ("optimise", "near", 1.0) in calls
+
+
+def test_automatic_worker_stops_after_five_complete_stagnant_passes():
+    controller = object.__new__(DS_LaserPointing)
+    controller.devices = {"camera": type("Camera", (), {"isgrabbing": True})()}
+    controller.ds_dict = {"Camera": "camera"}
+    controller.pid_groups = {
+        "near": ("point1", "point3"),
+        "far": ("point4", "point6"),
+    }
+    controller._search_stop = Event()
+    controller._search_pause = Event()
+    controller._search_progress = {}
+    controller._search_history = []
+    controller._search_status = "running"
+    controller._search_started_at = None
+    controller._search_session_id = "session-stagnant"
+    controller._pause_active = False
+    controller.cgc = True
+    controller._active_point = "point3"
+    controller._capture_alignment_state = lambda: {
+        "active_point": controller._active_point,
+        "actuators": {},
+        "optics": {},
+    }
+    stored_candidates = []
+    controller._store_pending_reference = stored_candidates.append
+    controller._accept_pending_alignment_reference = lambda _metadata: (
+        pytest.fail("a stagnant result must not be saved automatically")
+    )
+    events = []
+    controller._record_alignment_event = (
+        lambda event_type, **details: events.append((event_type, details))
+    )
+    controller._raise_if_cancelled = lambda: None
+    controller._validate_camera_verified_roles = lambda *_args: None
+    controller._point_stages = lambda _config: [("sensitive", [
+        ("near", ("point1", "point3")),
+        ("far", ("point4", "point6")),
+    ])]
+    optimised_groups = []
+
+    def optimise(group, _pair, _stage, _cycle, _step, _config, _origins):
+        optimised_groups.append(group)
+        return {"best_roundness_error_pct": 10.0}
+
+    current_point = [""]
+    controller._optimise_group = optimise
+    controller._measure_aperture_cycle = lambda pair, _config: (
+        current_point.__setitem__(0, pair[-1]) or (20.0, 20.0)
+    )
+    controller._read_beam_shape = lambda: {
+        "roundness_error_pct": 10.0,
+        "shape_centroid": [20.0, 20.0],
+    }
+    config = DS_LaserPointing._normalise_search_config({
+        "step_schedule": [6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        "max_cycles": 2,
+        "roundness_tolerance_pct": 7.0,
+        "stagnation_pass_limit": 5,
+        "stagnation_min_improvement_pct": 5.0,
+    })
+
+    DS_LaserPointing._automatic_search_worker(controller, config)
+
+    assert optimised_groups == ["near", "far"] * 5
+    assert stored_candidates == []
+    assert controller._search_status == "finished; no roundness improvement"
+    assert controller._search_progress["phase"] == "stopped_no_improvement"
+    assert controller._search_progress["completed_passes"] == 5
+    assert controller._search_progress["stagnant_passes"] == 5
+    assert controller._search_progress["current_alignment_kept"] is True
+    assert controller._search_progress["acceptance_required"] is False
+    assert controller.cgc is False
+    assert events[-1][0] == "search_stopped_no_improvement"
 
 
 def test_pause_and_continue_keep_the_same_search_worker():
@@ -1228,6 +1548,69 @@ def test_pause_and_continue_keep_the_same_search_worker():
     assert not controller._search_pause.is_set()
     assert controller._search_status == "running"
     assert events == ["pause_requested", "resume_requested"]
+
+
+def test_plain_cancel_requests_stop_without_restoring_current_alignment():
+    class RunningThread:
+        @staticmethod
+        def is_alive():
+            return True
+
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_thread = RunningThread()
+    controller._search_stop = Event()
+    controller._search_pause = Event()
+    controller._search_pause.set()
+    controller._alignment_pending_reference = {}
+    controller._search_status = "paused"
+    controller._search_progress = {"phase": "paused"}
+    controller._search_session_id = "session-1"
+    controller.cgc = True
+    events = []
+    controller._record_alignment_event = (
+        lambda event_type, **_details: events.append(event_type)
+    )
+
+    assert DS_LaserPointing.cancel_automatic_search(controller) == 0
+    assert controller._search_stop.is_set()
+    assert not controller._search_pause.is_set()
+    assert controller._restore_on_cancel is False
+    assert controller._search_status == "cancelling; keeping current"
+    assert controller.cgc is False
+    assert events == ["cancel_keep_current_requested"]
+
+
+def test_plain_cancel_discards_pending_decision_without_hardware_restore():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_thread = None
+    controller._alignment_pending_reference = {
+        "session_id": "session-2", "active_point": "point6"
+    }
+    controller.controller_rules = {"point6": {}}
+    controller._active_point = ""
+    controller._actuator_initialization_status = {}
+    controller._search_status = "not converged; awaiting operator decision"
+    controller._search_progress = {"phase": "not_converged"}
+    controller._search_session_id = "session-2"
+    cleared = []
+    events = []
+
+    def clear_pending():
+        cleared.append(True)
+        controller._alignment_pending_reference = {}
+
+    controller._clear_pending_reference = clear_pending
+    controller._record_alignment_event = (
+        lambda event_type, **_details: events.append(event_type)
+    )
+
+    assert DS_LaserPointing.cancel_automatic_search(controller) == 0
+    assert cleared == [True]
+    assert controller._search_status == "cancelled; current alignment kept"
+    assert controller._search_progress["phase"] == "cancelled_keep_current"
+    assert controller._active_point == "point6"
+    assert controller._actuator_initialization_status["group"] == 2
+    assert events == ["completed_alignment_kept_without_reference"]
 
 
 def test_pause_checkpoint_restores_in_progress_search_phase_on_continue():
@@ -1343,6 +1726,49 @@ def test_accept_reference_appends_revision_without_erasing_history():
     assert len(controller._alignment_reference_history) == 2
     assert persisted[0]["alignment_reference_history_property"][0] == old_reference
     assert controller._alignment_pending_reference == {}
+
+
+def test_manual_alignment_can_be_saved_as_next_day_reference_without_search():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_thread = None
+    controller._point_application_thread = None
+    controller._alignment_pending_reference = {}
+    controller._alignment_reference = {}
+    controller._alignment_reference_history = []
+    controller._search_config = {"position_tolerance": 0.05}
+    controller._search_progress = {}
+    controller._capture_alignment_state = lambda: {
+        "active_point": "point6",
+        "actuators": {
+            "ActuatorX4": {"position": 12.5},
+            "ActuatorY4": {"position": -3.0},
+        },
+        "optics": {},
+    }
+    persisted = []
+    events = []
+    controller._persist_alignment_properties = persisted.append
+    controller._record_alignment_event = (
+        lambda event_type, **details: events.append((event_type, details))
+    )
+    controller._push_alignment_value = lambda *_args, **_kwargs: None
+
+    revision = DS_LaserPointing.save_current_alignment_reference(
+        controller, json.dumps({"client": "pyqt5"})
+    )
+
+    assert revision == 1
+    assert controller._alignment_reference["source"] == "manual"
+    assert controller._alignment_reference["manual_reference"] is True
+    assert controller._alignment_reference["acceptance"] == {
+        "client": "pyqt5", "manual": True
+    }
+    assert controller._alignment_reference["actuators"][
+        "ActuatorX4"
+    ]["position"] == 12.5
+    assert controller._search_status == "reference accepted"
+    assert persisted[-1]["alignment_pending_reference_property"] == "{}"
+    assert events[-1][0] == "reference_accepted"
 
 
 def test_reference_acceptance_detects_post_search_hardware_movement():
@@ -1612,6 +2038,222 @@ def test_pattern_search_never_proposes_outside_bounds():
     assert all(8.0 <= x <= 10.0 and -10.0 <= y <= -8.0 for x, y in observed)
 
 
+def test_pattern_search_applies_a_smaller_learned_limit_during_same_run():
+    observed = []
+    learned_limit = [0.5]
+
+    def objective(position):
+        observed.append(position)
+        if position == (0.5, 0.0):
+            learned_limit[0] = 0.25
+        return 10.0
+
+    bounded_pattern_search(
+        objective,
+        start=(0.0, 0.0),
+        bounds=((-20.0, 20.0), (-20.0, 20.0)),
+        parameters=SearchParameters(
+            initial_step=10.0,
+            minimum_step=10.0,
+            tolerance_px=0.0,
+            max_evaluations=5,
+            step_schedule=(10.0,),
+            probe_repetitions=1,
+        ),
+        step_limit=lambda: learned_limit[0],
+    )
+
+    assert observed == [
+        (0.0, 0.0),
+        (0.5, 0.0),
+        (-0.25, 0.0),
+        (0.0, 0.25),
+        (0.0, -0.25),
+    ]
+
+
+def test_pattern_search_stops_one_actuator_group_after_five_plateau_probes():
+    observed = []
+
+    result = bounded_pattern_search(
+        lambda position: observed.append(position) or 20.0,
+        start=(0.0, 0.0),
+        bounds=((-20.0, 20.0), (-20.0, 20.0)),
+        parameters=SearchParameters(
+            initial_step=2.0,
+            minimum_step=0.125,
+            tolerance_px=7.0,
+            max_evaluations=20,
+            plateau_evaluations=5,
+            plateau_min_improvement=5.0,
+        ),
+    )
+
+    assert result.reason == "plateau"
+    assert result.evaluations == 6
+    assert len(observed) == 6
+    assert result.best_score == 20.0
+
+
+def test_five_percent_cumulative_improvement_resets_local_plateau_counter():
+    scores = iter((20.0, 18.0, 15.0, 15.0, 15.0, 15.0, 15.0, 15.0))
+
+    result = bounded_pattern_search(
+        lambda _position: next(scores),
+        start=(0.0, 0.0),
+        bounds=((-20.0, 20.0), (-20.0, 20.0)),
+        parameters=SearchParameters(
+            initial_step=2.0,
+            minimum_step=0.125,
+            tolerance_px=7.0,
+            max_evaluations=20,
+            plateau_evaluations=5,
+            plateau_min_improvement=5.0,
+        ),
+    )
+
+    assert result.reason == "plateau"
+    assert result.evaluations == 8
+    assert result.best_score == 15.0
+
+
+def test_cam2_point6_uses_persistent_adaptive_half_step_safety_limit():
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {"Camera": "manip/V0/Cam2_V0"}
+    controller._adaptive_search_model = {}
+    persisted = []
+    controller._persist_alignment_properties = persisted.append
+    config = DS_LaserPointing._normalise_search_config({
+        "adaptive_min_step": 2.0,
+    })
+
+    assert DS_LaserPointing._adaptive_step_limit(
+        controller, "group2", "point6", 10.0, config
+    ) == 0.5
+    assert DS_LaserPointing._adaptive_probe_repetitions(
+        controller, "point6", config
+    ) == 1
+
+    learning_config = DS_LaserPointing._normalise_search_config({
+        "adaptive_min_step": 0.125,
+    })
+
+    DS_LaserPointing._learn_from_probe(
+        controller,
+        "group2",
+        "point6",
+        ("ActuatorX4", "ActuatorY4"),
+        (0.0, 0.0),
+        (0.5, 0.0),
+        8.0,
+        None,
+        {"shape_centroid": [40.0, 40.0]},
+        None,
+        False,
+        10.0,
+        learning_config,
+        error="beam disappeared",
+    )
+
+    key = "manip/v0/cam2_v0|point6|group2"
+    model = controller._adaptive_search_model[key]
+    # A user-configured adaptive floor cannot override the hard 0.5 limit,
+    # while loss of visibility halves the next permitted probe.
+    assert model["maximum_step"] == 0.5
+    assert model["safe_step"] == 0.25
+    assert model["last_probe"]["visible"] is False
+    assert model["failed_visibility_probes"] == 1
+    assert "adaptive_search_model_property" in persisted[-1]
+
+
+@pytest.mark.parametrize("score_after", [8.05, 9.0, 25.0])
+def test_visible_worse_probe_does_not_collapse_persistent_safety_step(score_after):
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {"Camera": "manip/V0/Cam2_V0"}
+    controller._adaptive_search_model = {}
+    controller._persist_alignment_properties = lambda _properties: None
+    config = DS_LaserPointing._normalise_search_config({})
+
+    for index in range(8):
+        DS_LaserPointing._learn_from_probe(
+            controller, "group2", "point6",
+            ("ActuatorX4", "ActuatorY4"),
+            (0.0, 0.0), (0.5 if index % 2 else -0.5, 0.0),
+            8.0, score_after,
+            {"shape_centroid": [40.0, 40.0]},
+            {"shape_centroid": [40.2, 40.1]},
+            True, 10.0, config,
+        )
+
+    model = controller._adaptive_search_model["manip/v0/cam2_v0|point6|group2"]
+    assert model["safe_step"] == 0.5
+    assert model["successful_probes"] == 8
+    assert model["failed_visibility_probes"] == 0
+    assert DS_LaserPointing._adaptive_step_limit(
+        controller, "group2", "point6", 10.0, config
+    ) == 0.5
+
+
+def test_visible_worse_probe_preserves_an_existing_visibility_backoff():
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {"Camera": "manip/V0/Cam2_V0"}
+    key = "manip/v0/cam2_v0|point6|group2"
+    controller._adaptive_search_model = {key: {
+        "safe_step": 0.25, "failed_visibility_probes": 1, "axes": {},
+    }}
+    controller._persist_alignment_properties = lambda _properties: None
+    config = DS_LaserPointing._normalise_search_config({})
+
+    DS_LaserPointing._learn_from_probe(
+        controller, "group2", "point6", ("ActuatorX4", "ActuatorY4"),
+        (0.0, 0.0), (0.25, 0.0), 8.0, 12.0,
+        {"shape_centroid": [40.0, 40.0]},
+        {"shape_centroid": [40.2, 40.1]}, True, 10.0, config,
+    )
+
+    assert controller._adaptive_search_model[key]["safe_step"] == 0.25
+    assert controller._adaptive_search_model[key]["failed_visibility_probes"] == 1
+
+
+def test_adaptive_model_remembers_effect_and_prioritises_good_direction():
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {"Camera": "manip/V0/Cam2_V0"}
+    controller._adaptive_search_model = {}
+    controller._persist_alignment_properties = lambda _properties: None
+    config = DS_LaserPointing._normalise_search_config({
+        "adaptive_min_step": 0.125,
+    })
+
+    DS_LaserPointing._learn_from_probe(
+        controller,
+        "group2",
+        "point6",
+        ("ActuatorX4", "ActuatorY4"),
+        (0.0, 0.0),
+        (-0.5, 0.0),
+        9.0,
+        6.0,
+        {"shape_centroid": [40.0, 40.0]},
+        {"shape_centroid": [40.2, 39.9]},
+        True,
+        10.0,
+        config,
+    )
+
+    order = DS_LaserPointing._adaptive_direction_order(
+        controller,
+        "group2",
+        "point6",
+        ("ActuatorX4", "ActuatorY4"),
+    )
+    key = "manip/v0/cam2_v0|point6|group2"
+    statistics = controller._adaptive_search_model[key]["axes"][
+        "ActuatorX4"
+    ]["negative"]
+    assert statistics["mean_improvement_per_step"] == pytest.approx(6.0)
+    assert order[0] == (-1.0, 0.0)
+
+
 def test_pattern_search_honours_cancellation_before_moving():
     calls = []
 
@@ -1703,6 +2345,8 @@ def test_optical_signature_prevents_false_stiction_from_equal_scores():
         SearchParameters(max_evaluations=0),
         SearchParameters(step_schedule=(10.0, 6.0, 6.0)),
         SearchParameters(probe_repetitions=0),
+        SearchParameters(plateau_evaluations=-1),
+        SearchParameters(plateau_min_improvement=-1.0),
     ],
 )
 def test_invalid_search_parameters_are_rejected(parameters):

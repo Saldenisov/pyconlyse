@@ -1,0 +1,111 @@
+diff --git a/src/lvkit/codegen/context.py b/src/lvkit/codegen/context.py
+index 41a58ef..d6551c6 100644
+--- a/src/lvkit/codegen/context.py
++++ b/src/lvkit/codegen/context.py
+@@ -643,6 +643,17 @@ def _bind_inputs_and_constants(
+                     ctx.add_import(f"from .{func} import {func}")
+ 
+ 
++def _python_float_constant(value: float) -> str:
++    """Emit nonfinite numbers as executable expressions, never free names."""
++    import math
++
++    if math.isnan(value):
++        return "float('nan')"
++    if math.isinf(value):
++        return "float('-inf')" if value < 0 else "float('inf')"
++    return repr(value)
++
++
+ def _decode_numeric_constant(value: str, underlying_type: str) -> str:
+     """Decode a numeric constant using its LabVIEW type.
+ 
+@@ -658,7 +669,7 @@ def _decode_numeric_constant(value: str, underlying_type: str) -> str:
+     except ValueError:
+         pass
+     try:
+-        return str(float(value))
++        return _python_float_constant(float(value))
+     except ValueError:
+         pass
+ 
+@@ -673,11 +684,11 @@ def _decode_numeric_constant(value: str, underlying_type: str) -> str:
+     if "Float64" in underlying_type or "DBL" in underlying_type:
+         hex_padded = value.zfill(16)
+         float_val = struct.unpack(">d", bytes.fromhex(hex_padded))[0]
+-        return str(float_val)
++        return _python_float_constant(float_val)
+     if "Float32" in underlying_type or "SGL" in underlying_type:
+         hex_padded = value.zfill(8)
+         float_val = struct.unpack(">f", bytes.fromhex(hex_padded))[0]
+-        return str(float_val)
++        return _python_float_constant(float_val)
+     # Integer types (Int8, Int16, Int32, Int64, UInt*, etc.)
+     return str(int(value, 16))
+ 
+@@ -811,7 +822,9 @@ def _format_constant(const: Constant | ConstantNode) -> str:
+             return repr(value)
+ 
+     # Already-decoded Python values
+-    if isinstance(value, int | float):
++    if isinstance(value, float):
++        return _python_float_constant(value)
++    if isinstance(value, int):
+         return str(value)
+ 
+     # No type info — best-effort fallback
+@@ -825,7 +838,7 @@ def _format_constant(const: Constant | ConstantNode) -> str:
+         except ValueError:
+             pass
+         try:
+-            return str(float(value))
++            return _python_float_constant(float(value))
+         except ValueError:
+             pass
+         if len(value) == 1 and not value.isprintable():
+diff --git a/tests/test_trancon_nonfinite_constants.py b/tests/test_trancon_nonfinite_constants.py
+new file mode 100644
+index 0000000..d3bc923
+--- /dev/null
++++ b/tests/test_trancon_nonfinite_constants.py
+@@ -0,0 +1,40 @@
++"""Regression gates for executable scalar NaN/Inf constants in lvkit."""
++
++import math
++import unittest
++
++from lvkit.codegen.context import _decode_numeric_constant, _format_constant
++from lvkit.graph.models import Constant
++from lvkit.models import LVType, LVTypeKind
++
++
++class NonfiniteConstantTests(unittest.TestCase):
++    def assert_number(self, expression, expected):
++        actual = eval(expression, {})
++        if math.isnan(expected):
++            self.assertTrue(math.isnan(actual))
++        else:
++            self.assertEqual(actual, expected)
++            self.assertEqual(math.copysign(1, actual), math.copysign(1, expected))
++
++    def test_scalar_decimal_and_hex_nonfinite_constants(self):
++        for value, expected in (("nan", float("nan")), ("inf", float("inf")),
++                                ("-inf", -float("inf")), ("-0.0", -0.0),
++                                ("7FF8000000000000", float("nan")),
++                                ("7FF0000000000000", float("inf")),
++                                ("FFF0000000000000", -float("inf"))):
++            with self.subTest(value=value):
++                self.assert_number(_decode_numeric_constant(value, "NumFloat64"), expected)
++
++    def test_already_decoded_floats_are_executable(self):
++        kind = LVType(kind=LVTypeKind.PRIMITIVE, underlying_type="NumFloat64")
++        for value in (float("nan"), float("inf"), -float("inf"), -0.0, 2.5):
++            self.assert_number(_format_constant(Constant(id="scalar", value=value, lv_type=kind)), value)
++
++    def test_text_nan_remains_text(self):
++        kind = LVType(kind=LVTypeKind.PRIMITIVE, underlying_type="String")
++        self.assertEqual(eval(_format_constant(Constant(id="text", value="nan", lv_type=kind))), "nan")
++
++
++if __name__ == "__main__":
++    unittest.main(verbosity=2)

@@ -5,6 +5,7 @@ import time
 import zlib
 from abc import abstractmethod
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, RLock, Thread, current_thread
 from typing import Any, Dict, Union
@@ -23,6 +24,12 @@ from DeviceServers.base.hardware_lifecycle import (
     InitializationState,
     lifecycle_value,
 )
+
+PROCESS_STARTED_AT_UTC = datetime.now(timezone.utc).isoformat()
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 # Centralized global settings for all DeviceServers
 # These can be overridden via a single JSON config file, environment variables, or at runtime via commands
@@ -215,6 +222,22 @@ class DS_General(Device):
         ],
     }
 
+    _TRACKING_EVENT_ATTRIBUTES = (
+        "State",
+        "Status",
+        "last_error",
+        "process_started_at_utc",
+        "initialization_started_at_utc",
+        "initialization_completed_at_utc",
+        "initialization_duration_ms",
+        "last_error_at_utc",
+        "error_count",
+        "last_state_change_at_utc",
+        "hardware_connection_state",
+        "initialization_state",
+        "hardware_lifecycle_status",
+    )
+
     @property
     def _version_(self):
         raise NotImplementedError
@@ -290,6 +313,123 @@ class DS_General(Device):
         return self._error
 
     @attribute(
+        label="Process started at (UTC)",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=polling_main,
+    )
+    def process_started_at_utc(self):
+        return getattr(self, "_process_started_at_utc", PROCESS_STARTED_AT_UTC)
+
+    @attribute(
+        label="Initialisation started at (UTC)",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=polling_main,
+    )
+    def initialization_started_at_utc(self):
+        return getattr(self, "_initialization_started_at_utc", "")
+
+    @attribute(
+        label="Initialisation completed at (UTC)",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=polling_main,
+    )
+    def initialization_completed_at_utc(self):
+        return getattr(self, "_initialization_completed_at_utc", "")
+
+    @attribute(
+        label="Initialisation duration (ms)",
+        dtype=float,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=polling_main,
+    )
+    def initialization_duration_ms(self):
+        return float(getattr(self, "_initialization_duration_ms", 0.0))
+
+    @attribute(
+        label="Last error at (UTC)",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=polling_main,
+    )
+    def last_error_at_utc(self):
+        return getattr(self, "_last_error_at_utc", "")
+
+    @attribute(
+        label="Error count since process start",
+        dtype=int,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=polling_main,
+    )
+    def error_count(self):
+        return int(getattr(self, "_error_count", 0))
+
+    @attribute(
+        label="Last Tango state change at (UTC)",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=polling_main,
+    )
+    def last_state_change_at_utc(self):
+        return getattr(self, "_last_state_change_at_utc", "")
+
+    def set_state(self, state):
+        """Track real Tango state transitions without creating polling records."""
+
+        previous = getattr(self, "_tracked_tango_state", None)
+        Device.set_state(self, state)
+        if previous != state:
+            self._tracked_tango_state = state
+            self._last_state_change_at_utc = _utc_now_iso()
+            self._push_tracking_event("State", state)
+            self._push_tracking_event(
+                "last_state_change_at_utc", self._last_state_change_at_utc
+            )
+
+    def set_status(self, status):
+        """Push status only when it actually changes."""
+
+        text = str(status)
+        previous = getattr(self, "_tracked_tango_status", None)
+        Device.set_status(self, text)
+        if previous != text:
+            self._tracked_tango_status = text
+            self._push_tracking_event("Status", text)
+
+    def _configure_tracking_events(self):
+        """Enable device-pushed, change-only lifecycle archive events."""
+
+        self._tracking_events_ready = False
+        for name in self._TRACKING_EVENT_ATTRIBUTES:
+            try:
+                self.set_change_event(name, True, False)
+                self.set_archive_event(name, True, False)
+            except Exception as exc:
+                self.warn_stream(f"Cannot configure tracking event {name}: {exc}")
+        self._tracking_events_ready = True
+
+    def _push_tracking_event(self, name, value):
+        if not getattr(self, "_tracking_events_ready", False):
+            return
+        try:
+            self.push_change_event(name, value)
+        except Exception as exc:
+            self.warn_stream(f"Cannot push change event {name}: {exc}")
+        try:
+            self.push_archive_event(name, value)
+        except Exception as exc:
+            self.warn_stream(f"Cannot push archive event {name}: {exc}")
+
+    @attribute(
         label="Hardware connection",
         dtype=str,
         display_level=DispLevel.OPERATOR,
@@ -334,6 +474,9 @@ class DS_General(Device):
         process itself is unavailable.  That is determined externally by a
         DeviceProxy/Astor reachability check.
         """
+        previous_connection_state = getattr(self, "_hardware_connection_state", None)
+        previous_initialization_state = getattr(self, "_initialization_state", None)
+        previous_detail = getattr(self, "_hardware_lifecycle_status", None)
         self._hardware_connection_state = lifecycle_value(
             connection_state,
             HardwareConnectionState,
@@ -345,6 +488,34 @@ class DS_General(Device):
             InitializationState.UNKNOWN,
         )
         self._hardware_lifecycle_status = str(detail or "")
+        if (
+            self._initialization_state != InitializationState.UNKNOWN.value
+            and self._initialization_state != previous_initialization_state
+        ):
+            self._initialization_completed_at_utc = _utc_now_iso()
+            started = getattr(self, "_initialization_started_monotonic", None)
+            if isinstance(started, (int, float)):
+                self._initialization_duration_ms = max(
+                    0.0, (time.monotonic() - started) * 1000.0
+                )
+            self._push_tracking_event(
+                "initialization_completed_at_utc",
+                getattr(self, "_initialization_completed_at_utc", ""),
+            )
+            self._push_tracking_event(
+                "initialization_duration_ms",
+                float(getattr(self, "_initialization_duration_ms", 0.0)),
+            )
+        if previous_connection_state != self._hardware_connection_state:
+            self._push_tracking_event(
+                "hardware_connection_state", self._hardware_connection_state
+            )
+        if previous_initialization_state != self._initialization_state:
+            self._push_tracking_event("initialization_state", self._initialization_state)
+        if previous_detail != self._hardware_lifecycle_status:
+            self._push_tracking_event(
+                "hardware_lifecycle_status", self._hardware_lifecycle_status
+            )
 
     @attribute(
         label="URI",
@@ -358,7 +529,12 @@ class DS_General(Device):
 
     def error(self, error_in):
         self.error_stream(error_in)
-        self._error = error_in
+        self._error = str(error_in)
+        self._last_error_at_utc = _utc_now_iso()
+        self._error_count = int(getattr(self, "_error_count", 0)) + 1
+        self._push_tracking_event("last_error", self._error)
+        self._push_tracking_event("last_error_at_utc", self._last_error_at_utc)
+        self._push_tracking_event("error_count", self._error_count)
         self._n = 0
         print(error_in)
 
@@ -393,6 +569,17 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        self._process_started_at_utc = PROCESS_STARTED_AT_UTC
+        self._initialization_started_at_utc = _utc_now_iso()
+        self._initialization_started_monotonic = time.monotonic()
+        self._initialization_completed_at_utc = ""
+        self._initialization_duration_ms = 0.0
+        self._last_error_at_utc = ""
+        self._error_count = 0
+        self._last_state_change_at_utc = self._initialization_started_at_utc
+        self._tracked_tango_state = None
+        self._tracked_tango_status = None
+        self._tracking_events_ready = False
         self._stop_error_timer()
         self._stop_power_dependency_monitor()
         self._lifecycle_lock = RLock()
@@ -427,6 +614,14 @@ class DS_General(Device):
         except BaseException:
             self._stop_error_timer()
             raise
+
+        self._configure_tracking_events()
+        self._push_tracking_event(
+            "process_started_at_utc", self._process_started_at_utc
+        )
+        self._push_tracking_event(
+            "initialization_started_at_utc", self._initialization_started_at_utc
+        )
 
         self._start_error_timer()
         try:

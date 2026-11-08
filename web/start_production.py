@@ -35,10 +35,32 @@ def configure_production_environment(environ=None):
     """Apply production-safe defaults before importing the Flask application."""
     environ = os.environ if environ is None else environ
     environ["PYCONLYSE_PRODUCTION"] = "true"
-    for name in ("JWT_SECRET_KEY", "PYCONLYSE_AUTH_USERS"):
-        if not environ.get(name, "").strip():
-            raise RuntimeError(f"{name} must be set before starting production")
+    if not environ.get("JWT_SECRET_KEY", "").strip():
+        raise RuntimeError("JWT_SECRET_KEY must be set before starting production")
+    if not (
+        environ.get("PYCONLYSE_AUTH_USERS", "").strip()
+        or environ.get("PYCONLYSE_AUTH_USERS_FILE", "").strip()
+    ):
+        raise RuntimeError(
+            "PYCONLYSE_AUTH_USERS or PYCONLYSE_AUTH_USERS_FILE must be set "
+            "before starting production"
+        )
     _validate_production_jwt_secret(environ["JWT_SECRET_KEY"].strip())
+    default_audit_root = Path(
+        environ.get("PROGRAMDATA", r"C:\ProgramData")
+        if os.name == "nt"
+        else "/var/lib"
+    )
+    environ.setdefault(
+        "PYCONLYSE_AUDIT_DB_PATH",
+        str(default_audit_root / "Pyconlyse" / "audit.sqlite3"),
+    )
+    environ.setdefault(
+        "PYCONLYSE_TREATMENT_STATE_DB",
+        str(default_audit_root / "Pyconlyse" / "treatment_state.sqlite3"),
+    )
+    if not Path(environ["PYCONLYSE_AUDIT_DB_PATH"]).is_absolute():
+        raise RuntimeError("PYCONLYSE_AUDIT_DB_PATH must be absolute")
     environ.setdefault("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
     if str(environ["PYCONLYSE_ENFORCE_DEVICE_AUTH"]).strip().lower() not in (
         "1", "true", "yes", "y", "on"

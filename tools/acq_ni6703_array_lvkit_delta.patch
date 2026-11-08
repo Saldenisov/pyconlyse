@@ -1,0 +1,97 @@
+diff --git a/src/lvkit/codegen/elementwise.py b/src/lvkit/codegen/elementwise.py
+index 5a4209e..ffde7d9 100644
+--- a/src/lvkit/codegen/elementwise.py
++++ b/src/lvkit/codegen/elementwise.py
+@@ -99,6 +99,7 @@ class _ArrayifyBase(ast.NodeTransformer):
+     BinOp/UnaryOp/Compare is shared so it lives in exactly one place."""
+ 
+     used: bool = False
++    preserve_list_concat: bool = True
+ 
+     def _should(self, *operands: ast.expr) -> bool:
+         raise NotImplementedError
+@@ -114,7 +115,7 @@ class _ArrayifyBase(ast.NodeTransformer):
+             # `_lv.add` (which zips and truncates). Element-wise add / broadcast
+             # (`arr + arr`, `5.0 + arr[:3]`) has no list-literal and is not
+             # both-list-shaped, so it still rewrites.
+-            if isinstance(node.op, ast.Add) and (
++            if self.preserve_list_concat and isinstance(node.op, ast.Add) and (
+                 isinstance(node.left, ast.List)
+                 or isinstance(node.right, ast.List)
+                 or (_is_list_shaped(node.left) and _is_list_shaped(node.right))
+@@ -162,6 +163,11 @@ class _Arrayify(_ArrayifyBase):
+     """Rewrite every numeric operator — used per-node when the whole template
+     expression is already known to be array-valued."""
+ 
++    # The caller has a typed numeric primitive, not Build Array. A literal
++    # array operand (e.g. an AO offset vector) still means element-wise Add.
++    # Keep the concatenation heuristic only for the whole-module fallback.
++    preserve_list_concat = False
++
+     def _should(self, *operands: ast.expr) -> bool:
+         return True
+ 
+diff --git a/tests/test_array_ops_codegen.py b/tests/test_array_ops_codegen.py
+index 4918363..9f73f32 100644
+--- a/tests/test_array_ops_codegen.py
++++ b/tests/test_array_ops_codegen.py
+@@ -30,8 +30,11 @@ def _compile_and_run(statements: list, local_vars: dict) -> dict:
+     module = ast.Module(body=statements, type_ignores=[])
+     ast.fix_missing_locations(module)
+     code = compile(module, "<test>", "exec")
+-    exec(code, {"copy": copy}, local_vars)
+-    return local_vars
++    # Comprehensions resolve their free names through globals. Real modules
++    # use one namespace; split globals/locals create spurious NameErrors here.
++    namespace = {"copy": copy, **local_vars}
++    exec(code, namespace)
++    return namespace
+ 
+ 
+ # ── Initialize Array (aInit) ────────────────────────────────────────
+diff --git a/tests/test_numeric_array_literal.py b/tests/test_numeric_array_literal.py
+new file mode 100644
+index 0000000..49eb0b4
+--- /dev/null
++++ b/tests/test_numeric_array_literal.py
+@@ -0,0 +1,40 @@
++"""Typed numeric templates must not confuse literals with Build Array."""
++
++import ast
++
++import pytest
++
++from lvkit.codegen.elementwise import arrayify, arrayify_module
++from lvkit.runtime import lv
++
++
++@pytest.mark.parametrize(
++    "expression",
++    ("bank + [0.0, -2.0, -2.0]", "[0.0, -2.0, -2.0] + bank", "[1, 2] + [3, 4]"),
++)
++def test_typed_numeric_add_literal_uses_elementwise_helper(expression):
++    generated, used = arrayify(ast.parse(expression, mode="eval").body)
++    assert used
++    assert isinstance(generated, ast.Call)
++    assert ast.unparse(generated.func) == "_lv.add"
++
++
++def test_numeric_offset_retains_shape_and_input():
++    expression, _ = arrayify(ast.parse("bank + [0.0, -2.0, -2.0]", mode="eval").body)
++    bank = [1.0, 4.0, 5.0]
++    actual = eval(
++        compile(ast.Expression(expression), "<numeric-template>", "eval"),
++        {"__builtins__": {}, "_lv": lv, "bank": bank},
++    )
++    assert actual == [1.0, 2.0, 3.0]
++    assert bank == [1.0, 4.0, 5.0]
++
++
++@pytest.mark.parametrize(
++    "statement",
++    ("result = bank + [new]", "result = bank[:1] + [new] + bank[2:]"),
++)
++def test_module_build_replace_array_concatenation_stays_unchanged(statement):
++    body = ast.parse(statement).body
++    assert not arrayify_module(body, frozenset({"bank"}))
++    assert ast.unparse(body[0]) == statement

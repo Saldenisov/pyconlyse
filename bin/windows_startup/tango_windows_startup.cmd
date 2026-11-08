@@ -10,6 +10,7 @@ set "SCRIPT_DIR=%~dp0"
 set "LOG_FILE=%SCRIPT_DIR%tango_windows_startup.log"
 set "DB_READY_TIMEOUT_SECONDS=60"
 set "STARTER_READY_TIMEOUT_SECONDS=30"
+set "DEVICE_START_TIMEOUT_SECONDS=90"
 if not defined PYCONLYSE for %%I in ("%SCRIPT_DIR%\..\..") do set "PYCONLYSE=%%~fI"
 set "TANGO_PROBE=%SCRIPT_DIR%probe_tango_readiness.py"
 
@@ -95,6 +96,17 @@ if errorlevel 1 (
 goto complete
 
 :complete
+call :log "Starting all controlled device servers on %HOSTNAME%"
+"%PYCONLYSE_PYTHON%" "%TANGO_PROBE%" --start-controlled "tango/admin/%PYCONLYSE_STARTER_HOST%" >> "%LOG_FILE%" 2>&1
+if errorlevel 1 (
+    call :log "ERROR: one or more controlled device servers could not be started"
+    exit /b 1
+)
+call :wait_for_controlled_servers "%DEVICE_START_TIMEOUT_SECONDS%"
+if errorlevel 1 (
+    call :log "ERROR: controlled device servers remain stopped after %DEVICE_START_TIMEOUT_SECONDS%s"
+    exit /b 1
+)
 call :log "TANGO_STARTUP_COMPLETE database_port=%DB_PORT% starter_host=%HOSTNAME%"
 exit /b 0
 
@@ -145,6 +157,23 @@ if !elapsed! GEQ %~1 exit /b 1
 timeout /t 1 /nobreak >nul
 set /a "elapsed+=1"
 goto wait_for_starter_loop
+
+:controlled_servers_ready
+"%PYCONLYSE_PYTHON%" -c "import sys,tango; p=tango.DeviceProxy('tango/admin/%PYCONLYSE_STARTER_HOST%'); stopped=list(p.command_inout('DevGetStopServers',False)); print('STOPPED_CONTROLLED_SERVERS: '+', '.join(map(str,stopped))) if stopped else None; sys.exit(1 if stopped else 0)" >> "%LOG_FILE%" 2>&1
+exit /b %errorlevel%
+
+:wait_for_controlled_servers
+set /a "elapsed=0"
+:wait_for_controlled_servers_loop
+call :controlled_servers_ready
+if not errorlevel 1 (
+    call :log "CONTROLLED_DEVICE_SERVERS_READY elapsed_seconds=!elapsed!"
+    exit /b 0
+)
+if !elapsed! GEQ %~1 exit /b 1
+timeout /t 2 /nobreak >nul
+set /a "elapsed+=2"
+goto wait_for_controlled_servers_loop
 
 :log
 setlocal DisableDelayedExpansion

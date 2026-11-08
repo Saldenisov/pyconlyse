@@ -61,6 +61,7 @@ from main_app.core.async_manager import (
 )
 from main_app.core.config import OFFLINE_MODE
 from main_app.core.logging_config import setup_pyconlyse_logging
+from main_app.ui.experiment_preparation import open_preparation_window
 
 # Optional DS visualization type
 try:
@@ -499,6 +500,21 @@ class PyConlyseMainWindow(QMainWindow):
 
         v.addWidget(status_group)
 
+        preparation_group = QGroupBox("Experiment Preparation")
+        preparation_layout = QHBoxLayout(preparation_group)
+        preparation_layout.addWidget(QLabel("Experiment:"))
+        self.preparation_experiment_combo = QComboBox(preparation_group)
+        self.preparation_experiment_combo.addItems(["V0", "VD2"])
+        preparation_layout.addWidget(self.preparation_experiment_combo)
+        self.prepare_experiment_btn = QPushButton("Prepare")
+        self.prepare_experiment_btn.setToolTip(
+            "Open the progress window, check required device servers, and start required equipment."
+        )
+        self.prepare_experiment_btn.clicked.connect(self.open_experiment_preparation)
+        preparation_layout.addWidget(self.prepare_experiment_btn)
+        preparation_layout.addStretch()
+        v.addWidget(preparation_group)
+
         # Starters group
         starters_group = QGroupBox("Starters")
         starters_v = QVBoxLayout(starters_group)
@@ -564,6 +580,20 @@ class PyConlyseMainWindow(QMainWindow):
 
         v.addStretch()
         return tab
+
+    def open_experiment_preparation(self):
+        """Open the shared web progress window for the selected experiment."""
+        experiment = self.preparation_experiment_combo.currentText()
+        if open_preparation_window(experiment):
+            self.statusBar.showMessage(
+                f"Opened {experiment} experiment preparation progress window"
+            )
+            return
+        QMessageBox.warning(
+            self,
+            "Experiment Preparation",
+            "Could not open the web preparation window. Check that a default browser is configured.",
+        )
 
     def create_devices_tab(self) -> QWidget:
         """Create the DB devices tab that lists all devices from the Tango DB and allows opening control widgets."""
@@ -1597,6 +1627,7 @@ class PyConlyseMainWindow(QMainWindow):
             # Map DS class name -> widget class from registry (values are classes)
             # We only need to pick one based on keywords
             keyword_map = [
+                ("zaber", "ZaberStageWidget"),
                 ("netio", "Netio_pdu"),
                 ("basler", "Basler_camera"),
                 ("owis", "OWIS_motor"),

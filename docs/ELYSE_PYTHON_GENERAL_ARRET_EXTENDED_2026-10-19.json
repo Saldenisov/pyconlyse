@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-19",
+  "scope": "Code and offline tests only: full source General Arret plus a separately identified Python HT shutdown extension requested by the operator",
+  "hardware_operated_during_this_change": false,
+  "running_XP_processes_or_Windows_startup_changed": false,
+  "VI_run_edited_or_saved": false,
+  "telemetry_history_or_SQLite_created": false,
+  "implementation": {
+    "backend": "legacy/xp_acq_agent/elyse_agent/acquisition_backend.py",
+    "HT_extension": "legacy/xp_acq_agent/elyse_agent/acquisition_ht_shutdown.py",
+    "GUI": "legacy/xp_acq_agent/elyse_agent/acquisition_gui.py",
+    "profile_contract": {
+      "general_only_test": "Preserved restricted v4 behavior; other stages must already be OFF",
+      "legacy_full": "All17 source event6 frames, Chroma OFF and five staged C4 stop pulses",
+      "extended_ht_stop": "Python HT preamble first; original full event6 only after preamble success"
+    },
+    "same_existing_NI_owner_used_for_all_shutdown_reads_writes_and_counter_stops": true,
+    "stop_closes_or_reinitializes_tasks": false,
+    "stop_can_be_interrupted_by_deinitialize_or_window_close": false,
+    "new_HTTP_PSP_or_Tango_mutation_routes": false,
+    "new_heating_or_HT_start_controls": false
+  },
+  "source_identity": {
+    "main_archive": "legacy/xp_acq_agent/data/source_exports/0_ACQ_ELYSE_XML_sha6fe8.zip",
+    "main_archive_sha256": "6A518B319B2D35B465DB9AAB557CCA751ACC8B58A600FBA0B8E13771B6EA1527",
+    "original_main_VI_sha256": "6FE801E023CF755FBDE89B4AD17854D5FC08447517010C2122E66C9F3DF5C3CF",
+    "helper_archive": "legacy/xp_acq_agent/data/source_exports/ACQ_17_original_members_XML_20261001.zip",
+    "helper_archive_sha256": "645694B964BA594F0563DAE37E67E49A03A0B57B4BA6C2A0639C916717F04A2F"
+  },
+  "source_General_Arret_event6": {
+    "sequence_uid": "26556",
+    "frame_count": 17,
+    "ordered_actions": [
+      "Three Chroma Focales OFF chains; source reset/configure V/slew/I before Output False and Close; then500ms",
+      "Focale klystron: C4[8] False,150ms,True;1000ms",
+      "Relais HT: C4[17] False,150ms,True;1000ms",
+      "PREMA: C4[6] False,150ms,True;1000ms",
+      "Chauffage: C4[4] False,150ms,True;2000ms",
+      "General: C4[1] False,150ms,True",
+      "Original EPS/DPS assignments; final100ms"
+    ],
+    "parallel_frame0_150ms_not_added_to_post_focal_500ms": true,
+    "source_HT_supply_stop_C4_19_present": false,
+    "source_terminal_PSP_write": "Intentionally replaced with RAM software-status reporting, not an emitted PSP command",
+    "source_focal_error_clear_policy": "Source continues after Clear Errors; Python also attempts later stops but retains the error as PARTIAL_STOP_FAILURE",
+    "Python_interrupted_start_safeguard": "Restore General/RAZ C4[0]/[2] before stop; every full-stop C4 bank write keeps them released. A restore failure is retained and does not silently become success.",
+    "requested_delays_are_measured_electrical_pulse_widths": false
+  },
+  "operator_requested_HT_extension": {
+    "not_attributed_to_source_event6": true,
+    "operator_handoff_target_kv": 8.0,
+    "source_outer_controlled_stop_instead_tests_command_below_kv": 6.6,
+    "source_outer_ramp_uses_measured_voltage_feedback": false,
+    "step_kv": 0.1,
+    "step_wait_seconds": 0.5,
+    "ordered_logic": [
+      "Read fresh measured HT and explicit supply state on the NI-owner thread",
+      "If measured HT is already zero, skip every AO ramp write; never raise startup6.5 or any lower command to8",
+      "If supply is already OFF, do not ramp a residual voltage; require its fresh measured decay to zero before later stages",
+      "Otherwise lower C9[0] monotonically towards8, clamping the last step to8; read fresh HT between steps; no command increase is accepted",
+      "Dedicated alimentation HT stop from event21 if supply is ON or its state is unknown: C4[19] False,150ms,True; original EPS/DPS and100ms",
+      "Arrêt impulsion modulateur from event24: poll/stop NI6602 tasks3 and4 in order; attempt the second even when the first fails",
+      "Require a NEW post-stop observation of measured zero and supply OFF, plus successful stop calls for BOTH pulse tasks",
+      "Only then execute the complete General event6 sequence"
+    ],
+    "already_zero_and_supply_OFF": "No AO write and no redundant HT-supply pulse; both owned pulse tasks are still explicitly stopped before post-stop verification",
+    "HT_feedback": {
+      "measured_voltage": "C2NI6071E[7], /2/ai7, mean of10 raw samples, legacy calibration raw*2.44+0 kV",
+      "supply_on": "C4_IN_DIO96[48], /4/port6/line0, saved label Alimentation HT en marche",
+      "command": "C9NI6703[0], /9/ao0; logical kV to requested AO volts through existing NI6703 conversion",
+      "logical_HT_to_AO_scale": 0.5,
+      "other_nine_C9_fields_preserved": true,
+      "command_image_updated_only_after_successful_AO_call": true,
+      "maximum_accepted_sample_age_seconds_exclusive": 2.0,
+      "cached_telemetry_or_EPS_OK_used_as_OFF_ack": false,
+      "measurements_atomic_between_AI_and_DI": false,
+      "mapping_polarity_and_calibration_physically_qualified_in_this_work": false
+    },
+    "zero_policy": {
+      "default_tolerance_kv": 0.0,
+      "default_means": "Exact finite measured zero; no guessed noise band or UI rounding",
+      "nonzero_tolerance_requires_explicit_commissioned_configuration": true,
+      "default_feedback_wait_timeout_seconds": 10.0,
+      "timeout_is_a_qualified_physical_discharge_time": false,
+      "single_observation_is_certified_electrical_isolation": false
+    },
+    "pulse_stop": {
+      "physical_counters": [3, 4],
+      "source_task_cluster_local": 21,
+      "source_task_fields": [3, 4],
+      "source_predicate": "Done OR zero_based_iteration>40",
+      "maximum_polls_per_task": 42,
+      "wait_per_poll_seconds": 0.001,
+      "stop_attempted_after_poll_error_or_exhaustion": true,
+      "source_EPS_literals_preserved": {"42": true, "52": false},
+      "source_DPS_literal_preserved": {"19": false},
+      "EPS55_repaired_or_assumed_stop_ack": false,
+      "native_stop_return_success_is_independent_physical_pulse_measurement": false
+    }
+  },
+  "failure_policy": {
+    "unverified_feedback_profile": "Marche and Arret refused before output writes; operator must not treat this profile as a ready shutdown system",
+    "read_ramp_or_wait_failure_after_admission": "Attempt dedicated HT and pulse stops; retain all errors; do not execute later General/stage shutdown",
+    "HT_supply_stop_failure": "Still attempt both pulse stops; no later General shutdown and no success claim",
+    "pulse_stop_failure": "Attempt the other pulse task; no later General shutdown and no success claim",
+    "nonzero_stale_nonfinite_or_still_ON_feedback": "No OFF acceptance; timeout/fault retains NI ownership",
+    "full_event6_focal_or_NI_failure": "Continue later source stop stages, retry uncertain pulse release, retain every failure",
+    "runtime_after_partial_stop": "FAULT; general_stop_required remains True; ordinary deinitialize/exit blocked; retry or explicit independently verified local OFF remains required",
+    "normal_reads_in_runtime_FAULT": "Existing runtime suspends normal telemetry reads; this change does not claim fault-state continuous monitoring",
+    "emergency_or_hard_native_call_deadline_guarantee": false
+  },
+  "offline_verification": {
+    "modern_python": "3.12.14",
+    "pytest_passed": 128,
+    "pytest_failed": 0,
+    "pytest_warnings": 1,
+    "external_network_denied": true,
+    "pytest_command": "python -m pytest --deny-network tests/unit/test_xp_acquisition_ht_shutdown.py tests/unit/test_xp_acquisition_general_stop.py tests/unit/test_xp_acquisition_general_only.py tests/unit/test_xp_acquisition_general.py tests/unit/test_xp_acquisition_runtime.py tests/unit/test_acq_general_source.py tests/unit/test_acq_runtime_telemetry_check.py -q",
+    "actual_legacy_python": "3.4.4",
+    "legacy_unittest_passed": 123,
+    "legacy_unittest_failed": 0,
+    "legacy_unittest_command": "tools/xp_python34_extracted/python.exe -m unittest legacy.xp_acq_agent.tests.test_acquisition_runtime legacy.xp_acq_agent.tests.test_acquisition_general legacy.xp_acq_agent.tests.test_acquisition_general_stop legacy.xp_acq_agent.tests.test_acquisition_general_only legacy.xp_acq_agent.tests.test_acquisition_ht_shutdown legacy.xp_acq_agent.tests.test_acquisition_stage_model -q",
+    "new_module_and_test_Ruff_check": "PASS: acquisition_ht_shutdown.py and its two test files",
+    "source_checks": [
+      "validate_acq_linear_procedures:23 complete procedure paths,159 stacked frames,7 nested focal cells,4 For and2 While bodies",
+      "build_acq_modulator_catalog without --write:16 procedure requests and both Chroma helper graphs match immutable source",
+      "validate_acq_two_stop_paths: General event6 and outer controlled stop remain distinct",
+      "validate_acq_general_stop_status: complete event6 EPS/DPS literal wires",
+      "validate_acq_focal_helpers: all three six-call chains and direct nets of both saved helpers",
+      "validate_acq_controlled_stop_ht_ramp: original command<6.6, subtract0.1,500ms, not measured feedback",
+      "validate_acq_impulsion_mod_status: event24 EPS42/52 asymmetry retained",
+      "validate_acq_ni6703_writer:40 connected slopes, C9 conversion, writer error chain and all three root caller edges"
+    ],
+    "test_data": "Synthetic input snapshots, injected NI/DLL/task callbacks, virtual clocks and loopback test servers only; no actual card feedback obtained in this change"
+  },
+  "local_candidate": {
+    "directory": "C:/dev/ELYSE-ACQ-telemetry/2026-10-19/ACQ_Python_Server_20261019_v5",
+    "archive": "C:/dev/ELYSE-ACQ-telemetry/2026-10-19/ACQ_Python_Server_20261019_v5.zip",
+    "archive_sha256": "60F78826FB8CD7AB6361E823EFF02582699693791694A32514A2C9482DEA36DB",
+    "profile": "extended_ht_stop",
+    "payload_files": 20,
+    "payload_hashes_verified": 20,
+    "sources_parsed_with_actual_Python3_4": 16,
+    "cold_constructor_NI_resources": 0,
+    "cold_constructor_imported_NI_modules": false,
+    "auto_initialize": false,
+    "feedback_verified": false,
+    "Chroma_resources_verified": false,
+    "deployed_or_executed_on_XP": false,
+    "existing_v4_archive_sha256_unchanged": "41BA77826B5D73F0D4D666B8A2D2D472FCF0ED3E1ADEC22A3FCB3DDC9DAAAC83"
+  },
+  "remaining_before_any_hardware_commissioning": [
+    "Verify physical C2[7] scaling, zero/noise band and fresh read behavior against an independent measurement; default exact zero is not a calibrated tolerance.",
+    "Verify C4[48] ON/OFF polarity and behavior on loss of feedback; a saved label alone is not proof of electrical state.",
+    "Verify current Chroma COM10/11/12 mapping, OFF adapter and permitted reset/configuration effects; do not bypass its unverified-resource gate.",
+    "Qualify pulse-task Stop returns and physical pulse absence; Done before Stop or EPS OK alone is not that proof.",
+    "Review and commission the Python-specific8-kV handoff, changed phase order, discharge deadline and fault behavior before enabling feedback_verified.",
+    "A later supervised hardware test requires separate action-time consent and one NI owner; no heating or HT energization was performed or authorized by this offline verification."
+  ]
+}

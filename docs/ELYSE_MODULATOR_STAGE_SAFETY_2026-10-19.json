@@ -1,0 +1,218 @@
+{
+  "scope": "STATIC_REQUEST_DISPLAY_AND_PROCEDURE_BOUNDARIES_NOT_OPERATING_PERMISSION",
+  "source_supervision_vi_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "source_acquisition_vi_sha256": "6FE801E023CF755FBDE89B4AD17854D5FC08447517010C2122E66C9F3DF5C3CF",
+  "observations": {
+    "modulateur_request_wires": [
+      "Page Modulateur[22] Marche MOD -> DPS[2]  X Marche GENERAL Mod.",
+      "Page Modulateur[23] Arrêt MOD -> DPS[3] X Arrêt GENERAL Mod.",
+      "Page Modulateur[46] Marche CHAUFFAGE MOD -> DPS[4] X Marche CHAUFFAGE Mod.",
+      "Page Modulateur[47] Arrêt CHAUFFAGE MOD -> DPS[5] X Arrêt CHAUFFAGE Mod.",
+      "Page Modulateur[48] Marche PREMA MOD -> DPS[6] X Marche PREMA Mod. ",
+      "Page Modulateur[49] Arrêt PREMA MOD -> DPS[7] X Arrêt PREMA Mod.",
+      "Page Modulateur[50] Marche RELAIS HT MOD -> DPS[8]  X Marche RELAIS HT Mod.",
+      "Page Modulateur[51] Arrêt RELAIS HT MOD -> DPS[9] X Arrêt RELAIS HT Mod.",
+      "Page Modulateur[52] Marche FOCALES MOD -> DPS[10] X Marche FOCALE Mod.",
+      "Page Modulateur[53] Arrêt FOCALES MOD -> DPS[11] X Arrêt FOCALE Mod.",
+      "Page Modulateur[21] Reset MOD -> DPS[12] X RESET Mod."
+    ],
+    "ht_request_wires": [
+      "Page HT[10] Marche HT -> DPS[15] X Marche alimentation HT",
+      "Page HT[11] Arrêt HT -> DPS[17] X Arrêt alimentation HT",
+      "Page HT[9] Reset HT -> DPS[16] X Reset alimentation HT",
+      "Page HT[25] Marche pulse MOD -> DPS[18] X Marche impulsion mod",
+      "Page HT[24] Arrêt pulse MOD -> DPS[19] X Arret impulsion mod"
+    ],
+    "main_ui_property_census": {
+      "page_uid": "56140",
+      "descendant_count": 60,
+      "static_property_or_reference_targets": [],
+      "disabled_property_targets": {
+        "67698": "61480",
+        "67657": "59608",
+        "67619": "42740",
+        "67577": "40743",
+        "70250": "61480",
+        "68962": "59608",
+        "67505": "42740",
+        "7002": "40743",
+        "269818": "19489",
+        "186526": "19489",
+        "267202": "19489",
+        "267035": "19489"
+      },
+      "static_control_references": {
+        "20125": "37853",
+        "40447": "37853",
+        "7979": "7618",
+        "33897": "83226",
+        "20450": "20397"
+      },
+      "limit": "No direct Modulateur property/reference found; not a proof about all external UI access or electrical interlocks"
+    },
+    "acq_start_entries": [
+      "ACQ event 5: NewVal=True -> 10 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 12: NewVal=True -> 7 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 13: NewVal=True -> 8 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 14: NewVal=True -> 8 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 15: NewVal=True -> 8 frames; no direct C4 input local or nested case in root handler"
+    ],
+    "acq_c4_local_reference_census": {
+      "references": [
+        {
+          "uid": "8346",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicOpen",
+          "peer_uid": "1168",
+          "net_uid": "1171"
+        },
+        {
+          "uid": "19587",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "19515",
+          "net_uid": "18857"
+        },
+        {
+          "uid": "2352",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "7748",
+          "net_uid": "4165"
+        },
+        {
+          "uid": "25024",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicWrite",
+          "peer_uid": "4245",
+          "net_uid": "42839"
+        },
+        {
+          "uid": "10202",
+          "access": "read",
+          "peer_class": "nMux",
+          "peer_uid": "39336",
+          "net_uid": "40077"
+        },
+        {
+          "uid": "55726",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "55654",
+          "net_uid": "42946"
+        }
+      ],
+      "only_direct_local_unbundle_fields": [
+        19,
+        38
+      ],
+      "klystron_fields_0_1_20_not_selected_on_these_local_read_nets": true,
+      "limit": "Main-VI C4 local-reference census; not external control access or electrical interlocks"
+    },
+    "water_display": [
+      {
+        "raw_c4_field": 20,
+        "page_field": 15,
+        "label": "Eau focale Klystron",
+        "false_color": "#00C82D",
+        "true_color": "#FF3333",
+        "transform": "identity",
+        "electrical_polarity_qualified": false
+      },
+      {
+        "raw_c4_field": 0,
+        "page_field": 16,
+        "label": "Eau corps Klystron",
+        "false_color": "#00C82D",
+        "true_color": "#FF3333",
+        "transform": "identity",
+        "electrical_polarity_qualified": false
+      },
+      {
+        "raw_c4_field": 1,
+        "page_field": 17,
+        "label": "Eau collecteur Klystron",
+        "false_color": "#00C82D",
+        "true_color": "#FF3333",
+        "transform": "identity",
+        "electrical_polarity_qualified": false
+      },
+      {
+        "raw_c4_field": 2,
+        "page_field": 18,
+        "label": "eau cuve Klystron",
+        "false_color": "#00C82D",
+        "true_color": "#FF3333",
+        "transform": "identity",
+        "electrical_polarity_qualified": false
+      },
+      {
+        "raw_c4_field": 19,
+        "page_field": 19,
+        "label": "Eau section et canon",
+        "false_color": "#00C82D",
+        "true_color": "#FF3333",
+        "transform": "identity",
+        "electrical_polarity_qualified": false
+      },
+      {
+        "raw_c4_field": 38,
+        "page_field": 45,
+        "label": "EAU SECTION",
+        "false_color": "#00C82D",
+        "true_color": "#FF3333",
+        "transform": "identity",
+        "electrical_polarity_qualified": false
+      }
+    ],
+    "timeout_flow_guard": [
+      "Case selector is directly fed by (C4[19] OR C4[38]) AND ((NOT C3[0]) OR (NOT C3[6]))",
+      "No ACTION or EPS status input lies on this selector wire; the configured timeout is 20 ms, not a measured reevaluation period"
+    ],
+    "stage_catalog_sha256": "a9d821e7519ea50f6b35593e58c78129ec7d8a7bfedcc06098e247bef011a0b0",
+    "source_stage_count": 16,
+    "modeled_source_frames": 120,
+    "general_stop_c4_field_sequence": [
+      8,
+      8,
+      17,
+      17,
+      6,
+      6,
+      4,
+      4,
+      1,
+      1
+    ],
+    "alimentation_ht_stop_c4_field_sequence": [
+      19,
+      19
+    ],
+    "general_stop_does_not_directly_command_ht_supply_stop": true,
+    "guard_is_not_klystron_body_collector_permission": true,
+    "eps_ok_is_software_assignment_not_hardware_ack": true
+  },
+  "inferences": [
+    "The five reviewed start handlers do not enforce a preceding-stage or raw-water predicate at entry",
+    "These main-VI request and property paths do not establish a klystron cooling admission interlock",
+    "The Canon/Section timeout cooling-stop predicate cannot substitute for a Chauffage permit",
+    "General stop and HT-supply stop are distinct commands; relay behavior cannot be inferred from software status alone"
+  ],
+  "unresolved": [
+    "Electrical truth table and independent interlocks for body/collector/focal water inputs",
+    "Physical flow readiness and behavior on flow loss during heating",
+    "Actual Chroma COM10/COM11/COM12 mapping and bounded ON/OFF behavior",
+    "Installed VI version, asynchronous writer timing and fault/reset behavior",
+    "Complete staged live-control state machine and qualified installation shutdown"
+  ],
+  "saved_screenshots": {
+    "C:/dev/ELYSE-ACQ-analysis/runs/20260922-085500-+0200/images/EV-ACQ-0033-event12-start-modulator-heating.png": "000F3F92AD1EB3C46B6A2B9A8B7B5DA3AB647CDEDDC6DE65D190F41B07D6A811",
+    "C:/dev/ELYSE-ACQ-analysis/runs/20260922-085500-+0200/images/EV-ACQ-0046-event15-focal-modulator-psp-dps.png": "BCD43CD852DA3615103EAAFF93920DB5EF9A7E9A4D81C8FE0A77DF6646850F42",
+    "C:/dev/ELYSE-ACQ-analysis/review_20261015/native_evidence/MAIN-timeout3-cooling-guard-enabled.png": "5BBC9C88C1144CD42EBFDAD12BC78E5CF4AD1DBA831BB75E5765933E7ED4FCEF"
+  },
+  "screen_used": false,
+  "vi_run_or_saved": false,
+  "hardware_commands_sent": false,
+  "current_runtime_or_startup_changed": false,
+  "complete_live_control": false
+}

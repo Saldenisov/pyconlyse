@@ -1,0 +1,849 @@
+{
+  "scope": "STATIC_INDICATOR_CONDITIONS_AND_CONSUMERS_NOT_HARDWARE_INTERLOCK_QUALIFICATION",
+  "source_supervision_sha256": "B7B79636E77D7756A5896EDD132F7E3B24301394A04893D9A73938073C210A7B",
+  "source_acquisition_sha256": "6FE801E023CF755FBDE89B4AD17854D5FC08447517010C2122E66C9F3DF5C3CF",
+  "observations": {
+    "raw_digital_indicators": [
+      {
+        "page_field": 0,
+        "label": "I Focale 1",
+        "c4_field": 21,
+        "raw_source_label": "21 APC5 b05 I Focale 1",
+        "source_terminal": "42858",
+        "target_terminal": "41870",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 1,
+        "label": "I Focale 2",
+        "c4_field": 22,
+        "raw_source_label": "22 APC6 b03 I Focale 2",
+        "source_terminal": "42866",
+        "target_terminal": "41895",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 2,
+        "label": "I Focale 3",
+        "c4_field": 23,
+        "raw_source_label": "23 APC7 b01 I Focale 3",
+        "source_terminal": "42882",
+        "target_terminal": "41903",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 3,
+        "label": "I chauffage Klystron",
+        "c4_field": 9,
+        "raw_source_label": "09 APB1 b29 I chauffage Klystron",
+        "source_terminal": "46651",
+        "target_terminal": "50253",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 4,
+        "label": "V chauffage Klystron",
+        "c4_field": 8,
+        "raw_source_label": "08 APB0 b31 V chauffage Klystron",
+        "source_terminal": "46629",
+        "target_terminal": "50250",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 5,
+        "label": "V Klystron",
+        "c4_field": 44,
+        "raw_source_label": "44 BPC4 b08 V Klystron",
+        "source_terminal": "43227",
+        "target_terminal": "42169",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 6,
+        "label": "I Klystron",
+        "c4_field": 45,
+        "raw_source_label": "45 BPC5 b06 I Klystron",
+        "source_terminal": "43236",
+        "target_terminal": "42188",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 7,
+        "label": "Contact perche de masse",
+        "c4_field": 16,
+        "raw_source_label": "16 APC0 b15 Contact perche",
+        "source_terminal": "48197",
+        "target_terminal": "50268",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 8,
+        "label": "Sécurité Thyratron",
+        "c4_field": 12,
+        "raw_source_label": "12 APB4 b23 Sécurité Thyratron",
+        "source_terminal": "61491",
+        "target_terminal": "50259",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 9,
+        "label": "Contact porte cabine",
+        "c4_field": 15,
+        "raw_source_label": "15 APB7 b17 Contact porte",
+        "source_terminal": "48191",
+        "target_terminal": "50265",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 10,
+        "label": "Tempo Mod",
+        "c4_field": 18,
+        "raw_source_label": "18 APC2 b11 Fin Tempo",
+        "source_terminal": "42798",
+        "target_terminal": "41769",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 11,
+        "label": "Ventillation Thyratron",
+        "c4_field": 4,
+        "raw_source_label": "04 APA4 b39 Ventilation Thyratron",
+        "source_terminal": "44778",
+        "target_terminal": "51324",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 12,
+        "label": "Résistivité",
+        "c4_field": 39,
+        "raw_source_label": "39 BPB7 b18 Réserve",
+        "source_terminal": "42894",
+        "target_terminal": "41914",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 13,
+        "label": "Contact capot cuve Klystron",
+        "c4_field": 17,
+        "raw_source_label": "17 APC1 b13 Contact capot cuve",
+        "source_terminal": "48200",
+        "target_terminal": "50271",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 14,
+        "label": "Niveau d'huile cuve Klystron",
+        "c4_field": 5,
+        "raw_source_label": "05 APA5 b37 Niveau d'huile cuve Klystron",
+        "source_terminal": "46547",
+        "target_terminal": "51327",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 15,
+        "label": "Eau focale Klystron",
+        "c4_field": 20,
+        "raw_source_label": "20 APC4 b07 Eau focale Klystron",
+        "source_terminal": "42853",
+        "target_terminal": "41846",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 16,
+        "label": "Eau corps Klystron",
+        "c4_field": 0,
+        "raw_source_label": "00 APA0 b47 Eau corps Klystron",
+        "source_terminal": "51350",
+        "target_terminal": "51310",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 17,
+        "label": "Eau collecteur Klystron",
+        "c4_field": 1,
+        "raw_source_label": "01 APA1 b45 Eau collecteur Klystron",
+        "source_terminal": "29672",
+        "target_terminal": "51313",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 18,
+        "label": "eau cuve Klystron",
+        "c4_field": 2,
+        "raw_source_label": "02 APA2 b43 Eau cuve Klystron",
+        "source_terminal": "40243",
+        "target_terminal": "51317",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 19,
+        "label": "Eau section et canon",
+        "c4_field": 19,
+        "raw_source_label": "19 APC3 b09 Débit EAU CANON",
+        "source_terminal": "42816",
+        "target_terminal": "41800",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 20,
+        "label": "Vide Klystron",
+        "c4_field": 3,
+        "raw_source_label": "03 APA3 b41 Vide Klystron",
+        "source_terminal": "40372",
+        "target_terminal": "51321",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 24,
+        "label": "V LAR 2",
+        "c4_field": 43,
+        "raw_source_label": "43 BPC3 b10 V LAR",
+        "source_terminal": "42914",
+        "target_terminal": "41941",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 25,
+        "label": "I fin de ligne",
+        "c4_field": 42,
+        "raw_source_label": "42 BPC2 b12 I fin de ligne",
+        "source_terminal": "43249",
+        "target_terminal": "42277",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 26,
+        "label": "I Thyratron",
+        "c4_field": 41,
+        "raw_source_label": "41 BPC1 b14 I Thyratron",
+        "source_terminal": "43243",
+        "target_terminal": "42265",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 27,
+        "label": "V chauffage Thyratron",
+        "c4_field": 6,
+        "raw_source_label": "06 APA6 b35 V chauffage Thyratron",
+        "source_terminal": "46581",
+        "target_terminal": "50242",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 28,
+        "label": "I chauffage Thyratron",
+        "c4_field": 7,
+        "raw_source_label": "07 APA7 b33 I chauffage Thyratron",
+        "source_terminal": "46612",
+        "target_terminal": "50247",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 29,
+        "label": "I réservoir Thyratron",
+        "c4_field": 11,
+        "raw_source_label": "11 APB3 b25 I réservoir Thyratron",
+        "source_terminal": "46660",
+        "target_terminal": "50256",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 30,
+        "label": "Prémagnétisation",
+        "c4_field": 14,
+        "raw_source_label": "14 APB6 b19 I prémagnétisation",
+        "source_terminal": "61508",
+        "target_terminal": "50262",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": true
+      },
+      {
+        "page_field": 45,
+        "label": "EAU SECTION",
+        "c4_field": 38,
+        "raw_source_label": "38 BPB6 b20 Débit EAU SECTION",
+        "source_terminal": "42904",
+        "target_terminal": "41932",
+        "red_condition": "raw Boolean True",
+        "green_condition": "raw Boolean False",
+        "included_in_summary": false
+      }
+    ],
+    "all_green_summary": {
+      "steps": [
+        {
+          "frame_uid": "39589",
+          "compound_uid": "43385",
+          "page_fields": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ],
+          "operation": "AND of inverted fault inputs",
+          "wires": [
+            [
+              0,
+              "43342",
+              "43390",
+              "43744"
+            ],
+            [
+              1,
+              "43347",
+              "43393",
+              "43714"
+            ],
+            [
+              2,
+              "43350",
+              "43396",
+              "43659"
+            ],
+            [
+              3,
+              "43353",
+              "43400",
+              "43624"
+            ],
+            [
+              4,
+              "43356",
+              "43403",
+              "43611"
+            ],
+            [
+              5,
+              "43359",
+              "43406",
+              "43601"
+            ],
+            [
+              6,
+              "43362",
+              "43409",
+              "43594"
+            ],
+            [
+              7,
+              "43366",
+              "43412",
+              "43581"
+            ],
+            [
+              8,
+              "43369",
+              "43415",
+              "43575"
+            ],
+            [
+              9,
+              "43372",
+              "43418",
+              "43560"
+            ],
+            [
+              10,
+              "43375",
+              "43421",
+              "43517"
+            ],
+            [
+              11,
+              "43378",
+              "43426",
+              "43495"
+            ],
+            [
+              12,
+              "43381",
+              "43436",
+              "43483"
+            ],
+            [
+              13,
+              "53956",
+              "57018",
+              "4320"
+            ],
+            [
+              14,
+              "53961",
+              "57023",
+              "5900"
+            ],
+            [
+              15,
+              "53964",
+              "57026",
+              "15930"
+            ],
+            [
+              16,
+              "53967",
+              "57029",
+              "15947"
+            ],
+            [
+              17,
+              "53970",
+              "57032",
+              "15956"
+            ],
+            [
+              18,
+              "54443",
+              "57035",
+              "29468"
+            ],
+            [
+              19,
+              "54448",
+              "57038",
+              "30734"
+            ],
+            [
+              20,
+              "54876",
+              "57041",
+              "38752"
+            ]
+          ]
+        },
+        {
+          "frame_uid": "45182",
+          "compound_uid": "48228",
+          "page_fields": [
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30
+          ],
+          "operation": "AND of inverted fault inputs",
+          "wires": [
+            [
+              24,
+              "48153",
+              "48233",
+              "48401"
+            ],
+            [
+              25,
+              "48156",
+              "48236",
+              "48398"
+            ],
+            [
+              26,
+              "48159",
+              "48239",
+              "48395"
+            ],
+            [
+              27,
+              "48162",
+              "48242",
+              "48390"
+            ],
+            [
+              28,
+              "48165",
+              "48245",
+              "48382"
+            ],
+            [
+              29,
+              "48168",
+              "48248",
+              "48373"
+            ],
+            [
+              30,
+              "48175",
+              "48251",
+              "48367"
+            ]
+          ]
+        }
+      ],
+      "formula": "AND(NOT PageMod[0:21]) AND AND(NOT PageMod[24:31])",
+      "native_qualified_omitted_zero_terminal": "43342: I Focale 1, native print d147; not a general missing-index rule",
+      "included_fields": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
+      "excludes_eau_section_field": 45,
+      "summary_local_param": 60,
+      "summary_local_writers": [
+        "49489"
+      ],
+      "summary_local_readers": [],
+      "front_panel_terminal_unwired": true,
+      "statically_addressed_property_consumers": [],
+      "public_connector": false,
+      "statically_connected_to_command_gate": false,
+      "snapshot_limit": "Frame3 and frame4 read separate Page Modulateur snapshots, not one atomic hardware snapshot"
+    },
+    "page_consumers": {
+      "local_references": 12,
+      "writers": {
+        "27819": [
+          21,
+          22,
+          23,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53
+        ],
+        "40520": [
+          0,
+          1,
+          2,
+          5,
+          6,
+          10,
+          12,
+          15,
+          19,
+          24,
+          25,
+          26,
+          45
+        ],
+        "51304": [
+          3,
+          4,
+          7,
+          8,
+          9,
+          11,
+          13,
+          14,
+          16,
+          17,
+          18,
+          20,
+          27,
+          28,
+          29,
+          30
+        ],
+        "58415": [
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44
+        ],
+        "61263": [
+          54,
+          55,
+          56,
+          57,
+          58
+        ]
+      },
+      "two_summary_readers": [
+        "43324",
+        "48140"
+      ],
+      "other_reads": "Base snapshots for whole-cluster bundle updates",
+      "main_front_panel_terminal_unwired": true,
+      "concurrency_limit": "Read-modify-write updates can restore retained old fields; no atomic current-state guarantee"
+    },
+    "ui_reference_proof": {
+      "page_uid": "56140",
+      "descendant_count": 60,
+      "static_property_or_reference_targets": [],
+      "disabled_property_targets": {
+        "7002": "40743",
+        "67505": "42740",
+        "67577": "40743",
+        "67619": "42740",
+        "67657": "59608",
+        "67698": "61480",
+        "68962": "59608",
+        "70250": "61480",
+        "186526": "19489",
+        "267035": "19489",
+        "267202": "19489",
+        "269818": "19489"
+      },
+      "static_control_references": {
+        "7979": "7618",
+        "20125": "37853",
+        "20450": "20397",
+        "33897": "83226",
+        "40447": "37853"
+      },
+      "limit": "No direct Modulateur property/reference found; not a proof about all external UI access or electrical interlocks"
+    },
+    "supervision_request_proof": [
+      "Page Modulateur[22] Marche MOD -> DPS[2]  X Marche GENERAL Mod.",
+      "Page Modulateur[23] Arrêt MOD -> DPS[3] X Arrêt GENERAL Mod.",
+      "Page Modulateur[46] Marche CHAUFFAGE MOD -> DPS[4] X Marche CHAUFFAGE Mod.",
+      "Page Modulateur[47] Arrêt CHAUFFAGE MOD -> DPS[5] X Arrêt CHAUFFAGE Mod.",
+      "Page Modulateur[48] Marche PREMA MOD -> DPS[6] X Marche PREMA Mod. ",
+      "Page Modulateur[49] Arrêt PREMA MOD -> DPS[7] X Arrêt PREMA Mod.",
+      "Page Modulateur[50] Marche RELAIS HT MOD -> DPS[8]  X Marche RELAIS HT Mod.",
+      "Page Modulateur[51] Arrêt RELAIS HT MOD -> DPS[9] X Arrêt RELAIS HT Mod.",
+      "Page Modulateur[52] Marche FOCALES MOD -> DPS[10] X Marche FOCALE Mod.",
+      "Page Modulateur[53] Arrêt FOCALES MOD -> DPS[11] X Arrêt FOCALE Mod.",
+      "Page Modulateur[21] Reset MOD -> DPS[12] X RESET Mod."
+    ],
+    "acq_start_entry_proof": [
+      "ACQ event 5: NewVal=True -> 10 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 12: NewVal=True -> 7 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 13: NewVal=True -> 8 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 14: NewVal=True -> 8 frames; no direct C4 input local or nested case in root handler",
+      "ACQ event 15: NewVal=True -> 8 frames; no direct C4 input local or nested case in root handler"
+    ],
+    "acq_c4_consumers": {
+      "references": [
+        {
+          "uid": "8346",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicOpen",
+          "peer_uid": "1168",
+          "net_uid": "1171"
+        },
+        {
+          "uid": "19587",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "19515",
+          "net_uid": "18857"
+        },
+        {
+          "uid": "2352",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "7748",
+          "net_uid": "4165"
+        },
+        {
+          "uid": "25024",
+          "access": "read",
+          "peer_class": "sharedVariableDynamicWrite",
+          "peer_uid": "4245",
+          "net_uid": "42839"
+        },
+        {
+          "uid": "10202",
+          "access": "read",
+          "peer_class": "nMux",
+          "peer_uid": "39336",
+          "net_uid": "40077"
+        },
+        {
+          "uid": "55726",
+          "access": "write",
+          "peer_class": "prim",
+          "peer_uid": "55654",
+          "net_uid": "42946"
+        }
+      ],
+      "only_direct_local_unbundle_fields": [
+        19,
+        38
+      ],
+      "klystron_fields_0_1_20_not_selected_on_these_local_read_nets": true,
+      "limit": "Main-VI C4 local-reference census; not external control access or electrical interlocks"
+    },
+    "acq_c4_main_terminal": {
+      "control_uid": "5676",
+      "terminal_uid": "5678",
+      "wired": false,
+      "public_connector": false
+    },
+    "acq_c4_value_provenance": {
+      "helper_proof": "DIO96: Read C3/C4/C5 -> Write C3/C4/C5; public error chain; read data assigned without error guard; independent DI/DO task fields; autoStart True; timeout/task/count ports unwired",
+      "caller_proof": "DIO96 root: all three callers preserve C3/C4/C5 banks via locals OUT 17/15/13, IN 18/16/14; task local 22; NI6071E error -> DIO96 -> NI6703",
+      "hardware_api_boundary": "DAQmx Read.vi, saved Digital 1D Boolean selector 0F",
+      "read_node_uid": "667",
+      "read_data_terminal": "2688",
+      "helper_output_local_terminal": "3084",
+      "helper_output_connector": 6,
+      "main_assignments": [
+        {
+          "phase": "startup I/O",
+          "dio_helper_call": "19376",
+          "helper_c4_output_terminal": "19399",
+          "converter_uid": "19515",
+          "conversion": "Array To Cluster, no predicate",
+          "converter_array_input": "19520",
+          "converter_cluster_output": "19517",
+          "c4_input_writer": "19587",
+          "writer_terminal": "19590"
+        },
+        {
+          "phase": "runtime I/O",
+          "dio_helper_call": "686",
+          "helper_c4_output_terminal": "709",
+          "converter_uid": "7748",
+          "conversion": "Array To Cluster, no predicate",
+          "converter_array_input": "7753",
+          "converter_cluster_output": "7750",
+          "c4_input_writer": "2352",
+          "writer_terminal": "2355"
+        },
+        {
+          "phase": "controlled-stop I/O",
+          "dio_helper_call": "55502",
+          "helper_c4_output_terminal": "55523",
+          "converter_uid": "55654",
+          "conversion": "Array To Cluster, no predicate",
+          "converter_array_input": "55659",
+          "converter_cluster_output": "55656",
+          "c4_input_writer": "55726",
+          "writer_terminal": "55729"
+        }
+      ],
+      "software_vacuum_oil_water_threshold_found": false,
+      "electrical_signal_source_identified": false,
+      "deployed_runtime_identity_verified": false,
+      "distinction": "ACQ computes separate EPS procedure flags and writes DO commands; these C4 input bits are readback, not those computed flags"
+    },
+    "acq_command_procedures_source_checked": 16,
+    "dio_source_proof": "DIO96: Read C3/C4/C5 -> Write C3/C4/C5; public error chain; read data assigned without error guard; independent DI/DO task fields; autoStart True; timeout/task/count ports unwired",
+    "label_identity_limit": "C4[39] is Reserve in ACQ but Resistivite in SUP; C4[19] is Debit EAU CANON in ACQ but Eau section et canon in SUP. Labels do not qualify physical wiring."
+  },
+  "conclusions": [
+    "Oil level, klystron vacuum, water and V/I status icons are direct NI digital Boolean readbacks, not software comparisons of the displayed analogue measurements",
+    "A software AND of 28 green conditions exists, including klystron vacuum and oil level; EAU SECTION is not part of this summary",
+    "The summary has one local writer, no local readers, an unwired main terminal and no statically addressed property consumer in this saved main VI",
+    "Reviewed Supervision and ACQ startup command paths do not consume this summary as a permission predicate"
+  ],
+  "unresolved": [
+    "Electrical sensors/comparators and contact polarity that generate each NI digital input",
+    "Which physical interlock inhibits each cabinet contactor; a complete electrical schematic is required",
+    "External VI Server/dynamic access, different deployed VI versions and stale/error readback validity are not qualified by this static main-VI trace"
+  ],
+  "evidence_images": {
+    "C:\\dev\\pyconlyse\\Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd147.png": "24C51F5C61D11CDC55C279B8D4A03386E484E3051C364B3687B5B5F2F5DF8FB1",
+    "C:\\dev\\pyconlyse\\Supervision\\analysis\\labview_print_hidden_frames\\0__SUP__ELYSEd148.png": "BF2062902869956E06189E5445B65A07C86B270823D1A9534B6E5CE208334768",
+    "C:\\dev\\pyconlyse\\Supervision\\analysis\\screenshots\\0_SUP_ELYSE_outer_frame_2_event_case_18_full.png": "B89781EB37BBD22D782DA77305A29EAE42662C3D52C469B0A9573AA10A134AE8"
+  },
+  "image_limit": "Saved native prints support the two AND frames; source hashes pin XML separately, not original screenshot session provenance",
+  "screen_used": false,
+  "hardware_commands_sent": false,
+  "vi_run_or_saved": false,
+  "runtime_changed": false,
+  "safe_to_start_without_cooling": false
+}
+

@@ -3,9 +3,12 @@ import numpy as np
 import pytest
 
 from DeviceServers.control.laser_pointing.beam_metrics import (
+    CAM2_CONTOUR_RELATIVE_HEIGHTS,
     beam_contour_symmetry,
     beam_roundness,
+    beam_threshold_contours,
     beam_visibility,
+    camera_contour_profile,
 )
 
 
@@ -152,3 +155,77 @@ def test_dark_margin_beam_remains_visible_with_adaptive_diagnosis():
     assert diagnosis["ambient_light_high"] is False
     assert diagnosis["beam_visible"] is True
     assert diagnosis["centroid"] == pytest.approx((40, 40), abs=0.5)
+
+
+def test_display_contours_are_recalculated_from_each_current_frame():
+    first = _gaussian(8.0, 8.0)
+    second = np.roll(np.roll(first, 11, axis=0), -7, axis=1)
+
+    first_paths = beam_threshold_contours(first, threshold=10)
+    second_paths = beam_threshold_contours(second, threshold=10)
+
+    assert len(first_paths) == len(second_paths) == 9
+    first_centres = np.array([
+        np.mean(path["points"][:-1], axis=0) for path in first_paths
+    ])
+    second_centres = np.array([
+        np.mean(path["points"][:-1], axis=0) for path in second_paths
+    ])
+    assert np.mean(second_centres - first_centres, axis=0) == pytest.approx(
+        (-7, 11), abs=0.5
+    )
+    assert [path["relative_height"] for path in first_paths] == [
+        0.10, 0.16, 0.23, 0.31, 0.40, 0.50, 0.61, 0.72, 0.82
+    ]
+
+
+def test_display_contours_are_smooth_circles_from_the_scoring_fit():
+    paths = beam_threshold_contours(_gaussian(7.0, 10.0), threshold=10)
+
+    assert len(paths) == 9
+    for path in paths:
+        points = np.asarray(path["points"])
+        radii = np.linalg.norm(
+            points - np.asarray(path["centre"]), axis=1
+        )
+        assert len(points) == 181
+        assert points[0] == pytest.approx(points[-1])
+        assert radii == pytest.approx(path["radius_px"], abs=1.0e-9)
+        assert path["ellipticity_error_pct"] > 0
+
+
+def test_cam2_uses_lower_wider_roundness_threshold_profile():
+    profile = camera_contour_profile("manip/V0/Cam2_V0", 50)
+    image = _gaussian(5.0, 5.0)
+    generic_paths = beam_threshold_contours(image, threshold=50)
+    cam2_paths = beam_threshold_contours(image, **profile)
+
+    assert profile == {
+        "threshold": 20.0,
+        "relative_heights": CAM2_CONTOUR_RELATIVE_HEIGHTS,
+    }
+    assert len(cam2_paths) == 9
+    generic_span = (
+        generic_paths[0]["radius_px"] - generic_paths[-1]["radius_px"]
+    )
+    cam2_span = cam2_paths[0]["radius_px"] - cam2_paths[-1]["radius_px"]
+    assert cam2_span > generic_span + 1.0
+
+    measured = beam_contour_symmetry([image], **profile)
+    assert measured["contour_floor_threshold"] == pytest.approx(20.0)
+    assert measured["contour_relative_heights"] == list(
+        CAM2_CONTOUR_RELATIVE_HEIGHTS
+    )
+
+
+@pytest.mark.parametrize(
+    "relative_heights",
+    [(), (0.1, 0.2), (0.0, 0.2, 0.4), (0.2, 0.1, 0.4), (0.1, 0.4, 1.0)],
+)
+def test_invalid_contour_height_profiles_are_rejected(relative_heights):
+    with pytest.raises(ValueError):
+        beam_threshold_contours(
+            _gaussian(8.0, 8.0),
+            threshold=10,
+            relative_heights=relative_heights,
+        )

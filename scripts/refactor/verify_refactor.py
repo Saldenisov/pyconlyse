@@ -19,6 +19,9 @@ from typing import Callable, Iterable, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ENVIRONMENT = "pyconlyse39"
+# Deployment/restart helpers retain their existing environment above. Only the
+# software verification default follows the project's Python 3.12 dependency lock.
+DEFAULT_VERIFICATION_ENVIRONMENT = "pyconlyse312"
 COMPILE_ROOTS = (
     "DeviceServers",
     "gui/controllers/openers",
@@ -163,7 +166,7 @@ def changed_python_files(
 
 
 def build_verification_commands(
-    environment: str = DEFAULT_ENVIRONMENT,
+    environment: str = DEFAULT_VERIFICATION_ENVIRONMENT,
     include_frontend: bool = False,
     full: bool = False,
     changed_files: Iterable[str] = (),
@@ -331,7 +334,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Run the complete software-only pytest suite; implies frontend checks.",
     )
-    parser.add_argument("--environment", default=DEFAULT_ENVIRONMENT)
+    parser.add_argument("--environment", default=DEFAULT_VERIFICATION_ENVIRONMENT)
     return parser.parse_args(argv)
 
 

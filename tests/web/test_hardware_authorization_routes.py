@@ -28,6 +28,7 @@ DANGEROUS_ROUTES = [
     ("itest.output", "POST", "/api/device/itest/power/1/slot/1/output"),
     ("itest.current", "POST", "/api/device/itest/power/1/slot/1/current"),
     ("daqmx.write", "POST", "/api/daqmx/device/daq/write"),
+    ("daqmx.reset", "POST", "/api/daqmx/device/daq/counter/reset"),
     ("psp.ack", "POST", "/api/psp/device/vacuum/commands/ack"),
     ("camera.capture", "POST", "/api/device/camera/cam/capture"),
     ("camera.grabbing", "POST", "/api/camera/cam/grabbing"),
@@ -98,10 +99,11 @@ def test_v0_tango_idle_get_never_starts_acquisition(fake_v0_client):
     }
 
 
-def test_v0_enforced_initialize_requires_approval_before_side_effect(fake_v0_client, monkeypatch):
+def test_v0_initialize_still_requires_exact_plan_with_production_policy(fake_v0_client, monkeypatch):
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "true")
     response = fake_v0_client.post("/api/pump-probe-v0/hardware/initialize", json={})
     assert response.status_code == 403
+    assert response.get_json()["code"] == "hardware_not_authorized"
     assert fake_v0_client.proxy.mutating_calls == []
     assert not (fake_v0_client.proxy.calls and "approval" in fake_v0_client.proxy.calls)
 

@@ -8,5 +8,52 @@
     "BURM?": "0"
   },
   "verified_on_hardware": false,
-  "note": "Capture the complete Recall 9 parameter snapshot after Everest and DG645 are available."
+  "memory_programming": {
+    "programmed_at_utc": "2026-10-09T11:37:34.236450+00:00",
+    "instrument_idn": "Stanford Research Systems,DG645,s/n001771,ver1.14.10E",
+    "baseline_time_range": "1 us",
+    "save_command": "*SAV 9",
+    "memory_readback_verified": true,
+    "calibrated_ranges_read_back": 20,
+    "physical_waveform_verified": false,
+    "backup_file": "vd2_dg645_memory9_before_20261009.json",
+    "verified_snapshot_file": "vd2_dg645_memory9_verified_20261009.json",
+    "automatic_slot_save": false,
+    "scope": "Only A/E changed from old slot 9; BURM already 0. Derived T1 follows the longest delay automatically. B/C/D/F/G/H, links, output levels and trigger settings retained. Slot 8 untouched."
+  },
+  "output_roles": {
+    "AB": "pre-pulse",
+    "CD": "main flashlamp pulse",
+    "EF": "streak-camera trigger",
+    "GH": "gate; operator parameters pending"
+  },
+  "timing_calibration": {
+    "reference": "T0",
+    "delay_unit": "ms",
+    "delay_a": "2.0417",
+    "delay_e_by_time_range": {
+      "1 ns": "2.2077265",
+      "2 ns": "2.2077259",
+      "5 ns": "2.207714",
+      "10 ns": "2.207696",
+      "20 ns": "2.207683",
+      "50 ns": "2.20759",
+      "100 ns": "2.20752",
+      "200 ns": "2.20749",
+      "500 ns": "2.20715",
+      "1 us": "2.2065",
+      "2 us": "2.2054",
+      "5 us": "2.202",
+      "10 us": "2.197",
+      "20 us": "2.185",
+      "50 us": "2.15",
+      "100 us": "2.05",
+      "200 us": "1.85",
+      "500 us": "1.4",
+      "1 ms": "0.85",
+      "2 ms": "0"
+    },
+    "gates": "not supplied; preserve existing settings"
+  },
+  "note": "Operator-supplied A/E calibration and output roles, 2026-10-09. Delays are milliseconds; time-range labels use ns/us/ms. A is fixed. Preserve B, C, D, F, G, H and all output levels until operator parameters are supplied. No interpolation or automatic persistent *SAV command. Recall 9 stores one baseline setup, not the 20-entry calibration table. Physical pulse timing verification remains pending."
 }

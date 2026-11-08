@@ -257,6 +257,12 @@ def record_treatment_manifest(
             if key in {"save_path", "rows", "cols", "bytes"} and value is not None
         },
     }
+    if folder_set.get("map_policy") in {"selected_maps", "all_raw_maps"}:
+        record["processing"]["map_policy"] = folder_set["map_policy"]
+        record["processing"]["map_counts"] = dict(folder_set.get("map_counts") or {})
+    project = ((recipe or {}).get("provenance") or {}).get("vd2_project")
+    if project:
+        record["vd2_project"] = dict(project)
     manifest_path = _manifest_path(save_folder)
 
     with _manifest_lock:

@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 SOCKETIO_ASYNC_MODE = "threading"
 
 
+def _record_websocket_mutation(**event):
+    """Load audit support lazily so passive WebSocket monitoring stays independent."""
+    from audit_log import record_websocket_mutation
+
+    record_websocket_mutation(**event)
+
+
 def _json_safe_number(value, default=0.0):
     try:
         numeric = float(value)
@@ -95,6 +102,16 @@ def _socket_subject():
     if not isinstance(subject, str) or not subject.strip():
         raise AuthorizationError(403, "hardware_not_authorized", "Hardware action is not authorized")
     return subject
+
+
+def _socket_roles():
+    """Return server-signed JWT roles for audit display only."""
+    if not authorization_required():
+        return []
+    token = request.cookies.get(_jwt_access_cookie_name())
+    decoded = decode_token(str(token)) if token else {}
+    roles = decoded.get("roles", []) if isinstance(decoded, dict) else []
+    return roles if isinstance(roles, list) else []
 
 
 def _command_error_identifiers(data):
@@ -510,8 +527,9 @@ def init_socketio(app):
                 emit('error', {'message': 'Device name required'})
                 return
             
-            # Get device status immediately
-            monitor.monitor_device(device_name, "temp_status")
+            # Every Socket.IO client joins its own SID room on connection.
+            # Reply there even when the caller has not subscribed to monitoring.
+            monitor.monitor_device(device_name, request.sid)
             
         except Exception as e:
             logger.error(f"Get status error: {e}")
@@ -522,11 +540,13 @@ def init_socketio(app):
         """Execute device command via WebSocket"""
         device_name = 'unknown'
         command_name = 'unknown'
+        started_monotonic = time.monotonic()
         try:
             # A Socket.IO connection can outlive cookie expiry/revocation.  In
             # enforced mode, decode the current request cookie before looking
             # at client-controlled command fields or acquiring a proxy.
             subject = _socket_subject()
+            roles = _socket_roles()
             if not isinstance(data, dict):
                 raise AuthorizationError(409, 'hardware_approval_invalid', 'Hardware request is invalid')
             # Local opt-out bypasses cookie/approval enforcement only.  It
@@ -567,6 +587,16 @@ def init_socketio(app):
                 'success': True,
                 'timestamp': datetime.now().isoformat()
             })
+            _record_websocket_mutation(
+                subject=subject,
+                roles=roles,
+                device=device_name,
+                command=command_name,
+                args=args,
+                status_code=200,
+                result=result,
+                started_monotonic=started_monotonic,
+            )
             
             logger.info(f"Client executed command {command_name} on {device_name}")
             
@@ -579,6 +609,17 @@ def init_socketio(app):
                 'command': command_name,
                 **websocket_authorization_error(exc),
             })
+            if isinstance(locals().get('subject'), str) and subject:
+                _record_websocket_mutation(
+                    subject=subject,
+                    roles=locals().get('roles', []),
+                    device=device_name,
+                    command=command_name,
+                    args=data.get('args') if isinstance(data, dict) else None,
+                    status_code=exc.status_code,
+                    error=websocket_authorization_error(exc),
+                    started_monotonic=started_monotonic,
+                )
         except Exception as e:
             logger.error(f"Command execution error: {e}")
             emit('command_error', {
@@ -587,6 +628,17 @@ def init_socketio(app):
                 'error': str(e),
                 'success': False
             })
+            if isinstance(locals().get('subject'), str) and subject:
+                _record_websocket_mutation(
+                    subject=subject,
+                    roles=locals().get('roles', []),
+                    device=device_name,
+                    command=command_name,
+                    args=data.get('args') if isinstance(data, dict) else None,
+                    status_code=500,
+                    error=str(e),
+                    started_monotonic=started_monotonic,
+                )
     
     return socketio
 

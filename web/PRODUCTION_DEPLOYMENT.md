@@ -41,6 +41,13 @@ $env:PYCONLYSE_ENFORCE_DEVICE_AUTH = "true"
 $env:PYCONLYSE_JWT_COOKIE_CSRF_PROTECT = "true"
 ```
 
+Alternatively, set `PYCONLYSE_AUTH_USERS_FILE` to an absolute protected JSON
+file outside the repository. Production records authenticated HTTP mutations
+and WebSocket hardware commands in the hash-chained SQLite journal selected by
+`PYCONLYSE_AUDIT_DB_PATH` (default on Windows:
+`C:\ProgramData\Pyconlyse\audit.sqlite3`). See
+`docs/ARCHIVING_AUTHENTICATION_AUDIT.md`.
+
 Run from the `web` directory:
 
 ```powershell
@@ -69,3 +76,32 @@ topology until the supported Windows server and load validation are complete.
 - Authentication startup failures: set required production values before
   launch; do not weaken cookie, CSRF, or device-auth enforcement.
 - Tango connection errors: verify server configuration and `TANGO_HOST`.
+
+## Optional ELYSE ACQ simulation link
+
+The web Supervision business layer can link to the existing Python 3.4 agent
+with its optional named-procedure simulation extension, without importing a
+hardware driver. Before starting the
+web backend, set:
+
+```powershell
+$env:ELYSE_ACQ_URL = "tcp://10.20.30.10:8765"
+$env:ELYSE_ACQ_SHARED_KEY_FILE = "C:\ProgramData\Pyconlyse\acq.key"
+```
+
+Generate the shared key with `legacy/xp_acq_agent/generate_supervision_key.py`,
+then securely install protected copies on both hosts. Keep secrets outside
+the repository and frontend static files. Deploy the portable wire helper
+package alongside the web backend; neither the key nor NI adapters belong in
+the browser bundle. Keep all existing JWT/CSRF enforcement enabled.
+
+This is authenticated LAN simulation only, not hardware authorization or a
+supported public XP deployment. The link remains disconnected without an
+explicit URL/key. Full setup and unknown-outcome recovery boundaries are in
+`legacy/xp_acq_agent/SUPERVISION.md`; do not clear an unresolved database
+or automatically resend a command after restart.
+
+Use `main.py --supervision` inside the original agent deployment; do not start a
+second acquisition server on port 8768. Local Everest qualification uses the
+separate loopback-only `tools/run_elyse_supervision_local.py` harness, not the
+production web process or physical equipment.

@@ -1,0 +1,56 @@
+{
+  "scope": "Static transfer of General, Chauffage, PREMA, Focales, Relais HT and Alimentation HT procedure intent; not complete live control",
+  "implementation": {
+    "python_version": "3.4 compatible; tested using actual Python 3.4.4",
+    "module": "legacy/xp_acq_agent/elyse_agent/acquisition_stage_model.py",
+    "catalog": "legacy/xp_acq_agent/data/modulator_stage_catalog.json",
+    "catalog_sha256": "A9D821E7519EA50F6B35593E58C78129EC7D8A7BFEDCC06098E247BEF011A0B0",
+    "procedures": 16,
+    "outer_procedure_frames": 113,
+    "nested_focal_frames": 7,
+    "total_modeled_frames": 120,
+    "includes": [
+      "Separate start/stop of all six requested stages",
+      "Cooling start/stop and modulator/HT resets",
+      "Exact C3/C4 field writes, EPS/DPS assignments, nominal wait requests and publication error-wire order",
+      "Focal 29-second wait, Chroma ON helper boundary, 1500-ms wait",
+      "Three focal resources and connected V/slew/I/Output constants for both ON/OFF graphs",
+      "Strict complete Boolean snapshots; untouched local fields retained",
+      "Helper completion remains UNSUPPLIED; no assumed success or PSP delivery",
+      "Independent same-frame read snapshots; no invented atomic or concurrent runtime ordering"
+    ],
+    "hardware_callbacks_accepted_by_model": false,
+    "added_gui_or_http_actuation_routes": false,
+    "packager_change": "Future packages include the inert model/catalog; deployed v4 package was not overwritten"
+  },
+  "evidence": {
+    "safety_report": "docs/ELYSE_MODULATOR_STAGE_SAFETY_2026-10-19.json",
+    "catalog_reproducer": "tools/build_acq_modulator_catalog.py",
+    "safety_trace_reproducer": "tools/trace_acq_modulator_stage_safety.py",
+    "source_validation": "All 23 original ACQ procedure direct graphs and DPS dispatch validated before selecting the 16 catalog paths; both focal helper graphs validated",
+    "new_ui_scope": "Original saved Supervision main: 60 Modulateur panel descendants, 12 DisabledEnum properties, five static control references",
+    "new_input_scope": "All six saved main-VI C4_IN local references: only field-unbundle consumer selects 19/38, not klystron body/collector 0/1",
+    "physical_cooling_interlock_qualified": false,
+    "complete_business_logic_or_live_replacement_claimed": false
+  },
+  "verification": {
+    "python_3_4_unittest": {"passed": 86, "failed": 0},
+    "python_3_12_targeted_pytest": {"passed": 129, "failed": 0, "warnings": 1},
+    "python_3_12_focal_and_event_source_tests": {"passed": 10, "failed": 0, "warnings": 1},
+    "test_input_origin": "Synthetic test inputs only; no live telemetry values saved",
+    "hardware_initialized_or_commanded": false,
+    "screen_used": false,
+    "vi_run_or_saved": false,
+    "xp_processes_or_startup_changed": false,
+    "existing_v4_zip_sha256_unchanged": "41BA77826B5D73F0D4D666B8A2D2D472FCF0ED3E1ADEC22A3FCB3DDC9DAAAC83"
+  },
+  "remaining_before_live_stage_controls": [
+    "Establish electrical meaning, validity and response of body/collector/focal water inputs; verify independent protection without assuming EPS OK is readiness",
+    "Verify actual Chroma resources and implement/commission bounded ON and OFF adapters; existing OFF adapter is not a validated ON path",
+    "Integrate procedures with the single NI owner, fault/cancellation/read freshness and qualified stop behavior",
+    "Implement a complete qualified shutdown: General Arret event 6 does not directly pulse HT-supply stop C4[19]",
+    "Qualify HT voltage/setpoint/ramp and emergency behavior separately; catalog does not authorize voltage application",
+    "Operator-supervised sequential commissioning after cooling and hardware readiness are established"
+  ],
+  "operational_limit": "New stages remain non-actuating. No heating, PREMA, Focales, Relais HT or HT start was performed. Existing General commissioning controls were not replaced or exercised."
+}

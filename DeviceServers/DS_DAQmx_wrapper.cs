@@ -16,7 +16,7 @@ namespace DS_DAQmx_Wrapper
                 {
                     Console.WriteLine("ERROR: No instance name provided!");
                     Console.WriteLine("Usage: DS_DAQmx.exe [instance_name]");
-                    Console.WriteLine("Example: DS_DAQmx.exe 1_DAQMX_1");
+                    Console.WriteLine("Example: DS_DAQmx.exe TRANCON-DAQ");
                     return 1;
                 }
 

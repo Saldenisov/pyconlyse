@@ -3,11 +3,13 @@ from threading import RLock
 import pytest
 
 from tests.device_servers.base._test_support import _install_tango_stub
+from tests.device_servers.base._driver_stubs import avantes_imports
 
 _install_tango_stub()
 
 from DeviceServers.base import general as general_module
-from DeviceServers.cameras.avantes import DS_AVANTES_CCD as avantes_module
+with avantes_imports():
+    from DeviceServers.cameras.avantes import DS_AVANTES_CCD as avantes_module
 
 
 class FakeThread:

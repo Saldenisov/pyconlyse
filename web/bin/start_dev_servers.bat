@@ -62,23 +62,9 @@ if exist "%TANGO_ROOT%\bin\Starter.exe" (
     timeout /t 2 /nobreak
 )
 
-REM Start pyconlyse backend (production server)
-echo [3/3] Starting Pyconlyse Backend (Production)...
-if exist "C:\dev\pyconlyse\web\start_production.py" (
-    start "Pyconlyse Backend (Port 5000)" powershell -NoExit -Command "conda activate pyconlyse39; cd 'C:\dev\pyconlyse\web'; python start_production.py"
-    echo Backend started on port 5000
-) else (
-    echo WARNING: Pyconlyse production server script not found
-)
-
-REM Start pyconlyse frontend (dev server)
-echo [4/4] Starting Pyconlyse Frontend (Dev)...
-if exist "C:\dev\pyconlyse\web\frontend" (
-    start "Pyconlyse Frontend (Port 5001)" powershell -NoExit -Command "cd 'C:\dev\pyconlyse\web\frontend'; npm run dev -- --port 5001"
-    echo Frontend started on port 5001
-) else (
-    echo WARNING: Pyconlyse frontend not found
-)
+REM Start the web development services using their shared launcher.
+call "%~dp0start_pyconlyse.bat"
+if errorlevel 1 exit /b 1
 
 echo.
 echo ================================================
@@ -89,7 +75,7 @@ echo Services:
 echo  - Tango Database
 echo  - Tango Starter (if available)
 echo  - Pyconlyse Backend: http://localhost:5000
-echo  - Pyconlyse Frontend: http://localhost:5001
+echo  - Pyconlyse Frontend: http://127.0.0.1:3000
 echo.
 echo Close this window when done.
 pause

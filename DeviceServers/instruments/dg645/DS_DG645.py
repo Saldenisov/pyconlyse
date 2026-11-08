@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import socket
 from typing import Optional, Union
 
@@ -250,6 +251,22 @@ class DS_DG645(DS_General):
 
     def write_burst_period_s(self, value: float):
         self._write(f"BURP {float(value):.12g}")
+
+    @attribute(
+        label="Delay channels A-H",
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="JSON object containing raw DG645 reference,delay readbacks for channels A-H.",
+    )
+    def delays_json(self) -> str:
+        """Read every user delay channel in one passive web-friendly attribute."""
+        return self._delays_snapshot_json()
+
+    def _delays_snapshot_json(self) -> str:
+        return json.dumps(
+            {channel: self._query(f"DLAY?{self._channel_id(channel)}") for channel in "ABCDEFGH"},
+            separators=(",", ":"),
+        )
 
     @command(dtype_in=str, dtype_out=str, doc_in="SCPI write command")
     def scpi_write(self, cmd: str) -> str:

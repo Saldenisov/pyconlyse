@@ -324,6 +324,7 @@ def _resolve_command_name(device, candidates):
 
 
 DAQMX_DEVICE_CLASSES = (
+    "DS_DAQmx",
     "DS_DAQmx_ZMQ",
     "DS_PSP_SUPERVISION",
     "DS_PSP_Supervision",
@@ -381,6 +382,8 @@ def _read_daqmx_latest_payload(device):
     attr_candidates = [
         "latest_values_json",
         "LatestValuesJson",
+        "snapshot_json",
+        "SnapshotJson",
     ]
 
     for command_name in command_candidates:
@@ -397,6 +400,12 @@ def _read_daqmx_latest_payload(device):
             raw = device.read_attribute(attr_name).value
             payload = _safe_json_loads(raw, default={})
             if isinstance(payload, dict):
+                if attr_name.lower() == "snapshot_json" and "data" not in payload:
+                    return {
+                        "timestamp": time.time(),
+                        "source": "direct",
+                        "data": payload,
+                    }
                 return payload
         except Exception:
             pass
@@ -414,12 +423,55 @@ def _normalize_daqmx_channels(payload):
 
     channels = []
     for channel_name, channel_value in data.items():
+        if isinstance(channel_value, dict) and (
+            "value" in channel_value or "kind" in channel_value
+        ):
+            details = make_json_safe(channel_value)
+            kind = str(details.get("kind", details.get("type", "")) or "")
+            item = {
+                "name": str(channel_name),
+                "value": _to_scalar_value(details.get("value")),
+                "kind": kind,
+                "physical_channel": str(details.get("channel", "") or ""),
+                "counter": str(details.get("counter", "") or ""),
+                "unit": str(details.get("unit", "") or ""),
+                "alarm": bool(details.get("alarm", False)),
+                "value_known": bool(details.get("value_known", True)),
+                "writable": kind == "DigitalOut",
+                "raw_value": _to_scalar_value(details.get("raw_value")),
+                "multiplier": _to_scalar_value(details.get("multiplier", 1.0)),
+                "limit_alarm_min": _to_scalar_value(details.get("limit_alarm_min")),
+                "limit_alarm_max": _to_scalar_value(details.get("limit_alarm_max")),
+            }
+            if details.get("error"):
+                item["error"] = str(details["error"])
+            channels.append(item)
+            continue
+
         channels.append({
             "name": str(channel_name),
             "value": _to_scalar_value(channel_value),
+            "kind": "",
+            "physical_channel": "",
+            "counter": "",
+            "unit": "",
+            "alarm": False,
+            "value_known": True,
+            "writable": False,
         })
-    channels.sort(key=lambda item: item["name"])
     return channels
+
+
+def _read_daqmx_device_info(device):
+    for attr_name in ("device_info_json", "DeviceInfoJson"):
+        try:
+            raw = device.read_attribute(attr_name).value
+            payload = _safe_json_loads(raw, default={})
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+    return {}
 
 
 def _laser_camera_number(value):
@@ -627,6 +679,8 @@ def _write_daqmx_channel(device, channel, value, command_variant=None):
             return device.command_inout(command_name, json_payload_name_value)
         if command_variant == "set_channel_value_json":
             return device.command_inout(command_name, json_payload_channel_value)
+        if command_variant in {"write_digital_output", "write_channel"}:
+            return device.command_inout(command_name, [channel, str(scalar_value)])
         if command_variant == "write_variable":
             return device.command_inout(command_name, [channel, scalar_value])
         if command_variant == "set_variable_value":
@@ -660,6 +714,12 @@ def _write_daqmx_channel(device, channel, value, command_variant=None):
             return device.command_inout(cmd, [channel, scalar_value])
         except Exception:
             return device.command_inout(cmd, eq_payload)
+
+    for direct_command in ("write_digital_output", "write_channel"):
+        if direct_command in commands:
+            return device.command_inout(
+                commands[direct_command], [channel, str(scalar_value)]
+            )
 
     raise Exception(
         "Device does not expose a supported write command "
@@ -725,7 +785,9 @@ _PSP_ACK_COMMANDS = ('acknowledge_command_json', 'AcknowledgeCommandJson')
 _DAQMX_WRITE_COMMANDS = (
     'write_variable_json', 'set_variable_value_json', 'set_channel_value_json',
     'write_variable', 'set_variable_value', 'set_channel_value',
+    'write_digital_output', 'write_channel',
 )
+_DAQMX_RESET_COMMANDS = ('reset_counter',)
 _PSP_ACK_FIELDS = frozenset({
     'command', 'id', 'ok', 'status', 'error', 'message', 'timestamp',
     'command_variant',
@@ -1392,7 +1454,7 @@ def handle_attribute(device_name, attr_name):
             attr = device.read_attribute(attr_name)
             return jsonify({
                 'attribute': attr_name,
-                'value': attr.value if hasattr(attr, 'value') else None,
+                'value': make_json_safe(attr.value) if hasattr(attr, 'value') else None,
                 'quality': str(attr.quality),
                 'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None,
                 'success': True
@@ -1427,7 +1489,7 @@ def handle_attribute(device_name, attr_name):
             
             return jsonify({
                 'attribute': attr_name,
-                'value': attr.value if hasattr(attr, 'value') else None,
+                'value': make_json_safe(attr.value) if hasattr(attr, 'value') else None,
                 'quality': str(attr.quality),
                 'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None,
                 'success': True
@@ -1487,7 +1549,7 @@ def execute_command(device_name, command_name):
         
         return jsonify({
             'command': command_name,
-            'result': result,
+            'result': make_json_safe(result),
             'verified_states': verified_states,
             'success': True
         })
@@ -1558,8 +1620,14 @@ def get_laser_pointing_snapshot(device_name):
             automatic_supported = 'start_automatic_search' in commands
             pause_supported = 'pause_automatic_search' in commands
             resume_supported = 'resume_automatic_search' in commands
+            cancel_keep_current_supported = (
+                'cancel_automatic_search' in commands
+            )
             reference_acceptance_supported = (
                 'accept_alignment_reference' in commands
+            )
+            manual_reference_supported = (
+                'save_current_alignment_reference' in commands
             )
             point_supported = 'apply_controller_point' in commands
             manual_point_selection_supported = 'select_manual_point' in commands
@@ -1589,11 +1657,29 @@ def get_laser_pointing_snapshot(device_name):
                     'max_evaluations': 16,
                     'max_cycles': 2,
                     'samples': 3,
+                    'adaptive_learning': True,
+                    'adaptive_min_step': 0.125,
+                    'adaptive_backoff': 0.5,
+                    'adaptive_growth': 1.15,
+                    'point_step_limits': {},
+                    'point_probe_repetitions': {},
+                    'aperture_sweep_enabled': True,
+                    'aperture_sweep_positions': 4,
+                    'aperture_cycle_count': 2,
+                    'aperture_samples': 1,
+                    'aperture_drift_weight': 0.5,
+                    'group_plateau_probe_limit': 5,
+                    'group_plateau_min_improvement_pct': 5.0,
+                    'stagnation_pass_limit': 5,
+                    'stagnation_min_improvement_pct': 5.0,
                 },
             )
             search_history = read_optional_json('automatic_search_history', [])
             if not isinstance(search_history, list):
                 search_history = []
+            adaptive_search_model = read_optional_json(
+                'adaptive_search_model_json', {}
+            )
             alignment_reference = read_optional_json(
                 'alignment_reference_json', {}
             )
@@ -1999,6 +2085,7 @@ def get_laser_pointing_snapshot(device_name):
                     'progress': make_json_safe(search_progress),
                     'config': make_json_safe(search_config),
                     'history': make_json_safe(search_history),
+                    'adaptive_model': make_json_safe(adaptive_search_model),
                     'reference': make_json_safe(alignment_reference),
                     'reference_revision': alignment_reference_revision,
                     'pending_reference': make_json_safe(
@@ -2014,8 +2101,14 @@ def get_laser_pointing_snapshot(device_name):
                     'automatic_search': automatic_supported,
                     'pause_search': pause_supported,
                     'resume_search': resume_supported,
+                    'cancel_search_keep_current': (
+                        cancel_keep_current_supported
+                    ),
                     'accept_alignment_reference': (
                         reference_acceptance_supported
+                    ),
+                    'save_current_alignment_reference': (
+                        manual_reference_supported
                     ),
                     'apply_point': point_supported,
                     'manual_point_selection': manual_point_selection_supported,
@@ -2866,6 +2959,7 @@ def get_daqmx_latest(device_name):
         device = DeviceManager.get_device(device_name)
         payload = _read_daqmx_latest_payload(device)
         channels = _normalize_daqmx_channels(payload)
+        device_info = _read_daqmx_device_info(device)
 
         return jsonify({
             'device': device_name,
@@ -2873,6 +2967,7 @@ def get_daqmx_latest(device_name):
             'latest': payload,
             'channels': channels,
             'channel_count': len(channels),
+            'device_info': device_info,
             'success': True,
         })
     except Exception as e:
@@ -2949,6 +3044,55 @@ def write_daqmx_channel(device_name):
             'device': device_name,
             'channel': str(channel),
             'value': _to_scalar_value(value),
+            'result': make_json_safe(result),
+            'success': True,
+        })
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/daqmx/device/<path:device_name>/counter/reset', methods=['POST'])
+def reset_daqmx_counter(device_name):
+    """Reset one counter exposed by the direct physical-card DAQmx server."""
+    try:
+        _maybe_require_auth()
+        data = _mutation_payload(required=('channel',))
+        if data is None or set(data) - {'channel', 'command_variant'}:
+            return jsonify({'error': 'channel is required', 'success': False}), 400
+        channel = data.get('channel')
+        if not isinstance(channel, str) or not channel.strip():
+            return jsonify({'error': 'channel is required', 'success': False}), 400
+
+        command_variant = _command_variant(data, _DAQMX_RESET_COMMANDS)
+        if authorization_required() and command_variant is None:
+            return jsonify({'error': 'command_variant is required', 'success': False}), 400
+        if command_variant is None and data.get('command_variant') is not None:
+            return jsonify({'error': 'command_variant is invalid', 'success': False}), 400
+        command_name = command_variant or 'reset_counter'
+        blocked = require_http_hardware(
+            action='reset',
+            targets=[{'device': str(device_name), 'command': command_name}],
+            args={'channel': channel.strip(), 'command_variant': command_name},
+            route_id='daqmx.reset',
+            wrapper_fields={'channel', 'command_variant'},
+        )
+        if blocked is not None:
+            return blocked
+
+        device = DeviceManager.get_device(device_name)
+        commands = _list_device_commands_lower(device)
+        resolved_command = commands.get(command_name.lower())
+        if not resolved_command:
+            return jsonify({
+                'error': 'Device does not support counter reset',
+                'success': False,
+            }), 400
+        result = device.command_inout(resolved_command, channel.strip())
+        return jsonify({
+            'device': device_name,
+            'channel': channel.strip(),
             'result': make_json_safe(result),
             'success': True,
         })
@@ -3204,6 +3348,10 @@ def handle_camera_grabbing(device_name):
 def get_camera_image(device_name):
     """Get the last captured image from camera"""
     try:
+        include_contours = str(request.args.get('contours', '')).lower() in (
+            '1', 'true', 'yes', 'on'
+        )
+        contour_settings = None
         with DeviceManager.operation_lock(device_name):
             device = DeviceManager.get_device(device_name)
             # DS_CAMERA_CCD.image starts grabbing when acquisition is stopped.
@@ -3228,10 +3376,52 @@ def get_camera_image(device_name):
                 cg_position = ast.literal_eval(cg_str)
             except Exception:
                 pass
+
+            if include_contours:
+                contour_settings = {
+                    'threshold': float(
+                        device.read_attribute('center_gravity_threshold').value
+                    ),
+                    'width': int(device.read_attribute('width').value),
+                    'height': int(device.read_attribute('height').value),
+                }
+
+        contours = []
+        contour_error = ''
+        contour_profile = None
+        if include_contours and contour_settings:
+            try:
+                from DeviceServers.control.laser_pointing.beam_metrics import (
+                    beam_threshold_contours,
+                    camera_contour_profile,
+                )
+
+                contour_profile = camera_contour_profile(
+                    device_name, contour_settings['threshold']
+                )
+                fitted = beam_threshold_contours(
+                    image_data,
+                    **contour_profile,
+                    width=contour_settings['width'],
+                    height=contour_settings['height'],
+                )
+                contours = [
+                    {
+                        key: value
+                        for key, value in contour.items()
+                        if key != 'points'
+                    }
+                    for contour in fitted
+                ]
+            except Exception as error:
+                contour_error = str(error)
         
         return jsonify({
             'image': make_json_safe(image_data),
             'cg_position': cg_position,
+            'contours': make_json_safe(contours),
+            'contour_profile': make_json_safe(contour_profile),
+            'contour_error': contour_error,
             'timestamp': image_attr.time.tv_sec if hasattr(image_attr, 'time') else None,
             'success': True
         })

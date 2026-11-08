@@ -12,6 +12,44 @@ if str(BACKEND) not in sys.path:
 import experiment_readiness as readiness
 
 
+@pytest.mark.parametrize("healthy", [True, False])
+def test_start_only_mode_never_stops_an_existing_server(healthy):
+    calls = []
+    class Starter:
+        def command_inout(self, command, argument):
+            calls.append((command, argument))
+            assert command == "DevGetRunningServers"
+            return ["server"]
+    def observe():
+        if not healthy:
+            raise RuntimeError("hardware not ready; server retained")
+        return "verified"
+    if healthy:
+        assert readiness.start_managed_server(Starter(), "server", observe, restart_existing=False) == "verified"
+    else:
+        with pytest.raises(RuntimeError, match="server retained"):
+            readiness.start_managed_server(Starter(), "server", observe, restart_existing=False)
+    assert calls == [("DevGetRunningServers", True)]
+
+
+def test_start_race_observes_new_owner_without_replaying_initialization():
+    calls = []
+    class Starter:
+        running = False
+        def command_inout(self, command, argument):
+            calls.append(command)
+            if command == "DevGetRunningServers":
+                return ["server"] if self.running else []
+            assert command == "DevStart"
+            self.running = True
+            raise RuntimeError("ALREADY_RUNNING")
+    assert readiness.start_managed_server(
+        Starter(), "server", lambda: pytest.fail("Do not initialize another owner's server"),
+        restart_existing=False, observe_existing=lambda: "observed",
+    ) == "observed"
+    assert calls == ["DevGetRunningServers", "DevStart", "DevGetRunningServers"]
+
+
 def test_start_waits_until_starter_confirms_previous_process_stopped(monkeypatch):
     calls = []
 
@@ -157,6 +195,23 @@ def test_start_retries_only_rejected_already_running_transition(monkeypatch):
     monkeypatch.setattr(readiness.time, "sleep", lambda _seconds: None)
     assert readiness.start_managed_server(Starter(), "server", lambda: "ready") == "ready"
     assert calls == ["DevGetRunningServers", "DevStart", "DevGetRunningServers", "DevStart"]
+
+
+def test_recovery_reports_each_failure_attempt_and_verified_success():
+    reports = []
+    class Device:
+        ready = False
+        def get_command_list(self):
+            return ["recover", "Init"]
+        def command_inout(self, command):
+            if command == "recover":
+                raise RuntimeError("instrument offline")
+            self.ready = True
+    ready, errors = readiness.recover_device(Device(), lambda device: device.ready, on_progress=reports.append)
+    assert ready
+    assert errors == ["recover: instrument offline"]
+    assert reports == ["Attempting device recovery command recover", "Recovery recover failed: instrument offline",
+                       "Attempting device recovery command Init", "Recovery Init succeeded; hardware readiness verified"]
 
 
 def test_unsettled_start_race_does_not_call_device_recovery(monkeypatch):

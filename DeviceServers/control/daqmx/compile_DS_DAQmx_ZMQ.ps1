@@ -32,11 +32,17 @@ if (-not (Test-Path $SourceFile)) {
 Write-Host "✓ Source file found: $SourceFile" -ForegroundColor Green
 
 # Try to find C# compiler
+$VsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$InstalledCsc = @()
+if (Test-Path -LiteralPath $VsWhere) {
+    $InstalledCsc = @(& $VsWhere -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild\Current\Bin\Roslyn\csc.exe')
+}
 $CscPaths = @(
     "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin\Roslyn\csc.exe",
     "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\Roslyn\csc.exe",
     "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\Roslyn\csc.exe",
-    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe",
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe"
+) + $InstalledCsc + @(
     "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
     "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
 )

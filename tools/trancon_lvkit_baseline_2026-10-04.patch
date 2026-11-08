@@ -1,0 +1,82 @@
+--- a/src/lvkit/codegen/nodes/primitive.py
++++ b/src/lvkit/codegen/nodes/primitive.py
+@@ -84,6 +84,11 @@
+ def generate(node: PrimitiveNode, ctx: CodeGenContext) -> CodeFragment:
+     """Generate code for a primitive node."""
+     prim_id = node.prim_id
++
++    if node.node_type == "subset":
++        from .array_subset_node import generate as generate_array_subset
++
++        return generate_array_subset(node, ctx)
+ 
+     # Index Array's terminal pane has one (output, N indices) group per
+     # result. A one-expression template cannot represent multiple results.
+--- /dev/null
++++ b/src/lvkit/codegen/nodes/array_subset_node.py
+@@ -0,0 +1,40 @@
++"""Array Subset: preserve separate index/length pairs for every axis."""
++
++from lvkit.models import LVTypeKind
++
++from ..ast_utils import build_assign, parse_expr
++from ..elementwise import LV_IMPORT
++from ..fragment import CodeFragment
++from .base import CodeGenError
++
++
++def generate(node, ctx):
++    terms = {term.index: term for term in node.terminals}
++    array, output = terms.get(0), terms.get(1)
++    if array is None or array.lv_type is None or array.lv_type.kind != LVTypeKind.ARRAY:
++        raise CodeGenError("Array Subset requires a typed array", node)
++    rank = array.lv_type.dimensions
++    if not isinstance(rank, int) or rank < 1 or output is None:
++        raise CodeGenError("Array Subset rank or output is unknown", node)
++    if set(terms) != set(range(2 + 2 * rank)):
++        raise CodeGenError("Unrecognized Array Subset index/length pane", node)
++    bounds = []
++    for axis in range(rank):
++        pair = []
++        for position, default in ((2 + 2 * axis, "0"), (3 + 2 * axis, "None")):
++            term = terms[position]
++            if term.direction != "input":
++                raise CodeGenError("Array Subset boundary must be input", node)
++            value = ctx.resolve(term.id) if ctx.graph.terminal_is_wired(term.id) else default
++            if value is None:
++                raise CodeGenError("Array Subset wired boundary is unresolved", node)
++            pair.append(value)
++        bounds.append("(" + ", ".join(pair) + ")")
++    array_value = ctx.resolve(array.id)
++    if array_value is None:
++        raise CodeGenError("Array Subset array is unresolved", node)
++    variable = ctx.make_output_var("subarray", output.id)
++    expression = f"_lv.array_subset_nd({array_value}, [{', '.join(bounds)}])"
++    ctx.array_vars.add(variable)
++    return CodeFragment(statements=[build_assign(variable, parse_expr(expression))],
++                        bindings={output.id: variable}, imports={LV_IMPORT})
+--- a/src/lvkit/runtime/lv.py
++++ b/src/lvkit/runtime/lv.py
+@@ -363,6 +363,22 @@
+ def mean_real64(values):
+     """NI Mean (DBL) numeric output only; the error terminal must be unwired."""
+     return sum(values) / len(values) if values else _math.nan
++
++
++def array_subset_nd(arr, bounds):
++    """Nested list subset with independent (index, length) for each axis.
++
++    Qualified domain: rectangular arrays, integral nonnegative boundaries
++    whose requested subset fits each axis. Unwired lengths retain that axis.
++    Native behavior outside this domain has not been qualified here.
++    """
++    if not bounds:
++        return arr
++    index, length = bounds[0]
++    start = int(index)
++    end = None if length is None else start + int(length)
++    selected = arr[start:end]
++    return [array_subset_nd(value, bounds[1:]) for value in selected] if len(bounds) > 1 else selected
+ 
+ 
+ def array_subset(arr, index, length):

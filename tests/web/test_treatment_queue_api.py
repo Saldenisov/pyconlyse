@@ -3,6 +3,8 @@
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from pathlib import Path
 from threading import Event, Lock
 
@@ -41,6 +43,49 @@ def test_treatment_worker_count_uses_up_to_six_available_cpus(monkeypatch):
     monkeypatch.setattr(treatment_api_module.os, "cpu_count", lambda: 4)
     assert treatment_api_module._treatment_worker_count(10) == 4
 
+
+def test_independent_manifest_samples_overlap_but_following_folder_waits(monkeypatch):
+    from threading import Barrier, Event, Lock
+    monkeypatch.setenv('PYCONLYSE_TREATMENT_MAX_WORKERS', '2')
+    monkeypatch.setattr(treatment_api_module.os, 'cpu_count', lambda: 2)
+    store = TreatmentQueueStore()
+    gate, done, lock = Barrier(2), Event(), Lock()
+    finished = []
+    def execute(job_id, recipe):
+        if recipe['label'] != 'folder':
+            assert treatment_api_module._treatment_thread_context.parallel_sample
+            gate.wait(timeout=3)
+        else:
+            assert set(finished) == {'one', 'two'}
+            done.set()
+        with lock: finished.append(recipe['label'])
+        return {}
+    store.enqueue_batch('parallel', [
+        {'label':name, 'provenance':{'vd2_project':{'sample':name}}} for name in ['one','two']
+    ] + [{'label':'folder', 'kind':'standard_folder_set'}])
+    store.start('parallel', execute)
+    assert done.wait(5)
+    while store.snapshot('parallel')['running']:
+        time.sleep(.01)
+    assert all(job['status']=='completed' for job in store.snapshot('parallel')['jobs'])
+    assert finished[-1] == 'folder'
+
+
+def test_parallel_sample_uses_inline_roles_instead_of_nested_pools(monkeypatch):
+    monkeypatch.setattr(treatment_api_module, '_cpu_executor', lambda count: pytest.fail('nested pool'))
+    treatment_api_module._treatment_thread_context.parallel_sample = True
+    try:
+        assert treatment_api_module._run_parallel_cpu_jobs({'ABS':(2,), 'BASE':(3,)}, lambda role,n,progress:n*2) == {'ABS':4,'BASE':6}
+    finally:
+        treatment_api_module._treatment_thread_context.parallel_sample = False
+
+
+def test_dated_folder_save_name_uses_selected_folder_and_local_date(tmp_path):
+    folder = tmp_path / "12893-water_600_1us-x0"
+    assert treatment_api_module._dated_save_file_name_for_folder(
+        str(folder), date(2026, 9, 29)
+    ) == "12893-water_600_1us-x0_20260929.dat"
+
 def _write_dat(path):
     wavelengths = np.asarray([500.0, 550.0])
     timedelays = np.asarray([1.0, 2.0])
@@ -54,6 +99,12 @@ def _write_dat(path):
 
 @pytest.fixture
 def queue_client(tmp_path, monkeypatch):
+    # Injected fake converters run in the test process; production uses processes.
+    monkeypatch.setattr(
+        treatment_api_module,
+        "_cpu_executor",
+        lambda worker_count: ThreadPoolExecutor(max_workers=worker_count),
+    )
     monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT_BASE", str(tmp_path))
@@ -259,9 +310,105 @@ def test_standard_folder_queue_captures_destructive_vd2_recipe(queue_client):
         "angle_threshold": 1.5,
         "surface_threshold": 7.0,
     }
-    assert recipe["output"]["path"] == str(tmp_path / "12893-water_600_1us-x0.dat")
+    save_name = treatment_api_module._dated_save_file_name_for_folder(str(folder))
+    assert recipe["save_target"] == {
+        "save_folder": str(tmp_path),
+        "save_file_name": save_name,
+    }
+    assert recipe["output"]["path"] == str(tmp_path / save_name)
     assert recipe["output"]["allow_overwrite"] is True
     assert recipe["provenance"]["source_his_policy"] == "delete_after_verified_h5"
+
+
+def test_folder_enqueue_keeps_selected_parent_and_names_measurement_immediately(
+    queue_client, monkeypatch
+):
+    test_client, tmp_path, headers = queue_client
+    parent = tmp_path / "20260929-water"
+    measurement = parent / "130559-water"
+    measurement.mkdir(parents=True)
+    (measurement / "ABS130559.his").write_bytes(b"abs")
+    (measurement / "BASE130559.his").write_bytes(b"base")
+    selected = test_client.post(
+        "/api/treatment/session/folder",
+        json={"folder_path": str(parent)},
+        headers=headers,
+    )
+    assert selected.status_code == 200
+    monkeypatch.setattr(treatment_api_module.treatment_queue_store, "start", lambda *_args: False)
+
+    response = test_client.post(
+        "/api/treatment/queue/folder-set",
+        json={
+            "folder_path": str(measurement),
+            "convert": True,
+            "clean": True,
+            "calculate": True,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+    payload = response.get_json()
+    name = treatment_api_module._dated_save_file_name_for_folder(str(measurement))
+    assert payload["queue_job"]["recipe"]["output"]["path"] == str(parent / name)
+    assert payload["session"]["folder_path"] == str(parent)
+    assert payload["session"]["save_folder"] == str(parent)
+    assert payload["session"]["save_file_name"] == name
+    restored = test_client.get("/api/treatment/session", headers=headers).get_json()["session"]
+    assert (restored["folder_path"], restored["save_folder"], restored["save_file_name"]) == (
+        str(parent), str(parent), name,
+    )
+
+
+def test_folder_queue_respects_manual_save_folder(queue_client):
+    _test_client, tmp_path, _headers = queue_client
+    parent = tmp_path / "parent"
+    measurement = parent / "measurement"
+    output = tmp_path / "manual-output"
+    measurement.mkdir(parents=True)
+    output.mkdir()
+    (measurement / "ABS.his").write_bytes(b"abs")
+    (measurement / "BASE.his").write_bytes(b"base")
+    session_store.set_folder("queue-contract", str(parent))
+    session_store.update_config("queue-contract", {"save_folder": str(output)})
+
+    recipe = treatment_api_module._queue_standard_folder_recipe(
+        "queue-contract", {"folder_path": str(measurement)},
+    )
+
+    assert recipe["save_target"]["save_folder"] == str(output)
+    assert recipe["output"]["path"] == str(
+        output / recipe["save_target"]["save_file_name"]
+    )
+
+
+def test_folder_enqueue_repairs_previous_measurement_as_browser_folder(
+    queue_client, monkeypatch
+):
+    test_client, tmp_path, headers = queue_client
+    parent = tmp_path / "parent"
+    measurement = parent / "130559-water"
+    measurement.mkdir(parents=True)
+    (measurement / "ABS.his").write_bytes(b"abs")
+    (measurement / "BASE.his").write_bytes(b"base")
+    # Legacy processing incorrectly made the measurement both browser and save folder.
+    session_store.set_folder("queue-contract", str(measurement))
+    monkeypatch.setattr(treatment_api_module.treatment_queue_store, "start", lambda *_args: False)
+
+    response = test_client.post(
+        "/api/treatment/queue/folder-set",
+        json={"folder_path": str(measurement), "calculate": False},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.get_json()
+    session = response.get_json()["session"]
+    assert session["folder_path"] == str(parent)
+    assert session["save_folder"] == str(parent)
+    assert session["save_file_name"] == (
+        treatment_api_module._dated_save_file_name_for_folder(str(measurement))
+    )
 
 
 @pytest.mark.parametrize(
@@ -301,9 +448,14 @@ def test_folder_queue_recipe_freezes_every_action_variant(
         "angle_threshold": 1.0,
         "surface_threshold": 1.0,
     }
+    save_name = treatment_api_module._dated_save_file_name_for_folder(str(folder))
+    assert recipe["save_target"] == {
+        "save_folder": str(tmp_path),
+        "save_file_name": save_name,
+    }
     if calculate:
-        assert recipe["output"]["save_file_name"] == f"{folder.name}.dat"
-        assert recipe["output"]["path"] == str(tmp_path / f"{folder.name}.dat")
+        assert recipe["output"]["save_file_name"] == save_name
+        assert recipe["output"]["path"] == str(tmp_path / save_name)
         assert recipe["output"]["archive_existing"] is True
     else:
         assert recipe["output"] == {}
@@ -348,6 +500,10 @@ def test_folder_queue_without_calc_does_not_save_dat(queue_client, monkeypatch):
     assert outcome["result"] is None
     assert outcome["saved"] is None
     assert not (tmp_path / "set-only.dat").exists()
+    session = treatment_api_module.session_store.snapshot("queue-contract")
+    assert session["folder_path"] == str(tmp_path)
+    assert session["save_folder"] == str(tmp_path)
+    assert session["save_file_name"] == ""
 
 
 def test_folder_enqueue_autostarts_once_and_drains_jobs_sequentially(
@@ -457,9 +613,10 @@ def test_standard_folder_queue_archives_existing_dat_before_saving(queue_client,
     folder.mkdir()
     (folder / "ABS12895.his").write_bytes(b"abs")
     (folder / "BASE12895.his").write_bytes(b"base")
-    output_path = tmp_path / "12895-water_600_1us-x0.dat"
+    save_name = treatment_api_module._dated_save_file_name_for_folder(str(folder))
+    output_path = tmp_path / save_name
     output_path.write_text("previous output", encoding="utf-8")
-    prior_backup = tmp_path / "12895-water_600_1us-x0_old1_1.dat"
+    prior_backup = tmp_path / f"{Path(save_name).stem}_old1_1.dat"
     prior_backup.write_text("older output", encoding="utf-8")
 
     monkeypatch.setattr(
@@ -496,7 +653,7 @@ def test_standard_folder_queue_archives_existing_dat_before_saving(queue_client,
     assert snapshot["jobs"][0]["status"] == "completed"
     assert output_path.read_text(encoding="utf-8") == "new output"
     assert prior_backup.read_text(encoding="utf-8") == "older output"
-    archived_path = tmp_path / "12895-water_600_1us-x0_old1_2.dat"
+    archived_path = tmp_path / f"{Path(save_name).stem}_old1_2.dat"
     assert archived_path.read_text(encoding="utf-8") == "previous output"
     assert snapshot["jobs"][0]["saved"]["archived_output_path"] == str(archived_path)
 
@@ -516,7 +673,15 @@ def test_standard_folder_queue_runs_folder_workflow_then_saves_dat(
         if progress_callback:
             progress_callback("complete", 2, 2, "Folder operation complete", {})
         return {
-            "folder_set": {"folder": payload["folder_path"]},
+            "folder_set": {
+                "folder": payload["folder_path"],
+                "map_policy": "selected_maps",
+                "map_counts": {"ABS": {
+                    "total_count": 187,
+                    "used_count": 183,
+                    "stored_mask_included_count": 183,
+                }},
+            },
             "result": {"result_ready": True},
         }
 
@@ -548,18 +713,21 @@ def test_standard_folder_queue_runs_folder_workflow_then_saves_dat(
         time.sleep(0.005)
         snapshot = treatment_api_module.treatment_queue_store.snapshot("queue-contract")
 
-    assert calls == [("queue-contract", snapshot["jobs"][0]["recipe"]["folder_set"])]
+    assert calls == [(
+        "queue-contract",
+        {**snapshot["jobs"][0]["recipe"]["folder_set"], "_preserve_selected_folder": True},
+    )]
     assert snapshot["jobs"][0]["status"] == "completed"
-    assert snapshot["jobs"][0]["saved"]["save_path"] == str(
-        tmp_path / "12894-water_600_1us-x0.dat"
-    )
+    save_name = treatment_api_module._dated_save_file_name_for_folder(str(folder))
+    save_path = tmp_path / save_name
+    assert snapshot["jobs"][0]["saved"]["save_path"] == str(save_path)
     manifest_path = tmp_path / TREATMENT_MANIFEST_FILE_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["format"] == TREATMENT_MANIFEST_FORMAT
     assert manifest["format_version"] == 1
     assert manifest["dat_files"] == [
         {
-            "dat_file": "12894-water_600_1us-x0.dat",
+            "dat_file": save_name,
             "saved_at": manifest["dat_files"][0]["saved_at"],
             "workflow": {
                 "kind": "standard_folder_set",
@@ -574,8 +742,17 @@ def test_standard_folder_queue_runs_folder_workflow_then_saves_dat(
                 "source_folder": str(folder),
             },
             "inputs": {},
-            "processing": {"conversions": {}, "cleaning": {}},
-            "result": {"save_path": str(tmp_path / "12894-water_600_1us-x0.dat")},
+            "processing": {
+                "conversions": {},
+                "cleaning": {},
+                "map_policy": "selected_maps",
+                "map_counts": {"ABS": {
+                    "total_count": 187,
+                    "used_count": 183,
+                    "stored_mask_included_count": 183,
+                }},
+            },
+            "result": {"save_path": str(save_path)},
         }
     ]
     assert snapshot["jobs"][0]["saved"]["manifest_path"] == str(manifest_path)

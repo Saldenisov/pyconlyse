@@ -15,6 +15,7 @@ Position = Tuple[float, float]
 Objective = Callable[[Position], float]
 CancelCheck = Callable[[], bool]
 ResponseSignature = Callable[[], Sequence[float]]
+StepLimit = Callable[[], float]
 
 
 def optical_point_group(point_name: str) -> int:
@@ -51,6 +52,8 @@ class SearchParameters:
     step_schedule: Tuple[float, ...] = ()
     probe_repetitions: int = 1
     unchanged_response_tolerance_px: float = 0.0
+    plateau_evaluations: int = 0
+    plateau_min_improvement: float = 0.0
 
     def validate(self) -> None:
         if self.initial_step <= 0:
@@ -67,6 +70,10 @@ class SearchParameters:
             raise ValueError("probe_repetitions must be at least 1")
         if self.unchanged_response_tolerance_px < 0:
             raise ValueError("unchanged_response_tolerance_px cannot be negative")
+        if self.plateau_evaluations < 0:
+            raise ValueError("plateau_evaluations cannot be negative")
+        if self.plateau_min_improvement < 0:
+            raise ValueError("plateau_min_improvement cannot be negative")
         if self.step_schedule:
             if any(step <= 0 for step in self.step_schedule):
                 raise ValueError("all scheduled steps must be positive")
@@ -117,6 +124,8 @@ def bounded_pattern_search(
     parameters: Optional[SearchParameters] = None,
     cancelled: Optional[CancelCheck] = None,
     response_signature: Optional[ResponseSignature] = None,
+    step_limit: Optional[StepLimit] = None,
+    direction_order: Optional[Sequence[Position]] = None,
 ) -> SearchResult:
     """Minimise a noisy scalar objective with a bounded coordinate search.
 
@@ -161,7 +170,18 @@ def bounded_pattern_search(
         else float(params.initial_step)
     )
     reason = "max_evaluations"
-    directions = ((1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0))
+    plateau_reference_score = best_score
+    plateau_probe_count = 0
+    directions = tuple(
+        tuple(float(value) for value in direction)
+        for direction in (direction_order or (
+            (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)
+        ))
+    )
+    if set(directions) != {
+        (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)
+    } or len(directions) != 4:
+        raise ValueError("direction_order must contain each cardinal direction once")
 
     while len(history) < params.max_evaluations:
         if is_cancelled():
@@ -179,6 +199,7 @@ def bounded_pattern_search(
         round_best_score = best_score
         round_best_signature = best_signature
         visited = set()
+        plateau_reached = False
 
         for dx, dy in directions:
             if len(history) >= params.max_evaluations or is_cancelled():
@@ -186,10 +207,16 @@ def bounded_pattern_search(
             for repetition in range(1, params.probe_repetitions + 1):
                 if len(history) >= params.max_evaluations or is_cancelled():
                     break
+                effective_step = step
+                if step_limit is not None:
+                    learned_limit = float(step_limit())
+                    if not isfinite(learned_limit) or learned_limit <= 0:
+                        raise ValueError("step_limit must return a positive finite value")
+                    effective_step = min(effective_step, learned_limit)
                 candidate = _clamp_position(
                     (
-                        centre[0] + dx * step * repetition,
-                        centre[1] + dy * step * repetition,
+                        centre[0] + dx * effective_step * repetition,
+                        centre[1] + dy * effective_step * repetition,
                     ),
                     bounds,
                 )
@@ -207,10 +234,25 @@ def bounded_pattern_search(
                 history.append(
                     SearchObservation(candidate, score, candidate_signature)
                 )
+                if params.plateau_evaluations:
+                    if (
+                        score
+                        <= plateau_reference_score
+                        - params.plateau_min_improvement
+                    ):
+                        plateau_reference_score = score
+                        plateau_probe_count = 0
+                    else:
+                        plateau_probe_count += 1
+                    if plateau_probe_count >= params.plateau_evaluations:
+                        plateau_reached = True
                 if score < round_best_score:
                     round_best_position = candidate
                     round_best_score = score
                     round_best_signature = candidate_signature
+
+                if plateau_reached:
+                    break
 
                 # A changed optical score means that the mount responded. Only
                 # keep adding movement in the same direction while the score
@@ -234,6 +276,8 @@ def bounded_pattern_search(
                     )
                 if not response_unchanged:
                     break
+            if plateau_reached:
+                break
 
         if is_cancelled():
             reason = "cancelled"
@@ -244,7 +288,10 @@ def bounded_pattern_search(
             best_position = round_best_position
             best_score = round_best_score
             best_signature = round_best_signature
-        else:
+        if plateau_reached:
+            reason = "plateau"
+            break
+        if improvement < params.minimum_improvement_px:
             if scheduled_steps:
                 step_index += 1
                 if step_index >= len(scheduled_steps):

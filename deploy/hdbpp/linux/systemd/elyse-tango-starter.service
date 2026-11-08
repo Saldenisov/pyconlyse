@@ -1,0 +1,22 @@
+[Unit]
+Description=ELYSE Tango Starter for the HDB++ VM
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=hdbpp
+Group=hdbpp
+EnvironmentFile=/etc/hdbpp/hdbpp.env
+WorkingDirectory=/var/lib/hdbpp
+ExecStart=/usr/lib/tango/Starter hdbpp-archive
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

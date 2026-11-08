@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from flask import Flask
+import numpy as np
 
 
 def _install_tango_stub():
@@ -583,6 +584,16 @@ def test_standa_page_routes_smoke(monkeypatch):
     assert state_payload["state"] == "ON"
 
 
+def test_single_attribute_route_serializes_numpy_spectra(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    devices["pdu/netio/1"].attributes["ids"] = np.array([1, 2, 3, 4], dtype=np.int32)
+
+    response = client.get("/api/device/pdu/netio/1/attribute/ids")
+
+    assert response.status_code == 200
+    assert response.get_json()["value"] == [1, 2, 3, 4]
+
+
 def test_owis_page_routes_smoke(monkeypatch):
     client, devices = _make_client(monkeypatch)
 
@@ -759,6 +770,9 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
                     "diaphragm": 1,
                 }
             ]),
+            "adaptive_search_model_json": json.dumps({
+                "group1": {"point3": {"safe_step": 2.5}},
+            }),
             "alignment_reference_json": json.dumps({
                 "revision": 2,
                 "accepted_at_utc": "2026-09-18T08:00:00+00:00",
@@ -783,7 +797,9 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
         "start_automatic_search",
         "pause_automatic_search",
         "resume_automatic_search",
+        "cancel_automatic_search",
         "accept_alignment_reference",
+        "save_current_alignment_reference",
         "apply_controller_point",
         "select_manual_point",
         "initialize_active_pair",
@@ -877,7 +893,9 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
     assert snapshot["capabilities"]["initialize_active_pair"] is True
     assert snapshot["capabilities"]["pause_search"] is True
     assert snapshot["capabilities"]["resume_search"] is True
+    assert snapshot["capabilities"]["cancel_search_keep_current"] is True
     assert snapshot["capabilities"]["accept_alignment_reference"] is True
+    assert snapshot["capabilities"]["save_current_alignment_reference"] is True
     assert snapshot["active_point"] == "point3"
     assert snapshot["active_actuator_group"] == 1
     assert snapshot["automatic_search"]["history"][0]["elapsed_s"] == 4.5
@@ -886,6 +904,12 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
         == 3.2
     )
     assert snapshot["automatic_search"]["config"]["roundness_tolerance_pct"] == 7
+    assert (
+        snapshot["automatic_search"]["adaptive_model"]["group1"]["point3"][
+            "safe_step"
+        ]
+        == 2.5
+    )
     assert snapshot["automatic_search"]["reference_revision"] == 2
     assert snapshot["automatic_search"]["pending_reference"]["session_id"] == "pending-session"
     assert snapshot["automatic_search"]["session_event_count"] == 12
@@ -981,6 +1005,56 @@ def test_stopped_camera_image_read_does_not_restart_acquisition(monkeypatch):
     assert payload["grabbing"] is False
     assert payload["success"] is False
     assert reads == ["isgrabbing"]
+
+
+def test_camera_image_can_include_current_camera_specific_contours(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    camera_name = "manip/v0/cam2_v0"
+    devices[camera_name] = FakeDevice(camera_name, attributes={
+        "isgrabbing": True,
+        "image": [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]],
+        "cg": "{'X': 1, 'Y': 1}",
+        "center_gravity_threshold": 120,
+        "width": 2,
+        "height": 2,
+    })
+    metrics = importlib.import_module(
+        "DeviceServers.control.laser_pointing.beam_metrics"
+    )
+    monkeypatch.setattr(
+        metrics,
+        "camera_contour_profile",
+        lambda device, threshold: {
+            "threshold": 20.0,
+            "relative_heights": (0.03, 0.20, 0.75),
+        },
+    )
+    monkeypatch.setattr(
+        metrics,
+        "beam_threshold_contours",
+        lambda image, **settings: [{
+            "relative_height": 0.20,
+            "centre": [1.0, 1.0],
+            "radius_px": 0.5,
+            "points": [[0.5, 1.0], [1.5, 1.0]],
+        }],
+    )
+
+    response = client.get(f"/api/camera/{camera_name}/image?contours=1")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["contour_profile"] == {
+        "threshold": 20.0,
+        "relative_heights": [0.03, 0.20, 0.75],
+    }
+    assert payload["contours"] == [{
+        "relative_height": 0.20,
+        "centre": [1.0, 1.0],
+        "radius_px": 0.5,
+    }]
+    assert payload["contour_error"] == ""
 
 
 def test_camera_stop_command_confirms_stopped_state(monkeypatch):

@@ -203,7 +203,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
             if was_stopped:
                 return f"Moving to {pos} was stopped."
 
-            self.read_position()
+            self._refresh_motion_readback()
             with self._get_lifecycle_lock():
                 stop_event = (
                     getattr(self, "_motion_stop_complete", None)
@@ -221,7 +221,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
                 )
                 if was_stopped:
                     return f"Moving to {pos} was stopped."
-                if pos == self._position:
+                if self._motion_target_reached(pos):
                     self.info_stream(f"Moving to {pos} was accomplished with success.")
                     return 0
                 else:
@@ -234,6 +234,13 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
             with self._get_lifecycle_lock():
                 if getattr(self, "_active_motion_operation_id", None) == operation_id:
                     self._active_motion_operation_id = None
+
+    def _motion_target_reached(self, target):
+        """Allow motors with non-positional command feedback to verify a move."""
+        return target == self._position
+
+    def _refresh_motion_readback(self):
+        self.read_position()
 
     @abstractmethod
     def move_axis_local(self, pos) -> Union[int, str]:

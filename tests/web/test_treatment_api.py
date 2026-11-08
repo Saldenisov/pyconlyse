@@ -1,8 +1,9 @@
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Lock
+from threading import Barrier, Lock
 from types import SimpleNamespace
 
 import numpy as np
@@ -34,6 +35,39 @@ def _write_dat(file_path, data, wavelengths=None, timedelays=None):
     payload[1:, 0] = timedelays
     payload[1:, 1:] = data.transpose()
     np.savetxt(file_path, payload, delimiter="\t", fmt="%.4f")
+
+
+def test_dat_preview_preserves_input_roles_and_opens_selection(client, tmp_path):
+    client, tmp_path = client
+    source = tmp_path / 'inspect.dat'
+    _write_dat(source, [[0.1, 0.2], [0.3, 0.4]])
+    headers = {'X-Treatment-Session-Id': 'dat-preview-test'}
+    client.get('/api/treatment/session', headers=headers)
+    input_path = tmp_path / 'abs-input.dat'
+    _write_dat(input_path, [[10, 20], [30, 40]])
+    session_store.set_data_path('dat-preview-test', 'ABS', str(input_path))
+    original = session_store.snapshot('dat-preview-test')
+    response = client.post('/api/treatment/preview/dat', json={'file_path': str(source)}, headers=headers)
+    assert response.status_code == 200, response.get_json()
+    state = session_store.snapshot('dat-preview-test')
+    assert state['paths'] == original['paths']
+    assert state['save_file_name'] == original['save_file_name']
+    assert state['active_data_type'] == 'DAT'
+    selected = client.get('/api/treatment/selection', headers=headers).get_json()['selection']
+    assert selected['active_data_type'] == 'DAT'
+    assert selected['assigned_data_types'] == ['DAT', 'ABS']
+    assert treatment_api_module.treatment_service._resolve_active_path(state) == ('ABS', input_path)
+    assert selected['selection_ready'] is True
+    assert session_store.restore_if_empty('restored-dat-preview', state)
+    assert session_store.snapshot('restored-dat-preview')['dat_preview_path'] == state['dat_preview_path']
+    bad = client.post('/api/treatment/preview/dat', json={'file_path': str(tmp_path / 'abs.h5')}, headers=headers)
+    assert bad.status_code != 200
+    assert session_store.snapshot('dat-preview-test')['dat_preview_path'] == state['dat_preview_path']
+    broken = tmp_path / 'invalid.dat'
+    broken.write_text('1 2 3')
+    bad = client.post('/api/treatment/preview/dat', json={'file_path': str(broken)}, headers=headers)
+    assert bad.status_code == 400
+    assert session_store.snapshot('dat-preview-test')['dat_preview_path'] == state['dat_preview_path']
 
 
 def _measurement(data, wavelengths=None, timedelays=None, time_scale="ps"):
@@ -102,6 +136,12 @@ class FakeHisOpener:
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    # Contract tests inject in-process fake converters; production uses processes.
+    monkeypatch.setattr(
+        treatment_api_module,
+        "_cpu_executor",
+        lambda worker_count: ThreadPoolExecutor(max_workers=worker_count),
+    )
     monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT_BASE", str(tmp_path))
@@ -160,6 +200,8 @@ def test_set_folder_and_list_files(client):
 
     assert response.status_code == 200
     assert payload["session"]["folder_path"] == str(data_dir)
+    assert payload["session"]["save_folder"] == str(data_dir)
+    assert payload["session"]["save_file_name"] == "run_001.dat"
 
     listing = test_client.get("/api/treatment/files", query_string={"folder": str(data_dir)})
     listing_payload = listing.get_json()
@@ -182,6 +224,35 @@ def test_set_folder_and_list_files(client):
             "supported": h5_supported,
         },
     ]
+
+
+def test_selecting_another_folder_replaces_manual_save_folder(client):
+    test_client, root = client
+    first = root / "first"
+    second = root / "second"
+    manual = root / "manual"
+    for folder in (first, second, manual):
+        folder.mkdir()
+
+    response = test_client.post(
+        "/api/treatment/session/folder", json={"folder_path": str(first)}
+    )
+    assert response.status_code == 200
+    assert response.get_json()["session"]["save_folder"] == str(first)
+
+    response = test_client.post(
+        "/api/treatment/session/config", json={"save_folder": str(manual)}
+    )
+    assert response.status_code == 200
+    assert response.get_json()["session"]["save_folder"] == str(manual)
+
+    response = test_client.post(
+        "/api/treatment/session/folder", json={"folder_path": str(second)}
+    )
+    assert response.status_code == 200
+    assert response.get_json()["session"]["folder_path"] == str(second)
+    assert response.get_json()["session"]["save_folder"] == str(second)
+    assert response.get_json()["session"]["save_file_name"] == "second.dat"
 
 
 def test_stitch_od_dat_endpoint_saves_joined_dat(client):
@@ -436,6 +507,27 @@ def test_update_treatment_root_from_session_endpoint(client):
     assert payload["session"]["folder_path"] == str(new_root)
     assert payload["session"]["save_folder"] == str(new_root)
     assert payload["session"]["paths"] == {}
+
+
+def test_changing_root_preserves_other_workspace_state_and_runtime(client, monkeypatch):
+    test_client, tmp_path = client
+    other_id = "browser:one:profile:vd2:workspace:other"
+    session_store.update_config(other_id, {"save_file_name": "preserved.dat"})
+    before = session_store.snapshot(other_id)
+    resets = []
+    monkeypatch.setattr(treatment_api_module.treatment_service, "reset_runtime", resets.append)
+    new_root = tmp_path / "VD2"
+    new_root.mkdir()
+
+    response = test_client.post(
+        "/api/treatment/session/root",
+        headers={"X-Treatment-Session-Id": "browser:one:profile:vd2:workspace:new"},
+        json={"allowed_root": str(new_root)},
+    )
+
+    assert response.status_code == 200
+    assert session_store.snapshot(other_id) == before
+    assert resets == ["browser:one:profile:vd2:workspace:new"]
 
 
 def test_smb_treatment_root_lists_network_files(client, monkeypatch):
@@ -765,10 +857,10 @@ def test_compress_and_assign_overwrites_h5_without_deleting_source(client, monke
     source_file.write_bytes(b"old h5 payload")
 
     def fake_convert(source_path, output_path, progress_callback=None):
-        assert Path(source_path) == Path(output_path)
+        assert Path(source_path) != Path(output_path)
         if progress_callback:
             progress_callback(1, 1)
-        Path(output_path).write_bytes(b"recompressed h5 payload")
+        _write_gzip_h5(Path(output_path), compression_level=4)
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -791,13 +883,14 @@ def test_compress_and_assign_overwrites_h5_without_deleting_source(client, monke
     cached_path = Path(payload["cached_file"]["cached_path"])
 
     assert response.status_code == 200
-    assert source_file.read_bytes() == b"recompressed h5 payload"
-    assert cached_path.read_bytes() == b"recompressed h5 payload"
+    assert cached_path.read_bytes() == source_file.read_bytes()
+    with treatment_api_module.h5py.File(source_file, "r") as h5_file:
+        assert h5_file["raw_data"].compression_opts == 4
     assert payload["conversion"]["converted"] is True
     assert payload["conversion"]["overwritten"] is True
     assert payload["conversion"]["deleted_source"] is False
     assert payload["conversion"]["source_size_bytes"] == len(b"old h5 payload")
-    assert payload["conversion"]["output_size_bytes"] == len(b"recompressed h5 payload")
+    assert payload["conversion"]["output_size_bytes"] == source_file.stat().st_size
     assert payload["session"]["path_sources"]["ABS"] == str(source_file)
 
 
@@ -807,10 +900,10 @@ def test_compress_file_endpoint_does_not_assign_input(client, monkeypatch):
     source_file.write_bytes(b"old h5 payload")
 
     def fake_convert(source_path, output_path, progress_callback=None):
-        assert Path(source_path) == Path(output_path)
+        assert Path(source_path) != Path(output_path)
         if progress_callback:
             progress_callback(1, 1)
-        Path(output_path).write_bytes(b"recompressed h5 payload")
+        _write_gzip_h5(Path(output_path), compression_level=4)
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -832,7 +925,8 @@ def test_compress_file_endpoint_does_not_assign_input(client, monkeypatch):
     payload = response.get_json()
 
     assert response.status_code == 200
-    assert source_file.read_bytes() == b"recompressed h5 payload"
+    with treatment_api_module.h5py.File(source_file, "r") as h5_file:
+        assert h5_file["raw_data"].compression_opts == 4
     assert payload["conversion"]["overwritten"] is True
     assert payload["session"]["paths"] == {}
     assert payload["session"]["path_sources"] == {}
@@ -844,10 +938,10 @@ def test_compress_file_start_reports_job_progress(client, monkeypatch):
     source_file.write_bytes(b"old h5 payload")
 
     def fake_convert(source_path, output_path, progress_callback=None):
-        assert Path(source_path) == Path(output_path)
+        assert Path(source_path) != Path(output_path)
         if progress_callback:
             progress_callback(1, 1)
-        Path(output_path).write_bytes(b"recompressed h5 payload")
+        _write_gzip_h5(Path(output_path), compression_level=4)
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -881,7 +975,7 @@ def test_compress_file_start_reports_job_progress(client, monkeypatch):
     job = status_payload["compression_job"]
     assert job["status"] == "complete"
     assert job["conversion"]["overwritten"] is True
-    assert job["conversion"]["output_size_bytes"] == len(b"recompressed h5 payload")
+    assert job["conversion"]["output_size_bytes"] == source_file.stat().st_size
     assert job["payload"]["conversion"]["output_path"] == str(source_file)
 
 
@@ -913,6 +1007,31 @@ def test_compress_file_skips_existing_gzip_h5(client, monkeypatch):
     assert payload["conversion"]["reused_compressed"] is True
     assert payload["conversion"]["compression"] == "gzip"
     assert payload["conversion"]["compression_level"] == 9
+
+
+def test_compress_h5_keeps_source_when_staged_output_is_invalid(client, monkeypatch):
+    test_client, tmp_path = client
+    source_file = tmp_path / "ABS12886.h5"
+    source_file.write_bytes(b"original h5 payload")
+
+    def fake_convert(_source_path, output_path, progress_callback=None):
+        Path(output_path).write_bytes(b"invalid compressed h5")
+        return {"output_path": str(output_path)}
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/compress-file",
+        json={"file_path": str(source_file)},
+    )
+
+    assert response.status_code == 400
+    assert "verification failed" in response.get_json()["error"]
+    assert source_file.read_bytes() == b"original h5 payload"
 
 
 def test_compress_keeps_his_when_output_h5_verification_fails(client, monkeypatch):
@@ -967,9 +1086,13 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
         }
 
     cleaned_types = []
+    both_cleaning = Barrier(2, timeout=3)
 
-    def fake_save(session_id, session_state, angle_threshold, surface_threshold, output_file_name=""):
-        data_type = session_state["active_data_type"]
+    def fake_clean_worker(
+        data_type, session_state, angle_threshold, surface_threshold,
+        output_file_name, _progress_queue,
+    ):
+        both_cleaning.wait()
         source_path = Path(session_state["path_sources"][data_type])
         source_path.write_bytes(f"cleaned {data_type}".encode("ascii"))
         cleaned_types.append(data_type)
@@ -989,11 +1112,8 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
         "convert_file_to_h5",
         fake_convert,
     )
-    monkeypatch.setattr(
-        treatment_api_module.treatment_service,
-        "save_sam_cleaned_h5",
-        fake_save,
-    )
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_MAX_WORKERS", "2")
+    monkeypatch.setattr(treatment_api_module, "_queue_clean_worker", fake_clean_worker)
 
     response = test_client.post(
         "/api/treatment/session/folder-set",
@@ -1027,6 +1147,56 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
     assert payload["folder_set"]["cleaned"]["ABS"]["output_path"] == str(folder / "ABS12886.h5")
     assert payload["session"]["path_sources"]["ABS"] == str(folder / "ABS12886.h5")
     assert payload["session"]["path_sources"]["BASE"] == str(folder / "BASE12886.h5")
+
+
+def test_folder_set_without_clean_calculates_all_maps_and_preserves_h5_masks(client):
+    h5py = treatment_api_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+    test_client, tmp_path = client
+    folder = tmp_path / "uncleaned"
+    folder.mkdir()
+
+    for name, values in (
+        ("ABS1.h5", [1.0, 10.0]),
+        ("BASE1.h5", [10.0, 10.0]),
+        ("NOISE1.h5", [0.0, 0.0]),
+    ):
+        with h5py.File(folder / name, "w") as h5_file:
+            metadata = h5_file.create_group("metadata")
+            metadata.attrs["time_scale"] = "ps"
+            h5_file.create_dataset("timedelays", data=[1.0, 2.0])
+            h5_file.create_dataset("wavelengths", data=[500.0, 550.0])
+            h5_file.create_dataset(
+                "raw_data",
+                data=np.asarray([np.full((2, 2), value) for value in values]),
+                compression="gzip",
+                compression_opts=4,
+            )
+            selection = h5_file.create_group("map_selection")
+            selection.create_dataset("included", data=[True, False])
+
+    config = test_client.post(
+        "/api/treatment/session/config", json={"exp_type": "ABS+BASE+NOISE"}
+    )
+    assert config.status_code == 200, config.get_json()
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(folder), "convert": True, "clean": False, "calculate": True},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200, payload
+    assert payload["folder_set"]["map_policy"] == "all_raw_maps"
+    assert payload["folder_set"]["map_counts"]["ABS"] == {
+        "total_count": 2,
+        "used_count": 2,
+        "stored_mask_included_count": 1,
+    }
+    assert payload["folder_set"]["auto_calculated"] is True
+    assert payload["result"]["mean"] == pytest.approx(np.log10(10.0 / 5.5))
+    with h5py.File(folder / "ABS1.h5", "r") as h5_file:
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, False]
 
 
 def test_folder_set_his_noise_allows_abs_base_without_folder_noise(client):
@@ -1151,6 +1321,11 @@ def test_folder_set_convert_runs_conversions_in_parallel(client, monkeypatch):
 
 
 def test_smb_folder_convert_stages_io_and_converts_locally_in_parallel(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        treatment_api_module,
+        "_cpu_executor",
+        lambda worker_count: ThreadPoolExecutor(max_workers=worker_count),
+    )
     selected_paths = {
         "ABS": "smb://10.20.30.202/e/DATA_VD2/run/ABS001.his",
         "BASE": "smb://10.20.30.202/e/DATA_VD2/run/BASE001.his",
@@ -1564,7 +1739,7 @@ def test_auto_assign_smb_folder_caches_abs_base_bruit_his(client, monkeypatch):
     assert response.status_code == 200
     assert payload["auto_assign_missing"] == []
     assert payload["session"]["ready_for_calc"] is True
-    assert payload["session"]["save_folder"] == f"{smb_root}/20260127"
+    assert payload["session"]["save_folder"] == smb_folder
     assert payload["session"]["save_file_name"] == "water.dat"
     assert payload["auto_assigned_cached_files"]["ABS"]["source_path"] == abs_file
     assert payload["auto_assigned_cached_files"]["BASE"]["source_path"] == base_file

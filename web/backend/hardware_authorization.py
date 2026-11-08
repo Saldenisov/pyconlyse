@@ -104,7 +104,7 @@ def _load_json(path: Path) -> Any:
 def _read_regular_json(path: Path, *, require_readonly: bool = False) -> Any:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     before = os.lstat(path)
-    if not stat.S_ISREG(before.st_mode) or (require_readonly and os.access(path, os.W_OK)):
+    if not stat.S_ISREG(before.st_mode) or (require_readonly and _has_write_access(path)):
         raise ValueError("invalid authorization file")
     descriptor = os.open(str(path), flags)
     try:
@@ -133,6 +133,54 @@ def _canonical(value: Any) -> str:
         return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
     except (TypeError, ValueError) as exc:
         raise AuthorizationError(409, "hardware_approval_invalid", "Authorization values must be finite JSON") from exc
+
+
+def _has_write_access(path: Path) -> bool:
+    """Return effective write access, including Windows ACL enforcement.
+
+    ``os.access(..., os.W_OK)`` only reflects the read-only attribute for many
+    Windows paths. Confirm its positive result by asking Windows to open the
+    existing file or directory with generic write access, without modifying it.
+    """
+    if not os.access(path, os.W_OK):
+        return False
+    if os.name != "nt":
+        return True
+
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+
+    generic_write = 0x40000000
+    share_all = 0x00000001 | 0x00000002 | 0x00000004
+    open_existing = 3
+    backup_semantics = 0x02000000 if Path(path).is_dir() else 0
+    handle = create_file(
+        str(path), generic_write, share_all, None, open_existing,
+        backup_semantics, None,
+    )
+    invalid_handle = ctypes.c_void_p(-1).value
+    if handle not in (None, invalid_handle):
+        close_handle(handle)
+        return True
+    # Access denied is the only result that establishes a read-only ACL. Any
+    # other failure remains fail-closed and is treated as potentially writable.
+    return ctypes.get_last_error() != 5
 
 
 def _is_external_directory(path: Path) -> bool:
@@ -168,13 +216,13 @@ def authorization_config_from_environment(environ=None) -> AuthorizationConfig:
     if not _is_external_directory(config.consumed_dir) or config.consumed_dir.resolve() == config.approval_dir.resolve():
         raise AuthorizationError(403, "hardware_not_authorized", "Consumed directory must be a distinct existing absolute directory outside the repository")
     required = authorization_required(environ)
-    if required and os.access(config.policy_path, os.W_OK):
+    if required and _has_write_access(config.policy_path):
         raise AuthorizationError(403, "hardware_not_authorized", "Hardware policy must not be writable by the web service")
-    if required and os.access(config.policy_path.parent, os.W_OK):
+    if required and _has_write_access(config.policy_path.parent):
         raise AuthorizationError(403, "hardware_not_authorized", "Hardware policy directory must not be writable by the web service")
-    if required and os.access(config.approval_dir, os.W_OK):
+    if required and _has_write_access(config.approval_dir):
         raise AuthorizationError(403, "hardware_not_authorized", "Approval directory must not be writable by the web service")
-    if required and not os.access(config.consumed_dir, os.W_OK):
+    if required and not _has_write_access(config.consumed_dir):
         raise AuthorizationError(403, "hardware_not_authorized", "Consumed directory must be writable by the web service")
     if required:
         try:
@@ -182,7 +230,7 @@ def authorization_config_from_environment(environ=None) -> AuthorizationConfig:
         except OSError as exc:
             raise AuthorizationError(403, "hardware_not_authorized", "Approval directory is invalid") from exc
         for approval in approvals:
-            if approval.is_symlink() or not approval.is_file() or os.access(approval, os.W_OK):
+            if approval.is_symlink() or not approval.is_file() or _has_write_access(approval):
                 raise AuthorizationError(403, "hardware_not_authorized", "Approval files must not be writable by the web service")
     load_policy(config.policy_path, strict=True)
     return AuthorizationConfig(
@@ -633,8 +681,11 @@ def trusted_starter_for_server(policy: Mapping[str, Any], server_name: str) -> s
     return starter
 
 
-def authorize_runtime_operation(operation: Operation, nonce: str | None, *, subject: str | None = None) -> bool:
-    if not authorization_required():
+def authorize_runtime_operation(operation: Operation, nonce: str | None, *, subject: str | None = None,
+                                required: bool | None = None) -> bool:
+    if required is not None and type(required) is not bool:
+        raise TypeError('Explicit Boolean authorization requirement expected')
+    if not (authorization_required() or required is True):
         return True
     config = authorization_config_from_environment()
     subject = subject if subject is not None else get_jwt_identity()

@@ -3,6 +3,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 from flask import Flask
 
@@ -103,6 +104,8 @@ class FakePSPDevice:
 
 class FakeDatabase:
     def get_device_name(self, _wildcard, class_name):
+        if class_name == "DS_DAQmx":
+            return ["control/DAQ/TRANCON-DAQ"]
         if class_name == "DS_PSP":
             return ["manip/general/PSP"]
         if class_name == "DS_DAQmx_ZMQ":
@@ -160,6 +163,12 @@ def test_list_daqmx_devices_defaults_to_state_probe_and_preserves_payload(monkey
         "devices": [
             {
                 "available": True,
+                "class": "DS_DAQmx",
+                "name": "control/DAQ/TRANCON-DAQ",
+                "state": "ON",
+            },
+            {
+                "available": True,
                 "class": "DS_DAQmx_ZMQ",
                 "name": "manip/general/DAQ",
                 "state": "ON",
@@ -173,6 +182,128 @@ def test_list_daqmx_devices_defaults_to_state_probe_and_preserves_payload(monkey
         ],
         "success": True,
     }
+
+
+class FakeDirectDAQmxDevice:
+    def __init__(self):
+        self.calls = []
+        self.latest = {
+            "timestamp": 10.5,
+            "source": "direct",
+            "device": "TRANCON-DAQ",
+            "data": {
+                "Laser_SC Shutter": {
+                    "name": "Laser_SC Shutter",
+                    "channel": "TRANCON-DAQ/port0/line0",
+                    "kind": "DigitalOut",
+                    "value": -1,
+                    "value_known": False,
+                    "alarm": False,
+                    "unit": "",
+                },
+                "Power Status": {
+                    "name": "Power Status",
+                    "channel": "TRANCON-DAQ/ai0",
+                    "kind": "AIcurrent",
+                    "value": 120.0,
+                    "raw_value": 0.00012,
+                    "value_known": True,
+                    "alarm": False,
+                    "unit": "uA",
+                    "multiplier": 1000000,
+                    "limit_alarm_min": 100,
+                    "limit_alarm_max": 1000,
+                },
+            },
+        }
+
+    def state(self):
+        return "ON"
+
+    def get_command_list(self):
+        return ["get_latest_values_json", "write_digital_output", "reset_counter"]
+
+    def command_inout(self, name, arg=None):
+        self.calls.append((name, arg))
+        if str(name).lower() == "get_latest_values_json":
+            return json.dumps(self.latest)
+        if str(name).lower() == "write_digital_output":
+            return json.dumps({"name": arg[0], "value": int(arg[1])})
+        if str(name).lower() == "reset_counter":
+            return f"OK: reset {arg}"
+        raise ValueError(name)
+
+    def read_attribute(self, name):
+        if str(name).lower() == "device_info_json":
+            return SimpleNamespace(value=json.dumps({
+                "name": "TRANCON-DAQ",
+                "product_type": "PCIe-6320",
+                "serial_num": 29471170,
+            }))
+        raise KeyError(name)
+
+
+def test_direct_daqmx_snapshot_and_commands(monkeypatch):
+    client, _ = _make_client(monkeypatch)
+    import device_api
+
+    direct = FakeDirectDAQmxDevice()
+    monkeypatch.setattr(device_api.DeviceManager, "get_device", lambda _name: direct)
+
+    latest = client.get("/api/daqmx/device/control%2FDAQ%2FTRANCON-DAQ/latest")
+    payload = latest.get_json()
+    assert latest.status_code == 200
+    assert payload["device_info"]["product_type"] == "PCIe-6320"
+    assert payload["channels"] == [
+        {
+            "alarm": False,
+            "counter": "",
+            "kind": "DigitalOut",
+            "limit_alarm_max": None,
+            "limit_alarm_min": None,
+            "multiplier": 1.0,
+            "name": "Laser_SC Shutter",
+            "physical_channel": "TRANCON-DAQ/port0/line0",
+            "raw_value": None,
+            "unit": "",
+            "value": -1,
+            "value_known": False,
+            "writable": True,
+        },
+        {
+            "alarm": False,
+            "counter": "",
+            "kind": "AIcurrent",
+            "limit_alarm_max": 1000,
+            "limit_alarm_min": 100,
+            "multiplier": 1000000,
+            "name": "Power Status",
+            "physical_channel": "TRANCON-DAQ/ai0",
+            "raw_value": 0.00012,
+            "unit": "uA",
+            "value": 120.0,
+            "value_known": True,
+            "writable": False,
+        },
+    ]
+
+    write = client.post(
+        "/api/daqmx/device/control%2FDAQ%2FTRANCON-DAQ/write",
+        json={
+            "channel": "Laser_SC Shutter",
+            "value": 1,
+            "command_variant": "write_digital_output",
+        },
+    )
+    assert write.status_code == 200
+    assert ("write_digital_output", ["Laser_SC Shutter", "1"]) in direct.calls
+
+    reset = client.post(
+        "/api/daqmx/device/control%2FDAQ%2FTRANCON-DAQ/counter/reset",
+        json={"channel": "ELYSE Pulse Counter", "command_variant": "reset_counter"},
+    )
+    assert reset.status_code == 200
+    assert ("reset_counter", "ELYSE Pulse Counter") in direct.calls
 
 
 def test_get_vacuum_group_history(monkeypatch):

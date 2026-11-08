@@ -39,8 +39,11 @@ def pytest_unconfigure(config):
 
 
 @pytest.fixture(autouse=True)
-def isolated_tango_stub(monkeypatch):
+def isolated_tango_stub(monkeypatch, request):
     """Provide Tango only for one test and undo it during fixture teardown."""
+    if request.node.get_closest_marker("native_tango"):
+        yield
+        return
     with isolated_test_modules():
         install_tango_stub(monkeypatch)
         yield

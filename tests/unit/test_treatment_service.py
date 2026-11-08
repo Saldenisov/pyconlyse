@@ -428,6 +428,9 @@ def test_restore_cleaned_h5_file_migrates_legacy_deleted_maps_to_selection(servi
         metadata.attrs["time_scale"] = "us"
         metadata.attrs["scaling_yunit"] = "us"
 
+    with pytest.raises(ValueError, match="Legacy H5 does not contain all original maps"):
+        H5Opener().average_map(file_path, include_excluded=True)
+
     restored = service.restore_cleaned_h5_file(file_path)
 
     assert restored["restored"] is True
@@ -486,6 +489,49 @@ def test_cleaned_h5_preserves_raw_maps_and_uses_selection_for_averages(service, 
     assert [measurement.original_index for measurement in selected_maps] == [0, 2]
     assert [measurement.original_index for measurement in raw_maps] == [0, 1, 2]
     np.testing.assert_allclose(opener.average_map(output_path), np.full((2, 2), 2.0))
+    np.testing.assert_allclose(
+        opener.average_map(output_path, include_excluded=True),
+        np.full((2, 2), 104.0 / 3.0),
+    )
+
+
+def test_od_can_use_all_raw_h5_maps_without_changing_cleaning_masks(service, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    def write_input(name, values, included):
+        path = tmp_path / name
+        with h5py.File(path, "w") as h5_file:
+            metadata = h5_file.create_group("metadata")
+            metadata.attrs["time_scale"] = "ps"
+            metadata.attrs["scaling_yunit"] = "ps"
+            h5_file.create_dataset("timedelays", data=[10.0, 20.0])
+            h5_file.create_dataset("wavelengths", data=[500.0, 550.0])
+            h5_file.create_dataset(
+                "raw_data",
+                data=np.asarray([np.full((2, 2), value) for value in values]),
+                compression="gzip",
+            )
+            selection = h5_file.create_group("map_selection")
+            selection.create_dataset("included", data=np.asarray(included, dtype=bool))
+        return path
+
+    abs_path = write_input("ABS.h5", [1.0, 10.0], [True, False])
+    base_path = write_input("BASE.h5", [10.0, 10.0], [True, False])
+    noise_path = write_input("NOISE.h5", [0.0, 0.0], [True, False])
+    state = {
+        "exp_type": "ABS+BASE+NOISE",
+        "paths": {"ABS": str(abs_path), "BASE": str(base_path), "NOISE": str(noise_path)},
+    }
+
+    selected = service.calc_abs("selected", state)
+    all_maps = service.calc_abs("all-maps", {**state, "include_excluded_maps": True})
+
+    assert selected["mean"] == pytest.approx(1.0)
+    assert all_maps["mean"] == pytest.approx(np.log10(10.0 / 5.5))
+    with h5py.File(abs_path, "r") as h5_file:
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, False]
 
 
 def test_restore_clears_selection_without_rewriting_raw_maps(service, tmp_path):

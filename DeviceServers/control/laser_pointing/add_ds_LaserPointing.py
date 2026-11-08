@@ -82,7 +82,7 @@ names = {
                 },
                 "working": {
                     "MainLaserDiaphragm1": 100,
-                    "Shutter1": -1,
+                    "Shutter1": 1,
                     "CrimpingDiaphragm1": 100,
                     "CrimpingDiaphragm2": 100,
                     "HalfWavePlate1": 20.5,
@@ -195,7 +195,7 @@ names = {
                 "working": {
                     "MainLaserDiaphragm1": 100,
                     "Shutter1": 1,
-                    "Shutter2": -1,
+                    "Shutter2": 1,
                     "MainLaserDiaphragm2": 100,
                     "HalfWavePlate1": 20.5,
                     "TranslationStage1": (3, 0),
@@ -314,6 +314,27 @@ def main():
                             dev_id, []
                         ),
                         "restore_point": "",
+                        "adaptive_learning": True,
+                        "adaptive_min_step": 0.125,
+                        "adaptive_backoff": 0.5,
+                        "adaptive_growth": 1.15,
+                        "point_step_limits": (
+                            {"point6": 0.5}
+                            if dev_id == "LaserPointingV0_Cam2" else {}
+                        ),
+                        "point_probe_repetitions": (
+                            {"point6": 1}
+                            if dev_id == "LaserPointingV0_Cam2" else {}
+                        ),
+                        "aperture_sweep_enabled": True,
+                        "aperture_sweep_positions": 4,
+                        "aperture_cycle_count": 2,
+                        "aperture_samples": 1,
+                        "aperture_drift_weight": 0.5,
+                        "group_plateau_probe_limit": 5,
+                        "group_plateau_min_improvement_pct": 5.0,
+                        "stagnation_pass_limit": 5,
+                        "stagnation_min_improvement_pct": 5.0,
                     }
                 ),
             },

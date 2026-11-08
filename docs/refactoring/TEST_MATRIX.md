@@ -1,12 +1,15 @@
 # Refactoring Test Matrix
 
+Software checks use the Python 3.12 environment selected by the dependency lock.
+Native service restart/deployment profiles retain their existing interpreter settings.
+
 Every work package runs focused checks before full checks. Hardware remains off unless the user separately approves a manual test.
 
 ## Static checks
 
 ```bash
-conda run -n pyconlyse39 python -m compileall DeviceServers gui/controllers/openers utilities/dataio web/backend scripts/refactor tests
-conda run -n pyconlyse39 ruff check --select F <changed-python-files>
+conda run -n pyconlyse312 python -m compileall DeviceServers gui/controllers/openers utilities/dataio web/backend scripts/refactor tests
+conda run -n pyconlyse312 ruff check --select F <changed-python-files>
 git diff --check
 git diff --cached --check
 ```
@@ -101,7 +104,7 @@ explicit, opt-in lanes and are never selected by the full gate:
 Host-data opener characterization is a narrower integration lane:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest -o addopts='' tests/integration/data
+conda run -n pyconlyse312 python -m pytest -o addopts='' tests/integration/data
 ```
 
 It may scan mounted experiment data and is intentionally excluded from the
@@ -110,27 +113,27 @@ software-only gate; failures remain visible when that lane is invoked.
 Focused coverage command, run from repository root:
 
 ```bash
-conda run -n pyconlyse39 python -m coverage erase
-conda run -n pyconlyse39 python -m coverage run --rcfile=.coveragerc -m pytest --strict-config --deny-network
-conda run -n pyconlyse39 python -m coverage report --rcfile=.coveragerc --fail-under=60
-conda run -n pyconlyse39 python -m coverage json --rcfile=.coveragerc -o .coverage-refactor.json
-conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
+conda run -n pyconlyse312 python -m coverage erase
+conda run -n pyconlyse312 python -m coverage run --rcfile=.coveragerc -m pytest --strict-config --deny-network
+conda run -n pyconlyse312 python -m coverage report --rcfile=.coveragerc --fail-under=60
+conda run -n pyconlyse312 python -m coverage json --rcfile=.coveragerc -o .coverage-refactor.json
+conda run -n pyconlyse312 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
 ```
 
 T9 software-only focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_auth_security.py tests/web/test_websocket_handler_contracts.py
 cd web/frontend && npm test -- --watchAll=false --runInBand
 cd ../..
-conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --full
+conda run -n pyconlyse312 python scripts/refactor/verify_refactor.py --apply --full
 ```
 
 T12 shared data I/O focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/unit/test_dataio_boundary.py \
   tests/unit/test_openers_orientation.py \
   tests/unit/test_treatment_service.py \
@@ -150,7 +153,7 @@ new shared reader without an explicit floor fails the gate.
 T13 lazy Tango gateway focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_tango_gateway.py \
   tests/web/test_routes_import_safety.py \
   tests/web/test_websocket_handler_contracts.py
@@ -164,7 +167,7 @@ Named-module coverage requires 100% statements for `web/backend/tango_gateway.py
 T14 device API construction focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_tango_gateway.py \
   tests/web/test_device_api_smoke.py \
   tests/web/test_device_api_psp.py
@@ -177,7 +180,7 @@ contracts remain unchanged.
 T15 read-only device snapshot focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_device_snapshot_service.py \
   tests/web/test_device_api_smoke.py
 ```
@@ -192,7 +195,7 @@ for `web/backend/device_snapshot_service.py`.
 T16 read-only DAQmx/PSP catalog focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_device_catalog_service.py \
   tests/web/test_device_api_psp.py
 ```
@@ -206,7 +209,7 @@ coverage requires 100% statements for `web/backend/device_catalog_service.py`.
 T10 software-only focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_auth_security.py \
   tests/web/test_login_rate_limit.py \
   tests/web/test_production_startup_security.py \
@@ -265,7 +268,7 @@ Focused software-only commands:
 
 ```bash
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
-  conda run --no-capture-output -n pyconlyse39 python -m pytest --strict-config --deny-network \
+  conda run --no-capture-output -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_hardware_authorization.py \
   tests/web/test_hardware_authorization_routes.py \
   tests/web/test_hardware_authorization_websocket.py \
@@ -279,12 +282,12 @@ Coverage command (named modules only):
 
 ```bash
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
-  conda run --no-capture-output -n pyconlyse39 python -m coverage erase
+  conda run --no-capture-output -n pyconlyse312 python -m coverage erase
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
-  conda run --no-capture-output -n pyconlyse39 python -m coverage run --branch --rcfile=.coveragerc -m pytest --strict-config --deny-network <focused-tests>
+  conda run --no-capture-output -n pyconlyse312 python -m coverage run --branch --rcfile=.coveragerc -m pytest --strict-config --deny-network <focused-tests>
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
-  conda run --no-capture-output -n pyconlyse39 python -m coverage json --rcfile=.coveragerc -o .coverage-refactor.json
-conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
+  conda run --no-capture-output -n pyconlyse312 python -m coverage json --rcfile=.coveragerc -o .coverage-refactor.json
+conda run -n pyconlyse312 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
 ```
 
 Required cases: server-derived subject/role; external policy and approval
@@ -330,7 +333,7 @@ restart commands.
 T11 route import isolation:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+conda run -n pyconlyse312 python -m pytest --strict-config --deny-network \
   tests/web/test_routes_import_safety.py
 ```
 
