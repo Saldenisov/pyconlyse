@@ -1,3 +1,9 @@
+from sys import modules as _refactor_modules
+
+from DeviceServers.base.general_methods_write_always_on_value import _bind_general_methods_write_always_on_value
+
+from DeviceServers.base.general_methods_int_time import _bind_general_methods_int_time
+
 import ast
 import json
 import os
@@ -267,8 +273,8 @@ class DS_General(Device):
     def always_on_value(self):
         return self.always_on
 
-    def write_always_on_value(self, value: int):
-        self.always_on = value
+    _general_methods_write_always_on_value = _bind_general_methods_write_always_on_value(_refactor_modules[__name__])
+    write_always_on_value = _general_methods_write_always_on_value["write_always_on_value"]
 
     @attribute(
         label="Friendly name",
@@ -279,8 +285,7 @@ class DS_General(Device):
     def device_friendly_name(self):
         return self.friendly_name
 
-    def write_device_friendly_name(self, friendly_name):
-        self.friendly_name = friendly_name
+    write_device_friendly_name = _general_methods_write_always_on_value["write_device_friendly_name"]
 
     @attribute(
         label="comments",
@@ -382,52 +387,13 @@ class DS_General(Device):
     def last_state_change_at_utc(self):
         return getattr(self, "_last_state_change_at_utc", "")
 
-    def set_state(self, state):
-        """Track real Tango state transitions without creating polling records."""
+    set_state = _general_methods_write_always_on_value["set_state"]
 
-        previous = getattr(self, "_tracked_tango_state", None)
-        Device.set_state(self, state)
-        if previous != state:
-            self._tracked_tango_state = state
-            self._last_state_change_at_utc = _utc_now_iso()
-            self._push_tracking_event("State", state)
-            self._push_tracking_event(
-                "last_state_change_at_utc", self._last_state_change_at_utc
-            )
+    set_status = _general_methods_write_always_on_value["set_status"]
 
-    def set_status(self, status):
-        """Push status only when it actually changes."""
+    _configure_tracking_events = _general_methods_write_always_on_value["_configure_tracking_events"]
 
-        text = str(status)
-        previous = getattr(self, "_tracked_tango_status", None)
-        Device.set_status(self, text)
-        if previous != text:
-            self._tracked_tango_status = text
-            self._push_tracking_event("Status", text)
-
-    def _configure_tracking_events(self):
-        """Enable device-pushed, change-only lifecycle archive events."""
-
-        self._tracking_events_ready = False
-        for name in self._TRACKING_EVENT_ATTRIBUTES:
-            try:
-                self.set_change_event(name, True, False)
-                self.set_archive_event(name, True, False)
-            except Exception as exc:
-                self.warn_stream(f"Cannot configure tracking event {name}: {exc}")
-        self._tracking_events_ready = True
-
-    def _push_tracking_event(self, name, value):
-        if not getattr(self, "_tracking_events_ready", False):
-            return
-        try:
-            self.push_change_event(name, value)
-        except Exception as exc:
-            self.warn_stream(f"Cannot push change event {name}: {exc}")
-        try:
-            self.push_archive_event(name, value)
-        except Exception as exc:
-            self.warn_stream(f"Cannot push archive event {name}: {exc}")
+    _push_tracking_event = _general_methods_write_always_on_value["_push_tracking_event"]
 
     @attribute(
         label="Hardware connection",
@@ -462,60 +428,7 @@ class DS_General(Device):
     def hardware_lifecycle_status(self):
         return getattr(self, "_hardware_lifecycle_status", "not initialised")
 
-    def set_hardware_lifecycle(
-        self,
-        connection_state=HardwareConnectionState.UNKNOWN,
-        initialization_state=InitializationState.UNKNOWN,
-        detail="",
-    ):
-        """Record hardware facts without changing Tango ``DevState``.
-
-        A device server must not use these attributes to imply that the Tango
-        process itself is unavailable.  That is determined externally by a
-        DeviceProxy/Astor reachability check.
-        """
-        previous_connection_state = getattr(self, "_hardware_connection_state", None)
-        previous_initialization_state = getattr(self, "_initialization_state", None)
-        previous_detail = getattr(self, "_hardware_lifecycle_status", None)
-        self._hardware_connection_state = lifecycle_value(
-            connection_state,
-            HardwareConnectionState,
-            HardwareConnectionState.UNKNOWN,
-        )
-        self._initialization_state = lifecycle_value(
-            initialization_state,
-            InitializationState,
-            InitializationState.UNKNOWN,
-        )
-        self._hardware_lifecycle_status = str(detail or "")
-        if (
-            self._initialization_state != InitializationState.UNKNOWN.value
-            and self._initialization_state != previous_initialization_state
-        ):
-            self._initialization_completed_at_utc = _utc_now_iso()
-            started = getattr(self, "_initialization_started_monotonic", None)
-            if isinstance(started, (int, float)):
-                self._initialization_duration_ms = max(
-                    0.0, (time.monotonic() - started) * 1000.0
-                )
-            self._push_tracking_event(
-                "initialization_completed_at_utc",
-                getattr(self, "_initialization_completed_at_utc", ""),
-            )
-            self._push_tracking_event(
-                "initialization_duration_ms",
-                float(getattr(self, "_initialization_duration_ms", 0.0)),
-            )
-        if previous_connection_state != self._hardware_connection_state:
-            self._push_tracking_event(
-                "hardware_connection_state", self._hardware_connection_state
-            )
-        if previous_initialization_state != self._initialization_state:
-            self._push_tracking_event("initialization_state", self._initialization_state)
-        if previous_detail != self._hardware_lifecycle_status:
-            self._push_tracking_event(
-                "hardware_lifecycle_status", self._hardware_lifecycle_status
-            )
+    set_hardware_lifecycle = _general_methods_write_always_on_value["set_hardware_lifecycle"]
 
     @attribute(
         label="URI",
@@ -527,33 +440,11 @@ class DS_General(Device):
     def uri(self):
         return self._uri
 
-    def error(self, error_in):
-        self.error_stream(error_in)
-        self._error = str(error_in)
-        self._last_error_at_utc = _utc_now_iso()
-        self._error_count = int(getattr(self, "_error_count", 0)) + 1
-        self._push_tracking_event("last_error", self._error)
-        self._push_tracking_event("last_error_at_utc", self._last_error_at_utc)
-        self._push_tracking_event("error_count", self._error_count)
-        self._n = 0
-        print(error_in)
+    error = _general_methods_write_always_on_value["error"]
 
-    def warn(self, warn_in, printing=False):
-        # Log a warning and optionally print
-        try:
-            self.warn_stream(warn_in)
-        except Exception:
-            # Fallback if warn_stream is unavailable
-            self.info_stream(f"WARNING: {warn_in}")
-        self._comment = warn_in
-        if printing:
-            print(warn_in)
+    warn = _general_methods_write_always_on_value["warn"]
 
-    def info(self, info_in, printing=False):
-        self.info_stream(info_in)
-        self._comment = info_in
-        if printing:
-            print(info_in)
+    info = _general_methods_write_always_on_value["info"]
 
 
     @command(dtype_in=str)
@@ -704,289 +595,45 @@ class DS_General(Device):
             self._stop_power_dependency_monitor()
             raise
 
-    def _start_error_timer(self):
-        """Start one bounded maintenance timer per device instance."""
-        self._stop_error_timer()
-        self._error_timer_stop = Event()
-        self._error_timer_thread = Thread(
-            target=self.int_time,
-            args=(self._error_timer_stop,),
-            name=f"{self.__class__.__name__}-error-timer",
-            daemon=True,
-        )
-        self._error_timer_thread.start()
+    _start_error_timer = _general_methods_write_always_on_value["_start_error_timer"]
 
-    def _power_dependency_is_configured(self) -> bool:
-        try:
-            return bool(str(self.power_dependency_device or "").strip()) and int(
-                self.power_dependency_output_id or 0
-            ) > 0
-        except (TypeError, ValueError):
-            return False
+    _power_dependency_is_configured = _general_methods_write_always_on_value["_power_dependency_is_configured"]
 
-    def _power_dependency_auto_turn_on_enabled(self) -> bool:
-        """Return whether this explicitly opted-in device may re-enable itself."""
-        try:
-            return bool(int(self.power_dependency_auto_turn_on or 0))
-        except (TypeError, ValueError):
-            return False
+    _power_dependency_auto_turn_on_enabled = _general_methods_write_always_on_value["_power_dependency_auto_turn_on_enabled"]
 
-    def _read_power_dependency_state(self) -> PowerDependencyState:
-        return read_power_dependency_state(
-            self.power_dependency_device,
-            self.power_dependency_output_id,
-            self._power_dependency_proxy,
-        )
+    _read_power_dependency_state = _general_methods_write_always_on_value["_read_power_dependency_state"]
 
-    @staticmethod
-    def _power_dependency_proxy(device_name: str):
-        from tango import DeviceProxy
+    _power_dependency_proxy = (staticmethod)(_general_methods_write_always_on_value["_power_dependency_proxy"])
 
-        return DeviceProxy(device_name)
+    _observe_power_dependency = _general_methods_write_always_on_value["_observe_power_dependency"]
 
-    def _observe_power_dependency(
-        self, *, force: bool = False, initial: bool = False
-    ) -> PowerDependencyState:
-        if not self._power_dependency_is_configured():
-            state = PowerDependencyState(
-                False, None, "power dependency is not configured"
-            )
-            self._power_dependency_state = state
-            self._power_dependency_status = state.detail
-            return state
+    _apply_power_dependency_state = _general_methods_write_always_on_value["_apply_power_dependency_state"]
 
-        state = self._read_power_dependency_state()
-        self._apply_power_dependency_state(state, initial=initial)
-        return state
+    _schedule_power_probe = _general_methods_write_always_on_value["_schedule_power_probe"]
 
-    def _apply_power_dependency_state(
-        self, state: PowerDependencyState, *, initial: bool = False
-    ) -> None:
-        previous = getattr(self, "_power_dependency_state", None)
-        observed = bool(getattr(self, "_power_dependency_observed", False))
-        changed = (
-            not observed
-            or previous is None
-            or previous.powered != state.powered
-            or previous.detail != state.detail
-        )
-        self._power_dependency_observed = True
-        self._power_dependency_state = state
-        if changed:
-            self._power_dependency_status = state.detail
+    _mark_hardware_power_off = _general_methods_write_always_on_value["_mark_hardware_power_off"]
 
-        if state.powered is False:
-            self._power_probe_pending = False
-            self._power_probe_due_at = 0.0
-            if changed:
-                self._handle_power_dependency_off(state.detail)
-            return
+    _handle_power_dependency_off = _general_methods_write_always_on_value["_handle_power_dependency_off"]
 
-        if state.powered is None:
-            self._power_probe_pending = False
-            self._power_probe_due_at = 0.0
-            if changed:
-                self._handle_power_dependency_unavailable(state.detail)
-            return
+    _handle_power_dependency_unavailable = _general_methods_write_always_on_value["_handle_power_dependency_unavailable"]
 
-        if initial:
-            return
+    release_power_dependency_local = _general_methods_write_always_on_value["release_power_dependency_local"]
 
-        if previous is not None and previous.powered is not True:
-            settle_seconds = max(0.0, float(self.power_on_settle_seconds or 0.0))
-            self._schedule_power_probe(settle_seconds)
-            self._power_dependency_status = (
-                f"{state.detail}; waiting {settle_seconds:.1f}s before safe probe"
-            )
-            self.set_hardware_lifecycle(
-                HardwareConnectionState.CONNECTING,
-                InitializationState.PENDING,
-                self._power_dependency_status,
-            )
-            self.set_state(DevState.INIT)
-            self.info(self._power_dependency_status, True)
+    power_dependency_ready_state = _general_methods_write_always_on_value["power_dependency_ready_state"]
 
-    def _schedule_power_probe(self, delay_seconds: float) -> None:
-        """Schedule a passive hardware probe; never issue a PDU command."""
-        self._power_probe_pending = bool(int(self.power_dependency_auto_probe or 0))
-        self._power_probe_due_at = time.monotonic() + max(0.0, float(delay_seconds))
+    _release_power_dependency_transport = _general_methods_write_always_on_value["_release_power_dependency_transport"]
 
-    def _mark_hardware_power_off(
-        self, message: str, *, tango_state=DevState.OFF
-    ) -> str:
-        """Record a confirmed external power loss without fault recovery."""
-        self._device_id_internal, self._uri = -1, b""
-        self._status_check_fault = 0
-        self._fault_recovery_attempts = 0
-        self._next_fault_recovery_at = 0.0
-        self._last_fault_recovery_error = ""
-        self._last_power_probe_error = ""
-        self._error = ""
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.POWER_OFF,
-            InitializationState.NOT_REQUESTED,
-            message,
-        )
-        self.set_state(tango_state)
-        self.comment = message
-        if getattr(self, "_last_power_off_message", "") != message:
-            self.info(message, True)
-            self._last_power_off_message = message
-        return message
+    probe_powered_hardware = _general_methods_write_always_on_value["probe_powered_hardware"]
 
-    def _handle_power_dependency_off(self, detail: str) -> None:
-        self._release_power_dependency_transport()
-        message = f"Hardware power is OFF ({detail}); connection is intentionally skipped."
-        self._power_dependency_status = message
-        self._mark_hardware_power_off(message)
+    _power_dependency_monitor_loop = _general_methods_write_always_on_value["_power_dependency_monitor_loop"]
 
-    def _handle_power_dependency_unavailable(self, detail: str) -> None:
-        self._release_power_dependency_transport()
-        self._device_id_internal, self._uri = -1, b""
-        message = f"Power dependency is unavailable: {detail}"
-        self._power_dependency_status = message
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.POWER_STATUS_UNAVAILABLE,
-            InitializationState.UNKNOWN,
-            message,
-        )
-        self.set_state(DevState.FAULT)
-        self.error(message)
+    _run_power_dependency_probe_if_due = _general_methods_write_always_on_value["_run_power_dependency_probe_if_due"]
 
-    def release_power_dependency_local(self) -> None:
-        """Release local transport resources after external power loss only."""
+    _start_power_dependency_monitor = _general_methods_write_always_on_value["_start_power_dependency_monitor"]
 
-    def power_dependency_ready_state(self):
-        """State after a passive post-power probe; hardware defaults to STANDBY."""
-        return DevState.STANDBY
+    _stop_power_dependency_monitor = _general_methods_write_always_on_value["_stop_power_dependency_monitor"]
 
-    def _release_power_dependency_transport(self) -> None:
-        try:
-            self.release_power_dependency_local()
-        except Exception as error:
-            self.warn(f"Power-loss transport cleanup failed: {error}", True)
-
-    def probe_powered_hardware(self) -> Union[int, str]:
-        """Probe a restored supply without calling turn_on or moving hardware."""
-        self._device_id_internal, self._uri = -1, b""
-        self.find_device()
-        if self._device_id_internal == -1:
-            return "hardware did not respond after power was restored"
-        return 0
-
-    def _power_dependency_monitor_loop(self, stop_event: Event) -> None:
-        while not stop_event.wait(
-            max(0.2, float(self.power_dependency_poll_interval_s or 1.0))
-        ):
-            try:
-                self._observe_power_dependency()
-                self._run_power_dependency_probe_if_due()
-            except Exception as error:
-                self.warn(f"Power dependency monitor failed: {error}", True)
-
-    def _run_power_dependency_probe_if_due(self) -> None:
-        if not bool(getattr(self, "_power_probe_pending", False)):
-            return
-        if time.monotonic() < float(getattr(self, "_power_probe_due_at", 0.0)):
-            return
-        self._power_probe_pending = False
-        with self._get_lifecycle_lock():
-            state = self._observe_power_dependency(force=True)
-            if state.powered is not True:
-                return
-            result = self.probe_powered_hardware()
-            if operation_succeeded(result):
-                self.set_state(self.power_dependency_ready_state())
-                self._last_power_probe_error = ""
-                self._error = ""
-                self.set_hardware_lifecycle(
-                    HardwareConnectionState.CONNECTED,
-                    InitializationState.NOT_REQUESTED,
-                    f"{state.detail}; safe transport probe succeeded; operational initialisation has not been requested",
-                )
-                if self._power_dependency_auto_turn_on_enabled():
-                    self._power_dependency_status = (
-                        f"{state.detail}; safe probe succeeded; running automatic turn_on"
-                    )
-                    self.info(self._power_dependency_status, True)
-                    self.turn_on()
-                    if self.get_state() == DevState.ON:
-                        self.set_hardware_lifecycle(
-                            HardwareConnectionState.READY,
-                            InitializationState.SUCCEEDED,
-                            f"{state.detail}; safe probe and automatic operational initialisation succeeded",
-                        )
-                        self._power_dependency_status = (
-                            f"{state.detail}; safe probe succeeded; device was turned ON automatically"
-                        )
-                        self.info(self._power_dependency_status, True)
-                    else:
-                        self._power_dependency_status = (
-                            f"{state.detail}; safe probe succeeded but automatic turn_on "
-                            f"did not reach ON (state={self.get_state()})"
-                        )
-                        self.error(self._power_dependency_status)
-                    return
-                self._power_dependency_status = (
-                    f"{state.detail}; safe probe succeeded; awaiting explicit turn_on"
-                )
-                self.info(self._power_dependency_status, True)
-                return
-            message = f"Hardware power is ON but safe probe failed: {result}"
-            self._power_dependency_status = message
-            self.set_hardware_lifecycle(
-                HardwareConnectionState.DISCONNECTED,
-                InitializationState.NOT_REQUESTED,
-                message,
-            )
-            self.set_state(DevState.FAULT)
-            if message != getattr(self, "_last_power_probe_error", ""):
-                self.error(message)
-                self._last_power_probe_error = message
-            self._schedule_power_probe(
-                float(self.power_dependency_reconnect_seconds or 5.0)
-            )
-
-    def _start_power_dependency_monitor(self) -> None:
-        if not self._power_dependency_is_configured():
-            return
-        self._stop_power_dependency_monitor()
-        self._power_dependency_monitor_stop = Event()
-        self._power_dependency_monitor_thread = Thread(
-            target=self._power_dependency_monitor_loop,
-            args=(self._power_dependency_monitor_stop,),
-            name=f"{self.__class__.__name__}-power-monitor",
-            daemon=True,
-        )
-        self._power_dependency_monitor_thread.start()
-
-    def _stop_power_dependency_monitor(self) -> None:
-        stop_event = getattr(self, "_power_dependency_monitor_stop", None)
-        monitor_thread = getattr(self, "_power_dependency_monitor_thread", None)
-        if stop_event is not None:
-            stop_event.set()
-        if (
-            monitor_thread is not None
-            and monitor_thread.is_alive()
-            and monitor_thread is not current_thread()
-        ):
-            monitor_thread.join(timeout=1.0)
-        self._power_dependency_monitor_stop = None
-        self._power_dependency_monitor_thread = None
-
-    def _stop_error_timer(self):
-        stop_event = getattr(self, "_error_timer_stop", None)
-        timer_thread = getattr(self, "_error_timer_thread", None)
-        if stop_event is not None:
-            stop_event.set()
-        if (
-            timer_thread is not None
-            and timer_thread.is_alive()
-            and timer_thread is not current_thread()
-        ):
-            timer_thread.join(timeout=1.0)
-        self._error_timer_stop = None
-        self._error_timer_thread = None
+    _stop_error_timer = _general_methods_write_always_on_value["_stop_error_timer"]
 
     def delete_device(self):
         """Release local maintenance resources when Tango removes this device."""
@@ -1000,72 +647,21 @@ class DS_General(Device):
     def register_variables_for_archive(self):
         self.archive_state["State"] = (self.get_state, "int8")
 
-    def send_state_archive(self):
-        res = {}
-        for key, prev_value in self.previous_archive_state.items():
-            current_value = self.archive_state[key][0]()
-            dt = self.archive_state[key][1]
-            res[key] = current_value
-            if prev_value != current_value:
-                data = self.form_archive_data(current_value, key, dt)
-                self.write_to_archive(data)
-        self.previous_archive_state = res
+    send_state_archive = _general_methods_write_always_on_value["send_state_archive"]
 
-    def fix_state(self):
-        res = {}
-        for key, value in self.archive_state.items():
-            res[key] = value[0]()
-        self.previous_archive_state = res
-        self.info("Fixing archiving state", True)
+    fix_state = _general_methods_write_always_on_value["fix_state"]
 
     @abstractmethod
     def find_device(self):
         """Sets device_id_internal and uri if applicable"""
 
-    def check_func_allowance(self, func) -> int:
-        state_ok = -1
-        if func.__name__ in self.RULES:
-            rules_for_func = self.RULES[func.__name__]
-            state = self.get_state()
-            if state in rules_for_func:
-                state_ok = 1
-        else:
-            self.error(f"Function {func} is not in RULES: {self.RULES}.")
-        return state_ok
+    check_func_allowance = _general_methods_write_always_on_value["check_func_allowance"]
 
-    def _get_lifecycle_lock(self):
-        """Return a per-device reentrant lock for state-changing operations."""
-        lock = getattr(self, "_lifecycle_lock", None)
-        if lock is None:
-            lock = RLock()
-            self._lifecycle_lock = lock
-        return lock
+    _get_lifecycle_lock = _general_methods_write_always_on_value["_get_lifecycle_lock"]
 
-    def _fault_recovery_due(self, state) -> bool:
-        if state != DevState.FAULT:
-            return True
-        if not bool(int(getattr(self, "fault_recovery_enabled", 1) or 0)):
-            return False
-        now = time.monotonic()
-        if now < getattr(self, "_next_fault_recovery_at", 0.0):
-            return False
-        cooldown = max(0.1, float(getattr(self, "fault_recovery_cooldown_s", 3.0)))
-        self._next_fault_recovery_at = now + cooldown
-        self._fault_recovery_attempts = getattr(self, "_fault_recovery_attempts", 0) + 1
-        return True
+    _fault_recovery_due = _general_methods_write_always_on_value["_fault_recovery_due"]
 
-    def _record_controller_status(self, result) -> None:
-        if operation_succeeded(result):
-            # Older adapters sometimes reported success but left their previous
-            # FAULT untouched. A successful health check is authoritative.
-            if self.get_state() == DevState.FAULT:
-                self.set_state(DevState.ON)
-            self._fault_recovery_attempts = 0
-            self._next_fault_recovery_at = 0.0
-            self._last_fault_recovery_error = ""
-            return
-        self._last_fault_recovery_error = str(result)
-        self.error(str(result))
+    _record_controller_status = _general_methods_write_always_on_value["_record_controller_status"]
 
     @attribute(label="Fault recovery status", dtype=str, access=AttrWriteType.READ)
     def fault_recovery_status(self) -> str:
@@ -1083,95 +679,15 @@ class DS_General(Device):
     def power_dependency_status(self) -> str:
         return str(getattr(self, "_power_dependency_status", "not initialised"))
 
-    def _power_dependency_allows_hardware_operation(self, *, force: bool = False) -> bool:
-        if not self._power_dependency_is_configured():
-            return True
-        state = self._observe_power_dependency(force=force)
-        if state.powered is True and not bool(
-            getattr(self, "_power_probe_pending", False)
-        ):
-            return True
-        if state.powered is True:
-            self.info(self._power_dependency_status, True)
-            return False
-        return False
+    _power_dependency_allows_hardware_operation = _general_methods_write_always_on_value["_power_dependency_allows_hardware_operation"]
+    del _general_methods_write_always_on_value
 
-    def int_time(self, stop_event=None):
-        """Clear transient errors until device teardown requests cancellation."""
-        stop_event = stop_event or Event()
-        while not stop_event.wait(0.5):
-            self._n += 1
-            if self._n > 10:
-                self._error = ""
-                self._n = 0
+    _general_methods_int_time = _bind_general_methods_int_time(_refactor_modules[__name__])
+    int_time = _general_methods_int_time["int_time"]
 
-    def _init_archive_connection(self, timeout_seconds=5):
-        """Initialize archive connection with timeout and graceful fallback"""
-        import queue
-        import threading
+    _init_archive_connection = _general_methods_int_time["_init_archive_connection"]
 
-        # Lazy import taurus only when archive is enabled to avoid heavy startup cost
-        try:
-            import taurus  # noqa: F401
-        except Exception as e:
-            self.info(f"Taurus not available ({e}); using mock archive", True)
-            self._create_mock_archive()
-            return
-
-        self.info(
-            f"Attempting archive connection to {self.archive} (timeout: {timeout_seconds}s)",
-            True,
-        )
-
-        def connect_to_archive(result_queue):
-            """Thread function to connect to archive"""
-            try:
-                import taurus as _taurus
-
-                archive_device = _taurus.Device(self.archive)
-                result_queue.put(("success", archive_device))
-            except Exception as e:
-                result_queue.put(("error", str(e)))
-
-        # Create queue and thread for timeout handling
-        result_queue = queue.Queue()
-        connect_thread = threading.Thread(
-            target=connect_to_archive, args=(result_queue,)
-        )
-        connect_thread.daemon = True
-        connect_thread.start()
-
-        # Wait for result with timeout
-        try:
-            status, result = result_queue.get(timeout=timeout_seconds)
-            if status == "success":
-                self.archive = result
-                self.info(f"Archive connection successful: {self.archive}", True)
-            else:
-                self._create_mock_archive()
-                self.info(
-                    f"Archive connection failed: {result}, using mock archive", True
-                )
-        except queue.Empty:
-            # Timeout occurred
-            self._create_mock_archive()
-            self.info(
-                f"Archive connection timed out after {timeout_seconds}s, using mock archive",
-                True,
-            )
-
-    def _create_mock_archive(self):
-        """Create a mock archive object that doesn't cause errors"""
-
-        class MockArchive:
-            def __init__(self):
-                self.state = 0  # Disabled state
-
-            def archive_it(self, data):
-                # Do nothing - archive is disabled
-                pass
-
-        self.archive = MockArchive()
+    _create_mock_archive = _general_methods_int_time["_create_mock_archive"]
 
     @property
     def device_name(self) -> str:
@@ -1183,155 +699,42 @@ class DS_General(Device):
             return f"Device {device_id} {friendly_name}"
         return f"Device {friendly_name}"
 
-    @command(polling_period=polling_main)
-    def get_controller_status(self):
-        with self._get_lifecycle_lock():
-            if not self._power_dependency_allows_hardware_operation():
-                return
-            state = self.get_state()
-            state_ok = self.check_func_allowance(self.get_controller_status)
-            if state_ok != 1 or not self._fault_recovery_due(state):
-                return
-
-            result = self.get_controller_status_local()
-            self._record_controller_status(result)
-            self.send_state_archive()
+    get_controller_status = (command(polling_period=polling_main))(_general_methods_int_time["get_controller_status"])
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
         return 0
 
-    @command
-    def turn_on(self):
-        with self._get_lifecycle_lock():
-            if not self._power_dependency_allows_hardware_operation(force=True):
-                return
-            if self.get_state() == DevState.ON:
-                self.info(f"{self.device_name} is already ON.", True)
-                return
-            state_ok = self.check_func_allowance(self.turn_on)
-            if state_ok == 1:
-                self.info(f"Turning ON {self.device_name}.", True)
-                result = self.turn_on_local()
-                if not operation_succeeded(result):
-                    self._last_fault_recovery_error = str(result)
-                    self.error(f"{result}")
-                else:
-                    self._fault_recovery_attempts = 0
-                    self._next_fault_recovery_at = 0.0
-                    self._last_fault_recovery_error = ""
-                    self.info(f"{self.device_name} WAS turned ON.", True)
-                    self.fix_state()
-            else:
-                self.error(
-                    f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}."
-                )
+    turn_on = (command)(_general_methods_int_time["turn_on"])
 
     @abstractmethod
     def turn_on_local(self) -> Union[int, str]:
         pass
 
-    @command
-    def turn_off(self):
-        with self._get_lifecycle_lock():
-            if self.get_state() == DevState.OFF:
-                self.info(f"{self.device_name} is already OFF.", True)
-                return
-            state_ok = self.check_func_allowance(self.turn_off)
-            if state_ok == 1:
-                self.info(f"Turning off device {self.device_name}.", True)
-                result = self.turn_off_local()
-                if not operation_succeeded(result):
-                    self.error(f"{result}")
-                else:
-                    self.info(f"{self.device_name} is turned OFF.", True)
-                    data = self.form_archive_data(0, "State")
-                    self.write_to_archive(data)
-            else:
-                self.error(
-                    f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}."
-                )
+    turn_off = (command)(_general_methods_int_time["turn_off"])
 
-    @command(dtype_out=str)
-    def recover(self):
-        """Run one immediate non-power-cycling health recovery attempt."""
-        with self._get_lifecycle_lock():
-            if not self._power_dependency_allows_hardware_operation(force=True):
-                return "Recovery skipped: hardware power is not available"
-            self._next_fault_recovery_at = 0.0
-            result = self.get_controller_status_local()
-            self._record_controller_status(result)
-            self.send_state_archive()
-            if operation_succeeded(result):
-                return "Recovered"
-            return f"Recovery failed: {result}"
+    recover = (command(dtype_out=str))(_general_methods_int_time["recover"])
 
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:
         pass
 
-    def write_to_archive(self, data: ArchiveData):
-        archive = getattr(self, "archive", None)
-        if archive is not None and getattr(archive, "state", 0) == 1:
-            data_c = self.compress_data(data)
-            archive.archive_it(data_c)
+    write_to_archive = _general_methods_int_time["write_to_archive"]
 
-    def compress_data(self, data):
-        msg_b = msgpack.packb(str(data))
-        msg_b_c = zlib.compress(msg_b)
-        msg_b_c_s = str(msg_b_c)
-        return msg_b_c_s
+    compress_data = _general_methods_int_time["compress_data"]
 
-    def form_archive_data(self, data, name: str, time_stamp=None, dt=None):
-        if isinstance(data, float):
-            if not dt:
-                dt = "float32"
-            data_s = Scalar(value=data, dtype=dt)
-        elif isinstance(data, int):
-            if not dt:
-                if data <= 127 and data >= 0:
-                    dt = "uint8"
-                elif data >= 0:
-                    dt = "uintc"
-                else:
-                    dt = "int"
-            data_s = Scalar(value=data, dtype=dt)
-        elif isinstance(data, np.ndarray):
-            if not dt:
-                dt = str(data.dtype)
-                data.astype(dt)
-            data_s = Array(value=data.tobytes(), shape=data.shape, dtype=dt)
+    form_archive_data = _general_methods_int_time["form_archive_data"]
 
-        if time_stamp is None:
-            time_stamp = time.time()
-
-        archive_data = ArchiveData(
-            tango_device=self.get_name(),
-            data_timestamp=time_stamp,
-            dataset_name=name,
-            data=data_s,
-        )
-        return archive_data
-
-    @command(
+    register_order = (command(
         dtype_in=[
             int,
         ],
         dtype_out=str,
         doc_in="Takes an order",
         doc_out="return name of order",
-    )
-    def register_order(self, value: int):
-        import random
-        import string
+    ))(_general_methods_int_time["register_order"])
 
-        s = 20  # number of characters in the string.
-        name = "".join(random.choices(string.ascii_uppercase + string.digits, k=s))
-        res = self.register_order_local(name, value)
-        return name if res == 0 else "-1, could not register order"
-
-    def register_order_local(self, name, value):
-        pass
+    register_order_local = _general_methods_int_time["register_order_local"]
 
     @command(dtype_in=str, doc_in="Order name", dtype_out=bool)
     def is_order_ready(self, name):
@@ -1364,49 +767,15 @@ class DS_General(Device):
         order.order_done = True
         return 0
 
-    def give_order_local(self, name) -> Any:
-        pass
+    give_order_local = _general_methods_int_time["give_order_local"]
 
     # ----- Centralized global settings management commands -----
-    @command(
+    set_global_variable = (command(
         dtype_in=[str],
         dtype_out=str,
         doc_in="['name','value'] (global setting to change)",
         doc_out="Result message",
-    )
-    def set_global_variable(self, name_value: list) -> str:
-        try:
-            name, value = name_value[0], name_value[1]
-        except Exception:
-            return "ERROR: Provide ['name','value'] as a two-element string array"
-        key = str(name).strip().upper()
-        if key not in self.ALLOWED_GLOBAL_VARS:
-            return f"ERROR: Unknown global variable '{key}'. Allowed: {self.ALLOWED_GLOBAL_VARS}"
-        # Coerce value
-        if key in ("DISABLE_ARCHIVE",):
-            coerced = _str_to_bool(value)
-        elif key in ("ARCHIVE_TIMEOUT_SECONDS",):
-            try:
-                coerced = int(value)
-            except Exception:
-                return f"ERROR: '{key}' expects integer value"
-        else:
-            coerced = str(value)
-        GLOBAL_SETTINGS[key] = coerced
-        # Apply immediately for archive-related changes
-        if key == "DISABLE_ARCHIVE":
-            if coerced:
-                # Switch to mock archive now
-                self._create_mock_archive()
-                self.info("Global DISABLE_ARCHIVE set: switched to mock archive", True)
-            else:
-                # Try reconnect with configured timeout
-                timeout_val = int(GLOBAL_SETTINGS.get("ARCHIVE_TIMEOUT_SECONDS", 5))
-                self._init_archive_connection(timeout_seconds=timeout_val)
-                self.info(
-                    "Global DISABLE_ARCHIVE unset: attempted archive reconnect", True
-                )
-        return f"OK: {key} set to {GLOBAL_SETTINGS[key]}"
+    ))(_general_methods_int_time["set_global_variable"])
 
     @command(
         dtype_in=str,
@@ -1438,43 +807,13 @@ class DS_General(Device):
     def get_global_config_path(self) -> str:
         return os.environ.get(CONFIG_FILE_ENV, _default_config_path())
 
-    @command(
+    reload_global_variables = (command(
         dtype_out=str,
         doc_out="Reload result and current settings",
-    )
-    def reload_global_variables(self) -> str:
-        path = _load_global_settings_from_file()
-        # Overlay env again in case it is set
-        try:
-            if "DISABLE_ARCHIVE" in os.environ:
-                GLOBAL_SETTINGS["DISABLE_ARCHIVE"] = _str_to_bool(
-                    os.environ.get("DISABLE_ARCHIVE", "")
-                )
-            if "ARCHIVE_TIMEOUT_SECONDS" in os.environ:
-                GLOBAL_SETTINGS["ARCHIVE_TIMEOUT_SECONDS"] = int(
-                    os.environ.get("ARCHIVE_TIMEOUT_SECONDS", "5")
-                )
-        except Exception:
-            pass
-        return "Reloaded from: " + path + "\n" + self.list_global_variables()
+    ))(_general_methods_int_time["reload_global_variables"])
 
-    @command(
+    save_global_variables = (command(
         dtype_out=str,
         doc_out="Save result and path",
-    )
-    def save_global_variables(self) -> str:
-        path = os.environ.get(CONFIG_FILE_ENV, _default_config_path())
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-        except Exception:
-            pass
-        try:
-            to_save = {
-                k: GLOBAL_SETTINGS.get(k, CONFIG_DEFAULTS.get(k))
-                for k in CONFIG_DEFAULTS
-            }
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(to_save, f, indent=2)
-            return f"Saved to: {path}"
-        except Exception as e:
-            return f"ERROR: Could not save to {path}: {e}"
+    ))(_general_methods_int_time["save_global_variables"])
+    del _general_methods_int_time

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 
+from sys import modules as _refactor_modules
+
 import ctypes
 import os
 import sys
@@ -26,6 +28,9 @@ def _startup_trace(label):
 
 app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
+
+from DeviceServers.motion.standa.standa_motor_methods_get_temp import _bind_standa_motor_methods_get_temp
+from DeviceServers.motion.standa.standa_motor_methods_turn_on_local import _bind_standa_motor_methods_turn_on_local
 
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, device_property
@@ -150,8 +155,8 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     def temperature(self):
         return self._temperature
 
-    def get_temp(self):
-        return self._temperature
+    _standa_motor_methods_get_temp = _bind_standa_motor_methods_get_temp(_refactor_modules[__name__])
+    get_temp = _standa_motor_methods_get_temp["get_temp"]
 
     @attribute(
         label="Power current",
@@ -163,8 +168,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     def power_current(self):
         return self._power_current
 
-    def get_current(self):
-        return self._power_current
+    get_current = _standa_motor_methods_get_temp["get_current"]
 
     @attribute(
         label="Power voltage",
@@ -176,8 +180,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     def power_voltage(self):
         return self._power_voltage
 
-    def get_voltage(self):
-        return self._power_voltage
+    get_voltage = _standa_motor_methods_get_temp["get_voltage"]
 
     @attribute(
         label="Power status",
@@ -323,77 +326,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         _startup_trace("init_device_exit")
         _STARTUP_TRACE_ENABLED = False
 
-    def _initialize_on_startup_if_requested(self) -> bool:
-        """Leave a discovered controller open and ready for immediate use."""
-
-        try:
-            enabled = bool(int(self.initialize_on_startup or 0))
-        except (TypeError, ValueError):
-            enabled = True
-
-        if not enabled:
-            if self._device_id_internal != -1:
-                self.set_state(DevState.STANDBY)
-                self.info(
-                    f"{self.device_name} controller discovered; startup initialisation is disabled.",
-                    True,
-                )
-            return False
-
-        if self._device_id_internal == -1:
-            message = (
-                f"{self.device_name} startup initialisation failed: "
-                "controller was not discovered"
-            )
-            self.set_hardware_lifecycle(
-                HardwareConnectionState.DISCONNECTED,
-                InitializationState.FAILED,
-                message,
-            )
-            self.set_state(DevState.FAULT)
-            self.error(message)
-            return False
-
-        # A configured power dependency schedules its own delayed probe during
-        # base initialisation.  This Standa-specific startup path performs the
-        # stronger open/serial/status/position verification itself, so leaving
-        # that probe pending would make it run against an already-open ON axis.
-        # In that state find_device() is intentionally disallowed and the base
-        # probe would incorrectly report the powered controller as missing.
-        probe_was_pending = bool(getattr(self, "_power_probe_pending", False))
-        if probe_was_pending:
-            self._power_probe_pending = False
-            self._power_probe_due_at = 0.0
-
-        self.info(
-            f"Initialising {self.device_name} automatically at device-server startup.",
-            True,
-        )
-        result = self.turn_on_local()
-        if result in (None, 0) and self.get_state() == DevState.ON:
-            power_state = getattr(self, "_power_dependency_state", None)
-            if getattr(power_state, "configured", False) and getattr(
-                power_state, "powered", None
-            ) is True:
-                self._last_power_probe_error = ""
-                self._power_dependency_status = (
-                    f"{power_state.detail}; startup initialisation verified "
-                    "the hardware; axis is ready"
-                )
-            self.info(
-                f"{self.device_name} startup initialisation succeeded; axis is ready.",
-                True,
-            )
-            return True
-
-        self.set_state(DevState.FAULT)
-        if probe_was_pending:
-            self._schedule_power_probe(
-                float(self.power_dependency_reconnect_seconds or 5.0)
-            )
-        message = f"{self.device_name} startup initialisation failed: {result}"
-        self.error(message)
-        return False
+    _initialize_on_startup_if_requested = _standa_motor_methods_get_temp["_initialize_on_startup_if_requested"]
 
 
     def register_variables_for_archive(self):
@@ -407,674 +340,67 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             }
         )
 
-    def _transport_lock(self, timeout_s=None):
-        timeout = (
-            self.usb_transport_lock_timeout_s
-            if timeout_s is None
-            else timeout_s
-        )
-        if self.usb_transport_lock_path:
-            return exclusive_standa_transport(
-                self.usb_transport_lock_path,
-                timeout_seconds=max(0.1, float(timeout or 1.0)),
-            )
-        return exclusive_standa_device_transport(
-            str(self.device_id),
-            timeout_seconds=max(0.1, float(timeout or 1.0)),
-        )
+    _transport_lock = _standa_motor_methods_get_temp["_transport_lock"]
 
-    def _discovery_transport_lock(self, timeout_s=None):
-        """Serialize enumeration because probing touches the complete COM bus."""
+    _discovery_transport_lock = _standa_motor_methods_get_temp["_discovery_transport_lock"]
 
-        timeout = (
-            self.usb_transport_lock_timeout_s
-            if timeout_s is None
-            else timeout_s
-        )
-        return exclusive_standa_transport(
-            self.usb_transport_lock_path or None,
-            timeout_seconds=max(0.1, float(timeout or 1.0)),
-        )
+    _utc_now_iso = (staticmethod)(_standa_motor_methods_get_temp["_utc_now_iso"])
 
-    @staticmethod
-    def _utc_now_iso():
-        return datetime.now(timezone.utc).isoformat()
+    _record_transport_error = _standa_motor_methods_get_temp["_record_transport_error"]
 
-    def _record_transport_error(self, operation, result):
-        self._transport_error_count = int(
-            getattr(self, "_transport_error_count", 0)
-        ) + 1
-        self._last_transport_error = f"{operation}: {result}"
-        self._last_transport_error_at_utc = self._utc_now_iso()
+    _read_transport_call = _standa_motor_methods_get_temp["_read_transport_call"]
 
-    def _read_transport_call(self, operation, function, *args):
-        """Retry only idempotent reads after resetting transmission locks."""
+    _endpoint_state_from_gpio_flags = (staticmethod)(_standa_motor_methods_get_temp["_endpoint_state_from_gpio_flags"])
 
-        retries = max(0, int(getattr(self, "usb_read_retry_count", 1) or 0))
-        with self._transport_lock():
-            result = function(*args)
-            if result == Result.Ok:
-                return result
-            self._record_transport_error(operation, result)
-            if result != Result.Error:
-                return result
-            reset_locks = getattr(lib, "reset_locks", None)
-            if not callable(reset_locks):
-                return result
-            for _attempt in range(retries):
-                reset_locks()
-                time.sleep(
-                    max(0.0, float(getattr(self, "usb_read_retry_delay_s", 0.05)))
-                )
-                result = function(*args)
-                if result == Result.Ok:
-                    self._transport_retry_success_count = int(
-                        getattr(self, "_transport_retry_success_count", 0)
-                    ) + 1
-                    return result
-                self._record_transport_error(operation, result)
-                if result != Result.Error:
-                    return result
-            return result
+    _update_endpoint_state = _standa_motor_methods_get_temp["_update_endpoint_state"]
 
-    @staticmethod
-    def _endpoint_state_from_gpio_flags(gpio_flags) -> str:
-        """Decode the two physical end switches without using motor position."""
+    _refresh_endpoint_state_passively = _standa_motor_methods_get_temp["_refresh_endpoint_state_passively"]
 
-        flags = int(gpio_flags or 0)
-        right_active = bool(flags & GPIOFlags.STATE_RIGHT_EDGE)
-        left_active = bool(flags & GPIOFlags.STATE_LEFT_EDGE)
-        if right_active and left_active:
-            return "CONFLICT"
-        if right_active:
-            return "RIGHT"
-        if left_active:
-            return "LEFT"
-        return "BETWEEN"
+    _has_open_transport = _standa_motor_methods_get_temp["_has_open_transport"]
 
-    def _update_endpoint_state(self, controller_status) -> str:
-        self._endpoint_state = self._endpoint_state_from_gpio_flags(
-            getattr(controller_status, "GPIOFlags", 0)
-        )
-        return self._endpoint_state
+    _close_handle_locked = (staticmethod)(_standa_motor_methods_get_temp["_close_handle_locked"])
 
-    def _refresh_endpoint_state_passively(self) -> str:
-        """Read end switches through a temporary handle, without any motion."""
+    _invalidate_transport = _standa_motor_methods_get_temp["_invalidate_transport"]
 
-        uri = getattr(self, "_uri", b"") or getattr(self, "_last_known_uri", b"")
-        if not uri:
-            self._endpoint_state = "UNKNOWN"
-            return self._endpoint_state
+    _schedule_transport_recovery = _standa_motor_methods_get_temp["_schedule_transport_recovery"]
 
-        handle = -1
-        try:
-            with self._transport_lock():
-                handle = lib.open_device(uri)
-                if handle < 0:
-                    self._endpoint_state = "UNKNOWN"
-                    return self._endpoint_state
-                try:
-                    serial = ctypes.c_uint()
-                    serial_result = lib.get_serial_number(
-                        handle, ctypes.byref(serial)
-                    )
-                    if (
-                        serial_result != Result.Ok
-                        or int(serial.value) != int(self.device_id)
-                    ):
-                        self._endpoint_state = "UNKNOWN"
-                        return self._endpoint_state
+    _reset_transport_recovery = _standa_motor_methods_get_temp["_reset_transport_recovery"]
 
-                    controller_status = status_t()
-                    status_result = lib.get_status(
-                        handle, ctypes.byref(controller_status)
-                    )
-                    if status_result != Result.Ok:
-                        self._endpoint_state = "UNKNOWN"
-                        return self._endpoint_state
-                    return self._update_endpoint_state(controller_status)
-                finally:
-                    self._close_handle_locked(handle)
-                    handle = -1
-        except Exception:
-            self._endpoint_state = "UNKNOWN"
-            return self._endpoint_state
+    _enumerated_serial = (staticmethod)(_standa_motor_methods_get_temp["_enumerated_serial"])
 
-    def _has_open_transport(self) -> bool:
-        return bool(
-            getattr(
-                self,
-                "_standa_handle_open",
-                getattr(self, "_device_id_internal", -1) not in (-1, None),
-            )
-        )
+    _serial_by_temporary_open = _standa_motor_methods_get_temp["_serial_by_temporary_open"]
 
-    @staticmethod
-    def _close_handle_locked(device_handle) -> int:
-        if device_handle in (-1, None):
-            return 0
-        handle = ctypes.cast(device_handle, ctypes.POINTER(ctypes.c_int))
-        return lib.close_device(ctypes.byref(handle))
+    _set_passive_discovery_result = _standa_motor_methods_get_temp["_set_passive_discovery_result"]
 
-    def _invalidate_transport(self) -> None:
-        self._commanded_flipper_state = "UNKNOWN"
-        device_handle = getattr(self, "_device_id_internal", -1)
-        was_open = self._has_open_transport()
-        current_uri = getattr(self, "_uri", b"")
-        if current_uri:
-            self._last_known_uri = current_uri
-        self._device_id_internal = -1
-        self._uri = b""
-        self._standa_handle_open = False
-        if not was_open:
-            return
-        try:
-            with self._transport_lock(timeout_s=0.2):
-                self._close_handle_locked(device_handle)
-        except Exception:
-            # A disconnected USB device commonly cannot be closed.  The local
-            # handle is already invalidated, so no further command will use it.
-            pass
+    find_device = _standa_motor_methods_get_temp["find_device"]
 
-    def _schedule_transport_recovery(self) -> None:
-        delay = max(0.1, float(getattr(self, "_standa_recovery_delay_s", 3.0)))
-        max_delay = max(delay, float(self.usb_recovery_max_delay_s or 60.0))
-        self._next_fault_recovery_at = time.monotonic() + delay
-        self._standa_recovery_delay_s = min(max_delay, delay * 2.0)
+    read_position_local = _standa_motor_methods_get_temp["read_position_local"]
 
-    def _reset_transport_recovery(self) -> None:
-        self._status_check_fault = 0
-        self._standa_auto_recovery_blocked = False
-        self._standa_recovery_delay_s = max(
-            0.1, float(self.usb_recovery_initial_delay_s or 3.0)
-        )
+    write_position_local = _standa_motor_methods_get_temp["write_position_local"]
 
-    @staticmethod
-    def _enumerated_serial(devenum, index):
-        get_serial = getattr(lib, "get_enumerate_device_serial", None)
-        if not callable(get_serial):
-            return None
-        serial = ctypes.c_uint()
-        result = get_serial(devenum, index, ctypes.byref(serial))
-        if result == Result.Ok:
-            return int(serial.value)
-        return None
+    _standa_error = _standa_motor_methods_get_temp["_standa_error"]
 
-    def _serial_by_temporary_open(self, uri):
-        """Compatibility fallback for legacy enumeration without serial data."""
+    define_position_local = _standa_motor_methods_get_temp["define_position_local"]
 
-        device_handle = lib.open_device(uri)
-        if device_handle < 0:
-            return None
-        try:
-            serial = ctypes.c_uint()
-            result = lib.get_serial_number(device_handle, ctypes.byref(serial))
-            if result == Result.Ok:
-                return int(serial.value)
-            return None
-        finally:
-            self._close_handle_locked(device_handle)
+    _open_verified_transport = _standa_motor_methods_get_temp["_open_verified_transport"]
 
-    def _set_passive_discovery_result(self, discovered_uri):
-        """Store a closed discovery marker without initialising the axis."""
+    _resume_open_transport = _standa_motor_methods_get_temp["_resume_open_transport"]
+    del _standa_motor_methods_get_temp
 
-        discovered_uri = discovered_uri or b""
-        self._standa_handle_open = False
-        self._uri = discovered_uri
-        self._device_id_internal = 0 if discovered_uri else -1
-        if discovered_uri:
-            self._last_known_uri = discovered_uri
+    _standa_motor_methods_turn_on_local = _bind_standa_motor_methods_turn_on_local(_refactor_modules[__name__])
+    turn_on_local = _standa_motor_methods_turn_on_local["turn_on_local"]
 
-    def find_device(self):
-        _startup_trace("find_device_enter")
-        state_ok = self.check_func_allowance(self.find_device)
-        discovered_uri = b""
-        if not state_ok:
-            return
+    _attempt_recover_connection = _standa_motor_methods_turn_on_local["_attempt_recover_connection"]
 
-        self.info(f"Searching for STANDA device {self.device_id}", True)
-        cache_ttl = max(0.0, float(self.usb_discovery_cache_ttl_s or 0.0))
-        cached_devices = load_discovery_snapshot(cache_ttl)
-        if cached_devices is not None:
-            cached_uri = cached_devices.get(str(self.device_id))
-            discovered_uri = cached_uri.encode("utf-8") if cached_uri else b""
-            self._set_passive_discovery_result(discovered_uri)
-            if discovered_uri:
-                self._last_known_uri = discovered_uri
-                self.info(
-                    f"Reused recent host discovery for {self.device_name}: "
-                    f"{discovered_uri!r}",
-                    True,
-                )
-            return
+    turn_off_local = _standa_motor_methods_turn_on_local["turn_off_local"]
 
-        discovered_devices = {}
-        devenum = None
-        try:
-            # Enumeration itself opens every connected controller.  A single
-            # host-wide lock prevents simultaneous recoveries from disrupting
-            # one another when USB is noisy during accelerator operation.
-            _startup_trace("transport_lock_wait")
-            # A complete probe can take longer than an ordinary controller
-            # command. Once inside the host-wide lock, recheck the cache: a
-            # preceding Tango process may already have completed the scan.
-            with self._discovery_transport_lock(
-                timeout_s=max(
-                    0.1, float(self.usb_discovery_lock_timeout_s or 15.0)
-                )
-            ):
-                _startup_trace("transport_lock_acquired")
-                cached_devices = load_discovery_snapshot(cache_ttl)
-                if cached_devices is not None:
-                    cached_uri = cached_devices.get(str(self.device_id))
-                    discovered_uri = (
-                        cached_uri.encode("utf-8") if cached_uri else b""
-                    )
-                    if discovered_uri:
-                        self.info(
-                            f"Reused host discovery completed by another process "
-                            f"for {self.device_name}: {discovered_uri!r}",
-                            True,
-                        )
-                    self._set_passive_discovery_result(discovered_uri)
-                    return
-                set_bindy_key = getattr(lib, "set_bindy_key", None)
-                keyfile = Path(ximc_dir / arch_type / "keyfile.sqlite")
-                if callable(set_bindy_key) and keyfile.exists():
-                    set_bindy_key(str(keyfile).encode("utf-8"))
-                probe_flags = EnumerateFlags.ENUMERATE_PROBE
-                enum_hints = b""
-                if bool(int(self.enumerate_network_devices or 0)):
-                    probe_flags |= EnumerateFlags.ENUMERATE_NETWORK
-                    enum_hints = f"addr={self.ip_address}".encode()
-                _startup_trace("enumerate_devices_enter")
-                devenum = lib.enumerate_devices(probe_flags, enum_hints)
-                _startup_trace("enumerate_devices_exit")
-                device_counts = lib.get_device_count(devenum)
-                for index in range(max(0, device_counts)):
-                    uri = lib.get_device_name(devenum, index)
-                    serial = self._enumerated_serial(devenum, index)
-                    if serial is None:
-                        serial = self._serial_by_temporary_open(uri)
-                    if serial is not None:
-                        discovered_devices[int(serial)] = uri
-                    if int(self.device_id) == serial:
-                        discovered_uri = uri
-                store_discovery_map(discovered_devices)
-        except StandaTransportBusyError as error:
-            self.warn(f"STANDA discovery deferred: {error}", True)
-        except Exception as error:
-            self.warn(f"STANDA discovery failed: {error}", True)
-        finally:
-            if devenum is not None:
-                free_enumeration = getattr(lib, "free_enumerate_devices", None)
-                if callable(free_enumeration):
-                    try:
-                        free_enumeration(devenum)
-                    except Exception as error:
-                        self.warn(f"STANDA enumeration cleanup failed: {error}")
+    release_power_dependency_local = _standa_motor_methods_turn_on_local["release_power_dependency_local"]
 
-        # A closed probe handle remains only as a discovery marker. Commands
-        # use it only after turn_on_local reopens and verifies the selected URI.
-        self._set_passive_discovery_result(discovered_uri)
-        if discovered_uri:
-            self.set_state(DevState.STANDBY)
-        _startup_trace("find_device_exit")
+    move_axis_local = _standa_motor_methods_turn_on_local["move_axis_local"]
 
-    def read_position_local(self) -> Union[int, str]:
-        if not self._has_open_transport():
-            return (
-                f"Could not read position of {self.device_name}: "
-                "STANDA transport is not open."
-            )
-        pos = get_position_t()
-        try:
-            result = self._read_transport_call(
-                "get_position",
-                lib.get_position,
-                self._device_id_internal,
-                ctypes.byref(pos),
-            )
-        except StandaTransportBusyError:
-            return (
-                f"Could not read position of {self.device_name}: "
-                "STANDA USB transport is busy."
-            )
-        except Exception as error:
-            return f"Could not read position of {self.device_name}: {error}."
-        if result == Result.Ok:
-            pos_microsteps = pos.Position * 256 + pos.uPosition
-            pos_basic_units = pos_microsteps / 256
-            self._position = round(pos_basic_units / self.conversion, 3)
-            return 0
-        return f"Could not read position of {self.device_name}: {result}."
+    _flipper_state_for_target = (staticmethod)(_standa_motor_methods_turn_on_local["_flipper_state_for_target"])
 
-    def write_position_local(self, pos) -> Union[int, str]:
-        self.move_axis(pos)
-        return 0
-
-    def _standa_error(self, error: int) -> Tuple[bool, str]:
-        # TODO: finish filling different errors values
-        if error == 0:
-            res, comments = True, ""
-        elif error == -1:
-            res, comments = False, "Standa: generic error."
-        else:
-            res, comments = False, "Standa: unknown error."
-
-        return res, comments
-
-    def define_position_local(self, position) -> Union[str, int]:
-        if not self._has_open_transport():
-            return (
-                f"Could not define position of {self.device_name}: "
-                "STANDA transport is not open."
-            )
-        position = position * self.conversion
-        pos_steps = int(position // 1)
-        pos_microsteps = int(position % 1 * 256)
-        pos_standa = set_position_t()
-        pos_standa.Position = ctypes.c_int(pos_steps)
-        pos_standa.uPosition = ctypes.c_int(pos_microsteps)
-        pos_standa.EncPosition = ctypes.c_longlong(0)
-        pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
-        try:
-            with self._transport_lock():
-                result = lib.set_position(
-                    self._device_id_internal, ctypes.byref(pos_standa)
-                )
-        except StandaTransportBusyError as error:
-            return f"Could not define position of {self.device_name}: {error}."
-        except Exception as error:
-            return f"Could not define position of {self.device_name}: {error}."
-        if result == Result.Ok:
-            return 0
-        return f"Could not define position of {self.device_name}: {result}."
-
-    def _open_verified_transport(self, uri):
-        """Open one URI and verify that it is the configured controller."""
-
-        if not uri:
-            return -1, "empty URI"
-        try:
-            with self._transport_lock():
-                handle = lib.open_device(uri)
-                if handle < 0:
-                    return handle, f"open_device returned {handle}"
-                serial = ctypes.c_uint()
-                result = lib.get_serial_number(handle, ctypes.byref(serial))
-                if result != Result.Ok or int(serial.value) != int(self.device_id):
-                    self._close_handle_locked(handle)
-                    return -1, (
-                        f"serial verification failed: result={result}, "
-                        f"serial={serial.value}"
-                    )
-                return handle, ""
-        except StandaTransportBusyError as error:
-            return -1, str(error)
-        except Exception as error:
-            return -1, str(error)
-
-    def _resume_open_transport(self, uri) -> bool:
-        """Reopen and verify a previously initialized axis without moving it."""
-
-        handle, error = self._open_verified_transport(uri)
-        if handle < 0:
-            if error:
-                self._record_transport_error("reopen", error)
-            return False
-        self._device_id_internal = handle
-        self._uri = uri
-        self._last_known_uri = uri
-        self._standa_handle_open = True
-
-        status = status_t()
-        try:
-            result = self._read_transport_call(
-                "reopen_get_status",
-                lib.get_status,
-                handle,
-                ctypes.byref(status),
-            )
-            if result != Result.Ok or self.read_position_local() != 0:
-                self._invalidate_transport()
-                return False
-        except Exception as error:
-            self._record_transport_error("reopen_validation", error)
-            self._invalidate_transport()
-            return False
-
-        self._reset_transport_recovery()
-        self.set_state(DevState.ON)
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.READY,
-            InitializationState.SUCCEEDED,
-            "STANDA transport automatically reopened and verified; no movement or stop command was issued",
-        )
-        self.info(
-            f"STANDA transport safely resumed for {self.device_name} without movement.",
-            True,
-        )
-        return True
-
-    def turn_on_local(self) -> Union[int, str]:
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.CONNECTING,
-            InitializationState.IN_PROGRESS,
-            "opening STANDA transport for axis initialisation",
-        )
-        if self._device_id_internal == -1 or not self._uri:
-            self.info(f"Searching for device: {self.device_id}", True)
-            self.find_device()
-
-        if self._device_id_internal == -1:
-            self.set_hardware_lifecycle(
-                HardwareConnectionState.DISCONNECTED,
-                InitializationState.FAILED,
-                "STANDA controller was not found during axis initialisation",
-            )
-            return f"Could NOT turn on {self.device_name}: Device could not be found."
-
-        res, open_error = self._open_verified_transport(self._uri)
-        if res < 0:
-            self.set_hardware_lifecycle(
-                HardwareConnectionState.DISCONNECTED,
-                InitializationState.FAILED,
-                f"could not open and verify STANDA transport: {open_error}",
-            )
-            return f"Could NOT turn on {self.device_name}: {open_error}."
-
-        if res >= 0:
-            self._device_id_internal = res
-            self._standa_handle_open = True
-            self._reset_transport_recovery()
-            self.set_state(DevState.ON)
-            stop_result = self.stop_movement_local()
-            if stop_result not in (None, 0):
-                self._invalidate_transport()
-                self.set_state(DevState.FAULT)
-                self.set_hardware_lifecycle(
-                    HardwareConnectionState.CONNECTED,
-                    InitializationState.FAILED,
-                    str(stop_result),
-                )
-                return stop_result
-            position_result = self.read_position_local()
-            if position_result not in (None, 0):
-                self._invalidate_transport()
-                self.set_state(DevState.FAULT)
-                self.set_hardware_lifecycle(
-                    HardwareConnectionState.CONNECTED,
-                    InitializationState.FAILED,
-                    str(position_result),
-                )
-                return position_result
-            self.set_hardware_lifecycle(
-                HardwareConnectionState.READY,
-                InitializationState.SUCCEEDED,
-                "STANDA transport is open and the axis is initialised",
-            )
-            self._standa_resume_after_recovery = bool(
-                int(self.resume_connection_after_loss or 0)
-            )
-            return 0
-        self.set_state(DevState.FAULT)
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.DISCONNECTED,
-            InitializationState.FAILED,
-            f"STANDA open_device returned {res}",
-        )
-        return f"Could NOT turn on {self.device_name}: {res}."
-
-    def _attempt_recover_connection(self) -> bool:
-        if getattr(self, "_standa_auto_recovery_blocked", False):
-            self.warn(
-                "STANDA automatic recovery is blocked after USB loss during motion; "
-                "inspect the axis before an explicit turn_on.",
-                True,
-            )
-            return False
-        self.info(
-            f"Attempting STANDA transport discovery for {self.device_name}; "
-            "no axis initialisation or movement will be issued.",
-            True,
-        )
-        self.set_state(DevState.FAULT)
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.DISCONNECTED,
-            InitializationState.NOT_REQUESTED,
-            "STANDA transport is unavailable; passive discovery is pending",
-        )
-        self._invalidate_transport()
-        should_resume = bool(
-            getattr(self, "_standa_resume_after_recovery", False)
-            and int(getattr(self, "resume_connection_after_loss", 1) or 0)
-        )
-        if should_resume:
-            last_uri = getattr(self, "_last_known_uri", b"")
-            if last_uri and self._resume_open_transport(last_uri):
-                return True
-        try:
-            self.find_device()
-            res = 0 if self._device_id_internal != -1 else "controller unavailable"
-        except Exception as e:
-            self._schedule_transport_recovery()
-            self.warn(f"STANDA recovery discovery failed: {e}", True)
-            return False
-
-        if res == 0 and should_resume:
-            if self._resume_open_transport(self._uri):
-                return True
-            self._invalidate_transport()
-            res = "controller rediscovered but safe reopen verification failed"
-
-        if res == 0:
-            self._reset_transport_recovery()
-            self.set_state(DevState.STANDBY)
-            self.set_hardware_lifecycle(
-                HardwareConnectionState.CONNECTED,
-                InitializationState.NOT_REQUESTED,
-                "STANDA controller discovered passively; explicit initialisation is required",
-            )
-            self.info(
-                f"STANDA transport discovery succeeded for {self.device_name}; "
-                "awaiting explicit turn_on.",
-                True,
-            )
-            return True
-
-        self._schedule_transport_recovery()
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.DISCONNECTED,
-            InitializationState.NOT_REQUESTED,
-            f"STANDA passive discovery deferred: {res}",
-        )
-        self.warn(f"STANDA recovery deferred for {self.device_name}: {res}", True)
-        return False
-
-    def turn_off_local(self) -> Union[int, str]:
-        self._standa_resume_after_recovery = False
-        if not self._has_open_transport():
-            self._device_id_internal = -1
-            self._uri = b""
-            self.set_state(DevState.OFF)
-            return 0
-
-        try:
-            with self._transport_lock():
-                result = self._close_handle_locked(self._device_id_internal)
-        except StandaTransportBusyError as error:
-            return f"Could not turn off device {self.device_name}: {error}."
-        except Exception as error:
-            return f"Could not turn off device {self.device_name}: {error}."
-        sleep(0.05)
-        if result == 0:
-            self.set_state(DevState.OFF)
-            self._device_id_internal = -1
-            self._uri = ""
-            self._standa_handle_open = False
-            self._commanded_flipper_state = "UNKNOWN"
-            return 0
-        self.set_state(DevState.FAULT)
-        return self.error(f"Could not turn off device {self.device_name}: {result}.")
-
-    def release_power_dependency_local(self) -> None:
-        """Close a local controller handle after external PDU power loss."""
-        self._invalidate_transport()
-
-    def move_axis_local(self, pos) -> Union[int, str]:
-        is_flipper = self._uses_commanded_flipper_state()
-        target_state = self._flipper_state_for_target(pos)
-        if is_flipper:
-            self._commanded_flipper_state = "UNKNOWN"
-        if not self._has_open_transport():
-            return (
-                f"Move command for {self.device_name} did NOT work: "
-                "STANDA transport is not open."
-            )
-        pos = pos * self.conversion
-        microsteps = int(pos % 1 * 256)
-        steps = int(pos // 1)
-        try:
-            with self._transport_lock():
-                result = lib.command_move(self._device_id_internal, steps, microsteps)
-        except StandaTransportBusyError as error:
-            return f"Move command for {self.device_name} did NOT work: {error}."
-        except Exception as error:
-            return f"Move command for {self.device_name} did NOT work: {error}."
-        self.set_state(DevState.MOVING)
-        if result == Result.Ok:
-            try:
-                # Do not hold the host-wide lock while waiting: a concurrent
-                # stop command must stay able to reach a moving axis.
-                result = lib.command_wait_for_stop(
-                    self._device_id_internal, self.wait_time
-                )
-            except Exception as error:
-                return f"{self.device_name} did NOT stop moving yet: {error}."
-        else:
-            return f"Move command for {self.device_name} did NOT work: {result}."
-
-        if result != Result.Ok:
-            return f"{self.device_name} did NOT stop moving yet: {result}."
-        self.set_state(DevState.ON)
-        if is_flipper:
-            self._commanded_flipper_state = target_state
-        return 0
-
-    @staticmethod
-    def _flipper_state_for_target(target):
-        if float(target) == -1.0:
-            return "UP_BLOCKED"
-        if float(target) == 1.0:
-            return "DOWN_CLEAR"
-        return "UNKNOWN"
-
-    def _uses_commanded_flipper_state(self):
-        return (
-            str(self.unit).strip().lower() == "state"
-            and str(self.get_name()).strip().lower().endswith(("/s1", "/s2"))
-        )
+    _uses_commanded_flipper_state = _standa_motor_methods_turn_on_local["_uses_commanded_flipper_state"]
 
     def _motion_target_reached(self, target):
         if self._uses_commanded_flipper_state():
@@ -1088,34 +414,8 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         if not self._uses_commanded_flipper_state():
             super()._refresh_motion_readback()
 
-    def stop_movement_local(self) -> Union[int, str]:
-        if self._uses_commanded_flipper_state():
-            self._commanded_flipper_state = "UNKNOWN"
-        if not self._has_open_transport():
-            return (
-                f"Axis movement of device {self.device_name} cannot be stopped: "
-                "STANDA transport is not open."
-            )
-        try:
-            with self._transport_lock():
-                result = lib.command_stop(self._device_id_internal)
-        except StandaTransportBusyError as error:
-            return (
-                f"Axis movement of device {self.device_name} WAS NOT stopped: "
-                f"{error}."
-            )
-        except Exception as error:
-            return (
-                f"Axis movement of device {self.device_name} WAS NOT stopped: "
-                f"{error}."
-            )
-        if result == 0:
-            self.set_state(DevState.ON)
-            self.info(
-                f"Axis movement of device {self.device_name} was stopped by user."
-            )
-            return 0
-        return f"Axis movement of device {self.device_name} WAS NOT stopped by user."
+    stop_movement_local = _standa_motor_methods_turn_on_local["stop_movement_local"]
+    del _standa_motor_methods_turn_on_local
 
     def get_controller_status_local(self) -> Union[int, str]:
         if not self._has_open_transport():

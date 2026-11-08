@@ -1,9 +1,8 @@
 """V0 packet/order contracts using an indexed fake camera; no Tango or SDK."""
 
-import ast
 import hashlib
 import json
-from pathlib import Path
+from importlib import import_module
 from threading import RLock
 from types import SimpleNamespace
 import zlib
@@ -12,7 +11,7 @@ import numpy as np
 import pytest
 
 from DeviceServers.cameras.andor.v0_orders import (
-    V0Orders, canonical_json, config_fingerprint, sdk_configuration_mutation,
+    V0Orders, config_fingerprint, sdk_configuration_mutation,
 )
 
 
@@ -414,16 +413,16 @@ def test_configuration_guard_invalidates_before_sdk_write_and_holds_same_lock():
     Device().change()
 
 
+andor_device = import_module("DeviceServers.cameras.andor.DS_ANDOR_CCD")
+
+
 def device_methods(*names):
-    source = Path(__file__).resolve().parents[2] / "DeviceServers/cameras/andor/DS_ANDOR_CCD.py"
-    tree = ast.parse(source.read_text(encoding="utf-8"))
-    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "DS_ANDOR_CCD")
-    methods = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in names]
-    for method in methods:
-        method.decorator_list = []
-    namespace = {"np": np, "canonical_json": canonical_json, "json": json, "ast": ast}
-    exec(compile(ast.Module(body=methods, type_ignores=[]), str(source), "exec"), namespace)
-    return namespace
+    methods = {}
+    for name in names:
+        method = getattr(andor_device.DS_ANDOR_CCD, name)
+        methods[name] = getattr(method, "__wrapped__", method)
+    return methods
+
 
 
 def test_actual_device_hook_uses_indexed_nonblocking_reads_under_sdk_guard():
@@ -574,7 +573,7 @@ def test_camera_axis_parser_preserves_dbl_values_without_changing_legacy_sgl_def
     assert precise[0] == precise[2]
 
 
-def test_camera_factory_binds_the_loaded_sdk_unsupported_exception_without_opening_another_camera():
+def test_camera_factory_binds_the_loaded_sdk_unsupported_exception_without_opening_another_camera(monkeypatch):
     methods = device_methods("_create_camera")
     class UnsupportedOption(Exception):
         pass
@@ -583,8 +582,12 @@ def test_camera_factory_binds_the_loaded_sdk_unsupported_exception_without_openi
     def create(**kwargs):
         calls.append(kwargs)
         return camera
-    methods["get_andor_module"] = lambda **kwargs: SimpleNamespace(
-        AndorNotSupportedError=UnsupportedOption, AndorSDK2Camera=create)
+    monkeypatch.setattr(
+        andor_device, "get_andor_module",
+        lambda **kwargs: SimpleNamespace(
+            AndorNotSupportedError=UnsupportedOption, AndorSDK2Camera=create,
+        ),
+    )
     device = SimpleNamespace(dll_path="configured-sdk", ini_path="configured-ini", camera_index=0,
                              default_temperature=-50, fan_mode="full",
                              _coerce_str=lambda v, fallback: str(v or fallback),

@@ -1,4 +1,6 @@
 #!/usr/bin/python3 -u
+from sys import modules as _refactor_modules
+
 import ast
 import json
 import sys
@@ -14,6 +16,9 @@ from tango.server import AttrWriteType, attribute, command, device_property
 
 app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
+
+from DeviceServers.cameras.andor.andor_ccd_methods_coerce_int import _bind_andor_ccd_methods_coerce_int
+from DeviceServers.cameras.andor.andor_ccd_methods_v0_refresh_calibration import _bind_andor_ccd_methods_v0_refresh_calibration
 
 from tango import DeviceProxy
 
@@ -75,30 +80,12 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     }
     ACQ_MODE_MAP_INV = {value: key for key, value in ACQ_MODE_MAP.items()}
 
-    @staticmethod
-    def _coerce_int(value, default: int) -> int:
-        try:
-            if value is None or value == "":
-                return int(default)
-            return int(value)
-        except (TypeError, ValueError):
-            return int(default)
+    _andor_ccd_methods_coerce_int = _bind_andor_ccd_methods_coerce_int(_refactor_modules[__name__])
+    _coerce_int = (staticmethod)(_andor_ccd_methods_coerce_int["_coerce_int"])
 
-    @staticmethod
-    def _coerce_float(value, default: float) -> float:
-        try:
-            if value is None or value == "":
-                return float(default)
-            return float(value)
-        except (TypeError, ValueError):
-            return float(default)
+    _coerce_float = (staticmethod)(_andor_ccd_methods_coerce_int["_coerce_float"])
 
-    @staticmethod
-    def _coerce_str(value, default: str) -> str:
-        if value is None:
-            return str(default)
-        text = str(value).strip()
-        return text if text else str(default)
+    _coerce_str = (staticmethod)(_andor_ccd_methods_coerce_int["_coerce_str"])
 
     def init_device(self):
         self._v0_orders = V0Orders()
@@ -200,255 +187,39 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     def linked_spectrograph_device(self):
         return str(self.linked_spectrograph_ds or "")
 
-    def _parse_array_property(self, raw_value, dtype=np.float32) -> np.ndarray:
-        if isinstance(raw_value, np.ndarray):
-            return raw_value.astype(dtype)
+    _parse_array_property = _andor_ccd_methods_coerce_int["_parse_array_property"]
 
-        text = str(raw_value or "").strip()
-        if not text:
-            return np.array([], dtype=dtype)
+    _parse_wavelengths = _andor_ccd_methods_coerce_int["_parse_wavelengths"]
 
-        try:
-            parsed = ast.literal_eval(text)
-        except Exception:
-            return np.array([], dtype=dtype)
+    _create_camera = _andor_ccd_methods_coerce_int["_create_camera"]
 
-        try:
-            return np.asarray(parsed, dtype=dtype).reshape(-1)
-        except Exception:
-            return np.array([], dtype=dtype)
+    _with_temp_camera = _andor_ccd_methods_coerce_int["_with_temp_camera"]
 
-    def _parse_wavelengths(self, dtype=np.float32) -> np.ndarray:
-        calibration_path = self._coerce_str(self.wavelengths_file, "").strip()
-        if calibration_path:
-            try:
-                return np.loadtxt(calibration_path, dtype=dtype).reshape(-1)
-            except Exception as exc:
-                self.warn(
-                    f"Could not read wavelength calibration from {calibration_path}: {exc}"
-                )
-        return self._parse_array_property(self.wavelengths, dtype=dtype)
+    _sync_from_camera = _andor_ccd_methods_coerce_int["_sync_from_camera"]
 
-    def _create_camera(self):
-        Andor = get_andor_module(sdk_path=self.dll_path)
-        self._andor_not_supported_errors = (Andor.AndorNotSupportedError,)
-        ini_path = self._coerce_str(self.ini_path, "")
-        return Andor.AndorSDK2Camera(
-            idx=self._coerce_int(self.camera_index, 0),
-            ini_path=ini_path,
-            temperature=self._coerce_int(self.default_temperature, -50),
-            fan_mode=self._coerce_str(self.fan_mode, "full"),
-        )
+    _update_image_geometry_from_mode = _andor_ccd_methods_coerce_int["_update_image_geometry_from_mode"]
 
-    def _with_temp_camera(self):
-        camera = self._create_camera()
-        try:
-            yield camera
-        finally:
-            try:
-                camera.close()
-            except Exception:
-                pass
+    _update_temperature_status = _andor_ccd_methods_coerce_int["_update_temperature_status"]
 
-    def _sync_from_camera(self, camera) -> None:
-        info = camera.get_device_info()
-        if hasattr(info, "serial_number") or hasattr(info, "head_model"):
-            self.serial_number_real = getattr(info, "serial_number", -1)
-            self.head_name = getattr(info, "head_model", "Andor")
-        elif isinstance(info, tuple):
-            if len(info) >= 3:
-                self.serial_number_real = info[2]
-            if len(info) >= 2:
-                self.head_name = str(info[1])
-            elif len(info) >= 1:
-                self.head_name = str(info[0])
-        detector_width, detector_height = camera.get_detector_size()
-        self.current_width = int(detector_width)
-        self.current_height = int(camera.get_data_dimensions()[0])
-        self.height_value = int(detector_height)
-        self.track_count_value = max(1, int(camera.get_data_dimensions()[0]))
-        self.exposure_time_local = float(camera.get_exposure())
-        timings = camera.get_cycle_timings()
-        self.accumulate_time_local = float(getattr(timings, "accum_cycle_time", 0.0))
-        self.kinetic_time_local = float(getattr(timings, "kinetic_cycle_time", 0.0))
-        self.current_read_mode = str(camera.get_read_mode())
-        self.current_acquisition_mode = str(camera.get_acquisition_mode())
-        self._update_amp_mode_state(camera)
-        self._update_temperature_status(camera)
-        self._update_image_geometry_from_mode(camera)
+    _update_amp_mode_state = _andor_ccd_methods_coerce_int["_update_amp_mode_state"]
 
-    def _update_image_geometry_from_mode(self, camera) -> None:
-        try:
-            dims = camera.get_data_dimensions()
-            if len(dims) == 2:
-                self.current_height = int(dims[0])
-                self.current_width = int(dims[1])
-                self.track_count_value = max(1, int(dims[0]))
-        except Exception:
-            pass
+    _refresh_wavelengths_axis = _andor_ccd_methods_coerce_int["_refresh_wavelengths_axis"]
 
-        if self.current_read_mode == "image":
-            try:
-                _, _, _, _, hbin, vbin = camera.get_image_mode_parameters()
-                self.binning_horizontal_value = int(hbin)
-                self.binning_vertical_value = int(vbin)
-            except Exception:
-                self.binning_horizontal_value = 1
-                self.binning_vertical_value = 1
-        else:
-            self.binning_horizontal_value = 1
-            self.binning_vertical_value = 1
+    _normalize_frame = _andor_ccd_methods_coerce_int["_normalize_frame"]
 
-    def _update_temperature_status(self, camera=None) -> None:
-        cam = camera or self.camera
-        if cam is None:
-            return
+    _consume_frame_for_orders = _andor_ccd_methods_coerce_int["_consume_frame_for_orders"]
 
-        try:
-            self.temperature_value = float(cam.get_temperature())
-        except Exception:
-            pass
-        try:
-            self.temperature_target_value = float(cam.get_temperature_setpoint())
-        except Exception:
-            pass
-        try:
-            self.temperature_status_value = str(cam.get_temperature_status())
-        except Exception:
-            pass
-        try:
-            self.cooler_on_value = bool(cam.is_cooler_on())
-        except Exception:
-            pass
+    find_device = _andor_ccd_methods_coerce_int["find_device"]
 
-    def _update_amp_mode_state(self, camera) -> None:
-        try:
-            amp_mode = camera.get_amp_mode(full=False)
-            if len(amp_mode) >= 4:
-                self.ad_channel_value = int(amp_mode[0])
-                self.oamp_value = int(amp_mode[1])
-                self.hsspeed_value = int(amp_mode[2])
-                self.gain_value = int(amp_mode[3])
-        except Exception:
-            pass
+    get_camera_friendly_name = _andor_ccd_methods_coerce_int["get_camera_friendly_name"]
 
-        try:
-            amp_modes = camera.get_all_amp_modes()
-            if amp_modes:
-                self.n_gains_max = max(int(mode[6]) for mode in amp_modes)
-        except Exception:
-            self.n_gains_max = max(self.n_gains_max, self.gain_value)
+    set_camera_friendly_name = _andor_ccd_methods_coerce_int["set_camera_friendly_name"]
 
-        try:
-            self.vsspeed_value = int(camera.get_vsspeed())
-        except Exception:
-            pass
+    get_camera_serial_number = _andor_ccd_methods_coerce_int["get_camera_serial_number"]
 
-    def _refresh_wavelengths_axis(self, expected_width: Optional[int] = None) -> None:
-        width = self._coerce_int(expected_width or self.current_width or self.width, 1064)
-        axis = np.array([], dtype=np.float32)
-        axis64 = np.array([], dtype=np.float64)
-        axis_source = "pixel_index"
+    get_camera_model_name = _andor_ccd_methods_coerce_int["get_camera_model_name"]
 
-        linked_device_name = self._coerce_str(self.linked_spectrograph_ds, "").strip()
-        if linked_device_name:
-            try:
-                linked_ds = DeviceProxy(linked_device_name)
-                linked_axis = linked_ds.read_attribute("calibration").value
-                axis = np.asarray(linked_axis, dtype=np.float32).reshape(-1)
-                axis64 = np.asarray(linked_axis, dtype=np.float64).reshape(-1)
-                axis_source = "linked_spectrograph"
-            except Exception as exc:
-                self.warn(f"Could not read calibration from {linked_device_name}: {exc}")
-
-        if axis.size == 0:
-            axis = np.asarray(self._default_wavelengths, dtype=np.float32).reshape(-1)
-            axis64 = np.asarray(self._v0_default_wavelengths, dtype=np.float64).reshape(-1)
-            axis_source = "configured_calibration"
-            if axis.size != width and self._coerce_str(self.wavelengths_file, "").strip():
-                axis = self._parse_wavelengths()
-                if axis.size:
-                    self._default_wavelengths = axis
-                    axis64 = self._parse_wavelengths(dtype=np.float64)
-                    self._v0_default_wavelengths = axis64
-
-        if axis.size != width:
-            axis = np.arange(width, dtype=np.float32)
-            axis64 = np.arange(width, dtype=np.float64)
-            axis_source = "pixel_index"
-
-        self.wavelengths_axis_value = axis
-        self._v0_wavelengths = axis64
-        self._v0_axis_source = axis_source
-        self.current_width = int(axis.size)
-
-    def _normalize_frame(self, frame) -> np.ndarray:
-        frame_array = np.asarray(frame, dtype=np.float32)
-        if frame_array.ndim == 1:
-            frame_array = frame_array[np.newaxis, :]
-        elif frame_array.ndim > 2:
-            frame_array = frame_array.reshape(frame_array.shape[0], -1)
-
-        self.current_height = int(frame_array.shape[0])
-        self.current_width = int(frame_array.shape[1])
-        self.track_count_value = max(1, int(frame_array.shape[0]))
-        self._refresh_wavelengths_axis(expected_width=self.current_width)
-        return frame_array
-
-    def _consume_frame_for_orders(self, frame: np.ndarray) -> None:
-        time_stamp = time_ns()
-        self.time_stamp_deque.append(time_stamp)
-        self.data_deque.append(frame.copy())
-
-        if not self.orders:
-            return
-
-        orders_to_delete = []
-        for order_name, order_info in list(self.orders.items()):
-            if (time() - order_info.order_timestamp) >= 100:
-                orders_to_delete.append(order_name)
-                continue
-
-            if order_info.order_done:
-                continue
-
-            order_info.order_array = np.vstack([order_info.order_array, frame])
-            order_info.frames_done += 1
-            if order_info.frames_done >= order_info.order_length:
-                order_info.order_done = True
-
-        for order_name in orders_to_delete:
-            self.orders.pop(order_name, None)
-
-    def find_device(self) -> Tuple[int, str]:
-        # Do not open and immediately close the USB camera just to probe it.
-        # ``turn_on_local`` performs the single SDK initialization and then
-        # reads the camera identity, which avoids an extra USB re-enumeration.
-        camera_index = self._coerce_int(self.camera_index, 0)
-        self.info(f"Deferring Andor camera initialization for {self.device_name}", True)
-        self._device_id_internal = camera_index
-        self._uri = f"andor-sdk2://index/{camera_index}".encode("utf-8")
-        return self._device_id_internal, self._uri
-
-    def get_camera_friendly_name(self):
-        return self.friendly_name
-
-    def set_camera_friendly_name(self, value):
-        self.friendly_name = str(value)
-
-    def get_camera_serial_number(self) -> Union[str, int]:
-        return self.serial_number_real
-
-    def get_camera_model_name(self) -> str:
-        return self.head_name
-
-    def get_exposure_time(self) -> float:
-        if self.camera:
-            try:
-                self.exposure_time_local = float(self.camera.get_exposure())
-            except Exception:
-                pass
-        return self.exposure_time_local
+    get_exposure_time = _andor_ccd_methods_coerce_int["get_exposure_time"]
 
     @sdk_configuration_mutation
     def set_exposure_time(self, value: float):
@@ -470,14 +241,11 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     def set_trigger_delay(self, value: str):
         self.trigger_source_value = int(float(value))
 
-    def get_trigger_delay(self) -> str:
-        return float(self.trigger_source_value)
+    get_trigger_delay = _andor_ccd_methods_coerce_int["get_trigger_delay"]
 
-    def get_exposure_min(self):
-        return 0.0
+    get_exposure_min = _andor_ccd_methods_coerce_int["get_exposure_min"]
 
-    def get_exposure_max(self):
-        return 3600.0
+    get_exposure_max = _andor_ccd_methods_coerce_int["get_exposure_max"]
 
     @sdk_configuration_mutation
     def set_gain(self, value: int):
@@ -485,166 +253,73 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         if self.camera:
             self.camera.set_amp_mode(preamp=self.gain_value)
 
-    def get_gain(self) -> int:
-        return int(self.gain_value)
+    get_gain = _andor_ccd_methods_coerce_int["get_gain"]
 
-    def get_gain_min(self) -> int:
-        return 0
+    get_gain_min = _andor_ccd_methods_coerce_int["get_gain_min"]
 
-    def get_gain_max(self) -> int:
-        return int(max(self.n_gains_max, self.gain_value, 0))
+    get_gain_max = _andor_ccd_methods_coerce_int["get_gain_max"]
 
-    def get_width(self) -> int:
-        return int(self.current_width)
+    get_width = _andor_ccd_methods_coerce_int["get_width"]
 
     @sdk_configuration_mutation
     def set_width(self, value: int):
         self.current_width = max(1, int(value))
 
-    def get_width_min(self):
-        return 1
+    get_width_min = _andor_ccd_methods_coerce_int["get_width_min"]
 
-    def get_width_max(self):
-        return int(self.current_width)
+    get_width_max = _andor_ccd_methods_coerce_int["get_width_max"]
 
     @sdk_configuration_mutation
     def set_height(self, value: int):
         self.current_height = max(1, int(value))
 
-    def get_height(self) -> int:
-        return int(self.current_height)
+    get_height = _andor_ccd_methods_coerce_int["get_height"]
 
-    def get_height_min(self):
-        return 1
+    get_height_min = _andor_ccd_methods_coerce_int["get_height_min"]
 
-    def get_height_max(self):
-        return int(max(self.current_height, self.height_value))
+    get_height_max = _andor_ccd_methods_coerce_int["get_height_max"]
 
-    def get_offsetX(self) -> int:
-        return int(self.offsetX_value)
+    get_offsetX = _andor_ccd_methods_coerce_int["get_offsetX"]
 
     @sdk_configuration_mutation
     def set_offsetX(self, value: int):
         self.offsetX_value = int(value)
 
-    def get_offsetY(self) -> int:
-        return int(self.offsetY_value)
+    get_offsetY = _andor_ccd_methods_coerce_int["get_offsetY"]
 
     @sdk_configuration_mutation
     def set_offsetY(self, value: int):
         self.offsetY_value = int(value)
 
-    def set_format_pixel(self, value: str):
-        return None
+    set_format_pixel = _andor_ccd_methods_coerce_int["set_format_pixel"]
 
-    def get_format_pixel(self) -> str:
-        return "float32"
+    get_format_pixel = _andor_ccd_methods_coerce_int["get_format_pixel"]
 
-    def get_framerate(self):
-        if not self.camera:
-            return 0.0
-        try:
-            timings = self.camera.get_frame_timings()
-            frame_period = float(getattr(timings, "frame_period", timings[1]))
-            return 0.0 if frame_period <= 0 else 1.0 / frame_period
-        except Exception:
-            return 0.0
+    get_framerate = _andor_ccd_methods_coerce_int["get_framerate"]
 
     @sdk_configuration_mutation
     def set_binning_horizontal(self, value: int):
         self.binning_horizontal_value = max(1, int(value))
 
-    def get_binning_horizontal(self) -> int:
-        return int(self.binning_horizontal_value)
+    get_binning_horizontal = _andor_ccd_methods_coerce_int["get_binning_horizontal"]
 
     @sdk_configuration_mutation
     def set_binning_vertical(self, value: int):
         self.binning_vertical_value = max(1, int(value))
 
-    def get_binning_vertical(self) -> int:
-        return int(self.binning_vertical_value)
+    get_binning_vertical = _andor_ccd_methods_coerce_int["get_binning_vertical"]
 
-    def get_sensor_readout_mode(self) -> str:
-        return str(self.current_read_mode)
+    get_sensor_readout_mode = _andor_ccd_methods_coerce_int["get_sensor_readout_mode"]
 
-    def turn_on_local(self) -> Union[int, str]:
-        if self.camera is not None:
-            self.set_state(DevState.ON)
-            return 0
+    turn_on_local = _andor_ccd_methods_coerce_int["turn_on_local"]
 
-        try:
-            self.camera = self._create_camera()
-            self.camera.setup_shutter("open")
-            self._sync_from_camera(self.camera)
-            self._apply_parameters(self.parameters.get("Acquisition_Controls", {}))
-            self._refresh_wavelengths_axis(expected_width=self.current_width)
-            self.set_state(DevState.ON)
-            return 0
-        except Exception as exc:
-            self.camera = None
-            self.set_state(DevState.FAULT)
-            return f"Could not turn on camera via pylablib: {exc}"
+    turn_off_local = _andor_ccd_methods_coerce_int["turn_off_local"]
 
-    def turn_off_local(self) -> Union[int, str]:
-        book = getattr(self, "_v0_orders", None)
-        if book is not None:
-            book.unavailable("Camera turned off")
-        if self.grabbing:
-            self.stop_grabbing_local()
+    release_power_dependency_local = _andor_ccd_methods_coerce_int["release_power_dependency_local"]
 
-        if self.camera is not None:
-            try:
-                self.camera.close()
-            except Exception as exc:
-                self.warn(f"Camera close reported: {exc}", True)
-            finally:
-                self.camera = None
+    probe_powered_hardware = _andor_ccd_methods_coerce_int["probe_powered_hardware"]
 
-        self.set_state(DevState.OFF)
-        return 0
-
-    def release_power_dependency_local(self) -> None:
-        """Release a stale SDK handle without issuing camera configuration commands."""
-        book = getattr(self, "_v0_orders", None)
-        if book is not None:
-            book.unavailable("Camera power dependency released")
-        if self.grabbing:
-            self.abort = True
-        camera = self.camera
-        self.camera = None
-        if camera is not None:
-            try:
-                camera.close()
-            except Exception:
-                pass
-
-    def probe_powered_hardware(self) -> Union[int, str]:
-        """Verify an externally powered camera without opening its shutter or grabbing."""
-        if self.camera is not None:
-            return 0
-        camera = None
-        try:
-            camera = self._create_camera()
-            camera.get_device_info()
-            camera_index = self._coerce_int(self.camera_index, 0)
-            self._device_id_internal = camera_index
-            self._uri = f"andor-sdk2://index/{camera_index}".encode("utf-8")
-            return 0
-        except Exception as exc:
-            self._device_id_internal = -1
-            self._uri = b""
-            return f"Andor camera probe failed: {exc}"
-        finally:
-            if camera is not None:
-                try:
-                    camera.close()
-                except Exception:
-                    pass
-
-    def set_param_after_init_local(self) -> Union[int, str]:
-        if not self.camera:
-            return "Camera is not opened"
-        return self._apply_parameters(self.parameters.get("Acquisition_Controls", {}))
+    set_param_after_init_local = _andor_ccd_methods_coerce_int["set_param_after_init_local"]
 
     @sdk_configuration_mutation
     def _apply_read_mode(self, read_mode_value, controls: Dict) -> None:
@@ -782,113 +457,15 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         except Exception as exc:
             return f"Could not apply camera parameters: {exc}"
 
-    def get_image(self):
-        if self.last_image is not None:
-            return
-        book = getattr(self, "_v0_orders", None)
-        if book is not None and book.has_active():
-            # A snap can restart/reconfigure acquisition and cannot share an
-            # indexed order. The worker owns all reads until that order ends.
-            return
-        if not self.camera:
-            return
+    get_image = _andor_ccd_methods_coerce_int["get_image"]
+    del _andor_ccd_methods_coerce_int
 
-        try:
-            frame = self.camera.snap()
-            self.last_image = self._normalize_frame(frame)
-        except Exception as exc:
-            self.warn(f"Single-frame snap failed: {exc}")
+    _andor_ccd_methods_v0_refresh_calibration = _bind_andor_ccd_methods_v0_refresh_calibration(_refactor_modules[__name__])
+    _v0_refresh_calibration = _andor_ccd_methods_v0_refresh_calibration["_v0_refresh_calibration"]
 
-    def _v0_refresh_calibration(self, width):
-        """V0 admits only a fresh explicit DBL calibration; no pixel fallback."""
-        linked = self._coerce_str(self.linked_spectrograph_ds, "").strip()
-        calibration_file = self._coerce_str(self.wavelengths_file, "").strip()
-        if linked:
-            axis = np.asarray(DeviceProxy(linked).read_attribute("calibration").value, dtype=np.float64).reshape(-1)
-            source = "linked_spectrograph"
-        elif calibration_file:
-            # A missing/invalid configured file must not silently become a
-            # property calibration or the legacy pixel-index display fallback.
-            axis = np.loadtxt(calibration_file, dtype=np.float64).reshape(-1)
-            source = "configured_calibration"
-        else:
-            axis = self._parse_array_property(self.wavelengths, dtype=np.float64)
-            source = "configured_calibration"
-        if axis.shape != (int(width),) or not np.all(np.isfinite(axis)):
-            raise RuntimeError("V0 requires a finite explicit calibration matching fresh SDK width")
-        self._v0_wavelengths = axis.copy()
-        self._v0_axis_source = source
+    _v0_configuration = _andor_ccd_methods_v0_refresh_calibration["_v0_configuration"]
 
-    def _v0_configuration(self):
-        """Fresh SDK-wrapper readback under lifecycle guard, never guessed defaults."""
-        camera = self.camera
-        if camera is None:
-            raise RuntimeError("Camera is not opened")
-        for method in ("get_frames_status", "get_new_images_range", "read_multiple_images"):
-            if not callable(getattr(camera, method, None)):
-                raise RuntimeError(f"SDK wrapper lacks indexed read API {method}")
-        buffer_size = int(camera.get_frames_status().buffer_size)
-        height, width = map(int, camera.get_data_dimensions())
-        axis = np.asarray(self._v0_wavelengths, dtype=np.float64)
-        if axis.shape != (width,):
-            raise RuntimeError("V0 calibrated axis does not match fresh SDK width")
-        def optional_read(method_name):
-            method = getattr(camera, method_name, None)
-            if not callable(method):
-                return {"method_present": False, "value": None}
-            try:
-                return {"method_present": True, "value": method()}
-            except getattr(self, "_andor_not_supported_errors", ()) as exc:
-                # Non-EM models expose the SDK2 gain getter but reject this
-                # capability. Preserve that distinction in the fingerprint.
-                # Communication/SDK failures must still invalidate freshness.
-                return {"method_present": True, "value": None,
-                        "unsupported": True, "reason": str(exc)}
-        configuration = {
-            "trigger_mode": str(camera.get_trigger_mode()),
-            "read_mode": str(camera.get_read_mode()),
-            "acquisition_mode": str(camera.get_acquisition_mode()),
-            "track_count": height, "width": width,
-            "exposure_seconds": float(camera.get_exposure()),
-            "multi_track": list(camera.get_multi_track_mode_parameters()),
-            "amplifier": list(camera.get_amp_mode()),
-            "indexed_buffer_size": buffer_size,
-            "wavelengths": axis.tolist(), "axis_source": self._v0_axis_source,
-            # SDK2 get_roi exposes the stored image-mode ROI. Active multi-track
-            # sampling is described by multi_track and data dimensions above.
-            "image_mode_roi": optional_read("get_roi"),
-            "emccd_gain": optional_read("get_EMCCD_gain"),
-            "vertical_shift_speed": optional_read("get_vsspeed"),
-            "horizontal_shift_speed": optional_read("get_hsspeed"),
-            "image_indexing": optional_read("get_image_indexing"),
-        }
-        return configuration, bool(camera.acquisition_in_progress()) and not self.abort
-
-    def _v0_worker_tick(self):
-        # No blocking SDK wait while holding the lifecycle lock. A warm-up/stop
-        # can retain this lock while joining: timed acquisition lets the worker
-        # observe abort instead of deadlocking behind that join.
-        lock = self._get_lifecycle_lock()
-        if not lock.acquire(timeout=0.05):
-            return
-        try:
-            if self.abort or self.camera is None:
-                self._v0_orders.unavailable("Camera acquisition stopped")
-                return
-            if self._v0_orders.needs_arm():
-                self._v0_refresh_calibration(int(self.camera.get_data_dimensions()[1]))
-            configuration, active = self._v0_configuration()
-            self._v0_orders.observe(configuration, active)
-            frames = self._v0_orders.pump(self.camera)
-            # Preserve legacy latest-frame display/order delivery; the V0 book
-            # retains every indexed sample independently.
-            if frames:
-                self.last_image = np.asarray(frames[-1], dtype=np.float32).copy()
-                self._consume_frame_for_orders(self.last_image)
-        except Exception as exc:
-            self._v0_orders.unavailable(str(exc))
-        finally:
-            lock.release()
+    _v0_worker_tick = _andor_ccd_methods_v0_refresh_calibration["_v0_worker_tick"]
 
     @command(dtype_out=str)
     def V0Capabilities(self):
@@ -927,68 +504,15 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     def V0ReleaseOrder(self, order_id):
         return canonical_json(self._v0_orders.release(order_id))
 
-    def wait(self, timeout=0):
-        while self.abort is not True and self.camera is not None:
-            try:
-                if self._v0_orders.has_active():
-                    self._v0_worker_tick()
-                    sleep(0.005)
-                    continue
-                self.camera.wait_for_frame(timeout=1.0, error_on_stopped=False)
-                frame = self.camera.read_newest_image()
-                if frame is None:
-                    continue
-                normalized = self._normalize_frame(frame)
-                self.last_image = normalized
-                self._consume_frame_for_orders(normalized)
-            except Exception as exc:
-                self.warn(f"Andor grabbing loop warning: {exc}")
-                sleep(0.1)
+    wait = _andor_ccd_methods_v0_refresh_calibration["wait"]
 
-    def get_controller_status_local(self) -> Union[int, str]:
-        if self.camera is None:
-            self.set_state(DevState.OFF)
-            return 0
-        if self.grabbing:
-            self.set_state(DevState.RUNNING)
-        else:
-            self.set_state(DevState.ON)
-        return 0
+    get_controller_status_local = _andor_ccd_methods_v0_refresh_calibration["get_controller_status_local"]
 
-    def start_grabbing_local(self):
-        if not self.camera:
-            return "Camera is not opened"
+    start_grabbing_local = _andor_ccd_methods_v0_refresh_calibration["start_grabbing_local"]
 
-        if self.grabbing_thread and self.grabbing_thread.is_alive():
-            return 0
+    stop_grabbing_local = _andor_ccd_methods_v0_refresh_calibration["stop_grabbing_local"]
 
-        self.abort = False
-        self._apply_acquisition_mode_settings()
-        self.camera.setup_acquisition(mode="sequence")
-        self.camera.start_acquisition()
-        self._v0_orders.new_epoch()
-        self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt], daemon=True)
-        self.grabbing_thread.start()
-        self.set_state(DevState.RUNNING)
-        return 0
-
-    def stop_grabbing_local(self):
-        self.abort = True
-        book = getattr(self, "_v0_orders", None)
-        if book is not None:
-            book.unavailable("Camera acquisition stopped")
-        if self.camera:
-            try:
-                self.camera.stop_acquisition()
-            except Exception:
-                pass
-        if self.grabbing_thread and self.grabbing_thread.is_alive():
-            self.grabbing_thread.join(timeout=1.0)
-        self.set_state(DevState.ON if self.camera else DevState.OFF)
-        return 0
-
-    def grabbing_local(self):
-        return bool(self.grabbing_thread and self.grabbing_thread.is_alive() and not self.abort)
+    grabbing_local = _andor_ccd_methods_v0_refresh_calibration["grabbing_local"]
 
     @sdk_configuration_mutation
     def set_trigger_mode(self, state):
@@ -996,22 +520,19 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         if self.camera:
             self._apply_trigger_mode(state)
 
-    def get_trigger_mode(self) -> int:
-        return int(self.trigger_mode_value)
+    get_trigger_mode = _andor_ccd_methods_v0_refresh_calibration["get_trigger_mode"]
 
     @sdk_configuration_mutation
     def set_trigger_source(self, value):
         self.trigger_source_value = int(value)
 
-    def get_trigger_source(self) -> int:
-        return int(self.trigger_source_value)
+    get_trigger_source = _andor_ccd_methods_v0_refresh_calibration["get_trigger_source"]
 
     @sdk_configuration_mutation
     def set_trigger_type(self, value):
         self.trigger_type_value = int(value)
 
-    def get_trigger_type(self) -> int:
-        return int(self.trigger_type_value)
+    get_trigger_type = _andor_ccd_methods_v0_refresh_calibration["get_trigger_type"]
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
@@ -1021,32 +542,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             "float32",
         )
 
-    def register_order_local(self, name, value):
-        requested_frames = max(1, int(value[0]))
-        self._refresh_wavelengths_axis(expected_width=self.current_width)
-        self.orders[name] = FrameOrderState(
-            order_length=requested_frames,
-            order_done=False,
-            order_timestamp=time(),
-            ready_to_delete=False,
-            order_array=np.array([self.wavelengths_axis_value], dtype=np.float32),
-            frames_done=0,
-        )
-        return 0
+    register_order_local = _andor_ccd_methods_v0_refresh_calibration["register_order_local"]
 
-    def give_order_local(self, name):
-        if name in self.orders:
-            order = self.orders[name]
-            order.ready_to_delete = True
-            return np.asarray(order.order_array, dtype=np.float32)
-
-        if self.last_image is None:
-            self.get_image()
-        if self.last_image is None:
-            return np.array([self.wavelengths_axis_value], dtype=np.float32)
-        return np.vstack([self.wavelengths_axis_value, self.last_image]).astype(
-            np.float32
-        )
+    give_order_local = _andor_ccd_methods_v0_refresh_calibration["give_order_local"]
+    del _andor_ccd_methods_v0_refresh_calibration
 
     @command
     def RefreshCalibration(self):

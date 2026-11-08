@@ -1,6 +1,8 @@
 #!/usr/bin/python3 -u
 from __future__ import annotations
 
+from sys import modules as _refactor_modules
+
 import base64
 import json
 import subprocess
@@ -13,6 +15,9 @@ from typing import Union
 app_folder = Path(__file__).resolve().parents[3]
 if str(app_folder) not in sys.path:
     sys.path.append(str(app_folder))
+
+from DeviceServers.cameras.hamamatsu_streak.streak_camera_methods_power_dependency_ready_state import _bind_streak_camera_methods_power_dependency_ready_state
+from DeviceServers.cameras.hamamatsu_streak.streak_camera_methods_write_delay_e import _bind_streak_camera_methods_write_delay_e
 
 from tango import AttrWriteType, DevState, DeviceProxy
 from tango.server import attribute, command, device_property
@@ -142,45 +147,16 @@ class DS_HAMAMATSU_STREAK(DS_General):
             "float32",
         )
 
-    def power_dependency_ready_state(self):
-        """RemoteEx is a Tango companion service, not the camera power state."""
-        return DevState.ON
+    _streak_camera_methods_power_dependency_ready_state = _bind_streak_camera_methods_power_dependency_ready_state(_refactor_modules[__name__])
+    power_dependency_ready_state = _streak_camera_methods_power_dependency_ready_state["power_dependency_ready_state"]
 
-    def _handle_power_dependency_off(self, detail: str) -> None:
-        self._power_probe_pending = False
-        self._power_probe_due_at = 0.0
-        self._power_dependency_status = (
-            f"Streak hardware power is OFF ({detail}); RemoteEx service remains available."
-        )
-        # Keep Tango ON: it represents the controller process, while the
-        # dependency attribute represents the separately switched hardware.
-        self._mark_hardware_power_off(
-            self._power_dependency_status, tango_state=DevState.ON
-        )
+    _handle_power_dependency_off = _streak_camera_methods_power_dependency_ready_state["_handle_power_dependency_off"]
 
-    def _handle_power_dependency_unavailable(self, detail: str) -> None:
-        self._power_dependency_status = f"Streak hardware power is unknown: {detail}"
-        self.set_hardware_lifecycle(
-            "POWER_STATUS_UNAVAILABLE", "UNKNOWN", self._power_dependency_status
-        )
-        self.set_state(DevState.ON)
-        self.warn(self._power_dependency_status, True)
+    _handle_power_dependency_unavailable = _streak_camera_methods_power_dependency_ready_state["_handle_power_dependency_unavailable"]
 
-    def probe_powered_hardware(self) -> Union[int, str]:
-        """A PDU transition must not launch HPD-TA or issue camera commands."""
-        return 0
+    probe_powered_hardware = _streak_camera_methods_power_dependency_ready_state["probe_powered_hardware"]
 
-    def find_device(self):
-        arg_return = -1, b""
-        try:
-            temp_client = self._create_client()
-            temp_client.connect(connect_data_port=bool(int(self.connect_data_port or 0)))
-            uri = f"remoteex://{self.host}:{self.command_port}".encode("utf-8")
-            arg_return = int(self.command_port), uri
-            temp_client.close()
-        except Exception as exc:
-            self.warn(f"RemoteEx discovery failed: {exc}", True)
-        self._device_id_internal, self._uri = arg_return
+    find_device = _streak_camera_methods_power_dependency_ready_state["find_device"]
 
     @command(polling_period=5000)
     def get_controller_status(self):
@@ -200,247 +176,27 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.error(str(result))
         return result
 
-    def get_controller_status_local(self) -> Union[int, str]:
-        # The start workers own the RemoteEx command socket until they finish.
-        if any(
-            thread is not None and thread.is_alive()
-            for thread in (self._application_start_thread, self._live_start_thread)
-        ):
-            return 0
-        if self.controller is None or not self.controller.is_connected:
-            self.connected_value = False
-            self.application_running_value = False
-            self.remoteex_status_value = "disconnected"
-            if self._startup_configuration_error:
-                self.set_state(DevState.FAULT)
-                self.set_status(self._startup_configuration_error)
-            else:
-                self.set_state(DevState.ON)
-            return 0
+    get_controller_status_local = _streak_camera_methods_power_dependency_ready_state["get_controller_status_local"]
 
-        try:
-            snapshot = self.controller.refresh_cached_state()
-            self._sync_from_snapshot(snapshot)
-            if self._startup_configuration_error:
-                self.set_state(DevState.FAULT)
-                self.set_status(self._startup_configuration_error)
-            elif self.remoteex_status_value.lower() == "busy":
-                self.set_state(DevState.RUNNING)
-            else:
-                self.set_state(DevState.ON)
-            return 0
-        except Exception as exc:
-            self._reset_remoteex_connection(exc)
-            return f"RemoteEx status refresh failed: {exc}"
+    turn_on_local = _streak_camera_methods_power_dependency_ready_state["turn_on_local"]
 
-    def turn_on_local(self) -> Union[int, str]:
-        try:
-            self._connect_remoteex()
+    _connect_remoteex = _streak_camera_methods_power_dependency_ready_state["_connect_remoteex"]
 
-            if bool(int(self.start_application_on_turn_on or 0)):
-                self.controller.start_application()
-                try:
-                    snapshot = self.controller.configure_vd2_startup()
-                except Exception as exc:
-                    self._startup_configuration_error = (
-                        f"VD2 startup configuration failed: {exc}"
-                    )
-                    self.application_running_value = True
-                    self.set_state(DevState.FAULT)
-                    self.set_status(self._startup_configuration_error)
-                    return self._startup_configuration_error
-                self._sync_from_snapshot(snapshot)
-                self._startup_configuration_error = ""
-                self.set_state(DevState.ON)
-            else:
-                # RemoteEx can accept TCP connections while HPD-TA is stopped.
-                # Probe once after an explicit connection so the web UI is not
-                # left with the default "stopped" cache when HPD-TA is already
-                # running. A failed probe still leaves the RemoteEx layer ON.
-                try:
-                    snapshot = self.controller.refresh_cached_state()
-                    self._sync_from_snapshot(snapshot)
-                    self.set_state(
-                        DevState.RUNNING
-                        if self.remoteex_status_value.lower() == "busy"
-                        else DevState.ON
-                    )
-                except Exception:
-                    self.application_running_value = False
-                    self.remoteex_status_value = "idle"
-                    self.busy_command_value = ""
-                    self.set_state(DevState.ON)
-            return 0
-        except Exception as exc:
-            self.client = None
-            self.controller = None
-            self.connected_value = False
-            self.application_running_value = False
-            self.remoteex_status_value = "disconnected"
-            self.set_state(DevState.ON)
-            return f"Could not start Hamamatsu streak RemoteEx layer: {exc}"
+    turn_off_local = _streak_camera_methods_power_dependency_ready_state["turn_off_local"]
 
-    def _connect_remoteex(self) -> None:
-        """Attach this Tango device to an already-running local RemoteEx."""
-        client = self._create_client()
-        controller = HamamatsuStreakController(
-            client,
-            ini_path=str(self.ini_path or ""),
-            default_save_dir=str(self.default_save_dir or ""),
-            async_timeout=float(self.async_timeout_s or 120.0),
-        )
-        try:
-            controller.connect(connect_data_port=bool(int(self.connect_data_port or 0)))
-        except Exception:
-            client.close()
-            raise
-        self.client = client
-        self.controller = controller
-        self.connected_value = True
+    _create_client = _streak_camera_methods_power_dependency_ready_state["_create_client"]
 
-    def turn_off_local(self) -> Union[int, str]:
-        """Detach RemoteEx without stopping the Tango device server."""
-        try:
-            if self.controller is not None:
-                self.controller.disconnect()
-        finally:
-            self.controller = None
-            self.client = None
-            self.connected_value = False
-            self.application_running_value = False
-            self.remoteex_status_value = "disconnected"
-            self.set_state(DevState.ON)
-        return 0
+    _windows_process_running = (staticmethod)(_streak_camera_methods_power_dependency_ready_state["_windows_process_running"])
 
-    def _create_client(self) -> RemoteExClient:
-        return RemoteExClient(
-            host=str(self.host or "localhost"),
-            command_port=int(self.command_port or 1001),
-            data_port=int(self.data_port or 1002),
-            timeout=float(self.command_timeout_s or 5.0),
-            encoding=str(self.command_encoding or "ascii"),
-        )
+    _require_controller = _streak_camera_methods_power_dependency_ready_state["_require_controller"]
 
-    @staticmethod
-    def _windows_process_running(image_name: str) -> bool:
-        completed = subprocess.run(
-            ["tasklist.exe", "/fi", f"imagename eq {image_name}", "/nh"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        return image_name.lower() in completed.stdout.lower()
+    _reset_remoteex_connection = _streak_camera_methods_power_dependency_ready_state["_reset_remoteex_connection"]
 
-    def _require_controller(self) -> HamamatsuStreakController:
-        if self.controller is None or not self.controller.is_connected:
-            raise RuntimeError("Hamamatsu streak controller is not connected")
-        return self.controller
+    _prepare_dg645_for_hpdta = _streak_camera_methods_power_dependency_ready_state["_prepare_dg645_for_hpdta"]
 
-    def _reset_remoteex_connection(self, reason: Exception | str) -> None:
-        """Discard a stale RemoteEx socket without faulting the Tango launcher."""
-        if self.controller is not None:
-            try:
-                self.controller.disconnect()
-            except Exception:
-                pass
-        self.controller = None
-        self.client = None
-        self.connected_value = False
-        self.application_running_value = False
-        self.remoteex_status_value = "disconnected"
-        self.busy_command_value = ""
-        self.last_response_value = f"RemoteEx unavailable: {reason}"
-        if self._startup_configuration_error:
-            self.set_state(DevState.FAULT)
-            self.set_status(self._startup_configuration_error)
-        else:
-            self.set_state(DevState.ON)
+    _sync_from_snapshot = _streak_camera_methods_power_dependency_ready_state["_sync_from_snapshot"]
 
-    def _prepare_dg645_for_hpdta(self) -> None:
-        """Apply the VD2 timing preset before HPD-TA starts.
-
-        Recall 9 is the VD2 timing preset. Burst mode is explicitly disabled
-        after recall: the streak acquisition must receive one normal trigger
-        per shot rather than a V0 burst train. This does not overwrite Recall 9.
-        """
-        device = str(self.dg645_device or "manip/sync/DG645")
-        recall_slot = int(self.dg645_hpdta_recall_slot or 9)
-        dg645 = DeviceProxy(device)
-        dg645.set_timeout_millis(8000)
-        dg645.command_inout("scpi_write", f"*RCL {recall_slot}")
-        time.sleep(float(self.dg645_recall_wait_s or 1.0))
-        dg645.command_inout("scpi_write", "BURM 0")
-        dg645.command_inout("scpi_query", "*OPC?")
-        burst_mode = str(dg645.command_inout("scpi_query", "BURM?")).strip()
-        if burst_mode not in {"0", "0.0", "+0", "+0.0"}:
-            raise RuntimeError(
-                f"DG645 recall {recall_slot} left burst mode enabled (BURM?={burst_mode})"
-            )
-
-    def _sync_from_snapshot(self, snapshot) -> None:
-        self.connected_value = self.controller is not None and self.controller.is_connected
-        self.application_running_value = bool(snapshot.application_running)
-        self.remoteex_status_value = snapshot.remoteex_status
-        self.busy_command_value = snapshot.busy_command
-        self.application_version_value = snapshot.application_version
-        self.live_exposure_time_value = snapshot.live_exposure_time
-        self.acquire_exposure_time_value = snapshot.acquire_exposure_time
-        self.analog_integration_exposure_time_value = (
-            snapshot.analog_integration_exposure_time
-        )
-        self.live_rt_backsub_value = snapshot.live_rt_backsub
-        self.live_rt_shading_value = snapshot.live_rt_shading
-        self.live_rolling_average_enabled_value = snapshot.live_rolling_average_enabled
-        self.live_rolling_average_number_value = snapshot.live_rolling_average_number
-        self.analog_integration_count_value = snapshot.analog_integration_count
-        self.sequence_acquisition_mode_value = snapshot.sequence_acquisition_mode
-        self.sequence_loops_value = snapshot.sequence_loops
-        self.sequence_acquisition_speed_value = snapshot.sequence_acquisition_speed
-        self.current_time_range_value = snapshot.current_time_range
-        self.current_streak_mode_value = snapshot.current_streak_mode
-        self.current_gate_mode_value = snapshot.current_gate_mode
-        self.current_mcp_gain_value = snapshot.current_mcp_gain
-        self.current_streak_shutter_value = snapshot.current_streak_shutter
-        self.current_streak_trig_mode_value = snapshot.current_streak_trig_mode
-        self.current_streak_trigger_status_value = snapshot.current_streak_trigger_status
-        self.current_focus_time_over_value = snapshot.current_focus_time_over
-        self.current_wavelength_value = snapshot.current_wavelength
-        self.current_grating_value = snapshot.current_grating
-        self.current_blaze_value = snapshot.current_blaze
-        self.current_ruling_value = snapshot.current_ruling
-        self.current_exit_mirror_value = snapshot.current_exit_mirror
-        self.current_turret_value = snapshot.current_turret
-        self.current_slit_width_value = snapshot.current_slit_width
-        self.current_spectrograph_shutter_value = snapshot.current_spectrograph_shutter
-        self.current_focus_mirror_value = snapshot.current_focus_mirror
-        self.current_side_entry_iris_value = snapshot.current_side_entry_iris
-        self.current_delay_trig_mode_value = snapshot.current_delay_trig_mode
-        self.current_delay_repetition_rate_value = snapshot.current_delay_repetition_rate
-        self.current_delay_setting_value = snapshot.current_delay_setting
-        self.current_delay_a_value = snapshot.current_delay_a
-        self.current_delay_b_value = snapshot.current_delay_b
-        self.current_delay_c_value = snapshot.current_delay_c
-        self.current_delay_d_value = snapshot.current_delay_d
-        self.current_delay_e_value = snapshot.current_delay_e
-        self.current_delay_f_value = snapshot.current_delay_f
-        self.current_delay_g_value = snapshot.current_delay_g
-        self.current_delay_h_value = snapshot.current_delay_h
-        self.current_delay_ss_trigger_value = snapshot.current_delay_ss_trigger
-        self.current_delay_burst_mode_value = snapshot.current_delay_burst_mode
-        self.current_delay_manual_control_value = snapshot.current_delay_manual_control
-        self.last_saved_image_path_value = snapshot.last_saved_image_path
-        self.last_saved_sequence_path_value = snapshot.last_saved_sequence_path
-        if self.controller is not None:
-            self.last_command_value = self.controller.last_command
-            self.last_response_value = self.controller.last_response_text
-
-    @staticmethod
-    def _float_or_zero(value) -> float:
-        try:
-            return float(value)
-        except Exception:
-            return 0.0
+    _float_or_zero = (staticmethod)(_streak_camera_methods_power_dependency_ready_state["_float_or_zero"])
 
     @attribute(label="connected", dtype=bool, access=AttrWriteType.READ)
     def connected(self):
@@ -466,17 +222,13 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def live_exposure_time(self):
         return str(self.live_exposure_time_value)
 
-    def write_live_exposure_time(self, value: str):
-        controller = self._require_controller()
-        self.live_exposure_time_value = controller.set_live_exposure_time(str(value))
+    write_live_exposure_time = _streak_camera_methods_power_dependency_ready_state["write_live_exposure_time"]
 
     @attribute(label="acquire exposure time", dtype=str, access=AttrWriteType.READ_WRITE)
     def acquire_exposure_time(self):
         return str(self.acquire_exposure_time_value)
 
-    def write_acquire_exposure_time(self, value: str):
-        controller = self._require_controller()
-        self.acquire_exposure_time_value = controller.set_acquire_exposure_time(str(value))
+    write_acquire_exposure_time = _streak_camera_methods_power_dependency_ready_state["write_acquire_exposure_time"]
 
     @attribute(
         label="analog integration exposure time",
@@ -486,37 +238,25 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def analog_integration_exposure_time(self):
         return str(self.analog_integration_exposure_time_value)
 
-    def write_analog_integration_exposure_time(self, value: str):
-        controller = self._require_controller()
-        self.analog_integration_exposure_time_value = (
-            controller.set_analog_integration_exposure_time(str(value))
-        )
+    write_analog_integration_exposure_time = _streak_camera_methods_power_dependency_ready_state["write_analog_integration_exposure_time"]
 
     @attribute(label="live RT backsub", dtype=str, access=AttrWriteType.READ_WRITE)
     def live_rt_backsub(self):
         return str(self.live_rt_backsub_value)
 
-    def write_live_rt_backsub(self, value: str):
-        controller = self._require_controller()
-        self.live_rt_backsub_value = controller.set_live_rt_backsub(str(value))
+    write_live_rt_backsub = _streak_camera_methods_power_dependency_ready_state["write_live_rt_backsub"]
 
     @attribute(label="live RT shading", dtype=str, access=AttrWriteType.READ_WRITE)
     def live_rt_shading(self):
         return str(self.live_rt_shading_value)
 
-    def write_live_rt_shading(self, value: str):
-        controller = self._require_controller()
-        self.live_rt_shading_value = controller.set_live_rt_shading(str(value))
+    write_live_rt_shading = _streak_camera_methods_power_dependency_ready_state["write_live_rt_shading"]
 
     @attribute(label="live rolling average", dtype=str, access=AttrWriteType.READ_WRITE)
     def live_rolling_average(self):
         return str(self.live_rolling_average_enabled_value)
 
-    def write_live_rolling_average(self, value: str):
-        controller = self._require_controller()
-        self.live_rolling_average_enabled_value = (
-            controller.set_live_rolling_average_enabled(str(value))
-        )
+    write_live_rolling_average = _streak_camera_methods_power_dependency_ready_state["write_live_rolling_average"]
 
     @attribute(
         label="live rolling average number",
@@ -526,11 +266,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def live_rolling_average_number(self):
         return str(self.live_rolling_average_number_value)
 
-    def write_live_rolling_average_number(self, value: str):
-        controller = self._require_controller()
-        self.live_rolling_average_number_value = (
-            controller.set_live_rolling_average_number(str(value))
-        )
+    write_live_rolling_average_number = _streak_camera_methods_power_dependency_ready_state["write_live_rolling_average_number"]
 
     @attribute(
         label="analog integration count",
@@ -540,11 +276,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def analog_integration_count(self):
         return str(self.analog_integration_count_value)
 
-    def write_analog_integration_count(self, value: str):
-        controller = self._require_controller()
-        self.analog_integration_count_value = controller.set_analog_integration_count(
-            str(value)
-        )
+    write_analog_integration_count = _streak_camera_methods_power_dependency_ready_state["write_analog_integration_count"]
 
     @attribute(
         label="sequence acquisition mode",
@@ -554,19 +286,13 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def sequence_acquisition_mode(self):
         return str(self.sequence_acquisition_mode_value)
 
-    def write_sequence_acquisition_mode(self, value: str):
-        controller = self._require_controller()
-        self.sequence_acquisition_mode_value = controller.set_sequence_acquisition_mode(
-            str(value)
-        )
+    write_sequence_acquisition_mode = _streak_camera_methods_power_dependency_ready_state["write_sequence_acquisition_mode"]
 
     @attribute(label="sequence loops", dtype=str, access=AttrWriteType.READ_WRITE)
     def sequence_loops(self):
         return str(self.sequence_loops_value)
 
-    def write_sequence_loops(self, value: str):
-        controller = self._require_controller()
-        self.sequence_loops_value = controller.set_sequence_loops(str(value))
+    write_sequence_loops = _streak_camera_methods_power_dependency_ready_state["write_sequence_loops"]
 
     @attribute(
         label="sequence acquisition speed",
@@ -576,35 +302,25 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def sequence_acquisition_speed(self):
         return str(self.sequence_acquisition_speed_value)
 
-    def write_sequence_acquisition_speed(self, value: str):
-        controller = self._require_controller()
-        self.sequence_acquisition_speed_value = controller.set_sequence_acquisition_speed(
-            str(value)
-        )
+    write_sequence_acquisition_speed = _streak_camera_methods_power_dependency_ready_state["write_sequence_acquisition_speed"]
 
     @attribute(label="time range", dtype=str, access=AttrWriteType.READ_WRITE)
     def time_range(self):
         return str(self.current_time_range_value)
 
-    def write_time_range(self, value: str):
-        controller = self._require_controller()
-        self.current_time_range_value = controller.set_time_range(str(value))
+    write_time_range = _streak_camera_methods_power_dependency_ready_state["write_time_range"]
 
     @attribute(label="streak mode", dtype=str, access=AttrWriteType.READ_WRITE)
     def streak_mode(self):
         return str(self.current_streak_mode_value)
 
-    def write_streak_mode(self, value: str):
-        controller = self._require_controller()
-        self.current_streak_mode_value = controller.set_streak_mode(str(value))
+    write_streak_mode = _streak_camera_methods_power_dependency_ready_state["write_streak_mode"]
 
     @attribute(label="gate mode", dtype=str, access=AttrWriteType.READ_WRITE)
     def gate_mode(self):
         return str(self.current_gate_mode_value)
 
-    def write_gate_mode(self, value: str):
-        controller = self._require_controller()
-        self.current_gate_mode_value = controller.set_gate_mode(str(value))
+    write_gate_mode = _streak_camera_methods_power_dependency_ready_state["write_gate_mode"]
 
     @attribute(label="MCP gain", dtype=str, access=AttrWriteType.READ)
     def mcp_gain_text(self):
@@ -614,19 +330,13 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def streak_shutter(self):
         return str(self.current_streak_shutter_value)
 
-    def write_streak_shutter(self, value: str):
-        controller = self._require_controller()
-        self.current_streak_shutter_value = controller.set_streak_shutter(str(value))
+    write_streak_shutter = _streak_camera_methods_power_dependency_ready_state["write_streak_shutter"]
 
     @attribute(label="streak trig mode", dtype=str, access=AttrWriteType.READ_WRITE)
     def streak_trig_mode(self):
         return str(self.current_streak_trig_mode_value)
 
-    def write_streak_trig_mode(self, value: str):
-        controller = self._require_controller()
-        self.current_streak_trig_mode_value = controller.set_streak_trigger_mode(
-            str(value)
-        )
+    write_streak_trig_mode = _streak_camera_methods_power_dependency_ready_state["write_streak_trig_mode"]
 
     @attribute(label="streak trigger status", dtype=str, access=AttrWriteType.READ)
     def streak_trigger_status(self):
@@ -636,9 +346,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def focus_time_over(self):
         return str(self.current_focus_time_over_value)
 
-    def write_focus_time_over(self, value: str):
-        controller = self._require_controller()
-        self.current_focus_time_over_value = controller.set_focus_time_over(str(value))
+    write_focus_time_over = _streak_camera_methods_power_dependency_ready_state["write_focus_time_over"]
 
     @attribute(label="wavelength nm", dtype=float, access=AttrWriteType.READ_WRITE)
     def wavelength_nm(self):
@@ -647,17 +355,13 @@ class DS_HAMAMATSU_STREAK(DS_General):
         except Exception:
             return 0.0
 
-    def write_wavelength_nm(self, value: float):
-        controller = self._require_controller()
-        self.current_wavelength_value = controller.set_wavelength_nm(float(value))
+    write_wavelength_nm = _streak_camera_methods_power_dependency_ready_state["write_wavelength_nm"]
 
     @attribute(label="grating", dtype=str, access=AttrWriteType.READ_WRITE)
     def grating(self):
         return str(self.current_grating_value)
 
-    def write_grating(self, value: str):
-        controller = self._require_controller()
-        self.current_grating_value = controller.set_grating(str(value))
+    write_grating = _streak_camera_methods_power_dependency_ready_state["write_grating"]
 
     @attribute(label="slit width um", dtype=float, access=AttrWriteType.READ_WRITE)
     def slit_width_um(self):
@@ -666,19 +370,13 @@ class DS_HAMAMATSU_STREAK(DS_General):
         except Exception:
             return 0.0
 
-    def write_slit_width_um(self, value: float):
-        controller = self._require_controller()
-        self.current_slit_width_value = controller.set_slit_width_um(float(value))
+    write_slit_width_um = _streak_camera_methods_power_dependency_ready_state["write_slit_width_um"]
 
     @attribute(label="spectrograph shutter", dtype=str, access=AttrWriteType.READ_WRITE)
     def spectrograph_shutter(self):
         return str(self.current_spectrograph_shutter_value)
 
-    def write_spectrograph_shutter(self, value: str):
-        controller = self._require_controller()
-        self.current_spectrograph_shutter_value = controller.set_spectrograph_shutter(
-            str(value)
-        )
+    write_spectrograph_shutter = _streak_camera_methods_power_dependency_ready_state["write_spectrograph_shutter"]
 
     @attribute(label="blaze", dtype=str, access=AttrWriteType.READ)
     def blaze(self):
@@ -692,123 +390,93 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def exit_mirror(self):
         return str(self.current_exit_mirror_value)
 
-    def write_exit_mirror(self, value: str):
-        controller = self._require_controller()
-        self.current_exit_mirror_value = controller.set_exit_mirror(str(value))
+    write_exit_mirror = _streak_camera_methods_power_dependency_ready_state["write_exit_mirror"]
 
     @attribute(label="turret", dtype=str, access=AttrWriteType.READ_WRITE)
     def turret(self):
         return str(self.current_turret_value)
 
-    def write_turret(self, value: str):
-        controller = self._require_controller()
-        self.current_turret_value = controller.set_turret(str(value))
+    write_turret = _streak_camera_methods_power_dependency_ready_state["write_turret"]
 
     @attribute(label="focus mirror", dtype=str, access=AttrWriteType.READ_WRITE)
     def focus_mirror(self):
         return str(self.current_focus_mirror_value)
 
-    def write_focus_mirror(self, value: str):
-        controller = self._require_controller()
-        self.current_focus_mirror_value = controller.set_focus_mirror(str(value))
+    write_focus_mirror = _streak_camera_methods_power_dependency_ready_state["write_focus_mirror"]
 
     @attribute(label="side entry iris", dtype=str, access=AttrWriteType.READ_WRITE)
     def side_entry_iris(self):
         return str(self.current_side_entry_iris_value)
 
-    def write_side_entry_iris(self, value: str):
-        controller = self._require_controller()
-        self.current_side_entry_iris_value = controller.set_side_entry_iris(str(value))
+    write_side_entry_iris = _streak_camera_methods_power_dependency_ready_state["write_side_entry_iris"]
 
     @attribute(label="delay trig mode", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_trig_mode(self):
         return str(self.current_delay_trig_mode_value)
 
-    def write_delay_trig_mode(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_trig_mode_value = controller.set_delay_trigger_mode(str(value))
+    write_delay_trig_mode = _streak_camera_methods_power_dependency_ready_state["write_delay_trig_mode"]
 
     @attribute(label="delay repetition rate", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_repetition_rate(self):
         return str(self.current_delay_repetition_rate_value)
 
-    def write_delay_repetition_rate(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_repetition_rate_value = controller.set_delay_repetition_rate(
-            str(value)
-        )
+    write_delay_repetition_rate = _streak_camera_methods_power_dependency_ready_state["write_delay_repetition_rate"]
 
     @attribute(label="delay setting", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_setting(self):
         return str(self.current_delay_setting_value)
 
-    def write_delay_setting(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_setting_value = controller.set_delay_setting(str(value))
+    write_delay_setting = _streak_camera_methods_power_dependency_ready_state["write_delay_setting"]
 
     @attribute(label="delay A", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_a(self):
         return str(self.current_delay_a_value)
 
-    def write_delay_a(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_a_value = controller.set_delay_channel("Delay A", str(value))
+    write_delay_a = _streak_camera_methods_power_dependency_ready_state["write_delay_a"]
 
     @attribute(label="delay B", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_b(self):
         return str(self.current_delay_b_value)
 
-    def write_delay_b(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_b_value = controller.set_delay_channel("Delay B", str(value))
+    write_delay_b = _streak_camera_methods_power_dependency_ready_state["write_delay_b"]
 
     @attribute(label="delay C", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_c(self):
         return str(self.current_delay_c_value)
 
-    def write_delay_c(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_c_value = controller.set_delay_channel("Delay C", str(value))
+    write_delay_c = _streak_camera_methods_power_dependency_ready_state["write_delay_c"]
 
     @attribute(label="delay D", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_d(self):
         return str(self.current_delay_d_value)
 
-    def write_delay_d(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_d_value = controller.set_delay_channel("Delay D", str(value))
+    write_delay_d = _streak_camera_methods_power_dependency_ready_state["write_delay_d"]
+    del _streak_camera_methods_power_dependency_ready_state
 
     @attribute(label="delay E", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_e(self):
         return str(self.current_delay_e_value)
 
-    def write_delay_e(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_e_value = controller.set_delay_channel("Delay E", str(value))
+    _streak_camera_methods_write_delay_e = _bind_streak_camera_methods_write_delay_e(_refactor_modules[__name__])
+    write_delay_e = _streak_camera_methods_write_delay_e["write_delay_e"]
 
     @attribute(label="delay F", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_f(self):
         return str(self.current_delay_f_value)
 
-    def write_delay_f(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_f_value = controller.set_delay_channel("Delay F", str(value))
+    write_delay_f = _streak_camera_methods_write_delay_e["write_delay_f"]
 
     @attribute(label="delay G", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_g(self):
         return str(self.current_delay_g_value)
 
-    def write_delay_g(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_g_value = controller.set_delay_channel("Delay G", str(value))
+    write_delay_g = _streak_camera_methods_write_delay_e["write_delay_g"]
 
     @attribute(label="delay H", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_h(self):
         return str(self.current_delay_h_value)
 
-    def write_delay_h(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_h_value = controller.set_delay_channel("Delay H", str(value))
+    write_delay_h = _streak_camera_methods_write_delay_e["write_delay_h"]
 
     @attribute(label="delay ss trigger", dtype=str, access=AttrWriteType.READ)
     def delay_ss_trigger(self):
@@ -818,19 +486,13 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def delay_burst_mode(self):
         return str(self.current_delay_burst_mode_value)
 
-    def write_delay_burst_mode(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_burst_mode_value = controller.set_delay_burst_mode(str(value))
+    write_delay_burst_mode = _streak_camera_methods_write_delay_e["write_delay_burst_mode"]
 
     @attribute(label="delay manual control", dtype=str, access=AttrWriteType.READ_WRITE)
     def delay_manual_control(self):
         return str(self.current_delay_manual_control_value)
 
-    def write_delay_manual_control(self, value: str):
-        controller = self._require_controller()
-        self.current_delay_manual_control_value = controller.set_delay_manual_control(
-            str(value)
-        )
+    write_delay_manual_control = _streak_camera_methods_write_delay_e["write_delay_manual_control"]
 
     @attribute(label="last saved image path", dtype=str, access=AttrWriteType.READ)
     def last_saved_image_path(self):
@@ -856,120 +518,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def Disconnect(self):
         self.turn_off()
 
-    @command
-    def StartRemoteEx(self):
-        """Launch RemoteEx locally, then connect this Tango device to it.
+    StartRemoteEx = (command)(_streak_camera_methods_write_delay_e["StartRemoteEx"])
 
-        The web application never starts Windows processes directly. Astor starts
-        this device server; this command starts only RemoteEx through its Windows
-        scheduled task. HPD-TA itself is started later by StartApplication.
-        """
-        if self.controller is not None and self.controller.is_connected:
-            return
-
-        # A Tango restart must not create a second RemoteEx process. Attach to
-        # the existing command socket first, then start the scheduled task only
-        # when no RemoteEx instance accepts connections.
-        try:
-            self._connect_remoteex()
-            self.application_running_value = False
-            self.remoteex_status_value = "idle"
-            self.busy_command_value = ""
-            self.set_state(DevState.ON)
-            return
-        except Exception:
-            self.client = None
-            self.controller = None
-            self.connected_value = False
-
-        if not self._windows_process_running("TaRemoteEx.exe"):
-            task_name = str(self.remoteex_task_name or "Pyconlyse-TaRemoteEx")
-            completed = subprocess.run(
-                ["schtasks.exe", "/run", "/tn", f"\\{task_name}"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-            if completed.returncode != 0:
-                detail = (completed.stderr or completed.stdout or "scheduled task failed").strip()
-                raise RuntimeError(f"Could not start RemoteEx task {task_name}: {detail}")
-
-        deadline = time.monotonic() + max(30.0, float(self.remoteex_start_timeout_s or 0))
-        last_error = None
-        while time.monotonic() < deadline:
-            try:
-                self._connect_remoteex()
-                self.application_running_value = False
-                self.remoteex_status_value = "idle"
-                self.busy_command_value = ""
-                self.set_state(DevState.ON)
-                return
-            except Exception as exc:
-                last_error = exc
-                time.sleep(0.4)
-        self.connected_value = False
-        self.application_running_value = False
-        self.remoteex_status_value = "disconnected"
-        self.set_state(DevState.FAULT)
-        raise RuntimeError(f"RemoteEx did not accept TCP connections: {last_error}")
-
-    @command
-    def StopRemoteEx(self):
-        """Stop RemoteEx after HPD-TA has been closed."""
-        # A disconnected/stale application_running flag is not proof of exit.
-        if self._windows_process_running("HPDTA95.exe"):
-            raise RuntimeError("Close HPD-TA before stopping RemoteEx")
-        self.application_running_value = False
-        controller = self.controller
-        shutdown_error = None
-        if controller is not None and controller.is_connected:
-            try:
-                controller.shutdown_remoteex()
-            except Exception as exc:
-                shutdown_error = exc
-
-        if self._windows_process_running("TaRemoteEx.exe"):
-            # RemoteEx runs elevated through its interactive scheduled task.
-            # A non-elevated Tango device server cannot taskkill that process.
-            # The dedicated stop task runs taskkill in the same elevated
-            # interactive context as the RemoteEx launcher.
-            task_name = str(
-                self.remoteex_stop_task_name or "Pyconlyse-Stop-TaRemoteEx"
-            )
-            completed = subprocess.run(
-                ["schtasks.exe", "/run", "/tn", f"\\{task_name}"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-            deadline = time.monotonic() + 10.0
-            while (
-                self._windows_process_running("TaRemoteEx.exe")
-                and time.monotonic() < deadline
-            ):
-                time.sleep(0.25)
-            if self._windows_process_running("TaRemoteEx.exe"):
-                detail = (completed.stderr or completed.stdout or str(shutdown_error)).strip()
-                raise RuntimeError(
-                    f"Could not stop TaRemoteEx through elevated task {task_name}: {detail}"
-                ) from shutdown_error
-        self.controller = None
-        self.client = None
-        self.connected_value = False
-        self.application_running_value = False
-        self.remoteex_status_value = "disconnected"
-        self.busy_command_value = ""
-        self.last_command_value = (
-            controller.last_command
-            if controller is not None
-            else "schtasks /run stop TaRemoteEx"
-        )
-        self.last_response_value = controller.last_response_text if controller is not None else "TaRemoteEx stopped"
-        # RemoteEx is an optional companion process. Its absence must not make
-        # this still-running Tango device appear offline in the web control.
-        self.set_state(DevState.ON)
+    StopRemoteEx = (command)(_streak_camera_methods_write_delay_e["StopRemoteEx"])
 
     @command(dtype_out=str)
     def PrepareDG645ForHPDTA(self):
@@ -1009,53 +560,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
             }
         )
 
-    @command
-    def StartApplication(self):
-        if not self._power_dependency_allows_hardware_operation(force=True):
-            raise RuntimeError(self._power_dependency_status)
+    StartApplication = (command)(_streak_camera_methods_write_delay_e["StartApplication"])
 
-        if (
-            self._application_start_thread is not None
-            and self._application_start_thread.is_alive()
-        ):
-            return self.application_version_value
-
-        controller = self._require_controller()
-        self._startup_configuration_error = ""
-        self.busy_command_value = f"DG645 Recall {int(self.dg645_hpdta_recall_slot or 9)}"
-        try:
-            self._prepare_dg645_for_hpdta()
-        except Exception as exc:
-            self.busy_command_value = ""
-            self.last_response_value = f"DG645 preflight failed: {exc}"
-            self.remoteex_status_value = "idle"
-            self.set_state(DevState.ON)
-            raise RuntimeError(self.last_response_value) from exc
-        self.remoteex_status_value = "starting"
-        self.busy_command_value = "AppStart()"
-        self.set_state(DevState.RUNNING)
-        self._application_start_thread = threading.Thread(
-            target=self._start_application_background,
-            args=(controller,),
-            daemon=True,
-            name="hamamatsu-start-application",
-        )
-        self._application_start_thread.start()
-        return self.application_version_value
-
-    def _start_application_background(
-        self, controller: HamamatsuStreakController
-    ) -> None:
-        try:
-            controller.start_application()
-        except Exception as exc:
-            self._reset_remoteex_connection(f"StartApplication failed: {exc}")
-            self._startup_configuration_error = f"HPD-TA startup failed: {exc}"
-            self.set_state(DevState.FAULT)
-            self.set_status(self._startup_configuration_error)
-            return
-
-        self._configure_vd2_startup_background(controller)
+    _start_application_background = _streak_camera_methods_write_delay_e["_start_application_background"]
 
     @command
     def PrepareVD2Startup(self):
@@ -1081,27 +588,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
         )
         self._application_start_thread.start()
 
-    def _configure_vd2_startup_background(
-        self, controller: HamamatsuStreakController
-    ) -> None:
-        try:
-            snapshot = controller.configure_vd2_startup()
-            self._sync_from_snapshot(snapshot)
-            self.last_command_value = controller.last_command
-            self.last_response_value = controller.last_response_text
-            self.application_running_value = True
-            self.remoteex_status_value = "idle"
-            self.busy_command_value = ""
-            self._startup_configuration_error = ""
-            self.set_state(DevState.ON)
-        except Exception as exc:
-            self._startup_configuration_error = f"VD2 startup configuration failed: {exc}"
-            self.last_response_value = self._startup_configuration_error
-            self.application_running_value = bool(controller.snapshot.application_running)
-            self.remoteex_status_value = "idle"
-            self.busy_command_value = ""
-            self.set_state(DevState.FAULT)
-            self.set_status(self._startup_configuration_error)
+    _configure_vd2_startup_background = _streak_camera_methods_write_delay_e["_configure_vd2_startup_background"]
 
     @command
     def StopApplication(self):
@@ -1165,16 +652,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
         )
         self._live_start_thread.start()
 
-    def _start_live_background(self, controller: HamamatsuStreakController) -> None:
-        try:
-            controller.start_live()
-            self.last_command_value = controller.last_command
-            self.last_response_value = controller.last_response_text
-            self.remoteex_status_value = "busy"
-        except Exception as exc:
-            self.last_response_value = f"StartLive failed: {exc}"
-            self.remoteex_status_value = "fault"
-            self.set_state(DevState.FAULT)
+    _start_live_background = _streak_camera_methods_write_delay_e["_start_live_background"]
 
     @command
     def StartAnalogIntegration(self):
@@ -1261,35 +739,8 @@ class DS_HAMAMATSU_STREAK(DS_General):
         controller = self._require_controller()
         return controller.dump_current_image_data(path)
 
-    @command(dtype_in=str, dtype_out=str)
-    def ExecuteRaw(self, command_text: str):
-        if command_text == "AsyncCommandStatus()":
-            controller = self.controller
-            if controller is None or not controller.is_connected:
-                if not self._windows_process_running("TaRemoteEx.exe"):
-                    raise RuntimeError("RemoteEx sequence connection unavailable; sequence completion unconfirmed")
-                self._sequence_reconnect_pending = True
-                if controller is None:
-                    try:
-                        self._connect_remoteex()
-                    except RemoteExTransportError as exc:
-                        raise RemoteExTransportError(f"{command_text}: {exc}") from exc
-                    controller = self._require_controller()
-            response = controller.execute_raw(command_text, reconnect_timeout=2.0, timeout=3.0)
-            if self._sequence_reconnect_pending and response.parameters[:3] == ["0", "0", "0"]:
-                try:
-                    version = controller.execute_raw("AppInfo(Version)", timeout=3.0)
-                except RemoteExTransportError as exc:
-                    raise RemoteExTransportError(f"{command_text}: cannot verify HPD-TA after reconnect: {exc}") from exc
-                if not (version.parameter(0) or "").strip():
-                    raise RuntimeError("HPD-TA application unverified after reconnect; sequence completion unconfirmed")
-                self._sequence_reconnect_pending = False
-        else:
-            controller = self._require_controller()
-            response = controller.execute_raw(command_text)
-        self.last_command_value = command_text
-        self.last_response_value = response.raw_line
-        return response.raw_line
+    ExecuteRaw = (command(dtype_in=str, dtype_out=str))(_streak_camera_methods_write_delay_e["ExecuteRaw"])
+    del _streak_camera_methods_write_delay_e
 
     @command(dtype_out=str)
     def ListStreakParameters(self):
