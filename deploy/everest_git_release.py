@@ -18,7 +18,9 @@ from pathlib import Path, PureWindowsPath
 
 FRONTEND = "web/frontend"
 BUILD = FRONTEND + "/build"
-SOURCE_REF = "refs/pyconlyse-release/develop"
+RELEASE_BRANCH = "main"
+RELEASE_HEAD = f"refs/heads/{RELEASE_BRANCH}"
+SOURCE_REF = f"refs/pyconlyse-release/{RELEASE_BRANCH}"
 BOOTSTRAP = {"web/bin/start_pyconlyse_local.ps1", "web/bin/start_pyconlyse_production.bat"}
 ARCHIVED = (".tmp", "docs/data-treatment", "Supervision/analysis", "Supervision/integration_analysis")
 SHARED = {"DeviceServers", "Treatment", "main_app", "utilities", "gui", "legacy", "bin", "scripts"}
@@ -189,8 +191,8 @@ class Deployment:
         if self.state_file.exists():
             raise ReleaseError("Deployment state is already initialized.")
         head = self.git_text("rev-parse", "HEAD")
-        if head != self.git_text("rev-parse", "refs/heads/develop", repo=self.source):
-            raise ReleaseError("Initial runtime HEAD differs from develop on D:.")
+        if head != self.git_text("rev-parse", RELEASE_HEAD, repo=self.source):
+            raise ReleaseError(f"Initial runtime HEAD differs from {RELEASE_BRANCH} on D:.")
         changed = self.git_paths("diff", "--no-renames", "--name-only", "-z", "HEAD", "--")
         # Adopt identical existing web files copied from C to D, even if still untracked.
         untracked = self.git_paths("ls-files", "--others", "--exclude-standard", "-z", "--",
@@ -206,11 +208,11 @@ class Deployment:
 
     def fetch(self, revision):
         self.git("fetch", "--no-tags", "--no-write-fetch-head", "--no-auto-maintenance",
-                 "--", str(self.source), f"refs/heads/develop:{SOURCE_REF}")
+                 "--", str(self.source), f"{RELEASE_HEAD}:{SOURCE_REF}")
         candidate = self.git_text("rev-parse", "--verify", "--end-of-options",
                                   (revision or SOURCE_REF) + "^{commit}")
         if self.git("merge-base", "--is-ancestor", candidate, SOURCE_REF, check=False).returncode:
-            raise ReleaseError("The selected revision must be on develop from D:.")
+            raise ReleaseError(f"The selected revision must be on {RELEASE_BRANCH} from D:.")
         return candidate
 
     def blob_matches(self, path, name, entry):
