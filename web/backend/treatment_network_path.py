@@ -7,6 +7,8 @@ from typing import Dict, Iterable
 from urllib.parse import quote, unquote, urlparse
 from uuid import uuid4
 
+from path_input import clean_path_input
+
 
 def is_smb_path(path: str) -> bool:
     raw = str(path or "").strip()
@@ -32,6 +34,13 @@ def normalize_smb_path(path: str) -> str:
     tail = "/".join(quote(part) for part in parts[1:])
     base = f"smb://{server}/{quote(share)}"
     return f"{base}/{tail}" if tail else base
+
+
+def normalize_treatment_path(path: str) -> str:
+    path = clean_path_input(path)
+    if is_smb_path(path):
+        return normalize_smb_path(path)
+    return os.path.abspath(os.path.expanduser(str(path).strip()))
 
 
 def split_smb_path(path: str):

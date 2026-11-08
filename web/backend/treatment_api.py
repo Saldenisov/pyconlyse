@@ -1,11 +1,15 @@
 import json
+import math
 import os
 import re
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
+from contextlib import nullcontext
 from copy import deepcopy
 from datetime import datetime, timezone
+from multiprocessing import get_context
 from pathlib import Path
+from queue import Empty
 from threading import Lock, Thread
 from time import monotonic
 from typing import Dict, List, Optional
@@ -27,12 +31,14 @@ from treatment_file_cache import (
     is_within_cache,
 )
 from treatment_manifest import record_treatment_manifest
+from vd2_project_manifest import inspect_project, fingerprint as vd2_fingerprint, record_project_treatment
 from treatment_network_path import (
     copy_local_file_to_smb_atomic,
     copy_smb_file_to_local,
     is_mapped_smb_path,
     is_smb_path,
     normalize_smb_path,
+    normalize_treatment_path as _normalize_path,
     smb_is_within,
     smb_isdir,
     smb_isfile,
@@ -45,7 +51,14 @@ from treatment_network_path import (
     smb_suffix,
     smb_to_local_path,
 )
+from treatment_queue_store import (
+    TreatmentQueueStore,
+    _treatment_thread_context,
+    _treatment_worker_count,
+)
 from treatment_service import TreatmentDataService, h5py
+from treatment_state_repository import TreatmentStateRepository
+from browser_workspace_state import workspace_identity
 
 treatment_api = Blueprint("treatment_api", __name__, url_prefix="/api/treatment")
 install_mutation_auth(treatment_api)
@@ -82,35 +95,93 @@ DEFAULT_STITCH_OD_ROOTS = (
     "smb://10.20.30.202/f/DATA_VD2",
     "smb://10.20.30.202/F/DATA_VD2",
 )
-DEFAULT_TREATMENT_MAX_WORKERS = 6
 
 
-def _treatment_worker_count(task_count: int) -> int:
-    """Bound treatment work by task count, configured limit, and available CPUs."""
-    try:
-        configured = int(
-            os.environ.get(
-                "PYCONLYSE_TREATMENT_MAX_WORKERS",
-                str(DEFAULT_TREATMENT_MAX_WORKERS),
-            )
-        )
-    except ValueError:
-        configured = DEFAULT_TREATMENT_MAX_WORKERS
-    available_cpus = max(1, int(os.cpu_count() or 1))
-    return max(
-        1,
-        min(
-            max(1, int(task_count or 1)),
-            max(1, configured),
-            available_cpus,
-        ),
+def _cpu_executor(worker_count: int):
+    # h5py serializes HDF5 API calls within one process, so use spawned
+    # processes for independent files. Spawn is also safe from server threads.
+    return ProcessPoolExecutor(
+        max_workers=worker_count,
+        mp_context=get_context("spawn"),
     )
 
 
-def _normalize_path(path: str) -> str:
-    if is_smb_path(path):
-        return normalize_smb_path(path)
-    return os.path.abspath(os.path.expanduser(str(path).strip()))
+def _cpu_progress_callback(data_type: str, progress_queue):
+    if progress_queue is None:
+        return None
+    last_reported = -1
+
+    def report(current, total):
+        nonlocal last_reported
+        current, total = int(current), int(total)
+        step = max(1, total // 100)
+        if current == total or current == 1 or current - last_reported >= step:
+            progress_queue.put((data_type, current, total))
+            last_reported = current
+
+    return report
+
+
+def _run_parallel_cpu_jobs(items, worker, on_progress=None, on_complete=None, on_error=None):
+    """Convert independent files in separate processes; relay progress to caller."""
+    if not items:
+        return {}
+    worker_count = 1 if getattr(_treatment_thread_context, 'parallel_sample', False) else _treatment_worker_count(len(items))
+    if worker_count == 1:
+        class InlineProgress:
+            def put(self, event):
+                on_progress(event[0], *event[1:])
+
+        results = {}
+        for data_type, args in items.items():
+            try:
+                result = worker(data_type, *args, InlineProgress() if on_progress else None)
+            except Exception as exc:
+                if on_error:
+                    on_error(data_type, exc)
+                raise
+            results[data_type] = result
+            if on_complete:
+                on_complete(data_type, result)
+        return results
+
+    manager_context = get_context("spawn").Manager() if on_progress else nullcontext(None)
+    results = {}
+    with manager_context as manager:
+        progress_queue = manager.Queue() if manager else None
+
+        def drain_progress():
+            if progress_queue is None:
+                return
+            while True:
+                try:
+                    data_type, *progress = progress_queue.get_nowait()
+                except Empty:
+                    return
+                on_progress(data_type, *progress)
+
+        with _cpu_executor(worker_count) as executor:
+            futures = {
+                executor.submit(worker, data_type, *args, progress_queue): data_type
+                for data_type, args in items.items()
+            }
+            pending = set(futures)
+            while pending:
+                done, pending = wait(pending, timeout=0.02, return_when=FIRST_COMPLETED)
+                drain_progress()
+                for future in done:
+                    data_type = futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        if on_error:
+                            on_error(data_type, exc)
+                        raise
+                    results[data_type] = result
+                    if on_complete:
+                        on_complete(data_type, result)
+            drain_progress()
+    return results
 
 
 def _is_within_local_path(path: str, root: str) -> bool:
@@ -402,6 +473,7 @@ def _default_state() -> Dict[str, object]:
         "exp_type": default_exp_type,
         "selected_data_type": default_required[0],
         "active_data_type": "",
+        "dat_preview_path": "",
         "map_index": 0,
         "selection": {},
         "calc_mode": CALC_MODES[0],
@@ -414,8 +486,10 @@ def _default_state() -> Dict[str, object]:
         "status_label": "Treatment session is ready.",
         "noise_ready": False,
         "result_ready": False,
+        "result_map_policy": "selected_maps",
         "result_shape": None,
         "result_source_path": "",
+        "cleaning_preview_request": None,
     }
 
 
@@ -457,6 +531,48 @@ def _default_save_target_for_folder(folder: str):
         return parent or folder, save_file_name
     parent = str(Path(folder).expanduser().resolve().parent)
     return parent, save_file_name
+
+
+def _dated_save_file_name_for_folder(folder: str, on_date=None) -> str:
+    processing_date = on_date or datetime.now().astimezone().date()
+    folder_name = _path_name(folder)
+    return f"{folder_name}_{processing_date:%Y%m%d}.dat"
+
+
+def _folder_contains(parent: str, child: str) -> bool:
+    if is_smb_path(parent) or is_smb_path(child):
+        if not (is_smb_path(parent) and is_smb_path(child)):
+            return False
+        try:
+            return smb_is_within(child, parent)
+        except ValueError:
+            return False
+    return _is_within_local_path(child, parent)
+
+
+def _save_folder_for_measurement(session: Dict[str, object], measurement_folder: str) -> str:
+    """Keep the selected parent (or a manual override), not the measurement folder."""
+    configured = str(session.get("save_folder") or "").strip()
+    selected = str(session.get("folder_path") or "").strip()
+    if configured:
+        configured = _ensure_within_allowed_root(configured)
+        if not _folder_exists(configured):
+            raise ValueError("save_folder does not exist")
+        manual_override = not selected or _normalize_path(configured) != _normalize_path(selected)
+        if manual_override or (
+            _normalize_path(configured) != _normalize_path(measurement_folder)
+            and _folder_contains(configured, measurement_folder)
+        ):
+            return configured
+
+    parent = (
+        smb_parent(measurement_folder)
+        if is_smb_path(measurement_folder)
+        else str(Path(measurement_folder).parent)
+    )
+    if parent and _is_within_allowed_root(parent) and _folder_exists(parent):
+        return _ensure_within_allowed_root(parent)
+    return measurement_folder
 
 
 def _path_name(path: str) -> str:
@@ -575,6 +691,30 @@ def _convert_source_to_h5(source_path: str, progress_callback=None) -> Dict[str,
     return _compression_progress_summary(source_path, progress_callback=progress_callback)
 
 
+def _convert_folder_source_worker(data_type: str, source_path: str, progress_queue):
+    def report(*args):
+        if progress_queue is not None:
+            progress_queue.put((data_type, *args))
+
+    return _convert_source_to_h5(
+        source_path,
+        progress_callback=report if progress_queue is not None else None,
+    )
+
+
+def _convert_staged_h5_worker(data_type: str, source_path: str, output_path: str, progress_queue):
+    summary = treatment_service.convert_file_to_h5(
+        Path(source_path),
+        Path(output_path),
+        progress_callback=_cpu_progress_callback(data_type, progress_queue),
+    )
+    output = Path(output_path)
+    if not output.is_file():
+        raise ValueError(f"Compressed H5 was not created: {output}")
+    summary["output_size_bytes"] = int(output.stat().st_size)
+    return summary
+
+
 def _convert_smb_sources_to_h5_pipeline(
     selected_paths: Dict[str, str],
     progress_callback=None,
@@ -688,61 +828,50 @@ def _convert_smb_sources_to_h5_pipeline(
                     "mapped_output": mapped_output,
                 }
 
-        def convert_local(data_type: str, item: Dict[str, object]) -> Dict[str, object]:
-            local_source = Path(item["local_source"])
-            local_output = Path(item["local_output"])
-            if progress_callback:
-                progress_callback(data_type, "convert", 0, 0, "Compressing local H5 with gzip level 4")
-            summary = treatment_service.convert_file_to_h5(
-                local_source,
-                local_output,
-                progress_callback=(
-                    lambda current, total, dt=data_type: progress_callback(
-                        dt,
-                        "convert",
-                        current,
-                        total,
-                        f"Compressing map {current}/{total} with gzip level 4",
-                    )
-                    if progress_callback
-                    else None
-                ),
-            )
-            if not local_output.is_file():
-                raise ValueError(f"Compressed H5 was not created: {item['output_path']}")
-            summary["output_size_bytes"] = int(local_output.stat().st_size)
-            return summary
-
-        max_workers = _treatment_worker_count(len(prepared))
         if prepared:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(convert_local, data_type, item): data_type
+            if progress_callback:
+                for data_type in prepared:
+                    progress_callback(data_type, "convert", 0, 0, "Compressing local H5 with gzip level 4")
+
+            def report_conversion(data_type, current, total):
+                progress_callback(
+                    data_type,
+                    "convert",
+                    current,
+                    total,
+                    f"Compressing map {current}/{total} with gzip level 4",
+                )
+
+            def complete_conversion(data_type, summary):
+                item = prepared[data_type]
+                source_size_bytes = int(item["source_size_bytes"])
+                output_size_bytes = int(summary.get("output_size_bytes") or 0)
+                space_change_bytes = output_size_bytes - source_size_bytes
+                summary.update({
+                    "source_path": str(item["source_path"]),
+                    "output_path": str(item["output_path"]),
+                    "converted": True,
+                    "overwritten": bool(item["output_existed"]),
+                    "deleted_source": item["source_suffix"] == ".his",
+                    "source_size_bytes": source_size_bytes,
+                    "output_size_bytes": output_size_bytes,
+                    "space_change_bytes": space_change_bytes,
+                    "space_change_percent": (
+                        round((space_change_bytes / source_size_bytes) * 100, 2)
+                        if source_size_bytes else 0.0
+                    ),
+                })
+                conversions[data_type] = summary
+
+            _run_parallel_cpu_jobs(
+                {
+                    data_type: (str(item["local_source"]), str(item["local_output"]))
                     for data_type, item in prepared.items()
-                }
-                for future in as_completed(futures):
-                    data_type = futures[future]
-                    item = prepared[data_type]
-                    summary = future.result()
-                    source_size_bytes = int(item["source_size_bytes"])
-                    output_size_bytes = int(summary.get("output_size_bytes") or 0)
-                    space_change_bytes = output_size_bytes - source_size_bytes
-                    summary.update({
-                        "source_path": str(item["source_path"]),
-                        "output_path": str(item["output_path"]),
-                        "converted": True,
-                        "overwritten": bool(item["output_existed"]),
-                        "deleted_source": item["source_suffix"] == ".his",
-                        "source_size_bytes": source_size_bytes,
-                        "output_size_bytes": output_size_bytes,
-                        "space_change_bytes": space_change_bytes,
-                        "space_change_percent": (
-                            round((space_change_bytes / source_size_bytes) * 100, 2)
-                            if source_size_bytes
-                            else 0.0
-                        ),
-                    })
-                    conversions[data_type] = summary
+                },
+                _convert_staged_h5_worker,
+                on_progress=report_conversion if progress_callback else None,
+                on_complete=complete_conversion,
+            )
 
         for data_type, item in prepared.items():
             conversion = conversions[data_type]
@@ -1177,20 +1306,28 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
             progress_callback("replace", 0, 0, "Existing H5 will be replaced from HIS")
         if progress_callback:
             progress_callback("convert", 0, source_size_bytes, "Compressing local H5 with gzip level 4")
-        summary = treatment_service.convert_file_to_h5(
-            source,
-            output,
-            progress_callback=(
-                lambda current, total: progress_callback(
-                    "convert",
-                    current,
-                    total,
-                    f"Compressing map {current}/{total} with gzip level 4",
-                )
-                if progress_callback
-                else None
-            ),
+        conversion_progress = (
+            lambda current, total: progress_callback(
+                "convert",
+                current,
+                total,
+                f"Compressing map {current}/{total} with gzip level 4",
+            )
+            if progress_callback
+            else None
         )
+        if source_suffix == ".h5":
+            with tempfile.TemporaryDirectory(prefix="pyconlyse_recompress_h5_", dir=output.parent) as tmp_dir:
+                staged_output = Path(tmp_dir) / output.name
+                summary = treatment_service.convert_file_to_h5(
+                    source, staged_output, progress_callback=conversion_progress,
+                )
+                _validate_canonical_h5(staged_output, output_path)
+                os.replace(staged_output, output)
+        else:
+            summary = treatment_service.convert_file_to_h5(
+                source, output, progress_callback=conversion_progress,
+            )
         if not output.is_file():
             raise ValueError(f"Compressed H5 was not created: {output}")
         output_size_bytes = int(output.stat().st_size)
@@ -1308,9 +1445,17 @@ def _cache_assignable_source(source_path: str) -> Dict[str, object]:
 
 
 class TreatmentSessionStore:
-    def __init__(self):
+    def __init__(self, repository=None):
         self._lock = Lock()
-        self._sessions: Dict[str, Dict[str, object]] = {}
+        self._repository = repository
+        self._sessions: Dict[str, Dict[str, object]] = (
+            repository.load_sessions() if repository else {}
+        )
+
+    def _persist_locked(self, session_id):
+        self._sessions[session_id]["saved_at"] = datetime.now(timezone.utc).isoformat()
+        if self._repository:
+            self._repository.save_session(session_id, self._sessions[session_id])
 
     @staticmethod
     def _clone_state(state: Dict[str, object]) -> Dict[str, object]:
@@ -1325,6 +1470,7 @@ class TreatmentSessionStore:
         if state is None:
             state = _default_state()
             self._sessions[session_id] = state
+            self._persist_locked(session_id)
         return state
 
     def snapshot(self, session_id: str) -> Dict[str, object]:
@@ -1332,17 +1478,145 @@ class TreatmentSessionStore:
             state = self._get_or_create_state(session_id)
             return self._clone_state(state)
 
+    def saved_sessions(self, browser, profile):
+        prefix = f"browser:{workspace_identity(browser)}:"
+        with self._lock:
+            items = [dict(session_id=key, folder=state.get("folder_path", ""),
+                          name=state.get("save_file_name") or state.get("folder_path") or "Treatment",
+                          updated_at=state.get("saved_at", ""))
+                     for key, state in self._sessions.items()
+                     if key.startswith(prefix) and _saved_session_profile(key) == profile
+                     and (state.get("paths") or state.get("save_file_name") or state.get("selection")
+                          or (state.get("folder_path") and state.get("status_label") != "Treatment session is ready."))]
+        return sorted(items, key=lambda item: item["updated_at"], reverse=True)[:40]
+
+    def copy_saved_session(self, source_id, target_id):
+        with self._lock:
+            source = self._sessions.get(source_id)
+            if source is None:
+                raise ValueError("Saved treatment session no longer exists")
+            source = deepcopy(source)
+        return self.restore_if_empty(target_id, source, origin="server snapshot")
+
     def reset(self, session_id: Optional[str] = None) -> Dict[str, object]:
         with self._lock:
             if session_id is None:
                 self._sessions.clear()
+                if self._repository:
+                    self._repository.delete_session()
                 return self._clone_state(_default_state())
             self._sessions[session_id] = _default_state()
+            self._persist_locked(session_id)
             return self._clone_state(self._sessions[session_id])
+
+    def restore_if_empty(self, session_id: str, snapshot: Dict[str, object], *, origin="browser backup") -> bool:
+        """Import a browser backup only into an untouched, empty server session."""
+        if not isinstance(snapshot, dict):
+            raise ValueError("session backup must be an object")
+        exp_type = str(snapshot.get("exp_type") or "")
+        if exp_type not in EXP_TYPES:
+            raise ValueError("session backup has an unsupported experiment type")
+        selected_data_type = str(snapshot.get("selected_data_type") or "")
+        if selected_data_type not in REQUIRED_DATA_TYPES[exp_type]:
+            raise ValueError("session backup has an invalid selected data type")
+        calc_mode = str(snapshot.get("calc_mode") or "")
+        if calc_mode not in CALC_MODES:
+            raise ValueError("session backup has an invalid calculation mode")
+
+        folder = _ensure_within_allowed_root(str(snapshot.get("folder_path") or ""))
+        save_folder = _ensure_within_allowed_root(str(snapshot.get("save_folder") or folder))
+        if not _folder_exists(folder) or not _folder_exists(save_folder):
+            raise ValueError("session backup folder no longer exists")
+        save_file_name = os.path.basename(str(snapshot.get("save_file_name") or "").strip())
+        if save_file_name and not save_file_name.lower().endswith(".dat"):
+            raise ValueError("session backup save file name must end in .dat")
+
+        paths = {}
+        sources = {}
+        raw_paths = snapshot.get("paths") or {}
+        raw_sources = snapshot.get("path_sources") or {}
+        if not isinstance(raw_paths, dict) or not isinstance(raw_sources, dict):
+            raise ValueError("session backup paths must be objects")
+        for data_type, path in raw_paths.items():
+            if data_type not in DATA_TYPES:
+                raise ValueError("session backup has an invalid input data type")
+            paths[data_type] = _ensure_readable_treatment_file(str(path))
+            source = str(raw_sources.get(data_type) or path)
+            sources[data_type] = _ensure_within_allowed_root(source) if source != path else paths[data_type]
+
+        active_data_type = str(snapshot.get("active_data_type") or "")
+        if active_data_type not in {"", "OD", "DAT", *DATA_TYPES}:
+            raise ValueError("session backup has an invalid active data type")
+        dat_preview_path = str(snapshot.get("dat_preview_path") or "")
+        if dat_preview_path:
+            dat_preview_path = _ensure_readable_treatment_file(dat_preview_path)
+            if _path_suffix(dat_preview_path) != ".dat":
+                raise ValueError("session backup preview must be DAT")
+        if active_data_type == "DAT" and not dat_preview_path:
+            raise ValueError("session backup preview file is missing")
+        preview_request = None
+        raw_preview = snapshot.get("cleaning_preview_request")
+        if isinstance(raw_preview, dict) and str(raw_preview.get("file_path") or "") == paths.get(active_data_type):
+            try:
+                angle_threshold = float(raw_preview["angle_threshold"])
+                surface_threshold = float(raw_preview["surface_threshold"])
+                if math.isfinite(angle_threshold) and math.isfinite(surface_threshold):
+                    preview_request = {
+                        "angle_threshold": angle_threshold,
+                        "surface_threshold": surface_threshold,
+                        "file_path": paths[active_data_type],
+                    }
+            except (KeyError, TypeError, ValueError):
+                pass
+        try:
+            map_index = max(0, int(snapshot.get("map_index") or 0))
+            raw_selection = snapshot.get("selection") or {}
+            if not isinstance(raw_selection, dict):
+                raise ValueError("selection must be an object")
+            selection = {
+                key: int(value) for key, value in raw_selection.items()
+                if key in {"x1", "x2", "y1", "y2"} and value is not None
+            }
+        except (TypeError, ValueError) as exc:
+            raise ValueError("session backup has invalid selection values") from exc
+
+        with self._lock:
+            current = self._get_or_create_state(session_id)
+            if current.get("status_label") != "Treatment session is ready." or current.get("paths"):
+                return False
+            current.update({
+                "exp_type": exp_type,
+                "selected_data_type": selected_data_type,
+                "active_data_type": active_data_type,
+                "dat_preview_path": dat_preview_path,
+                "map_index": map_index,
+                "selection": selection,
+                "calc_mode": calc_mode,
+                "first_map_with_electrons": bool(snapshot.get("first_map_with_electrons", True)),
+                "folder_path": folder,
+                "save_folder": save_folder,
+                "save_file_name": save_file_name,
+                "paths": paths,
+                "path_sources": sources,
+                "result_ready": bool(snapshot.get("result_ready", False)),
+                "result_map_policy": (
+                    "all_raw_maps"
+                    if snapshot.get("result_map_policy") == "all_raw_maps"
+                    else "selected_maps"
+                ),
+                "cleaning_preview_request": preview_request,
+                "status_label": f"Treatment session restored from {origin}.",
+            })
+            self._persist_locked(session_id)
+            return True
 
     def update_config(self, session_id: str, payload: Dict[str, object]) -> Dict[str, object]:
         with self._lock:
             state = self._get_or_create_state(session_id)
+            previous_calculation = (
+                state["exp_type"], state["selected_data_type"],
+                state["calc_mode"], state["first_map_with_electrons"],
+            )
             requested_exp_type = str(state["exp_type"])
             if "exp_type" in payload:
                 exp_type = str(payload["exp_type"])
@@ -1394,6 +1668,14 @@ class TreatmentSessionStore:
                 state["save_file_name"] = save_file_name
 
             state["status_label"] = "Treatment session updated."
+            if previous_calculation != (
+                state["exp_type"], state["selected_data_type"],
+                state["calc_mode"], state["first_map_with_electrons"],
+            ):
+                state["result_ready"] = False
+                state["result_map_policy"] = "selected_maps"
+                state["cleaning_preview_request"] = None
+            self._persist_locked(session_id)
 
         return self.snapshot(session_id)
 
@@ -1405,12 +1687,25 @@ class TreatmentSessionStore:
         with self._lock:
             state = self._get_or_create_state(session_id)
             state["folder_path"] = folder
-            save_folder, save_file_name = _default_save_target_for_folder(folder)
-            state["save_folder"] = save_folder
+            _, save_file_name = _default_save_target_for_folder(folder)
+            state["save_folder"] = folder
             state["save_file_name"] = save_file_name
+            state["result_ready"] = False
+            state["result_map_policy"] = "selected_maps"
+            state["cleaning_preview_request"] = None
             state["status_label"] = f"Folder selected: {folder}"
+            self._persist_locked(session_id)
 
         return self.snapshot(session_id)
+
+    def clear_folder_inputs(self, session_id: str) -> None:
+        """Start a folder selection without inheriting a previous sample's roles."""
+        with self._lock:
+            state = self._get_or_create_state(session_id)
+            state.update(paths={}, path_sources={}, active_data_type="", map_index=0,
+                         noise_ready=False, result_ready=False, dat_preview_path="",
+                         cleaning_preview_request=None, selection={})
+            self._persist_locked(session_id)
 
     def set_data_path(
         self,
@@ -1439,12 +1734,44 @@ class TreatmentSessionStore:
             state.setdefault("path_sources", {})[data_type] = normalized_source
             state["active_data_type"] = data_type
             state["map_index"] = 0
+            state["result_ready"] = False
+            state["result_map_policy"] = "selected_maps"
+            state["cleaning_preview_request"] = None
             if not state["save_file_name"]:
                 stem = os.path.splitext(os.path.basename(normalized))[0]
                 state["save_file_name"] = f"{stem}.dat"
             state["status_label"] = f"{data_type} file selected."
+            self._persist_locked(session_id)
 
         return self.snapshot(session_id)
+
+    def set_browsing_folder(self, session_id: str, folder_path: str) -> Dict[str, object]:
+        """Repair browser folder context without resetting active processing state."""
+        folder = _ensure_within_allowed_root(folder_path)
+        if not _folder_exists(folder):
+            raise ValueError("Selected folder does not exist")
+        with self._lock:
+            state = self._get_or_create_state(session_id)
+            state["folder_path"] = folder
+            self._persist_locked(session_id)
+        return self.snapshot(session_id)
+
+    def mark_result_ready(
+        self, session_id: str, ready: bool, map_policy: str = "selected_maps"
+    ) -> None:
+        with self._lock:
+            state = self._get_or_create_state(session_id)
+            state["result_ready"] = bool(ready)
+            state["result_map_policy"] = (
+                "all_raw_maps" if ready and map_policy == "all_raw_maps" else "selected_maps"
+            )
+            self._persist_locked(session_id)
+
+    def set_cleaning_preview_request(self, session_id: str, request_payload) -> None:
+        with self._lock:
+            state = self._get_or_create_state(session_id)
+            state["cleaning_preview_request"] = dict(request_payload) if request_payload else None
+            self._persist_locked(session_id)
 
     def update_selection(self, session_id: str, payload: Dict[str, object]) -> Dict[str, object]:
         with self._lock:
@@ -1452,7 +1779,7 @@ class TreatmentSessionStore:
 
             if "active_data_type" in payload:
                 active_data_type = str(payload["active_data_type"])
-                if active_data_type and active_data_type != "OD" and active_data_type not in DATA_TYPES:
+                if active_data_type and active_data_type not in {"OD", "DAT"} and active_data_type not in DATA_TYPES:
                     raise ValueError(f"Unsupported active_data_type '{active_data_type}'")
                 state["active_data_type"] = active_data_type
 
@@ -1480,211 +1807,33 @@ class TreatmentSessionStore:
                 state["selection"] = selection
 
             state["status_label"] = "Selection updated."
+            self._persist_locked(session_id)
 
         return self.snapshot(session_id)
 
-
-class TreatmentQueueStore:
-    """In-memory, per-treatment-session sequential job runner.
-
-    Queue jobs deliberately own an immutable recipe snapshot and a unique
-    TreatmentDataService runtime id.  This prevents later interactive edits
-    from changing a queued calculation or sharing its calculated OD result.
-    """
-
-    def __init__(self):
-        self._lock = Lock()
-        self._queues: Dict[str, List[Dict[str, object]]] = {}
-        self._workers: Dict[str, Thread] = {}
-        self._output_reservations: Dict[str, str] = {}
-        self._discarded_terminal_jobs: Dict[str, int] = {}
-        self._history_limit = 100
-
-    @staticmethod
-    def _public_job(job: Dict[str, object]) -> Dict[str, object]:
-        return deepcopy(job)
-
-    @staticmethod
-    def _output_reservation_key(output_path: str) -> str:
-        """Normalize aliases conservatively so queue jobs cannot overwrite each other."""
-        raw_path = str(output_path or "").strip()
-        if is_smb_path(raw_path):
-            return f"smb:{normalize_smb_path(raw_path).rstrip('/').casefold()}"
-        if re.match(r"^[A-Za-z]:[\\/]", raw_path):
-            normalized_windows_path = raw_path.replace("\\", "/").rstrip("/")
-            return f"windows:{normalized_windows_path.casefold()}"
-        normalized = os.path.realpath(_normalize_path(raw_path)).rstrip(os.sep)
-        return f"local:{normalized.casefold()}"
-
-    def _reserve_output_locked(self, output_path: str, owner: str) -> None:
-        if not output_path:
-            return
-        key = self._output_reservation_key(output_path)
-        existing_owner = self._output_reservations.get(key)
-        if existing_owner and existing_owner != owner:
-            raise ValueError("Output path is already reserved by an active queue or save operation")
-        self._output_reservations[key] = owner
-
-    def _release_output_locked(self, output_path: str, owner: str) -> None:
-        if not output_path:
-            return
-        key = self._output_reservation_key(output_path)
-        if self._output_reservations.get(key) == owner:
-            self._output_reservations.pop(key, None)
-
-    def reserve_immediate_output(self, output_path: str) -> Optional[str]:
-        if not output_path:
-            return None
-        owner = f"immediate:{uuid4().hex}"
+    def set_dat_preview(self, session_id, path):
         with self._lock:
-            self._reserve_output_locked(output_path, owner)
-        return owner
-
-    def release_immediate_output(self, output_path: str, owner: Optional[str]) -> None:
-        if not owner:
-            return
-        with self._lock:
-            self._release_output_locked(output_path, owner)
-
-    def enqueue(self, session_id: str, recipe: Dict[str, object]) -> Dict[str, object]:
-        now = datetime.now(timezone.utc).isoformat()
-        job = {
-            "job_id": uuid4().hex,
-            "status": "queued",
-            "phase": "queued",
-            "message": "Queued; processing has not started.",
-            "queued_at": now,
-            "started_at": None,
-            "completed_at": None,
-            "error": None,
-            "result": None,
-            "saved": None,
-            "recipe": deepcopy(recipe),
-        }
-        with self._lock:
-            jobs = self._queues.setdefault(session_id, [])
-            self._prune_terminal_jobs(session_id, jobs)
-            output_path = str((recipe.get("output") or {}).get("path") or "")
-            self._reserve_output_locked(output_path, f"queue:{job['job_id']}")
-            jobs.append(job)
-            return self._public_job(job)
-
-    def snapshot(self, session_id: str) -> Dict[str, object]:
-        with self._lock:
-            jobs = self._queues.get(session_id, [])
-            active_job = next((job for job in jobs if job["status"] == "running"), None)
-            return {
-                "running": session_id in self._workers,
-                "persistence": "process_local",
-                "restart_behavior": "Queued jobs are lost when the backend process restarts.",
-                "active_job_id": active_job["job_id"] if active_job else None,
-                "pending_count": sum(job["status"] == "queued" for job in jobs),
-                "discarded_terminal_jobs": self._discarded_terminal_jobs.get(session_id, 0),
-                "history_limit": self._history_limit,
-                "jobs": [self._public_job(job) for job in jobs],
-            }
-
-    def remove_queued(self, session_id: str, job_id: str) -> Dict[str, object]:
-        with self._lock:
-            jobs = self._queues.get(session_id, [])
-            for index, job in enumerate(jobs):
-                if job["job_id"] != job_id:
-                    continue
-                if job["status"] != "queued":
-                    raise RuntimeError("Only queued jobs can be removed")
-                removed = jobs.pop(index)
-                output_path = str(
-                    (removed.get("recipe", {}).get("output") or {}).get("path") or ""
-                )
-                self._release_output_locked(output_path, f"queue:{removed['job_id']}")
-                return self._public_job(removed)
-        raise KeyError(job_id)
-
-    def _prune_terminal_jobs(self, session_id: str, jobs: List[Dict[str, object]]) -> None:
-        terminal = [job for job in jobs if job["status"] in {"completed", "failed"}]
-        excess = len(terminal) - self._history_limit
-        if excess <= 0:
-            return
-        stale_ids = {job["job_id"] for job in terminal[:excess]}
-        jobs[:] = [job for job in jobs if job["job_id"] not in stale_ids]
-        self._discarded_terminal_jobs[session_id] = (
-            self._discarded_terminal_jobs.get(session_id, 0) + excess
-        )
-
-    def start(self, session_id: str, executor) -> bool:
-        """Start one drain worker. Returns False when it is already draining."""
-        with self._lock:
-            if session_id in self._workers:
-                return False
-            worker = Thread(
-                target=self._drain,
-                args=(session_id, executor),
-                daemon=True,
-                name=f"treatment-queue-{session_id[:8]}",
-            )
-            self._workers[session_id] = worker
-            worker.start()
-            return True
-
-    def update_job(self, job_id: str, **updates) -> None:
-        with self._lock:
-            for jobs in self._queues.values():
-                for job in jobs:
-                    if job["job_id"] == job_id:
-                        job.update(deepcopy(updates))
-                        return
-
-    def _drain(self, session_id: str, executor) -> None:
-        while True:
-            with self._lock:
-                jobs = self._queues.get(session_id, [])
-                job = next((item for item in jobs if item["status"] == "queued"), None)
-                if job is None:
-                    self._workers.pop(session_id, None)
-                    return
-                job["status"] = "running"
-                job["phase"] = "preparing"
-                job["message"] = "Preparing immutable treatment recipe."
-                job["started_at"] = datetime.now(timezone.utc).isoformat()
-                job["error"] = None
-                recipe = deepcopy(job["recipe"])
-                job_id = str(job["job_id"])
-
-            try:
-                outcome = executor(job_id, recipe)
-            except Exception as exc:  # Job failures must remain observable.
-                with self._lock:
-                    job["status"] = "failed"
-                    job["phase"] = "error"
-                    job["message"] = "Processing failed; inspect error."
-                    job["error"] = str(exc)
-                    job["completed_at"] = datetime.now(timezone.utc).isoformat()
-                    output_path = str(
-                        (job.get("recipe", {}).get("output") or {}).get("path") or ""
-                    )
-                    self._release_output_locked(output_path, f"queue:{job['job_id']}")
-                    self._prune_terminal_jobs(session_id, self._queues.get(session_id, []))
-            else:
-                with self._lock:
-                    job["status"] = "completed"
-                    job["phase"] = "complete"
-                    job["message"] = str(
-                        outcome.get("message") or "Optical-density result saved."
-                    )
-                    job["result"] = deepcopy(outcome.get("result"))
-                    job["saved"] = deepcopy(outcome.get("saved"))
-                    job["preparation"] = deepcopy(outcome.get("preparation"))
-                    job["completed_at"] = datetime.now(timezone.utc).isoformat()
-                    output_path = str(
-                        (job.get("recipe", {}).get("output") or {}).get("path") or ""
-                    )
-                    self._release_output_locked(output_path, f"queue:{job['job_id']}")
-                    self._prune_terminal_jobs(session_id, self._queues.get(session_id, []))
+            state = self._get_or_create_state(session_id)
+            state.update(dat_preview_path=path, active_data_type="DAT", map_index=0, selection={})
+            self._persist_locked(session_id)
 
 
-session_store = TreatmentSessionStore()
+
+_state_database_path = os.environ.get("PYCONLYSE_TREATMENT_STATE_DB", "").strip()
+_state_repository = (
+    TreatmentStateRepository(_state_database_path) if _state_database_path else None
+)
+_root_restore_error = ""
+if _state_repository:
+    _persisted_root = _state_repository.get_setting("allowed_root")
+    if _persisted_root:
+        try:
+            set_allowed_root(_persisted_root)
+        except ValueError as exc:
+            _root_restore_error = str(exc)
+session_store = TreatmentSessionStore(_state_repository)
 treatment_service = TreatmentDataService()
-treatment_queue_store = TreatmentQueueStore()
+treatment_queue_store = TreatmentQueueStore(_state_repository)
 
 
 def _current_session_id() -> str:
@@ -1699,8 +1848,38 @@ def _current_session_id() -> str:
 
 
 def _session_payload(session_id: str) -> Dict[str, object]:
-    runtime = treatment_service.runtime_status(session_id)
     session = session_store.snapshot(session_id)
+    runtime = treatment_service.runtime_status(session_id)
+    preview_request = session.get("cleaning_preview_request") or {}
+    if preview_request and not runtime.get("cleaning_ready"):
+        try:
+            if str(preview_request.get("file_path") or "") != str(
+                (session.get("paths") or {}).get(session.get("active_data_type")) or ""
+            ):
+                raise ValueError("Cleaning preview source changed")
+            recovery_summary = treatment_service.analyze_sam_cleaning(
+                session_id,
+                session,
+                float(preview_request["angle_threshold"]),
+                float(preview_request["surface_threshold"]),
+            )
+            if not recovery_summary.get("state_updated"):
+                raise ValueError("Cleaning preview no longer has accepted measurements")
+            runtime = treatment_service.runtime_status(session_id)
+        except (KeyError, TypeError, ValueError, OSError) as exc:
+            session_store.set_cleaning_preview_request(session_id, None)
+            session["cleaning_recovery_error"] = str(exc)
+    if session.get("result_ready") and not runtime.get("result_ready") and not runtime.get("cleaning_ready"):
+        try:
+            recovery_state = dict(session)
+            recovery_state["include_excluded_maps"] = (
+                session.get("result_map_policy") == "all_raw_maps"
+            )
+            treatment_service.calc_abs(session_id, recovery_state)
+            runtime = treatment_service.runtime_status(session_id)
+        except (ValueError, OSError) as exc:
+            session_store.mark_result_ready(session_id, False)
+            session["result_recovery_error"] = str(exc)
     session.update(runtime)
     required_data_types = REQUIRED_DATA_TYPES.get(str(session.get("exp_type")), DATA_TYPES)
     paths = session.get("paths") or {}
@@ -1735,6 +1914,8 @@ def _session_payload(session_id: str) -> Dict[str, object]:
     allowed_root = _normalize_path(get_allowed_root())
     return {
         "session_id": session_id,
+        "session_persistence": "sqlite" if _state_repository else "process_local",
+        "root_restore_error": _root_restore_error,
         "session": session,
         "allowed_root": allowed_root,
         "allowed_root_exists": _root_exists(allowed_root),
@@ -1920,6 +2101,8 @@ def _queue_preflight(recipe: Dict[str, object]) -> None:
         stat = os.stat(cached_path)
         if int(stat.st_size) != int(fingerprint.get("size_bytes", -1)) or int(stat.st_mtime_ns) != int(fingerprint.get("mtime_ns", -1)):
             raise ValueError(f"Queued input changed after enqueue: {data_type}")
+        if fingerprint.get("sha256") and vd2_fingerprint(cached_path)["sha256"] != fingerprint["sha256"]:
+            raise ValueError(f"Queued manifest input changed after enqueue: {data_type}")
 
     output = recipe.get("output") or {}
     if not output:
@@ -2012,8 +2195,8 @@ def _queue_cleaning_plan(payload: Dict[str, object], required_data_types: List[s
     }
 
 
-def _queue_recipe(session_id: str, payload: Dict[str, object]) -> Dict[str, object]:
-    session = session_store.snapshot(session_id)
+def _queue_recipe(session_id: str, payload: Dict[str, object], *, session_state=None) -> Dict[str, object]:
+    session = deepcopy(session_state) if session_state is not None else session_store.snapshot(session_id)
     required_paths = _queue_required_paths(session)
     required_data_types = list(required_paths)
     for file_path in required_paths.values():
@@ -2130,6 +2313,12 @@ def _queue_standard_folder_recipe(session_id: str, payload: Dict[str, object]) -
     profile = str(payload.get("profile") or "VD2").strip().upper()
     if profile != "VD2":
         raise ValueError("Standard folder queue is available only for the VD2 profile")
+    naming = payload.get("output_naming")
+    if naming not in (None, "sample"):
+        raise ValueError("Unsupported folder output naming")
+    exp_type = str(payload.get("exp_type") or "ABS+BASE+NOISE")
+    if exp_type not in EXP_TYPES:
+        raise ValueError("Unsupported experiment type")
     raw_allow_overwrite = payload.get("allow_overwrite", False)
     if not isinstance(raw_allow_overwrite, bool):
         raise ValueError("allow_overwrite must be a boolean")
@@ -2149,36 +2338,39 @@ def _queue_standard_folder_recipe(session_id: str, payload: Dict[str, object]) -
         surface_threshold = float(payload.get("surface_threshold", 1.0))
     except (TypeError, ValueError) as exc:
         raise ValueError("angle_threshold and surface_threshold must be numeric") from exc
-    if angle_threshold <= 0 or surface_threshold <= 0:
+    if not all(math.isfinite(value) and value > 0 for value in (angle_threshold, surface_threshold)):
         raise ValueError("angle_threshold and surface_threshold must be positive")
 
     candidates = _folder_input_candidates(
         folder,
-        "ABS+BASE+NOISE",
+        exp_type,
         convert=raw_convert,
     )
+    required = REQUIRED_DATA_TYPES[exp_type] if naming == "sample" and raw_calculate else _folder_required_input_types(exp_type)
     missing = [
         data_type
-        for data_type in _folder_required_input_types("ABS+BASE+NOISE")
+        for data_type in required
         if not candidates.get(data_type)
     ]
     if missing:
         raise ValueError(
-            "Standard folder queue requires ABS and BASE in the folder; missing "
+            f"Folder requires {', '.join(required)} for {exp_type}; missing "
             f"{', '.join(missing)}"
         )
 
+    session = session_store.snapshot(session_id)
+    save_folder = _save_folder_for_measurement({} if naming == "sample" else session, folder)
+    save_file_name = f"{_path_name(folder)}.dat" if naming == "sample" else _dated_save_file_name_for_folder(folder)
+    save_target = {"save_folder": save_folder, "save_file_name": save_file_name}
     output: Dict[str, object] = {}
     if raw_calculate:
-        save_folder, save_file_name = _default_save_target_for_folder(folder)
         output_path = (
             smb_join(save_folder, save_file_name)
             if is_smb_path(save_folder)
             else str(Path(save_folder) / save_file_name)
         )
         output = {
-            "save_folder": save_folder,
-            "save_file_name": save_file_name,
+            **save_target,
             "path": output_path,
             "allow_overwrite": raw_allow_overwrite,
             "archive_existing": True,
@@ -2194,19 +2386,21 @@ def _queue_standard_folder_recipe(session_id: str, payload: Dict[str, object]) -
         "created_at": datetime.now(timezone.utc).isoformat(),
         "session_id": session_id,
         "session_config": {
-            "exp_type": "ABS+BASE+NOISE",
-            "selected_data_type": "ABS",
-            "calc_mode": "averaged",
-            "first_map_with_electrons": True,
+            "exp_type": exp_type,
+            "selected_data_type": REQUIRED_DATA_TYPES[exp_type][0],
+            "calc_mode": session["calc_mode"] if naming == "sample" and exp_type != "ABS+BASE+NOISE" else "averaged",
+            "first_map_with_electrons": session["first_map_with_electrons"] if naming == "sample" else True,
         },
         "folder_set": {
             "folder_path": folder,
             "convert": raw_convert,
             "clean": raw_clean,
             "calculate": raw_calculate,
+            **({"_tree_workflow": True} if naming == "sample" else {}),
             "angle_threshold": angle_threshold,
             "surface_threshold": surface_threshold,
         },
+        "save_target": save_target,
         "output": output,
         "provenance": {
             "enqueued_by_session": session_id,
@@ -2218,14 +2412,50 @@ def _queue_standard_folder_recipe(session_id: str, payload: Dict[str, object]) -
     }
 
 
-def _queue_assign_job_path(job_state: Dict[str, object], data_type: str, source_path: str) -> None:
-    cached = _cache_assignable_source(source_path)
-    job_state.setdefault("paths", {})[data_type] = str(cached["cached_path"])
-    job_state.setdefault("path_sources", {})[data_type] = str(cached["source_path"])
+def _queue_assign_job_path(job_state: Dict[str, object], data_type: str, source_path: str, *, local_artifact=False) -> None:
+    if local_artifact and not is_smb_path(source_path):
+        source_path = _ensure_within_allowed_root(source_path)
+        _ensure_readable_treatment_file(source_path)
+        local_path = source_path
+    else:
+        cached = _cache_assignable_source(source_path)
+        local_path = str(cached["cached_path"])
+        source_path = str(cached["source_path"])
+    job_state.setdefault("paths", {})[data_type] = local_path
+    job_state.setdefault("path_sources", {})[data_type] = source_path
 
 
 def _queue_cleaning_output_name(source_path: str, data_type: str, job_id: str) -> str:
     return f"{Path(_path_name(source_path)).stem}_queue_{job_id[:8]}_{data_type.lower()}.h5"
+
+
+def _tree_cleaning_sources(cached_files):
+    return {
+        role: {"path": item["source_path"], "sha256": vd2_fingerprint(item["cached_path"])["sha256"]}
+        for role, item in cached_files.items()
+    }
+
+
+def _tree_cleaning_for_calculation(session_id, folder, cached_files):
+    """Reuse a complete cleaning from this workspace only for identical inputs."""
+    for job in reversed(treatment_queue_store.snapshot(session_id)["jobs"]):
+        preparation = (job.get("preparation") or {}).get("folder_set") or {}
+        cleaned = preparation.get("cleaned") or {}
+        if (
+            job["status"] != "completed" or preparation.get("folder") != folder
+            or not preparation.get("clean_source_fingerprints") or cleaned.keys() != cached_files.keys()
+        ):
+            continue
+        if preparation["clean_source_fingerprints"] != _tree_cleaning_sources(cached_files):
+            return {}
+        outputs = {}
+        for role, item in cleaned.items():
+            path = _ensure_within_allowed_root(str(item["output_path"]))
+            cached = _cache_assignable_source(path)
+            _validate_canonical_h5(Path(cached["cached_path"]), path)
+            outputs[role] = cached
+        return outputs
+    return {}
 
 
 def _queue_artifact_path(job_state: Dict[str, object], file_name: str) -> str:
@@ -2270,6 +2500,30 @@ def _queue_convert_to_job_h5(job_state: Dict[str, object], data_type: str, job_i
     return summary
 
 
+def _queue_convert_worker(data_type: str, job_state: Dict[str, object], job_id: str, _progress_queue):
+    return _queue_convert_to_job_h5(job_state, data_type, job_id)
+
+
+def _queue_clean_worker(
+    data_type: str,
+    session_state: Dict[str, object],
+    angle_threshold: float,
+    surface_threshold: float,
+    output_file_name: str,
+    _progress_queue,
+):
+    """Clean one independent role in its own process and service runtime."""
+    role_state = deepcopy(session_state)
+    role_state["active_data_type"] = data_type
+    return TreatmentDataService().save_sam_cleaned_h5(
+        f"clean:{uuid4()}",
+        role_state,
+        angle_threshold,
+        surface_threshold,
+        output_file_name=output_file_name,
+    )
+
+
 def _execute_standard_folder_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict[str, object]:
     """Run one frozen folder action inside the serialized session queue."""
     session_id = str(recipe.get("session_id") or "")
@@ -2303,11 +2557,13 @@ def _execute_standard_folder_queue_job(job_id: str, recipe: Dict[str, object]) -
         _queue_preflight(recipe)
         session_store.update_config(session_id, dict(recipe.get("session_config") or {}))
         folder_payload = dict(recipe.get("folder_set") or {})
+        folder_payload["_preserve_selected_folder"] = True
         progress("checking", 0, 0, "Checking standard folder recipe.", {})
         response_payload = _set_inputs_from_folder_job_payload(
             session_id,
             folder_payload,
             progress_callback=progress,
+            **({"queue_job_id": job_id} if folder_payload.get("_tree_workflow") else {}),
         )
         preparation = {"folder_set": response_payload.get("folder_set", {})}
         if not folder_payload.get("calculate", False):
@@ -2317,21 +2573,16 @@ def _execute_standard_folder_queue_job(job_id: str, recipe: Dict[str, object]) -
                 "preparation": preparation,
                 "message": "Folder action complete; calculation was not requested.",
             }
+        if folder_payload.get("_tree_workflow") and not response_payload.get("result"):
+            raise ValueError(preparation["folder_set"].get("auto_calc_error") or "No OD result was calculated for this folder")
 
-        output = recipe.get("output") or {}
-        session_store.update_config(
-            session_id,
-            {
-                "save_folder": str(output.get("save_folder") or ""),
-                "save_file_name": str(output.get("save_file_name") or ""),
-            },
-        )
         treatment_queue_store.update_job(
             job_id,
             phase="saving",
             message="Saving optical-density DAT result.",
         )
         session_state = session_store.snapshot(session_id)
+        session_state.update(dict(recipe.get("save_target") or {}))
         saved = _save_queued_result(session_id, session_state)
         record_treatment_manifest(
             saved,
@@ -2365,6 +2616,7 @@ def _execute_treatment_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict
     job_state["save_folder"] = str(recipe["output"]["save_folder"])
     job_state["save_file_name"] = str(recipe["output"]["save_file_name"])
     runtime_id = f"queue:{job_id}"
+    project = (recipe.get("provenance") or {}).get("vd2_project")
     preparation = {"conversions": {}, "cleaned": {}}
     try:
         treatment_queue_store.update_job(
@@ -2380,15 +2632,29 @@ def _execute_treatment_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict
             phase="converting",
             message="Converting requested HIS inputs to H5.",
         )
-        for data_type, requested in (recipe.get("convert_to_h5") or {}).items():
-            if not requested:
-                continue
-            conversion = _queue_convert_to_job_h5(job_state, data_type, job_id)
+        def complete_conversion(data_type, conversion):
             output_path = str(conversion["output_path"])
             if _path_suffix(output_path) != ".h5":
                 raise ValueError(f"Convert/Compress did not create H5 for {data_type}")
             _queue_assign_job_path(job_state, data_type, output_path)
             preparation["conversions"][data_type] = conversion
+
+        conversion_roles = [
+            data_type for data_type, requested in (recipe.get("convert_to_h5") or {}).items()
+            if requested
+        ]
+        if len(conversion_roles) == 1:
+            data_type = conversion_roles[0]
+            complete_conversion(
+                data_type, _queue_convert_to_job_h5(job_state, data_type, job_id)
+            )
+        elif conversion_roles:
+            conversion_state = deepcopy(job_state)
+            _run_parallel_cpu_jobs(
+                {data_type: (conversion_state, job_id) for data_type in conversion_roles},
+                _queue_convert_worker,
+                on_complete=complete_conversion,
+            )
 
         cleaning = recipe.get("cleaning") or {}
         if cleaning.get("state") == "pending":
@@ -2397,22 +2663,32 @@ def _execute_treatment_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict
                 phase="cleaning",
                 message="Applying SAM map selections to job-specific H5 files.",
             )
-            for data_type in cleaning.get("data_types") or []:
-                job_state["active_data_type"] = data_type
-                source_path = str((job_state.get("path_sources") or {}).get(data_type) or job_state["paths"][data_type])
-                saved = treatment_service.save_sam_cleaned_h5(
-                    runtime_id,
-                    job_state,
-                    float(cleaning["angle_threshold"]),
-                    float(cleaning["surface_threshold"]),
-                    output_file_name=_queue_cleaning_output_name(source_path, data_type, job_id),
-                )
+            def complete_cleaning(data_type, saved):
                 output_path = str(saved.get("output_path") or "")
                 if not output_path or _path_suffix(output_path) != ".h5":
                     raise ValueError(f"Cleaning did not create H5 for {data_type}")
-                _queue_assign_job_path(job_state, data_type, output_path)
+                # Manifest cleaning already created a local file owned by this job.
+                _queue_assign_job_path(job_state, data_type, output_path, local_artifact=bool(project))
                 preparation["cleaned"][data_type] = saved
-                treatment_service.reset_runtime(runtime_id)
+
+            cleaning_state = deepcopy(job_state)
+            cleaning_items = {}
+            for data_type in cleaning.get("data_types") or []:
+                source_path = str(
+                    (cleaning_state.get("path_sources") or {}).get(data_type)
+                    or cleaning_state["paths"][data_type]
+                )
+                cleaning_items[data_type] = (
+                    cleaning_state,
+                    float(cleaning["angle_threshold"]),
+                    float(cleaning["surface_threshold"]),
+                    _queue_cleaning_output_name(source_path, data_type, job_id),
+                )
+            _run_parallel_cpu_jobs(
+                cleaning_items,
+                _queue_clean_worker,
+                on_complete=complete_cleaning,
+            )
 
         treatment_queue_store.update_job(
             job_id,
@@ -2438,17 +2714,28 @@ def _execute_treatment_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict
             recipe=recipe,
             preparation=preparation,
         )
+        if project:
+            record_project_treatment(project, saved, preparation)
         return {"result": result, "saved": saved, "preparation": preparation}
     finally:
         # Do not retain potentially large OD arrays after a queue item finishes.
         treatment_service.reset_runtime(runtime_id)
 
 
-def _auto_calc_od_if_ready(session_id: str) -> Optional[Dict[str, object]]:
+def _auto_calc_od_if_ready(
+    session_id: str, *, include_excluded_maps: bool = False
+) -> Optional[Dict[str, object]]:
     session = _session_payload(session_id)["session"]
     if not session.get("ready_for_calc"):
         return None
-    result = treatment_service.calc_abs(session_id, session_store.snapshot(session_id))
+    calculation_state = session_store.snapshot(session_id)
+    calculation_state["include_excluded_maps"] = include_excluded_maps
+    result = treatment_service.calc_abs(session_id, calculation_state)
+    session_store.mark_result_ready(
+        session_id,
+        True,
+        "all_raw_maps" if include_excluded_maps else "selected_maps",
+    )
     session_store.update_selection(session_id, {"active_data_type": "OD", "map_index": 0})
     return result
 
@@ -2481,6 +2768,64 @@ def reset_session():
     session_store.reset(session_id)
     treatment_service.reset_runtime(session_id)
     return _json_response(_session_payload(session_id), session_id)
+
+
+def _saved_session_profile(session_id):
+    match = re.search(r":profile:(vd2|v0)(?::workspace:[A-Za-z0-9-]+)?$", session_id)
+    return match.group(1) if match else None
+
+
+def _saved_session_browser(session_id):
+    browser = workspace_identity(request.headers.get("X-Workspace-Browser"))
+    if not session_id.startswith(f"browser:{browser}:") or _saved_session_profile(session_id) is None:
+        raise ValueError("Treatment session does not belong to this browser")
+    return browser
+
+
+@treatment_api.get("/session/saved")
+def saved_treatment_sessions():
+    session_id = _current_session_id()
+    try:
+        browser = _saved_session_browser(session_id)
+        return _json_response(dict(success=True, sessions=session_store.saved_sessions(browser, _saved_session_profile(session_id))), session_id)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+
+@treatment_api.post("/session/copy")
+def copy_treatment_session():
+    session_id = _current_session_id()
+    try:
+        browser = _saved_session_browser(session_id)
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict) or set(payload) != {"source_session_id"}:
+            raise ValueError("One saved source session is required")
+        source = payload["source_session_id"]
+        if not isinstance(source, str) or not source.startswith(f"browser:{browser}:") or _saved_session_profile(source) != _saved_session_profile(session_id):
+            raise ValueError("Saved treatment session belongs to another browser/profile")
+        queue = treatment_queue_store.snapshot(session_id)
+        if source == session_id or queue.get("running") or queue.get("jobs"):
+            return _error("Restore into a new, empty workspace", session_id, 409)
+        if not session_store.copy_saved_session(source, session_id):
+            return _error("Restore into a new, empty workspace", session_id, 409)
+        # Queue jobs are deliberately not cloned or started. Runtime recovery
+        # uses the existing treatment/session GET after opening the new view.
+        return _json_response(dict(success=True, restored=True), session_id)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+
+@treatment_api.route("/session/restore", methods=["POST"])
+def restore_session_from_browser():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    try:
+        restored = session_store.restore_if_empty(session_id, payload.get("session"))
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+    response_payload = _session_payload(session_id)
+    response_payload["restored"] = restored
+    return _json_response(response_payload, session_id)
 
 
 @treatment_api.route("/session/config", methods=["POST"])
@@ -2516,11 +2861,13 @@ def update_session_root():
 
     try:
         previous_root = _normalize_path(get_allowed_root())
-        set_allowed_root(str(root_path))
+        normalized_root = set_allowed_root(str(root_path))
+        if _state_repository:
+            _state_repository.save_setting("allowed_root", normalized_root)
         _clear_root_exists_cache(previous_root)
         _clear_root_exists_cache(_normalize_path(str(root_path)))
-        session_store.reset()
-        treatment_service.reset_runtime()
+        session_store.reset(session_id)
+        treatment_service.reset_runtime(session_id)
     except ValueError as exc:
         return _error(str(exc), session_id)
 
@@ -2544,7 +2891,7 @@ def set_session_folder():
     return _json_response(_session_payload(session_id), session_id)
 
 
-def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, object], progress_callback=None):
+def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, object], progress_callback=None, *, queue_job_id=None):
     folder_path = payload.get("folder_path")
     convert = bool(payload.get("convert", False))
     clean = bool(payload.get("clean", False))
@@ -2569,7 +2916,8 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
     session = session_store.snapshot(session_id)
     exp_type = str(session.get("exp_type"))
     candidates = _folder_input_candidates(folder, exp_type, convert=convert)
-    if exp_type == "HIS+NOISE":
+    tree_workflow = bool(queue_job_id and payload.get("_tree_workflow"))
+    if exp_type == "HIS+NOISE" and not tree_workflow:
         separate_candidates = _folder_input_candidates(folder, "ABS+BASE+NOISE", convert=convert)
         separate_found = {
             data_type: sorted(paths, key=_convert_sort_key if convert else _candidate_sort_key)
@@ -2596,7 +2944,7 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
         for data_type, paths in candidates.items()
         if paths
     }
-    required_in_folder = _folder_required_input_types(exp_type)
+    required_in_folder = REQUIRED_DATA_TYPES[exp_type] if tree_workflow and calculate else _folder_required_input_types(exp_type)
     missing_in_folder = [
         data_type for data_type in required_in_folder if data_type not in found
     ]
@@ -2678,23 +3026,6 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
                     statuses,
                 )
 
-        def convert_one(data_type: str, selected_path: str) -> Dict[str, object]:
-            statuses = set_file_status(data_type, status="running")
-            if progress_callback:
-                progress_callback(
-                    "converting",
-                    sum(1 for item in statuses.values() if item.get("status") == "complete"),
-                    total_items,
-                    f"Converting {data_type}: {_path_name(selected_path)}",
-                    statuses,
-                )
-
-            conversion_result = _convert_source_to_h5(
-                selected_path,
-                progress_callback=lambda *args: item_progress(data_type, *args),
-            )
-            return {"data_type": data_type, "conversion": conversion_result}
-
         completed = 0
         if any(is_smb_path(path) and not _mapped_smb_local_file(path) for path in selected_paths.values()):
             try:
@@ -2743,48 +3074,52 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
                         statuses,
                     )
         else:
-            max_workers = _treatment_worker_count(len(selected_paths))
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(convert_one, data_type, selected_path): data_type
-                    for data_type, selected_path in selected_paths.items()
-                }
-                for future in as_completed(futures):
-                    data_type = futures[future]
-                    try:
-                        result = future.result()
-                    except Exception as exc:
-                        statuses = set_file_status(data_type, status="error", error=str(exc))
-                        if progress_callback:
-                            progress_callback("error", completed, total_items, str(exc), statuses)
-                        raise
-                    conversion = result["conversion"]
-                    completed += 1
-                    statuses = set_file_status(
-                        data_type,
-                        status="complete",
-                        phase="complete",
-                        output_path=str(conversion["output_path"]),
-                        current=int(conversion.get("output_size_bytes") or 0),
-                        total=int(conversion.get("output_size_bytes") or 0),
-                        message="Complete",
+            for data_type, selected_path in selected_paths.items():
+                statuses = set_file_status(data_type, status="running")
+                if progress_callback:
+                    progress_callback(
+                        "converting", completed, total_items,
+                        f"Converting {data_type}: {_path_name(selected_path)}", statuses,
                     )
-                    prepared[data_type] = {
-                        "source_path": str(conversion["output_path"]),
-                        "conversion": conversion,
-                    }
-                    if _path_suffix(str(conversion["output_path"])) != ".h5":
-                        raise ValueError(
-                            f"Set/Convert did not create H5 for {data_type}: {conversion['output_path']}"
-                        )
-                    if progress_callback:
-                        progress_callback(
-                            "converting",
-                            completed,
-                            total_items,
-                            f"Converted {completed}/{total_items} files",
-                            statuses,
-                        )
+
+            def complete_conversion(data_type, conversion):
+                nonlocal completed
+                if _path_suffix(str(conversion["output_path"])) != ".h5":
+                    raise ValueError(
+                        f"Set/Convert did not create H5 for {data_type}: {conversion['output_path']}"
+                    )
+                completed += 1
+                statuses = set_file_status(
+                    data_type,
+                    status="complete",
+                    phase="complete",
+                    output_path=str(conversion["output_path"]),
+                    current=int(conversion.get("output_size_bytes") or 0),
+                    total=int(conversion.get("output_size_bytes") or 0),
+                    message="Complete",
+                )
+                prepared[data_type] = {
+                    "source_path": str(conversion["output_path"]),
+                    "conversion": conversion,
+                }
+                if progress_callback:
+                    progress_callback(
+                        "converting", completed, total_items,
+                        f"Converted {completed}/{total_items} files", statuses,
+                    )
+
+            def failed_conversion(data_type, exc):
+                statuses = set_file_status(data_type, status="error", error=str(exc))
+                if progress_callback:
+                    progress_callback("error", completed, total_items, str(exc), statuses)
+
+            _run_parallel_cpu_jobs(
+                {data_type: (selected_path,) for data_type, selected_path in selected_paths.items()},
+                _convert_folder_source_worker,
+                on_progress=item_progress if progress_callback else None,
+                on_complete=complete_conversion,
+                on_error=failed_conversion,
+            )
     else:
         for data_type, paths in found.items():
             prepared[data_type] = {
@@ -2792,7 +3127,10 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
                 "conversion": None,
             }
 
-    session_store.set_folder(session_id, folder)
+    if not payload.get("_preserve_selected_folder"):
+        session_store.set_folder(session_id, folder)
+    if tree_workflow:
+        session_store.clear_folder_inputs(session_id)
     assigned: Dict[str, str] = {}
     cached_files: Dict[str, Dict[str, object]] = {}
     conversions: Dict[str, Dict[str, object]] = {}
@@ -2821,20 +3159,39 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
         if progress_callback:
             file_statuses[data_type] = {**file_statuses.get(data_type, {}), "status": "assigned"}
             progress_callback("assigning", len(assigned), total_items, f"Assigned {len(assigned)}/{total_items} files", file_statuses)
-        if clean:
-            if progress_callback:
-                file_statuses[data_type] = {**file_statuses.get(data_type, {}), "status": "cleaning"}
-                progress_callback("cleaning", len(cleaned), total_items, f"Cleaning {data_type}", file_statuses)
-            treatment_service.reset_runtime(session_id)
-            saved = treatment_service.save_sam_cleaned_h5(
-                session_id,
-                session_store.snapshot(session_id),
-                angle_threshold,
-                surface_threshold,
+
+    clean_sources = _tree_cleaning_sources(cached_files) if tree_workflow and clean else None
+    if tree_workflow and calculate and not clean:
+        reused = _tree_cleaning_for_calculation(session_id, folder, cached_files)
+        for data_type, cached in reused.items():
+            session_store.set_data_path(session_id, data_type, str(cached["cached_path"]),
+                                        source_path=str(cached["source_path"]))
+            assigned[data_type] = str(cached["cached_path"])
+            cached_files[data_type] = cached
+
+    if clean:
+        cleaning_state = session_store.snapshot(session_id)
+        cleaning_items = {
+            data_type: (
+                cleaning_state, angle_threshold, surface_threshold,
+                f".{_queue_cleaning_output_name(cached_files[data_type]['source_path'], data_type, queue_job_id)}"
+                if tree_workflow else "",
             )
-            deleted_source_file = _delete_source_his_after_cleaning(saved)
-            if deleted_source_file:
-                saved["deleted_source_file"] = deleted_source_file
+            for data_type in assigned
+        }
+        for data_type in cleaning_items:
+            file_statuses[data_type] = {
+                **file_statuses.get(data_type, {}),
+                "status": "cleaning",
+            }
+        if progress_callback:
+            progress_callback(
+                "cleaning", 0, total_items,
+                f"Cleaning {total_items} files with {_treatment_worker_count(total_items)} worker(s)",
+                file_statuses,
+            )
+
+        def assign_cleaned(data_type, saved):
             output_path = str(saved.get("output_path") or "")
             if output_path:
                 if is_smb_path(output_path):
@@ -2855,10 +3212,49 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
                 assigned[data_type] = assigned_path
                 saved["assigned_data_type"] = data_type
                 saved["assigned_path"] = assigned_path
+
+        def complete_cleaning(data_type, saved):
+            deleted_source_file = _delete_source_his_after_cleaning(saved)
+            if deleted_source_file:
+                saved["deleted_source_file"] = deleted_source_file
+            if not tree_workflow:
+                assign_cleaned(data_type, saved)
             cleaned[data_type] = saved
             if progress_callback:
                 file_statuses[data_type] = {**file_statuses.get(data_type, {}), "status": "cleaned"}
                 progress_callback("cleaning", len(cleaned), total_items, f"Cleaned {len(cleaned)}/{total_items} files", file_statuses)
+
+        def failed_cleaning(data_type, exc):
+            file_statuses[data_type] = {
+                **file_statuses.get(data_type, {}),
+                "status": "error",
+                "error": str(exc),
+            }
+            if progress_callback:
+                progress_callback("error", len(cleaned), total_items, str(exc), file_statuses)
+
+        _run_parallel_cpu_jobs(
+            cleaning_items,
+            _queue_clean_worker,
+            on_complete=complete_cleaning,
+            on_error=failed_cleaning,
+        )
+        if tree_workflow:
+            for data_type, saved in cleaned.items():
+                assign_cleaned(data_type, saved)
+
+    use_selected_maps = clean or tree_workflow
+    map_policy = "selected_maps" if use_selected_maps else "all_raw_maps"
+    map_counts = {}
+    for data_type, assigned_path in assigned.items():
+        selection = _map_selection_status(assigned_path)
+        total = selection.get("total_count")
+        if total is not None:
+            map_counts[data_type] = {
+                "total_count": total,
+                "used_count": selection.get("included_count") if use_selected_maps else total,
+                "stored_mask_included_count": selection.get("included_count"),
+            }
 
     treatment_service.reset_runtime(session_id)
     response_payload = _session_payload(session_id)
@@ -2871,10 +3267,14 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
         "cached_files": cached_files,
         "conversions": conversions,
         "cleaned": cleaned,
+        "map_policy": map_policy,
+        "map_counts": map_counts,
     }
     if calculate:
         try:
-            auto_result = _auto_calc_od_if_ready(session_id)
+            auto_result = _auto_calc_od_if_ready(
+                session_id, include_excluded_maps=not use_selected_maps
+            )
         except ValueError as exc:
             response_payload = _session_payload(session_id)
             response_payload["folder_set"] = {
@@ -2886,6 +3286,8 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
                 "cached_files": cached_files,
                 "conversions": conversions,
                 "cleaned": cleaned,
+                "map_policy": map_policy,
+                "map_counts": map_counts,
                 "auto_calc_error": str(exc),
             }
         else:
@@ -2900,9 +3302,13 @@ def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, obje
                     "cached_files": cached_files,
                     "conversions": conversions,
                     "cleaned": cleaned,
+                    "map_policy": map_policy,
+                    "map_counts": map_counts,
                     "auto_calculated": True,
                 }
                 response_payload["result"] = auto_result
+    if clean_sources is not None:
+        response_payload["folder_set"]["clean_source_fingerprints"] = clean_sources
     if progress_callback:
         progress_callback("complete", total_items, total_items, "Folder operation complete", file_statuses)
     return response_payload
@@ -3374,7 +3780,7 @@ def get_file_summary():
     try:
         source_path = _ensure_within_allowed_root(file_path)
         suffix = _path_suffix(source_path)
-        if suffix not in {".his", ".h5"}:
+        if suffix not in {".his", ".h5", ".dat"}:
             return _json_response({"file_summary": {}, "success": True}, session_id)
 
         if is_smb_path(source_path):
@@ -3438,6 +3844,26 @@ def average_noise():
     return _json_response({"noise": summary, **_session_payload(session_id)}, session_id)
 
 
+@treatment_api.route("/preview/dat", methods=["POST"])
+def open_dat_preview():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    try:
+        source = _ensure_readable_treatment_file(str(payload.get("file_path") or ""))
+        if _path_suffix(source) != ".dat":
+            raise ValueError("Preview requires a DAT file")
+        cached = _cache_assignable_source(source)
+        path = str(cached["cached_path"])
+        # Validate before changing the preview. ABS/BASE/NOISE assignments and
+        # calculated results remain independent of the inspected DAT.
+        treatment_service._read_od_dat(Path(path))
+        treatment_service.get_selection_view({"active_data_type": "DAT", "dat_preview_path": path})
+        session_store.set_dat_preview(session_id, path)
+        return _json_response({"success": True, "preview_source": source}, session_id)
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as exc:
+        return _error(str(exc), session_id)
+
+
 @treatment_api.route("/selection", methods=["GET"])
 def get_selection():
     session_id = _current_session_id()
@@ -3498,6 +3924,14 @@ def analyze_sam_cleaning():
             session_id,
             session_store.snapshot(session_id),
         )
+        session_store.set_cleaning_preview_request(
+            session_id,
+            {
+                "angle_threshold": angle_threshold,
+                "surface_threshold": surface_threshold,
+                "file_path": summary.get("file_path"),
+            } if summary.get("state_updated") else None,
+        )
     except ValueError as exc:
         return _error(str(exc), session_id)
 
@@ -3535,6 +3969,7 @@ def reset_sam_cleaning():
             session_id,
             session_store.snapshot(session_id),
         )
+        session_store.set_cleaning_preview_request(session_id, None)
     except ValueError as exc:
         return _error(str(exc), session_id)
 
@@ -3578,6 +4013,7 @@ def restore_sam_cleaning():
             restored = treatment_service.restore_cleaned_h5_file(Path(active_path))
             restored["output_path"] = active_path
         treatment_service.reset_runtime(session_id)
+        session_store.set_cleaning_preview_request(session_id, None)
         cleaning_view = treatment_service.get_cleaning_view(
             session_id,
             session_store.snapshot(session_id),
@@ -3614,6 +4050,7 @@ def save_sam_cleaning():
             surface_threshold,
             output_file_name=output_file_name,
         )
+        session_store.set_cleaning_preview_request(session_id, None)
         deleted_source_file = _delete_source_his_after_cleaning(saved)
         if deleted_source_file:
             saved["deleted_source_file"] = deleted_source_file
@@ -3674,6 +4111,104 @@ def save_sam_cleaning_for_file():
     return _json_response({"cleaning": saved, "success": True}, session_id)
 
 
+def _vd2_manifest_plan(payload):
+    if h5py is None:
+        raise ValueError("VD2 manifest treatment requires H5 support")
+    path = _ensure_within_allowed_root(str(payload.get("manifest_path") or ""))
+    if is_smb_path(path):
+        raise ValueError("Open the VD2 manifest through its local project folder")
+    plan = inspect_project(path, allowed=_ensure_readable_treatment_file, include_results=True)
+    # All axes must agree before any queued cleaning or DAT output is created.
+    import numpy as np
+    for sample in plan["samples"]:
+        if not sample["ready"]:
+            continue
+        try:
+            axes = None
+            for role, source in sample["inputs"].items():
+                with h5py.File(source, "r") as handle:
+                    if handle["metadata"].attrs.get("phase") != role:
+                        raise ValueError(f"H5 phase does not match manifest role {role}")
+                    current = (handle["wavelengths"][:], handle["timedelays"][:])
+                if axes is not None and any(not np.array_equal(a, b) for a, b in zip(axes, current)):
+                    raise ValueError("Bruit/Base/Absorption axes differ; acquire compatible inputs")
+                axes = current
+        except (OSError, KeyError, ValueError) as exc:
+            sample.update(ready=False, error=str(exc))
+    return {**plan, "project_folder": str(Path(plan["manifest_path"]).parent)}
+
+
+@treatment_api.route("/manifest/vd2", methods=["POST"])
+def preview_vd2_manifest():
+    session_id = _current_session_id()
+    try:
+        plan = _vd2_manifest_plan(request.get_json(silent=True) or {})
+        return _json_response({"success": True, "manifest": plan}, session_id)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return _error(str(exc), session_id)
+
+
+@treatment_api.route("/manifest/vd2/queue", methods=["POST"])
+def queue_vd2_manifest():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    try:
+        plan = _vd2_manifest_plan(payload)
+        mode = payload.get("mode")
+        if mode not in (None, "all", "new"):
+            raise ValueError("Calculation mode must be all or new")
+        clean = payload.get("clean", True)
+        if not isinstance(clean, bool):
+            raise ValueError("clean must be a boolean")
+        for key in ("angle_threshold", "surface_threshold"):
+            value = float(payload.get(key, 1.0))
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError("Cleaning thresholds must be finite and positive")
+        selected = payload.get("samples")
+        if not isinstance(selected, list) or not selected or len(selected) > 100 or len(set(selected)) != len(selected):
+            raise ValueError("Select 1–100 distinct manifest samples")
+        by_name = {sample["name"]: sample for sample in plan["samples"]}
+        recipes = []
+        skipped = []
+        for name in selected:
+            sample = by_name.get(name)
+            if not sample or not sample["ready"]:
+                raise ValueError(f"Sample is incomplete or changed: {name}")
+            if mode == "new" and sample.get("result_path"):
+                skipped.append(name)
+                continue
+            folder = str(Path(sample["inputs"]["ABS"]).parent)
+            save_folder = plan["project_folder"] if mode else folder
+            state = _default_state()
+            state.update(exp_type="ABS+BASE+NOISE", calc_mode="averaged", selected_data_type="ABS",
+                         paths=sample["inputs"], path_sources=sample["inputs"], folder_path=folder,
+                         save_folder=save_folder, save_file_name=f"{name}.dat", selection={})
+            recipe = _queue_recipe(session_id, {
+                "profile": "VD2", "label": name, "allow_overwrite": False,
+                "cleaning": {"enabled": clean, "state": "pending" if clean else "not_requested", "data_types": ["ABS", "BASE", "NOISE"] if clean else [],
+                             "angle_threshold": payload.get("angle_threshold", 1.0),
+                             "surface_threshold": payload.get("surface_threshold", 1.0)},
+            }, session_state=state)
+            recipe["provenance"]["vd2_project"] = {
+                "manifest_path": plan["manifest_path"], "project_id": plan["project_id"],
+                "sample": name, "bruit_reference": sample["bruit_reference"],
+                "bruit_sample": sample["bruit_sample"], "bruit_reused": sample["bruit_reused"],
+                "artifact_ids": sample["artifact_ids"],
+            }
+            for role, identity in sample["fingerprints"].items():
+                recipe["inputs"][role]["fingerprint"]["sha256"] = identity["sha256"]
+            recipes.append(recipe)
+        # Validate every selected sample before enqueuing any of them. Private
+        # snapshots leave the operator's currently open treatment unchanged.
+        jobs = treatment_queue_store.enqueue_batch(session_id, recipes) if recipes else []
+        started = bool(jobs) and treatment_queue_store.start(session_id, _execute_treatment_queue_job)
+        return _json_response({"success": True, "queue_jobs": jobs, "started": started,
+                               "skipped_samples": skipped,
+                               "queue": treatment_queue_store.snapshot(session_id)}, session_id)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as exc:
+        return _error(str(exc), session_id)
+
+
 @treatment_api.route("/queue", methods=["GET"])
 def get_treatment_queue():
     session_id = _current_session_id()
@@ -3712,8 +4247,31 @@ def enqueue_standard_folder_queue_job():
     session_id = _current_session_id()
     payload = request.get_json(silent=True) or {}
     try:
-        recipe = _queue_standard_folder_recipe(session_id, payload)
-        job = treatment_queue_store.enqueue(session_id, recipe)
+        if "folder_paths" in payload:
+            paths = payload["folder_paths"]
+            if (not isinstance(paths, list) or not 1 <= len(paths) <= 100
+                    or any(not isinstance(path, str) or not path.strip() for path in paths)):
+                raise ValueError("Select 1–100 measurement folders")
+            recipes = [_queue_standard_folder_recipe(session_id, {**payload, "folder_path": path}) for path in paths]
+            if len({_normalize_path(recipe["folder_set"]["folder_path"]) for recipe in recipes}) != len(recipes):
+                raise ValueError("Select distinct measurement folders")
+        else:
+            recipes = [_queue_standard_folder_recipe(session_id, payload)]
+        jobs = treatment_queue_store.enqueue_batch(session_id, recipes)
+        recipe = recipes[0]
+        current = session_store.snapshot(session_id)
+        selected_folder = str(current.get("folder_path") or "")
+        current_save_folder = str(current.get("save_folder") or "")
+        save_folder = str(recipe["save_target"]["save_folder"])
+        if (
+            selected_folder
+            and _normalize_path(selected_folder) == _normalize_path(current_save_folder)
+            and _normalize_path(selected_folder) != _normalize_path(save_folder)
+        ):
+            session_store.set_browsing_folder(session_id, save_folder)
+        # Reflect the clicked measurement's name immediately while retaining
+        # the parent selected in the file browser as the save folder.
+        session = session_store.update_config(session_id, dict(recipe["save_target"]))
         started = treatment_queue_store.start(
             session_id,
             _execute_treatment_queue_job,
@@ -3722,8 +4280,10 @@ def enqueue_standard_folder_queue_job():
         return _error(str(exc), session_id)
     return _json_response(
         {
-            "queue_job": job,
+            "queue_job": jobs[0],
+            "queue_jobs": jobs,
             "queue": treatment_queue_store.snapshot(session_id),
+            "session": session,
             "started": started,
             "success": True,
         },
@@ -3972,6 +4532,7 @@ def calc_abs():
                 "Cleaning preview is not applied; apply mask to H5 or reset preview."
             )
         result = treatment_service.calc_abs(session_id, session_store.snapshot(session_id))
+        session_store.mark_result_ready(session_id, True)
         session_store.update_selection(session_id, {"active_data_type": "OD", "map_index": 0})
     except ValueError as exc:
         return _error(str(exc), session_id)
