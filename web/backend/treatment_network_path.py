@@ -34,6 +34,12 @@ def normalize_smb_path(path: str) -> str:
     return f"{base}/{tail}" if tail else base
 
 
+def normalize_treatment_path(path: str) -> str:
+    if is_smb_path(path):
+        return normalize_smb_path(path)
+    return os.path.abspath(os.path.expanduser(str(path).strip()))
+
+
 def split_smb_path(path: str):
     normalized = normalize_smb_path(path)
     parsed = urlparse(normalized)
