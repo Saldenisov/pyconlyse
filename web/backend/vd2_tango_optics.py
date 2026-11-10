@@ -241,6 +241,42 @@ def measurement_clock(api, camera, request):
             raise RuntimeError(f"{prefix}DG645 pulse pause or Burst OFF unverified: {exc}") from exc
 
 
+@contextmanager
+def paired_capture_clock(api, camera, trigger_source, stop, arm):
+    """Warm at 10 Hz, arm the reader without triggers, then capture at 10 Hz."""
+    api._verify_vd2_timing_ready(camera)
+    _confirm_flash_lamp_power(api)
+    dg645 = _proxy(api, api.DG645_DEVICE)
+    try:
+        pause_internal_clock(dg645)
+        _set(dg645, "TRAT 5", "TRAT?", 5)
+        _set(dg645, "BURC 2", "BURC?", 2)
+        _set(dg645, "BURP 0.1", "BURP?", 0.1)
+        if _query(dg645, "BURD?") != 0:
+            raise RuntimeError("Expected zero DG645 burst delay for paired recording")
+        _set(dg645, "BURM 1", "BURM?", 1)
+        if stop.is_set():
+            yield False
+            return
+        _set(dg645, "TSRC 0", "TSRC?", 0)
+        if stop.wait(10.0):
+            yield False
+            return
+        _set(dg645, "TSRC 5", "TSRC?", 5)
+        arm()
+        if stop.is_set():
+            yield False
+            return
+        _set(dg645, f"TSRC {trigger_source}", "TSRC?", trigger_source)
+        validate_paired_burst(dg645)
+        yield True
+    finally:
+        try:
+            pause_internal_clock(dg645)
+        except Exception as exc:
+            raise RuntimeError(f"DG645 pulse pause or Burst OFF unverified: {exc}") from exc
+
+
 def verify_image_optics(settings, kymera_values):
     """Fail closed when HPD-TA still reports legacy spectral metadata."""
     actual_center = float(settings["wavelength_nm"])
@@ -269,6 +305,8 @@ def validate_saved_capture(api, request, machine_before, rate):
     try:
         if rate is not None:
             verify_frame_rate(request.his_path, request.frames_per_his, rate)
+        if request.phase == "BRUIT":
+            return  # A dark reference needs detector geometry, even without a wavelength calibration.
         kymera = machine_before["devices"][api.KYMERA_DEVICE]["values"]
         info = HamamatsuFileOpener().read_critical_info(Path(request.his_path))
         verify_image_optics(api.image_alignment_settings(info.header), kymera)

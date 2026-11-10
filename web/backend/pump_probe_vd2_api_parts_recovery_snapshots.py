@@ -187,6 +187,9 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
             if not api._preparation_lock.acquire(blocking=False):
                 return api.jsonify(success=False, code="VD2_CONTROL_LOCKED", error=api._vd2_busy_message()), 409
             try:
+                if api._paired_acquisition.status()["active"]:
+                    return api.jsonify(success=False, code="VD2_CONTROL_LOCKED",
+                                       error="A paired measurement owns the camera and DG645"), 409
                 return function(*args, **kwargs)
             finally:
                 api._preparation_lock.release()
@@ -204,6 +207,9 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
     _proxy.__qualname__ = "_proxy"
 
     def _protocol_hardware_phase():
+        paired = api._paired_acquisition.status()
+        if paired["active"]:
+            return paired["status"]
         value = api._measurement_protocol.status()
         if type(value.get("acquisition_active")) is bool:
             return value.get("acquisition_phase", "acquiring") if value["acquisition_active"] else "idle"

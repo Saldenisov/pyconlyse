@@ -175,3 +175,35 @@ def test_stale_hpdta_wavelength_metadata_is_rejected():
     with pytest.raises(RuntimeError, match="do not match Tango Kymera"):
         optics.verify_image_optics({"wavelength_nm": "550", "grating": "150 g/mm"},
                                    {"wavelength_nm": 400, "lines_per_mm": 150, "grating": 2})
+
+
+def test_paired_clock_warms_arms_with_no_pulses_and_switches_to_external(rig):
+    camera, dg645, events = rig
+
+    class Stop:
+        def wait(self, seconds):
+            assert seconds == 10 and dg645.values["TSRC"] == 0 and dg645.values["BURM"] == 1
+            events.append("warm")
+            return False
+
+        def is_set(self):
+            return False
+
+    def arm():
+        assert dg645.values["TSRC"] == 5
+        events.append("arm")
+
+    with optics.paired_capture_clock(api, camera, 1, Stop(), arm) as running:
+        assert running and dg645.values["TSRC"] == 1
+        events.append("record")
+    assert events.index("warm") < events.index("arm") < events.index("TSRC 1") < events.index("record")
+    assert events[-2:] == ["TSRC 5", "BURM 0"]
+    assert dg645.values["TRAT"] == 5
+
+
+def test_cancel_during_paired_warmup_disarms_without_starting_camera(rig):
+    camera, dg645, events = rig
+    stop = SimpleNamespace(is_set=lambda: False, wait=lambda seconds: True)
+    with optics.paired_capture_clock(api, camera, 0, stop, lambda: pytest.fail("Camera armed")) as running:
+        assert not running
+    assert events[-2:] == ["TSRC 5", "BURM 0"]

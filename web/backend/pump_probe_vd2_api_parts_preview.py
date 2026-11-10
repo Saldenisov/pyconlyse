@@ -7,6 +7,9 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
     """Bind implementation to the owning module and its runtime state."""
 
     def preview():
+        paired = api._paired_acquisition.preview()
+        if paired is not None:
+            return api.jsonify(paired)
         # One native reader for all browser tabs. Cached frames retain their original
         # timestamp; waiting clients never queue a second RemoteEx binary transfer.
         phase_status = api._protocol_hardware_phase()

@@ -456,8 +456,10 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
     _verify_owis_sample_axis.__module__ = api.__name__
     _verify_owis_sample_axis.__qualname__ = "_verify_owis_sample_axis"
 
-    def _assert_preparation_idle(streak=None):
-        if api._protocol_hardware_phase() in {"preparing", "acquiring", "saving", "processing"}:
+    def _assert_preparation_idle(streak=None, *, ignore_paired=False):
+        phase = (api._measurement_protocol.status().get("acquisition_phase")
+                 if ignore_paired else api._protocol_hardware_phase())
+        if phase in {"preparing", "acquiring", "saving", "processing"}:
             raise RuntimeError("Stop the VD2 measurement before Prepare")
         if streak is None:
             try:

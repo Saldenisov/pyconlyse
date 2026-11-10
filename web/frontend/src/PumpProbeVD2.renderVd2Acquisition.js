@@ -2,6 +2,7 @@ import VD2TranslationStages, { VD2SampleHolder } from './components/VD2Translati
 import VD2PDUControl from './components/VD2PDUControl';
 import VD2RoiEditor from './components/VD2RoiEditor';
 import VD2LiveAverage from './components/VD2LiveAverage';
+import VD2PairedCapture from './components/VD2PairedCapture';
 import VD2ReadDiagnostics from './components/VD2ReadDiagnostics';
 import FrameDisplayRate from './components/FrameDisplayRate';
 import { alignmentRegionFromBounds } from './vd2RoiMath';
@@ -39,7 +40,7 @@ export function renderVd2Acquisition({
   updateLutRange, autoscaleLut, previewPoint, beginRoi, updateRoi, completeRoi,
   removeRoi, values, alignmentControlsBlocked, acquisitionIdle, acquisitionReadError,
   acquisitionReadDeferred, awaitingCameraState, readIssues, statusClass,
-  showPreviousError, showNextError, dismissError, clearErrors, copyError,
+  showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
 }) {
   return (
     <main className="vd2-page">
@@ -137,6 +138,11 @@ export function renderVd2Acquisition({
               measurementMessage={guidedMessage}
               sampleHolder={<VD2SampleHolder disabled={busy || protocolStarting || protocolHardwareActive} />}
             />
+            <VD2PairedCapture available={protocol?.paired_available} run={protocol?.paired} settings={protocolSettings}
+              disabled={!serverWorkspace.ready || busy || protocolStarting || protocolHardwareActive
+                || Boolean(preparedPhase || guidedRun || guidedChoice) || !acquisitionIdle}
+              roi={rois.find(roi => roi.id === selectedRoiId)} preview={preview} onUpdate={updatePairedCapture}
+              onStop={() => runCommand('StopAcquisition')} />
             {projectError && <p role="alert" className="vd2-stage-error">{projectError}</p>}
             <section className="vd2-roi-analysis" aria-label="ROI analysis">
               <aside className="vd2-roi-list">

@@ -39,6 +39,8 @@ from vd2_measurement_protocol import PhaseRequest, Vd2MeasurementProtocol, Vd2Pr
 from vd2_sequence_processing import check_new_sequence, process_saved_sequence_in_worker, retire_source_his
 from vd2_project_manifest import MANIFEST_NAME, Vd2ProjectManifest, inspect_project
 from vd2_phase_destination import PhaseDestinations
+from vd2_paired_acquisition import PairedAcquisition
+from vd2_paired_api import install_paired_routes
 from vd2_live_acquisition import SEQUENCE_TIMEOUT_S, SEQUENCE_WAIT_QUERY, camera_serialization_timeout, wait_for_sequence
 from vd2_alignment import read_alignment_axes, image_alignment_settings, image_intensity_settings, alignment_calibration_key, alignment_measurement_key
 from vd2_alignment_readout import AlignmentReadout, READOUT_VERSION, parse_selection
@@ -264,6 +266,8 @@ _measurement_protocol = Vd2MeasurementProtocol(
     ),
 )
 _phase_destinations = PhaseDestinations()
+_paired_acquisition = PairedAcquisition()
+install_paired_routes(_refactor_modules[__name__])
 
 
 _protocol_hardware_phase = _pump_probe_vd2_api_parts_recovery_snapshots["_protocol_hardware_phase"]
@@ -503,7 +507,11 @@ protocol_project = (pump_probe_vd2_api.route("/protocol/project", methods=["GET"
 
 @pump_probe_vd2_api.route("/protocol/state", methods=["GET"])
 def protocol_state():
-    return jsonify({"success": True, **_measurement_protocol.status()})
+    paired = _paired_acquisition.status()
+    status = _measurement_protocol.status()
+    if paired["active"]:
+        status.update(acquisition_active=True, acquisition_phase=paired["status"])
+    return jsonify({"success": True, **status, "paired_available": VD2_CAMERA_ONLY, "paired": paired})
 
 
 protocol_plan = (pump_probe_vd2_api.route("/protocol/plan", methods=["POST"]))(_pump_probe_vd2_api_parts_preview["protocol_plan"])

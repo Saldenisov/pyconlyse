@@ -21,6 +21,15 @@ export function useVd2AcquisitionActions({
   previewController, previewOverlay, nextRoiId, phaseClickTimer, lastPollError,
   reportError, resolveReadErrors, loadPreview,
 }) {
+  const updatePairedCapture = useCallback((paired) => {
+    setProtocol(current => ({ ...current, paired, acquisition_active: paired.active,
+      acquisition_phase: paired.status }));
+    if (paired.active) {
+      previewPaused.current = false;
+      setPreviewEnabled(true);
+    }
+  }, [setProtocol, setPreviewEnabled, previewPaused]);
+
   const runRequest = useCallback(async (path, body) => {
     const stopping = ['/command/StopAcquisition', '/command/StopSequence', '/command/StopApplication',
       '/command/ShutdownRemoteEx', '/command/Disconnect'].includes(path);
@@ -43,6 +52,10 @@ export function useVd2AcquisitionActions({
         const failure = new Error(payload.error || 'Control request failed');
         if (payload.code === 'READBACK_UNAVAILABLE' && payload.command_acknowledged === true) failure.scope = 'state';
         throw failure;
+      }
+      if (payload.paired) {
+        updatePairedCapture(payload.paired);
+        return;
       }
       setState(payload);
       if (['/command/StartLive', '/command/StartSequence', '/command/Acquire', '/command/AcquireSingle'].includes(path)) {
@@ -70,10 +83,15 @@ export function useVd2AcquisitionActions({
     } finally {
       setBusy(false);
     }
-  }, [reportError]);
+  }, [reportError, updatePairedCapture]);
 
   const writeParameter = useCallback((name, value) => runRequest(`/parameter/${name}`, { value }), [runRequest]);
-  const runCommand = useCallback((name) => runRequest(`/command/${name}`), [runRequest]);
+  const runCommand = useCallback((name) => {
+    if (name === 'StopAcquisition' && protocol?.paired?.active) {
+      return runRequest('/paired/stop', { job_id: protocol.paired.job_id });
+    }
+    return runRequest('/command/' + name);
+  }, [protocol?.paired, runRequest]);
   const refreshAll = useCallback(async () => {
     setBusy(true);
     try {
@@ -385,6 +403,6 @@ export function useVd2AcquisitionActions({
     previewPoint, beginRoi, updateRoi, completeRoi, removeRoi, values,
     alignmentControlsBlocked, acquisitionIdle, acquisitionReadError,
     acquisitionReadDeferred, awaitingCameraState, readIssues, statusClass,
-    showPreviousError, showNextError, dismissError, clearErrors, copyError,
+    showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
   };
 }

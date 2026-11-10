@@ -64,6 +64,8 @@ def _bind_streak_camera_methods_power_dependency_ready_state(api):
                 self.set_state(api.DevState.ON)
             return 0
 
+        if getattr(getattr(self.controller, "client", None), "paired_monitor_active", False) is True:
+            return 0
         try:
             snapshot = self.controller.refresh_cached_state()
             self._sync_from_snapshot(snapshot)

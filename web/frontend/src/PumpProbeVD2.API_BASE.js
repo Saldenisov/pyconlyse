@@ -581,7 +581,11 @@ export function Vd2PhaseProtocol({ protocol, settings, disabled, settingsDisable
             {item.recorded_at&&<small> · {new Date(item.recorded_at).toLocaleString()}</small>}{!item.selected&&<small> · previous version</small>}
             {item.error&&<span role="alert"> · {item.error}</span>}
           </div>)}
-          {!sample.ready&&<small>{sample.error}</small>}
+          {(sample.paired_runs || []).map(item => <div key={item.job_id}>
+            <strong>Paired ABS/BASE</strong> · {item.status} · {item.pairs_recorded} pairs
+            <small> · {item.h5.path}</small>
+          </div>)}
+          {!sample.ready && !sample.paired_runs?.length && <small>{sample.error}</small>}
         </article>)}
       </details>
       {protocol?.queue_full&&<small role="status">H5 conversion queue is full. Wait for one conversion to finish.</small>}

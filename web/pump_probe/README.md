@@ -371,38 +371,36 @@ capture. Use an even frame count. After capture the worker verifies single-shot
 standby and Burst OFF before saving. BRUIT uses 5 Hz without the flash-lamp
 warm-up. Check that the dark optical path is configured before recording BRUIT.
 
-### Paired beam acquisition design
+### Paired ABS/BASE acquisition
 
-Record BRUIT with the same camera geometry and gain before opening the
-measurement run. Warm the flash lamp for 10 s at 10 Hz before retaining pairs.
+In **Acquisition → Paired ABS/BASE**, select a project with a completed BRUIT.
+Use matching detector geometry, gain, sweep and exposure. Open both shutters
+and turn off Live rolling average. Choose the DG645 5 Hz trigger source for
+capture. DG645 warms the lamp internally for 10 s at 10 Hz, pauses while the
+camera arms its ring buffer, then uses the selected sync for capture.
+
 The operator sets **First frame with electrons**. Checked assigns ABS to the
 first frame. Unchecked assigns BASE to it. Roles alternate within the
-continuous 10 Hz sequence. If timing is interrupted, confirm the starting
-phase again before applying the rule to a new sequence. Fixed mode counts
-completed pairs, so a target of 200 means 200 ABS and 200 BASE frames.
-The measured sign of ΔOD is independent of the phase selection mechanism.
+continuous 10 Hz sequence. A target of 200 pairs means 200 ABS and 200 BASE
+frames. The camera's ring-buffer index and native timestamp detect gaps.
 
-For continuous mode, retain raw frames, camera sequence numbers, cycle IDs,
-the operator's phase selection, and probe-monitor values in acquisition order. Stream committed
-pairs to server-side reduction independently of the latest-image browser
-preview. Preview may skip images. A raw sequence gap is a recorded event.
-The pulse budget and a user Stop must bound the run even if it never meets the
-error target. Restore the verified DG645 5 Hz base clock and standby at exit.
+The server archives raw frames, camera indices, timestamps and operator
+phase in a new H5 in the sample folder. It records the H5 and BRUIT identity
+in the project manifest and serves a decimated browser preview from the same
+stream. A gap stops recording and preserves the data already received. Stop,
+pair count and precision completion pause DG645 and disable Burst before H5
+finalization.
 
-The offline reducer in `utilities/dataio/vd2_paired_od.py` supports:
+Live analysis uses mean signed OD of individual pairs. Select an ROI before
+starting precision mode. ROI remains fixed during the run, while the target
+can change. The reported error estimates one standard error of the ROI mean
+from 20-pair contiguous blocks, comparison with 40-pair blocks and a BRUIT
+contribution. The target must hold for two consecutive estimates, with at
+least eight complete blocks before the first estimate. The pair limit bounds
+the run. OD of the ABS and BASE means, matching by probe intensity, and
+replay with specified exclusions remain available in the offline reducer.
 
-- OD of the background-corrected ABS and BASE means.
-- The mean of per-pair OD. The first complete pair can produce a preview.
-- Pairing each ABS with a BASE of similar probe intensity within bounded cycle
-  distance and intensity mismatch. BASE reuse is auditable. Match using a lamp
-  monitor or a pre-beam reference region outside the signal ROI.
-- Replay with specified excluded cycles. Cleaning thresholds should be derived
-  from a beam-off control. Raw frames and exclusions must remain accessible.
-
-Show mean ROI OD and the estimated uncertainty of that mean in mOD. Use
-contiguous cycle blocks to test the effect of correlated lamp drift. Include
-the background contribution when material, and account for reused BASE frames
-in the matched method. Changing ROI or reduction must recompute from stored
-frames or sufficient statistics. Automatic termination requires a contiguous sequence, a validated block
-uncertainty estimate for the selected method, and sufficient independent data. The offline reducer does not control
-acquisition or claim a live uncertainty estimate.
+Deploy the camera-only profile and the new Tango ring commands together.
+Authorization-enforced installations require exact approvals for the paired
+start, stop and target routes. Validate native timestamps and sustained
+10 Hz streaming on the installed HPD-TA before running with the beam.

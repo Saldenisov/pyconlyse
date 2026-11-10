@@ -35,7 +35,7 @@ function PumpProbeVD2() {
     previewPoint, beginRoi, updateRoi, completeRoi, removeRoi, values,
     alignmentControlsBlocked, acquisitionIdle, acquisitionReadError,
     acquisitionReadDeferred, awaitingCameraState, readIssues, statusClass,
-    showPreviousError, showNextError, dismissError, clearErrors, copyError,
+    showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
   } = useVd2AcquisitionActions({
     state, setState, preview, errors, setErrors, readFailures, activeErrorId,
     setActiveErrorId, previewError, setPreviewError, liveAverageReadError,
@@ -69,7 +69,7 @@ function PumpProbeVD2() {
     updateLutRange, autoscaleLut, previewPoint, beginRoi, updateRoi, completeRoi,
     removeRoi, values, alignmentControlsBlocked, acquisitionIdle, acquisitionReadError,
     acquisitionReadDeferred, awaitingCameraState, readIssues, statusClass,
-    showPreviousError, showNextError, dismissError, clearErrors, copyError,
+    showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
   });
 }
 

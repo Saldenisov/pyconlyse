@@ -227,7 +227,8 @@ export function useVd2AcquisitionState() {
       }
     }, 450);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [protocolSettings.outputRoot, protocol?.completed_at,protocol?.acquisition_active,projectConversionState]);
+  }, [protocolSettings.outputRoot, protocol?.completed_at, protocol?.paired?.completed_at,
+    protocol?.acquisition_active, projectConversionState]);
 
   const loadPreview = useCallback(async () => {
     if (previewRequestActive.current || previewPaused.current || protocolStartActive.current) return;

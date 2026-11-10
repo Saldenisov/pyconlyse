@@ -575,6 +575,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @attribute(dtype=bool, access=AttrWriteType.READ)
     def camera_only_application(self):
+        return self._camera_only_profile_verified()
+
+    def _camera_only_profile_verified(self):
         controller = self.controller
         return bool(controller and controller.camera_only_identity and self.application_running_value
                     and controller.camera_only_identity == remoteex_process_identity())
@@ -714,6 +717,41 @@ class DS_HAMAMATSU_STREAK(DS_General):
         controller.stop_sequence()
         self.last_command_value = controller.last_command
         self.last_response_value = controller.last_response_text
+        self.remoteex_status_value = "idle"
+        self.busy_command_value = ""
+        self.set_state(DevState.ON)
+
+    @command
+    def StartPairedLive(self):
+        if not self._camera_only_profile_verified():
+            raise RuntimeError("Paired capture requires the camera-only HPD-TA profile")
+        controller = self._require_controller()
+        controller.client.start_paired_monitor()
+        self.set_state(DevState.RUNNING)
+        self._start_live_background(controller, propagate=True)
+
+    @command(dtype_in=int, dtype_out=str)
+    def ReadPairedLiveFrame(self, sequence: int):
+        frame = self._require_controller().client.read_paired_image(sequence)
+        if frame is None:
+            return ""
+        return json.dumps({
+            "width": frame.width, "height": frame.height, "bytes_per_pixel": frame.bytes_per_pixel,
+            "sequence": frame.sequence_number, "timestamp_ms": frame.timestamp_ms,
+            "pixels_b64": base64.b64encode(frame.pixels).decode("ascii"),
+        })
+
+    @command
+    def StopPairedLive(self):
+        controller = self._require_controller()
+        try:
+            # AcqStart may have failed before triggering, so check native state.
+            if controller.execute_raw("AcqStatus()").raw_line.strip().lower() != "0,acqstatus,idle":
+                self.StopAcquisition()
+            if controller.execute_raw("AcqStatus()").raw_line.strip().lower() != "0,acqstatus,idle":
+                raise RuntimeError("Paired HPD-TA acquisition is not confirmed idle")
+        finally:
+            controller.client.stop_paired_monitor()
         self.remoteex_status_value = "idle"
         self.busy_command_value = ""
         self.set_state(DevState.ON)
