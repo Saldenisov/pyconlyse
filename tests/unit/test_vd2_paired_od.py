@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
 
-from utilities.dataio.vd2_paired_od import BeamPair, TaggedFrame, pair_tagged_frames, reduce_paired_od
+from utilities.dataio.vd2_paired_od import (
+    BeamPair, TaggedFrame, pair_alternating_frames, pair_tagged_frames, reduce_paired_od,
+)
 
 
 def frame(sequence, cycle, beam_on, counts, intensity=None):
@@ -64,3 +66,31 @@ def test_excluded_and_nonpositive_pixels_are_not_substituted():
     assert result.od[0, 1] == pytest.approx(np.log10(10 / 8))
     assert result.roi_mod is None
     np.testing.assert_array_equal(result.valid_count, [[0, 1]])
+
+
+@pytest.mark.parametrize("first_has_electrons", [True, False])
+@pytest.mark.parametrize("method", ["mean_pair_od", "od_of_means", "matched_base"])
+def test_operator_phase_preserves_signed_od(first_has_electrons, method):
+    first = np.array([[81, 101]])
+    second = np.array([[101, 81]])
+    pairs, incomplete = pair_alternating_frames(
+        [first, second, first, second, first], [100.001, 99.999, 100, 100],
+        first_map_with_electrons=first_has_electrons,
+        probe_intensities=[100] * 5,
+    )
+    assert incomplete == (2,)
+    result = reduce_paired_od(
+        pairs, [[1, 1]], [[True, False]], method=method,
+        max_cycle_gap=1, max_relative_mismatch=0.01,
+    )
+    expected = np.log10(100 / 80) * (1 if first_has_electrons else -1)
+    np.testing.assert_allclose(result.od, [[expected, -expected]])
+    assert result.roi_mod == pytest.approx(1000 * expected)
+
+
+def test_manual_phase_requires_contiguous_timing():
+    image = np.ones((2, 2))
+    with pytest.raises(ValueError, match="after frame 2; confirm phase again"):
+        pair_alternating_frames([image] * 4, [100, 200, 100], first_map_with_electrons=True)
+    with pytest.raises(ValueError, match="Select whether"):
+        pair_alternating_frames([image] * 2, [100], first_map_with_electrons=None)

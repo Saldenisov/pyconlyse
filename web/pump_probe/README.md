@@ -375,13 +375,15 @@ warm-up. Check that the dark optical path is configured before recording BRUIT.
 
 Record BRUIT with the same camera geometry and gain before opening the
 measurement run. Warm the flash lamp for 10 s at 10 Hz before retaining pairs.
-A verified accelerator cycle contributes one ABS frame with electrons and one
-BASE frame without electrons. Fixed mode counts completed tagged pairs, so a
-target of 200 means 200 ABS and 200 BASE frames. Report incomplete cycles
-separately. The internal timing check measures camera cadence only.
+The operator sets **First frame with electrons**. Checked assigns ABS to the
+first frame. Unchecked assigns BASE to it. Roles alternate within the
+continuous 10 Hz sequence. If timing is interrupted, confirm the starting
+phase again before applying the rule to a new sequence. Fixed mode counts
+completed pairs, so a target of 200 means 200 ABS and 200 BASE frames.
+The measured sign of ΔOD is independent of the phase selection mechanism.
 
 For continuous mode, retain raw frames, camera sequence numbers, cycle IDs,
-beam tags, and probe-monitor values in acquisition order. Stream committed
+the operator's phase selection, and probe-monitor values in acquisition order. Stream committed
 pairs to server-side reduction independently of the latest-image browser
 preview. Preview may skip images. A raw sequence gap is a recorded event.
 The pulse budget and a user Stop must bound the run even if it never meets the
@@ -401,7 +403,6 @@ Show mean ROI OD and the estimated uncertainty of that mean in mOD. Use
 contiguous cycle blocks to test the effect of correlated lamp drift. Include
 the background contribution when material, and account for reused BASE frames
 in the matched method. Changing ROI or reduction must recompute from stored
-frames or sufficient statistics. Automatic termination requires a verified
-frame/tag join, a validated block uncertainty estimate for the selected
-method, and sufficient independent data. The offline reducer does not control
+frames or sufficient statistics. Automatic termination requires a contiguous sequence, a validated block
+uncertainty estimate for the selected method, and sufficient independent data. The offline reducer does not control
 acquisition or claim a live uncertainty estimate.

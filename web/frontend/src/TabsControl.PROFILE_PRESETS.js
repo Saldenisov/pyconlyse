@@ -225,21 +225,6 @@ const ParametersZone = ({
           ))}
         </select>
       </div>
-      <div className="parameter-checkbox">
-        <label>
-          <input
-            type="checkbox"
-            checked={session.first_map_with_electrons}
-            disabled={busy || isAbsBaseNoiseMode}
-            onChange={(event) =>
-              onConfigChange({
-                first_map_with_electrons: event.target.checked,
-              })
-            }
-          />
-          First map with electrons
-        </label>
-      </div>
       <div className="parameter-actions">
         {onAverageNoise && <button type="button" onClick={onAverageNoise} disabled={busy || !canAverageNoise}>Average Noise</button>}
         <button onClick={onReset} disabled={busy}>Reset Session</button>

@@ -45,6 +45,16 @@ export function renderTreatmentWorkspace({
   stitchOutputPath, stitchZoneMap, stitchDatFiles, sourceBrowser, detailSummary,
   QueuePanel, activeQueueJob, lastFolderJob,
 }) {
+  const phaseOption = ['HIS', 'HIS+NOISE'].includes(session.exp_type) && (
+    <div className="parameter-checkbox">
+      <label>
+        <input type="checkbox" checked={session.first_map_with_electrons}
+          disabled={isBusy || treatmentQueue?.running}
+          onChange={event => handleConfigChange({ first_map_with_electrons: event.target.checked })} />
+        First frame with electrons
+      </label>
+    </div>
+  );
   return (
     <div className={`tabs-control${treeFirst ? ' treatment-tree-first' : ''}`}>
       {treeFirst && <div className="treatment-tree-and-preview" style={{ '--tree-width': `${filesLayout.tree}px` }}>
@@ -86,6 +96,7 @@ export function renderTreatmentWorkspace({
           >
             {isStudioLayout ? 'Treatment' : 'Files'}
           </button>}
+          {treeFirst && phaseOption}
           {treeFirst && <button type="button" onClick={handleCalcAbs}
             disabled={isBusy || isQueueLoading || treatmentQueue?.running || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
             Calculate OD
@@ -189,6 +200,7 @@ export function renderTreatmentWorkspace({
                   </section>
                   <section className="treatment-step">
                     <h3>3 Calculate</h3>
+                    {phaseOption}
                     <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
                       Calculate OD
                     </button>

@@ -26,8 +26,10 @@ else:
     )
 
 
+@pytest.mark.parametrize("first_map_with_electrons", [True, False])
+@pytest.mark.parametrize("calc_mode", ["individual", "averaged"])
 def test_calc_abs_his_noise_uses_noise_average_and_pair_order(
-    service, monkeypatch, tmp_path
+    service, monkeypatch, tmp_path, first_map_with_electrons, calc_mode,
 ):
     data_path = tmp_path / "his_abs_base.his"
     noise_path = tmp_path / "noise_reference.his"
@@ -63,8 +65,8 @@ def test_calc_abs_his_noise_uses_noise_average_and_pair_order(
         "session-his-noise",
         {
             "exp_type": "HIS+NOISE",
-            "calc_mode": "individual",
-            "first_map_with_electrons": False,
+            "calc_mode": calc_mode,
+            "first_map_with_electrons": first_map_with_electrons,
             "paths": {
                 "ABS+BASE": str(data_path),
                 "NOISE": str(noise_path),
@@ -72,8 +74,8 @@ def test_calc_abs_his_noise_uses_noise_average_and_pair_order(
         },
     )
 
-    expected_value = (np.log10(4.0) + np.log10(3.5)) / 2.0
-    expected = np.full((2, 2), expected_value, dtype=float)
+    expected_value = (np.log10(4.0) + np.log10(3.5)) / 2.0 if calc_mode == "individual" else np.log10(11 / 3)
+    expected = np.full((2, 2), -expected_value if first_map_with_electrons else expected_value, dtype=float)
     assert payload["shape"] == [2, 2]
     assert np.allclose(np.asarray(payload["sample"], dtype=float), expected)
 

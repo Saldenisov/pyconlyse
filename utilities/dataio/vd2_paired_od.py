@@ -1,7 +1,7 @@
-"""Reference reduction for VD2 frames with independent beam-state tags.
+"""Reference reduction for alternating VD2 frames.
 
-No hardware or file I/O. Callers retain the original frames, beam tags, and
-exclusion reasons for replay. Image order is never used to infer beam state.
+No hardware or file I/O. Callers retain original frames, the phase selected by
+the operator, and exclusions for replay. Image intensities never set the phase.
 """
 from dataclasses import dataclass
 import math
@@ -33,6 +33,27 @@ class PairedOD:
     used: tuple[tuple[int, int], ...]
     unmatched: tuple[int, ...]
     valid_count: np.ndarray
+
+
+def pair_alternating_frames(
+    images, frame_intervals_ms, *, first_map_with_electrons, probe_intensities=None,
+):
+    """Apply the operator's phase to one contiguous 10 Hz capture."""
+    if type(first_map_with_electrons) is not bool:
+        raise ValueError("Select whether the first frame has electrons")
+    if len(images) < 2 or len(frame_intervals_ms) != len(images) - 1:
+        raise ValueError("A timed sequence with at least two frames is required")
+    for index, interval in enumerate(frame_intervals_ms, start=1):
+        if not math.isfinite(interval) or abs(interval - 100.0) > 5.0:
+            raise ValueError(f"10 Hz sequence interrupted after frame {index}; confirm phase again")
+    if probe_intensities is None:
+        probe_intensities = [None] * len(images)
+    if len(probe_intensities) != len(images):
+        raise ValueError("One probe reading is required per frame")
+    return pair_tagged_frames(
+        TaggedFrame(index, index // 2, first_map_with_electrons == (index % 2 == 0), image, probe)
+        for index, (image, probe) in enumerate(zip(images, probe_intensities, strict=True))
+    )
 
 
 def pair_tagged_frames(frames: Iterable[TaggedFrame]):
