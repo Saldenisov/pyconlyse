@@ -7,7 +7,6 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
     """Bind implementation to the owning module and its runtime state."""
 
     def preview():
-        global _preview_cache, _preview_cache_until
         # One native reader for all browser tabs. Cached frames retain their original
         # timestamp; waiting clients never queue a second RemoteEx binary transfer.
         phase_status = api._protocol_hardware_phase()
@@ -31,14 +30,14 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
             if str(proxy.state()).split(".")[-1] not in {"ON", "RUNNING"}:
                 payload = {"success": False, "error": "Hamamatsu Tango device is not connected"}
                 api._alignment_readout.unavailable()
-                _preview_cache = (payload, 409)
-                _preview_cache_until = started + api._preview_period
+                api._preview_cache = (payload, 409)
+                api._preview_cache_until = started + api._preview_period
                 return api.jsonify(payload), 409
             if not bool(api._value(proxy, "application_running")):
                 payload = {"success": False, "error": "HPD-TA is still starting"}
                 api._alignment_readout.unavailable()
-                _preview_cache = (payload, 409)
-                _preview_cache_until = started + api._preview_period
+                api._preview_cache = (payload, 409)
+                api._preview_cache_until = started + api._preview_period
                 return api.jsonify(payload), 409
             checked_at = api.time.monotonic()
             phase_status = api._protocol_hardware_phase()
@@ -57,8 +56,8 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
                 # have no current image yet; do not start Live or reuse stale pixels.
                 api._alignment_readout.unavailable()
                 payload = api._waiting_for_current_image(source_status)
-                _preview_cache = (payload, 200)
-                _preview_cache_until = api.time.monotonic() + period
+                api._preview_cache = (payload, 200)
+                api._preview_cache_until = api.time.monotonic() + period
                 return api.jsonify(payload)
             captured_at = api.datetime.now(api.timezone.utc).isoformat()
             pixels_at = api.time.monotonic()
@@ -83,8 +82,8 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
                         # The current image can disappear between pixels and metadata.
                         api._alignment_readout.unavailable()
                         payload = api._waiting_for_current_image(source_status)
-                        _preview_cache = (payload, 200)
-                        _preview_cache_until = api.time.monotonic() + period
+                        api._preview_cache = (payload, 200)
+                        api._preview_cache_until = api.time.monotonic() + period
                         return api.jsonify(payload)
                     frame["calibration_error"] = api._control_error(exc)
             payload = {"success": True, "frame_available": True, **frame,
@@ -96,14 +95,14 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
                            "metadata": round((api.time.monotonic() - pixels_at) * 1000, 3),
                        }}
             api._alignment_readout.observe(payload, pixels_at)
-            _preview_cache = (payload, 200)
-            _preview_cache_until = started + period
+            api._preview_cache = (payload, 200)
+            api._preview_cache_until = started + period
             return api.jsonify(payload)
         except Exception as exc:
             payload = {"success": False, "error": api._control_error(exc)}
             api._alignment_readout.unavailable()
-            _preview_cache = (payload, 503)
-            _preview_cache_until = api.time.monotonic() + api._preview_period
+            api._preview_cache = (payload, 503)
+            api._preview_cache_until = api.time.monotonic() + api._preview_period
             return api.jsonify(payload), 503
         finally:
             api._preview_lock.release()
@@ -273,7 +272,10 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
                 return blocked
             if "destination_token" in payload:
                 request_data = api._phase_destinations.consume(destination_token, original_request)
-            api._verify_vd2_timing_ready(api._proxy())
+            proxy = api._proxy()
+            if api.VD2_CAMERA_ONLY:
+                api._assert_preparation_idle(proxy)
+            api._verify_vd2_timing_ready(proxy)
             state = api._measurement_protocol.start_request(request_data) if "destination_token" in payload else api._measurement_protocol.start(
                 phase=request_data.phase,
                 frames_per_his=request_data.frames_per_his,
@@ -428,8 +430,7 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
         targets, args = api._initialize_authorization()
         if mode != "default":
             settings = saved["settings"] if saved else {"time_range": "1 us", "streak_mode": "Operate"}
-            targets.extend(api._target(api.STREAK_DEVICE, api.WRITABLE_PARAMETERS[name].get("command") or
-                                   f"write_attribute:{api.WRITABLE_PARAMETERS[name]['attribute']}")
+            targets.extend(api._target(*api.tango_optics.parameter_target(api, name))
                            for name in settings if name in api.WRITABLE_PARAMETERS)
             targets.append(api._target(api.STREAK_DEVICE, "ExecuteRaw"))
             args.update(restore_mode=mode, restore_id=identity, restore_settings=settings)
@@ -486,7 +487,6 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
     _restore_readback.__qualname__ = "_restore_readback"
 
     def _initialize_with_restore(mode, saved, steps=None):
-        global _alignment_axes
         steps = steps if steps is not None else []
         try:
             try:
@@ -501,7 +501,7 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
             settings = saved["settings"] if saved else {"time_range": "1 us", "streak_mode": "Operate"}
             profile = api.timing_for_range(settings["time_range"])
             with api._alignment_axes_lock:
-                _alignment_axes = None
+                api._alignment_axes = None
             # Mode is restored last, after the calibrated sweep and camera settings.
             order = [name for name in settings if name not in {"streak_mode", "rolling_average"}] + ["streak_mode"]
             for name in order:
@@ -509,10 +509,7 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
                 api._progress(steps, f"Restoring camera {name}: {value}", stage=2)
                 if not api.equivalent(name, value, api._restore_readback(proxy, name)):
                     spec = api.WRITABLE_PARAMETERS[name]
-                    if "attribute" in spec:
-                        proxy.write_attribute(spec["attribute"], spec["coerce"](value))
-                    else:
-                        proxy.command_inout(spec["command"], value)
+                    api.tango_optics.write_parameter(api, proxy, name, spec["coerce"](value))
                     if not api.equivalent(name, value, api._restore_readback(proxy, name)):
                         raise RuntimeError(f"Camera {name} readback does not match {value}")
                     if name == "time_range":

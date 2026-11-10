@@ -564,7 +564,8 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
         if prepared is not None:
             # A repeat Prepare must not silently call an old timing ready, nor
             # reset operational optics to repair it. Verification performs no writes.
-            api._verify_vd2_timing_ready(api._wait_for_device(api.STREAK_DEVICE, timeout_s=2.0))
+            streak = api._wait_for_device(api.STREAK_DEVICE, timeout_s=2.0)
+            api._verify_vd2_timing_ready(streak)
             return prepared
         # A measurement can start while the passive equipment checks are running.
         api._assert_preparation_idle()
@@ -599,14 +600,16 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
         if dg645_power_on is not None:
             dg645_options["dg645_boot_deadline"] = dg645_power_on + api.DG645_POWER_UP_TIMEOUT_S
         dg645 = attempt("DG645 server", lambda: api._ensure_server(api.DG645_DEVICE, steps, **dg645_options), ("SD2 power",))
-        attempt("DG645 timing", lambda: api._prepare_dg645_for_vd2(dg645, steps), ("DG645 server",))
+        if not api.VD2_CAMERA_ONLY:
+            attempt("DG645 timing", lambda: api._prepare_dg645_for_vd2(dg645, steps), ("DG645 server",))
         # VD2 uses axis 2 on the IP backend. The shared aggregator also depends on
         # USB axis 4, so it must not gate preparation or receive VD2 axis commands.
         owis = attempt("OWIS IP server", lambda: api._ensure_server(api.OWIS_SAMPLE_DEVICE, steps), ("OWIS power",))
         attempt("OWIS sample axis", lambda: api._verify_owis_sample_axis(owis, steps), ("OWIS IP server",))
         attempt("Zaber server", lambda: api._ensure_server(api.ZABER_STAGE_DEVICE, steps), ("VD2 power",))
         streak = attempt("Hamamatsu server", lambda: api._ensure_server(api.STREAK_DEVICE, steps), ("SD2 power",))
-        optical = attempt("Streak / Kymera optical startup", lambda: api._start_vd2_optics(streak, steps), ("Hamamatsu server", "DG645 timing"))
+        dg645_step = "DG645 server" if api.VD2_CAMERA_ONLY else "DG645 timing"
+        optical = attempt("Streak / Kymera optical startup", lambda: api._start_vd2_optics(streak, steps), ("Hamamatsu server", dg645_step))
         if failed:
             # No global ready flag for a partially prepared rig, even if optics work.
             raise RuntimeError("VD2 preparation incomplete: " + "; ".join(f"{name}: {detail}" for name, detail in failed.items()))

@@ -43,6 +43,7 @@ from vd2_live_acquisition import SEQUENCE_TIMEOUT_S, SEQUENCE_WAIT_QUERY, camera
 from vd2_alignment import read_alignment_axes, image_alignment_settings, image_intensity_settings, alignment_calibration_key, alignment_measurement_key
 from vd2_alignment_readout import AlignmentReadout, READOUT_VERSION, parse_selection
 from vd2_dg645_timing import apply_timing, timing_for_range, verify_timing
+import vd2_tango_optics as tango_optics
 from vd2_recovery import RecoverySnapshots, PARAMETERS as RECOVERY_PARAMETERS, settings_from_state, equivalent
 from vd2_alignment_presets import (AlignmentSnapshots, CHANNELS as ALIGNMENT_CHANNELS,
                                   DEVICE as ALIGNMENT_DEVICE, SnapshotConflict,
@@ -91,6 +92,7 @@ _vd2_busy_message = _pump_probe_vd2_api_parts_recovery_snapshots["_vd2_busy_mess
 
 _serialized_vd2_mutation = _pump_probe_vd2_api_parts_recovery_snapshots["_serialized_vd2_mutation"]
 
+VD2_CAMERA_ONLY = os.environ.get("PYCONLYSE_VD2_CAMERA_ONLY") == "1"
 STREAK_DEVICE = "manip/camera/hamamatsu_streak_main"
 DG645_DEVICE = "manip/sync/DG645"
 DG645_POWER_UP_TIMEOUT_S = 180.0
@@ -255,6 +257,11 @@ _measurement_protocol = Vd2MeasurementProtocol(
     artifact_journal=Vd2ProjectManifest(), snapshot_reader=lambda proxy: _machine_snapshot(proxy),
     artifact_finalizer=retire_source_his,
     point_recorder=_remember_measurement_point,
+    capture_clock=(lambda proxy, request: tango_optics.measurement_clock(_refactor_modules[__name__], proxy, request))
+    if VD2_CAMERA_ONLY else None,
+    capture_validator=lambda request, before, rate: tango_optics.validate_saved_capture(
+        _refactor_modules[__name__], request, before, rate
+    ),
 )
 _phase_destinations = PhaseDestinations()
 
@@ -547,7 +554,16 @@ write_parameter = (pump_probe_vd2_api.route("/parameter/<name>", methods=["POST"
 
 
 def _alignment_signature(proxy):
-    return image_alignment_settings(_remoteex_readback(proxy, "ImgStatusGet(Current,All)"))
+    settings = image_alignment_settings(_remoteex_readback(proxy, "ImgStatusGet(Current,All)"))
+    if VD2_CAMERA_ONLY:
+        kymera = DeviceProxy(KYMERA_DEVICE)
+        kymera.set_timeout_millis(5000)
+        if str(kymera.state()).split(".")[-1] != "ON":
+            raise RuntimeError("Kymera is not ON; wavelength calibration unavailable")
+        tango_optics.verify_image_optics(settings, {
+            key: _value(kymera, key) for key in ("wavelength_nm", "lines_per_mm", "grating")
+        })
+    return settings
 
 
 def _alignment_frame_metadata(proxy):
@@ -644,7 +660,7 @@ def alignment_start():
     if rejected is not None:
         return rejected
     profile = timing_for_range("1 us")
-    targets = [_target(STREAK_DEVICE, f"write_attribute:{name}") for name in
+    targets = [_target(*tango_optics.parameter_target(_refactor_modules[__name__], name)) for name in
                ("streak_mode", "time_range", "streak_shutter", "spectrograph_shutter")]
     targets += [_target(DG645_DEVICE, "scpi_write"), _target(STREAK_DEVICE, "StartLive")]
     blocked = _approval_or_response(
@@ -658,6 +674,8 @@ def alignment_start():
     try:
         proxy = _proxy()
         _assert_preparation_idle(proxy)
+        if VD2_CAMERA_ONLY and not bool(_value(proxy, "camera_only_application")):
+            raise RuntimeError("VD2 requires the camera-only HPD-TA profile")
         with _alignment_axes_lock:
             _alignment_axes = None
         proxy.write_attribute("streak_mode", "Operate")
@@ -668,11 +686,16 @@ def alignment_start():
             raise RuntimeError("Alignment time-range readback mismatch; Live not started")
         _apply_vd2_timing(profile, [])
         for attribute in ("streak_shutter", "spectrograph_shutter"):
-            proxy.write_attribute(attribute, "Open")
-            if str(_value(proxy, attribute)).lower() != "open":
+            tango_optics.write_parameter(_refactor_modules[__name__], proxy, attribute, "Open")
+            shutter = (tango_optics.read_external(_refactor_modules[__name__], attribute)
+                       if VD2_CAMERA_ONLY and attribute == "spectrograph_shutter" else _value(proxy, attribute))
+            if str(shutter).lower() != "open":
                 raise RuntimeError(f"Cannot verify {attribute} Open; Live not started")
         _verify_vd2_timing_ready(proxy)
-        proxy.command_inout("StartLive")
+        if VD2_CAMERA_ONLY:
+            tango_optics.run_camera_acquisition(_refactor_modules[__name__], proxy, "StartLive")
+        else:
+            proxy.command_inout("StartLive")
         return jsonify({"success": True, **_snapshot(proxy)})
     except Exception as exc:
         return jsonify({"success": False, "error": _control_error(exc)}), 503
@@ -688,9 +711,21 @@ def command(name: str):
     if rejected is not None:
         return rejected
 
+    if VD2_CAMERA_ONLY and name == "PrepareDG645ForHPDTA":
+        return jsonify(success=False, error="DG645 timing is owned by its Tango server"), 409
+    actual_command = "StartCameraOnlyApplication" if VD2_CAMERA_ONLY and name == "StartApplication" else name
+    start_commands = {"StartLive", "AcquireSingle", "Acquire", "StartAnalogIntegration", "StartSequence"}
+    clock_managed = VD2_CAMERA_ONLY and name in start_commands | {"StopAcquisition", "StopSequence"}
+    if clock_managed and _protocol_hardware_phase() in {"preparing", "acquiring", "saving"}:
+        return jsonify(success=False, error="VD2 measurement owns the acquisition clock"), 409
+    if VD2_CAMERA_ONLY and name == "StartSequence":
+        return jsonify(success=False, error="Select an ABS, BASE, or BRUIT measurement to record a sequence"), 409
+    targets = [_target(STREAK_DEVICE, actual_command)]
+    if clock_managed:
+        targets.append(_target(DG645_DEVICE, "scpi_write"))
     blocked = _approval_or_response(
         f"command.{name}.execute",
-        [_target(STREAK_DEVICE, name)],
+        targets,
         {"name": name},
         "vd2.command",
         set(),
@@ -701,9 +736,14 @@ def command(name: str):
     command_acknowledged = False
     try:
         proxy = _proxy()
-        if name in {"StartLive", "AcquireSingle", "Acquire", "StartAnalogIntegration", "StartSequence"}:
+        if name in start_commands:
+            if clock_managed:
+                _assert_preparation_idle(proxy)
             _verify_vd2_timing_ready(proxy)
-        proxy.command_inout(name)
+        if clock_managed:
+            tango_optics.run_camera_acquisition(_refactor_modules[__name__], proxy, actual_command)
+        else:
+            proxy.command_inout(actual_command)
         command_acknowledged = True
         return jsonify({"success": True, **_snapshot(proxy)})
     except Exception as exc:

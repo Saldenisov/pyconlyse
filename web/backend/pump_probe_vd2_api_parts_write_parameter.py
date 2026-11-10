@@ -7,7 +7,6 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
     """Bind implementation to the owning module and its runtime state."""
 
     def write_parameter(name: str):
-        global _alignment_axes
         spec = api.WRITABLE_PARAMETERS.get(name)
         if spec is None:
             return api.jsonify({"success": False, "error": f"Unsupported parameter: {name}"}), 404
@@ -23,11 +22,8 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
             timing = api.timing_for_range(value) if name == "time_range" else None
             if timing is not None:
                 value = timing.time_range
-            if "attribute" in spec:
-                target_name = f"write_attribute:{spec['attribute']}"
-            else:
-                target_name = spec["command"]
-            targets = [api._target(api.STREAK_DEVICE, target_name)]
+            device, target_name = api.tango_optics.parameter_target(api, name)
+            targets = [api._target(device, target_name)]
             args = {"name": name, "value": value}
             if timing is not None:
                 targets.append(api._target(api.DG645_DEVICE, "scpi_write"))
@@ -44,13 +40,12 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
             proxy = api._proxy()
             if name in {"time_range", "grating", "wavelength_nm", "exit_mirror", "turret"}:
                 with api._alignment_axes_lock:
-                    _alignment_axes = None
-            if timing is not None:
+                    api._alignment_axes = None
+            if timing is not None or device != api.STREAK_DEVICE:
                 api._assert_preparation_idle(proxy)
-            if "attribute" in spec:
-                proxy.write_attribute(spec["attribute"], value)
-            else:
-                proxy.command_inout(spec["command"], value)
+            if api.VD2_CAMERA_ONLY and not bool(api._value(proxy, "camera_only_application")):
+                raise RuntimeError("Start the camera-only HPD-TA profile before changing VD2 settings")
+            api.tango_optics.write_parameter(api, proxy, name, value)
             if timing is not None:
                 raw_range = api._remoteex_readback(proxy, "DevParamGet(TD,Time Range)")
                 try:
@@ -78,9 +73,8 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
     _assert_alignment_live_or_idle.__qualname__ = "_assert_alignment_live_or_idle"
 
     def _capture_alignment_axes(proxy):
-        global _alignment_axes
         with api._alignment_axes_lock:
-            _alignment_axes = None
+            api._alignment_axes = None
         signature = api._alignment_signature(proxy)
         api._alignment_image_path.parent.mkdir(parents=True, exist_ok=True)
         api._alignment_image_path.unlink(missing_ok=True)
@@ -108,14 +102,13 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
         axes["settings"] = signature
         axes["calibration_key"] = api.alignment_calibration_key(signature, axes["width"], axes["height"])
         with api._alignment_axes_lock:
-            _alignment_axes = axes
+            api._alignment_axes = axes
         return axes
 
     _capture_alignment_axes.__module__ = api.__name__
     _capture_alignment_axes.__qualname__ = "_capture_alignment_axes"
 
     def alignment_calibration():
-        global _alignment_axes, _preview_cache, _preview_cache_until
         if api.request.method == "GET":
             with api._alignment_axes_lock:
                 return api.jsonify({"success": True, "calibration": api._alignment_axes})
@@ -141,10 +134,10 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
             ))
             if source_status is not None:
                 with api._alignment_axes_lock:
-                    _alignment_axes = None
+                    api._alignment_axes = None
                 payload = api._waiting_for_current_image(source_status)
-                _preview_cache = (payload, 200)
-                _preview_cache_until = api.time.monotonic() + api._preview_period
+                api._preview_cache = (payload, 200)
+                api._preview_cache_until = api.time.monotonic() + api._preview_period
                 return api.jsonify({**payload, "calibration": None})
             return api.jsonify({"success": False, "error": api._control_error(exc)}), 503
 
@@ -242,7 +235,7 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
             return rejected
         names = ("streak_shutter", "spectrograph_shutter")
         blocked = api._approval_or_response(
-            "alignment.open-shutters", [api._target(api.STREAK_DEVICE, f"write_attribute:{name}") for name in names],
+            "alignment.open-shutters", [api._target(*api.tango_optics.parameter_target(api, name)) for name in names],
             {name: "Open" for name in names}, "vd2.alignment.open-shutters", set(),
         )
         if blocked is not None:
@@ -250,8 +243,10 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
         try:
             proxy = api._proxy()
             api._assert_preparation_idle(proxy)
+            if api.VD2_CAMERA_ONLY and not bool(api._value(proxy, "camera_only_application")):
+                raise RuntimeError("VD2 requires the camera-only HPD-TA profile")
             for name, query in zip(names, ("DevParamGet(TD,Shutter)", "DevParamGet(Spec,Shutter)")):
-                proxy.write_attribute(name, "Open")
+                api.tango_optics.write_parameter(api, proxy, name, "Open")
                 if api._remoteex_readback(proxy, query).lower() != "open":
                     raise RuntimeError(f"Cannot verify {name} Open; inspect optical-path readback")
             return api.jsonify({"success": True})

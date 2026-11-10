@@ -119,6 +119,7 @@ def test_preview_publishes_shared_frame_and_readout_never_reads_it_again(source,
     def read_pixels(_):
         reads.append(True)
         return {k: original[k] for k in ("width", "height", "pixels_b64")}
+    monkeypatch.setattr(vd2, "_protocol_hardware_phase", lambda: "idle")
     monkeypatch.setattr(vd2, "_preview_cache", None)
     monkeypatch.setattr(vd2, "_preview_cache_until", 0.0)
     monkeypatch.setattr(vd2, "_preview_period", 10)

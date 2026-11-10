@@ -26,6 +26,9 @@ from DeviceServers.base.general import DS_General
 from DeviceServers.cameras.hamamatsu_streak.hamamatsu_streak_controller import (
     HamamatsuStreakController,
 )
+from DeviceServers.cameras.hamamatsu_streak.camera_only_profile import (
+    DEFAULT_REMOTE_INI, checked_camera_only_ini, remoteex_process_identity,
+)
 from DeviceServers.cameras.hamamatsu_streak.remoteex_client import RemoteExClient
 from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import RemoteExTransportError
 
@@ -44,6 +47,8 @@ class DS_HAMAMATSU_STREAK(DS_General):
     command_port = device_property(dtype=int, default_value=1001)
     data_port = device_property(dtype=int, default_value=1002)
     ini_path = device_property(dtype=str, default_value="")
+    camera_only_ini_path = device_property(dtype=str, default_value=DEFAULT_REMOTE_INI)
+    remote_camera_only = device_property(dtype=bool, default_value=False)
     default_save_dir = device_property(dtype=str, default_value="")
     command_timeout_s = device_property(dtype=float, default_value=5.0)
     async_timeout_s = device_property(dtype=float, default_value=120.0)
@@ -524,7 +529,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command(dtype_out=str)
     def PrepareDG645ForHPDTA(self):
-        """Apply VD2 Recall 9 and verify that burst mode is disabled."""
+        """Apply VD2 Recall 9 for a legacy full-profile session."""
+        if getattr(self, "remote_camera_only", False) or getattr(getattr(self, "controller", None), "camera_only", False):
+            raise RuntimeError("DG645 timing is owned by the DG645 Tango server")
         self._prepare_dg645_for_hpdta()
         self.last_response_value = (
             f"DG645 Recall {int(self.dg645_hpdta_recall_slot or 9)} applied; BURM=0"
@@ -561,6 +568,16 @@ class DS_HAMAMATSU_STREAK(DS_General):
         )
 
     StartApplication = (command)(_streak_camera_methods_write_delay_e["StartApplication"])
+
+    StartCameraOnlyApplication = (command)(_streak_camera_methods_write_delay_e["StartCameraOnlyApplication"])
+
+    _launch_application = _streak_camera_methods_write_delay_e["_launch_application"]
+
+    @attribute(dtype=bool, access=AttrWriteType.READ)
+    def camera_only_application(self):
+        controller = self.controller
+        return bool(controller and controller.camera_only_identity and self.application_running_value
+                    and controller.camera_only_identity == remoteex_process_identity())
 
     _start_application_background = _streak_camera_methods_write_delay_e["_start_application_background"]
 
@@ -601,7 +618,16 @@ class DS_HAMAMATSU_STREAK(DS_General):
             # a stale application_running flag that blocks shutdown.
             if self._windows_process_running("HPDTA95.exe"):
                 raise
+            if getattr(controller, "camera_only", False) and remoteex_process_identity() is not None:
+                try:
+                    controller.execute_raw("AcqStatus()")
+                except Exception as probe:
+                    if "3,acqstatus,application not running" not in str(probe).lower():
+                        raise RuntimeError("HPD-TA application exit is unverified") from probe
+                else:
+                    raise RuntimeError("HPD-TA remains active in TaRemoteEx") from exc
             self.last_response_value = f"AppEnd closed RemoteEx socket: {exc}"
+        controller.camera_only_identity = None
         self.application_running_value = False
         self._startup_configuration_error = ""
         self.remoteex_status_value = "idle"
@@ -644,6 +670,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.remoteex_status_value = "starting"
         self.busy_command_value = "AcqStart(Live)"
         self.set_state(DevState.RUNNING)
+        if self.remote_camera_only:
+            self._start_live_background(controller, propagate=True)
+            return
         self._live_start_thread = threading.Thread(
             target=self._start_live_background,
             args=(controller,),

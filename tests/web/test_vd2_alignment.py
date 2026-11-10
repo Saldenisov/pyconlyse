@@ -426,18 +426,10 @@ def test_save_phase_overrides_an_otherwise_fresh_cached_preview(monkeypatch):
 
 
 @pytest.mark.parametrize("failure", [False, True])
-def test_parallel_viewer_shares_pending_frame_or_its_failure_without_another_native_read(monkeypatch, failure):
+def test_parallel_viewer_skips_pending_frame_without_another_native_read(monkeypatch, failure):
     from threading import Event, Lock, Thread
-    started, waiting, release = Event(), Event(), Event()
-    native_lock = Lock()
-    class ObservedLock:
-        def acquire(self, **kwargs):
-            if "timeout" in kwargs:
-                waiting.set()
-            return native_lock.acquire(**kwargs)
-        def release(self):
-            native_lock.release()
-    monkeypatch.setattr(vd2, "_preview_lock", ObservedLock())
+    started, release = Event(), Event()
+    monkeypatch.setattr(vd2, "_preview_lock", Lock())
     monkeypatch.setattr(vd2, "_preview_cache", ({"success": True, "width": 1}, 200))
     reads, responses = [], []
     def read(_):
@@ -456,7 +448,8 @@ def test_parallel_viewer_shares_pending_frame_or_its_failure_without_another_nat
     try:
         assert started.wait(2)
         viewer.start()
-        assert waiting.wait(2)
+        viewer.join(1)
+        assert not viewer.is_alive()
         release.set()
     finally:
         release.set()
@@ -465,12 +458,12 @@ def test_parallel_viewer_shares_pending_frame_or_its_failure_without_another_nat
             viewer.join(2)
     assert len(reads) == 1
     assert len(responses) == 2
-    assert responses[0] == responses[1]
+    assert responses[0] == (200, {"success": True, "frame_available": False, "stream_state": "waiting_for_frame"})
     if failure:
-        assert responses[0] == (503, {"success": False, "error": "Camera read failed"})
+        assert responses[1] == (503, {"success": False, "error": "Camera read failed"})
     else:
-        assert responses[0][1]["width"] == 2
-        assert "received_at" in responses[0][1]
+        assert responses[1][1]["width"] == 2
+        assert "received_at" in responses[1][1]
 
 
 def test_snapshot_batches_cached_attributes_and_preserves_individual_faults(monkeypatch):

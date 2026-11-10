@@ -349,3 +349,59 @@ shows both the OD heatmap and the raw-group spectra.
 - Whether accelerator pulse state is readable from Tango/PSP.
 - Required output format besides HDF5: CSV, DAT, JSON, or Igor.
 - Where run files should be saved by default.
+
+## VD2 camera-only RemoteEx commissioning
+
+The camera-only path uses `HPDTA8_VD2_RemoteEx.INI` and
+`VD2_RemoteEx_Streak_Only.hwp` under `C:\ProgramData\Hamamatsu\HPDTA`.
+The manual HPD-TA shortcut uses its own profile.
+
+Deploy the Web and both Tango server changes together. On the camera Tango
+device set `remote_camera_only=true` and `start_application_on_turn_on=0`.
+The optional `camera_only_ini_path` property defaults to the path above.
+Set `PYCONLYSE_VD2_CAMERA_ONLY=1` for Pyconlyse Web after checking that
+RemoteEx starts with a working DCAM readout and Kymera responds through Tango.
+Verify the trigger and the two outgoing pulses on the scope before capture.
+A stale or absent HIS spectral header keeps the raw file and blocks H5
+conversion until the calibration is verified.
+
+For the Internal 5 Hz clock, the managed ABS and BASE sequence enables a
+two-pulse burst at 100 ms spacing, waits ten seconds, and then starts camera
+capture. Use an even frame count. After capture the worker verifies single-shot
+standby and Burst OFF before saving. BRUIT uses 5 Hz without the flash-lamp
+warm-up. Check that the dark optical path is configured before recording BRUIT.
+
+### Paired beam acquisition design
+
+Record BRUIT with the same camera geometry and gain before opening the
+measurement run. Warm the flash lamp for 10 s at 10 Hz before retaining pairs.
+A verified accelerator cycle contributes one ABS frame with electrons and one
+BASE frame without electrons. Fixed mode counts completed tagged pairs, so a
+target of 200 means 200 ABS and 200 BASE frames. Report incomplete cycles
+separately. The internal timing check measures camera cadence only.
+
+For continuous mode, retain raw frames, camera sequence numbers, cycle IDs,
+beam tags, and probe-monitor values in acquisition order. Stream committed
+pairs to server-side reduction independently of the latest-image browser
+preview. Preview may skip images. A raw sequence gap is a recorded event.
+The pulse budget and a user Stop must bound the run even if it never meets the
+error target. Restore the verified DG645 5 Hz base clock and standby at exit.
+
+The offline reducer in `utilities/dataio/vd2_paired_od.py` supports:
+
+- OD of the background-corrected ABS and BASE means.
+- The mean of per-pair OD. The first complete pair can produce a preview.
+- Pairing each ABS with a BASE of similar probe intensity within bounded cycle
+  distance and intensity mismatch. BASE reuse is auditable. Match using a lamp
+  monitor or a pre-beam reference region outside the signal ROI.
+- Replay with specified excluded cycles. Cleaning thresholds should be derived
+  from a beam-off control. Raw frames and exclusions must remain accessible.
+
+Show mean ROI OD and the estimated uncertainty of that mean in mOD. Use
+contiguous cycle blocks to test the effect of correlated lamp drift. Include
+the background contribution when material, and account for reused BASE frames
+in the matched method. Changing ROI or reduction must recompute from stored
+frames or sufficient statistics. Automatic termination requires a verified
+frame/tag join, a validated block uncertainty estimate for the selected
+method, and sufficient independent data. The offline reducer does not control
+acquisition or claim a live uncertainty estimate.

@@ -76,7 +76,7 @@ def test_existing_h5_is_never_replaced(tmp_path):
     request = request_file(tmp_path)
     output = Path(request.his_path).with_suffix(".h5")
     output.write_bytes(b"existing data")
-    with pytest.raises(Vd2ProtocolError, match="already exists"):
+    with pytest.raises(Vd2ProtocolError, match="Existing H5 does not match this HIS; both files retained"):
         process_saved_sequence(request)
     assert output.read_bytes() == b"existing data"
     assert Path(request.his_path).exists()

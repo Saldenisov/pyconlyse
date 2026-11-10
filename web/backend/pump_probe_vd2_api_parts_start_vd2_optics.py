@@ -6,11 +6,59 @@ from __future__ import annotations
 def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
     """Bind implementation to the owning module and its runtime state."""
 
+    def _start_tango_optics(streak, steps):
+        api._assert_preparation_idle(streak)
+        if not bool(api._value(streak, "application_running")):
+            api._progress(steps, "Starting the camera-only RemoteEx profile", stage=2)
+            streak.command_inout("StartRemoteEx")
+            streak.command_inout("StartCameraOnlyApplication")
+        deadline = api.time.monotonic() + 180.0
+        while api.time.monotonic() < deadline:
+            state = str(streak.state()).split(".")[-1]
+            if state in {"FAULT", "ALARM"}:
+                raise RuntimeError(f"Camera-only HPD-TA startup failed: {streak.status()}")
+            if state == "ON" and bool(api._value(streak, "application_running")):
+                if not bool(api._value(streak, "camera_only_application")):
+                    raise RuntimeError("Close the manual HPD-TA session before preparing remote VD2")
+                if str(api._value(streak, "remoteex_status")).lower() == "idle":
+                    break
+            api.time.sleep(1.0)
+        else:
+            raise RuntimeError("Camera-only HPD-TA did not confirm readiness")
+
+        dg645 = api.DeviceProxy(api.DG645_DEVICE)
+        dg645.set_timeout_millis(5000)
+        try:
+            api._prepare_dg645_for_vd2(dg645, steps)
+        finally:
+            api.tango_optics.pause_internal_clock(dg645)
+        profile = api.timing_for_range(api._remoteex_readback(streak, "DevParamGet(TD,Time Range)"))
+        api._apply_vd2_timing(profile, steps)
+        dg645.command_inout("scpi_write", "TRAT 5")
+        if float(dg645.command_inout("scpi_query", "TRAT?")) != 5.0:
+            raise RuntimeError("DG645 internal 5 Hz setpoint unverified")
+        kymera = api._ensure_server(api.KYMERA_DEVICE, steps)
+        kymera.set_timeout_millis(45000)
+        kymera.write_attribute("shutter", "Closed")
+        kymera.command_inout("PrepareVD2Grating")
+        kymera.write_attribute("wavelength_nm", 550.0)
+        wavelength = float(api._value(kymera, "wavelength_nm"))
+        if not api.math.isfinite(wavelength) or abs(wavelength - 550.0) > 0.1:
+            raise RuntimeError("Kymera did not verify 550 nm")
+        if api._remoteex_readback(streak, "DevParamGet(TD,Shutter)").lower() != "closed":
+            raise RuntimeError("Confirm streak shutter Closed before opening Kymera")
+        kymera.write_attribute("shutter", "Open")
+        if str(api._value(kymera, "shutter")).lower() != "open":
+            raise RuntimeError("Kymera shutter did not verify Open")
+        steps.append({"step": "VD2 optics", "status": "camera-only HPD-TA; Kymera and DG645 via Tango"})
+        return api._snapshot(streak)
+
     def _start_vd2_optics(streak, steps):
         """Optical branch is independent of external stages, but requires safe timing."""
-        global _live_average_readback
-        _live_average_readback = None  # A prior HPD-TA instance cannot verify new filter settings.
+        api._live_average_readback = None  # A prior HPD-TA instance cannot verify new filter settings.
         streak.set_timeout_millis(60000)
+        if api.VD2_CAMERA_ONLY:
+            return _start_tango_optics(streak, steps)
 
         # StopRemoteEx below verifies actual local process exit, even when its Tango
         # flags are disconnected. A cold start must not launch it merely to stop it
@@ -94,9 +142,9 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
                 steps.append({"step": f"{label} power", "status": "already enabled"})
 
             dg645 = proxies[api.DG645_DEVICE]
-            if float(dg645.command_inout("scpi_query", "BURM?")) != 0.0:
+            if api.tango_optics.burst_armed(dg645):
                 return None
-            steps.append({"step": "DG645", "status": "verified BURM=0; timing unchanged"})
+            steps.append({"step": "DG645", "status": "verified; timing unchanged"})
 
             owis = proxies[api.OWIS_SAMPLE_DEVICE]
             if int(owis.command_inout("get_status_axis", api.OWIS_SAMPLE_AXIS)) != int(api.DevState.ON):
@@ -119,7 +167,10 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
             ):
                 return None
 
-            # Query HPD-TA directly: Tango's application/grating cache may be stale.
+            if api.VD2_CAMERA_ONLY and not bool(api._value(streak, "camera_only_application")):
+                return None
+
+            # Verify the active camera and grating through their owners.
             for command, expected in (
                 ("AppInfo(Version)", None),
                 ("DevParamGet(Spec,Blaze)", 800.0),
@@ -127,10 +178,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
                 ("DevParamGet(TD,Mode)", "operate"),
                 ("AcqStatus()", "idle"),
             ):
-                parts = str(streak.command_inout("ExecuteRaw", command)).strip().split(",", 2)
-                if len(parts) != 3 or parts[0] != "0" or parts[1] != command.split("(", 1)[0]:
-                    return None
-                value = parts[2].strip()
+                value = api._remoteex_readback(streak, command)
                 if not value:
                     return None
                 if isinstance(expected, float):
@@ -141,7 +189,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
                     return None
 
             running = set(api._astor(api.KYMERA_DEVICE).command_inout("DevGetRunningServers", True))
-            if api.VD2_SERVERS[api.KYMERA_DEVICE] in running:
+            if not api.VD2_CAMERA_ONLY and api.VD2_SERVERS[api.KYMERA_DEVICE] in running:
                 kymera = api.DeviceProxy(api.KYMERA_DEVICE)
                 kymera.set_timeout_millis(2000)
                 api._assert_kymera_passive_server(kymera)
@@ -149,8 +197,8 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
                     return None
             steps.extend([
                 {"step": "RemoteEx / HPD-TA", "status": "already running; verified idle"},
-                {"step": "Kymera grating 2", "status": "verified Blaze 800 / 150 g/mm via HPD-TA"},
-                {"step": "Kymera SDK ownership", "status": "SDK released; HPD-TA owns spectrograph; server may remain running"},
+                {"step": "Kymera grating 2", "status": "verified Blaze 800 / 150 g/mm"},
+                {"step": "Kymera SDK ownership", "status": "Tango owns spectrograph" if api.VD2_CAMERA_ONLY else "HPD-TA owns spectrograph"},
             ])
             return {
                 "already_ready": True,
@@ -180,6 +228,8 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
     _deinitialize_experiment.__qualname__ = "_deinitialize_experiment"
 
     def _remoteex_readback(streak, command):
+        if api.VD2_CAMERA_ONLY and command in api.tango_optics.SPEC_QUERIES:
+            return str(api.tango_optics.read_external(api, api.tango_optics.SPEC_QUERIES[command]))
         raw = str(streak.command_inout("ExecuteRaw", command)).strip()
         parts = raw.split(",", 2)
         if len(parts) != 3 or parts[0] != "0" or parts[1] != command.split("(", 1)[0]:
@@ -206,15 +256,24 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
 
     def _verify_vd2_timing_ready(streak):
         """A partial timing write cannot silently become an Operate acquisition."""
+        if api.VD2_CAMERA_ONLY and not bool(api._value(streak, "camera_only_application")):
+            raise RuntimeError("VD2 requires the camera-only HPD-TA profile")
         mode = api._remoteex_readback(streak, "DevParamGet(TD,Mode)").lower()
-        if mode == "focus":
+        if mode == "focus" and not api.VD2_CAMERA_ONLY:
             return  # Focus live imaging does not use the calibrated sweep trigger.
+        if api.VD2_CAMERA_ONLY:
+            dg645 = api.DeviceProxy(api.DG645_DEVICE)
+            dg645.set_timeout_millis(5000)
+            if api.tango_optics.burst_armed(dg645):
+                raise RuntimeError("DG645 Burst is reserved for managed VD2 sequence recording")
+            if mode == "focus":
+                return
         if mode != "operate":
             raise RuntimeError(f"Cannot confirm streak mode before acquisition: {mode}")
         profile = api.timing_for_range(api._remoteex_readback(streak, "DevParamGet(TD,Time Range)"))
         dg645 = api.DeviceProxy(api.DG645_DEVICE)
         dg645.set_timeout_millis(5000)
-        if float(dg645.command_inout("scpi_query", "BURM?")) != 0.0:
+        if not api.VD2_CAMERA_ONLY and float(dg645.command_inout("scpi_query", "BURM?")) != 0.0:
             raise RuntimeError("DG645 burst mode is not verified OFF; acquisition blocked")
         api.verify_timing(dg645, profile)
 
@@ -289,6 +348,8 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
                 application_running = False
             else:
                 application_running = True  # Direct reply overrides a stale Tango flag.
+                if api.VD2_CAMERA_ONLY and not bool(api._value(streak, "camera_only_application")):
+                    raise RuntimeError("HPD-TA profile is unverified; close the manual session before remote shutdown")
                 if status != "idle":
                     api._progress(steps, "Stopping camera acquisition and waiting for idle", stage=0)
                     api._shutdown_once(lambda: streak.command_inout("StopAcquisition"), steps, "idle acquisition")
@@ -305,7 +366,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
             ):
                 api._progress(steps, f"Closing and verifying {attribute.replace('_', ' ')}", stage=0)
                 if api._remoteex_readback(streak, command).lower() != "closed":
-                    api._shutdown_once(lambda: streak.write_attribute(attribute, "Closed"), steps, attribute)
+                    api._shutdown_once(lambda: api.tango_optics.write_parameter(api, streak, attribute, "Closed"), steps, attribute)
                 api._wait_shutdown_readback(streak, lambda: api._remoteex_readback(streak, command).lower(),
                                         "closed", f"{attribute} closed")
                 steps.append({"step": attribute, "status": "verified closed"})
@@ -353,8 +414,13 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
         starter = api._astor(api.KYMERA_DEVICE)
         if api.VD2_SERVERS[api.KYMERA_DEVICE] in set(starter.command_inout("DevGetRunningServers", True)):
             kymera = api._wait_for_device(api.KYMERA_DEVICE, timeout_s=2.0)
-            api._assert_kymera_passive_server(kymera)
+            if not api.VD2_CAMERA_ONLY:
+                api._assert_kymera_passive_server(kymera)
             if str(kymera.state()).split(".")[-1].upper() != "OFF":
+                if api.VD2_CAMERA_ONLY:
+                    kymera.write_attribute("shutter", "Closed")
+                    if str(api._value(kymera, "shutter")).lower() != "closed":
+                        raise RuntimeError("Cannot confirm Kymera shutter closed; power retained")
                 kymera.command_inout("turn_off")
             api._verify_kymera_sdk_released(kymera)
         steps.append({"step": "Kymera SDK ownership", "status": "released; Tango server retained"})

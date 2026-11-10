@@ -146,50 +146,70 @@ def _bind_streak_camera_methods_write_delay_e(api):
         self.set_state(api.DevState.ON)
 
     def StartApplication(self):
+        if getattr(self, "remote_camera_only", False):
+            return self.StartCameraOnlyApplication()
+        return self._launch_application()
+
+    def StartCameraOnlyApplication(self):
+        ini = api.checked_camera_only_ini(self.camera_only_ini_path)
+        if self._windows_process_running("HPDTA95.exe"):
+            raise RuntimeError("Close the existing HPD-TA session before starting the camera-only profile")
+        controller = self._require_controller()
+        try:
+            controller.execute_raw("AcqStatus()")
+        except Exception as exc:
+            if "3,acqstatus,application not running" not in str(exc).lower():
+                raise RuntimeError("Cannot confirm the RemoteEx host has no HPD-TA session") from exc
+        else:
+            raise RuntimeError("Close the existing RemoteEx HPD-TA session before starting the camera-only profile")
+        return self._launch_application(ini)
+
+    def _launch_application(self, camera_only_ini=None):
         if not self._power_dependency_allows_hardware_operation(force=True):
             raise RuntimeError(self._power_dependency_status)
-
-        if (
-            self._application_start_thread is not None
-            and self._application_start_thread.is_alive()
-        ):
+        if self._application_start_thread is not None and self._application_start_thread.is_alive():
+            if camera_only_ini is not None:
+                raise RuntimeError("An HPD-TA startup is already in progress")
             return self.application_version_value
 
         controller = self._require_controller()
         self._startup_configuration_error = ""
-        self.busy_command_value = f"DG645 Recall {int(self.dg645_hpdta_recall_slot or 9)}"
-        try:
-            self._prepare_dg645_for_hpdta()
-        except Exception as exc:
-            self.busy_command_value = ""
-            self.last_response_value = f"DG645 preflight failed: {exc}"
-            self.remoteex_status_value = "idle"
-            self.set_state(api.DevState.ON)
-            raise RuntimeError(self.last_response_value) from exc
+        controller.camera_only = camera_only_ini is not None
+        controller.camera_only_identity = None
+        if camera_only_ini is None:
+            self.busy_command_value = f"DG645 Recall {int(self.dg645_hpdta_recall_slot or 9)}"
+            try:
+                self._prepare_dg645_for_hpdta()
+            except Exception as exc:
+                self.busy_command_value = ""
+                self.last_response_value = f"DG645 preflight failed: {exc}"
+                self.remoteex_status_value = "idle"
+                self.set_state(api.DevState.ON)
+                raise RuntimeError(self.last_response_value) from exc
         self.remoteex_status_value = "starting"
         self.busy_command_value = "AppStart()"
         self.set_state(api.DevState.RUNNING)
         self._application_start_thread = api.threading.Thread(
             target=self._start_application_background,
-            args=(controller,),
+            args=(controller, camera_only_ini),
             daemon=True,
             name="hamamatsu-start-application",
         )
         self._application_start_thread.start()
         return self.application_version_value
 
-    def _start_application_background(
-        self, controller: HamamatsuStreakController
-    ) -> None:
+    def _start_application_background(self, controller, camera_only_ini=None) -> None:
         try:
-            controller.start_application()
+            if camera_only_ini is None:
+                controller.start_application()
+            else:
+                controller.start_application(ini_path=camera_only_ini)
         except Exception as exc:
             self._reset_remoteex_connection(f"StartApplication failed: {exc}")
             self._startup_configuration_error = f"HPD-TA startup failed: {exc}"
             self.set_state(api.DevState.FAULT)
             self.set_status(self._startup_configuration_error)
             return
-
         self._configure_vd2_startup_background(controller)
 
     def _configure_vd2_startup_background(
@@ -197,6 +217,11 @@ def _bind_streak_camera_methods_write_delay_e(api):
     ) -> None:
         try:
             snapshot = controller.configure_vd2_startup()
+            if getattr(controller, "camera_only", False):
+                identity = api.remoteex_process_identity()
+                if identity is None:
+                    raise RuntimeError("Cannot identify the camera-only TaRemoteEx host")
+                controller.camera_only_identity = identity
             self._sync_from_snapshot(snapshot)
             self.last_command_value = controller.last_command
             self.last_response_value = controller.last_response_text
@@ -214,7 +239,7 @@ def _bind_streak_camera_methods_write_delay_e(api):
             self.set_state(api.DevState.FAULT)
             self.set_status(self._startup_configuration_error)
 
-    def _start_live_background(self, controller: HamamatsuStreakController) -> None:
+    def _start_live_background(self, controller: HamamatsuStreakController, *, propagate=False) -> None:
         try:
             controller.start_live()
             self.last_command_value = controller.last_command
@@ -224,6 +249,8 @@ def _bind_streak_camera_methods_write_delay_e(api):
             self.last_response_value = f"StartLive failed: {exc}"
             self.remoteex_status_value = "fault"
             self.set_state(api.DevState.FAULT)
+            if propagate:
+                raise
 
     def ExecuteRaw(self, command_text: str):
         if command_text == "AsyncCommandStatus()":
@@ -264,6 +291,8 @@ def _bind_streak_camera_methods_write_delay_e(api):
         "StartRemoteEx": StartRemoteEx,
         "StopRemoteEx": StopRemoteEx,
         "StartApplication": StartApplication,
+        "StartCameraOnlyApplication": StartCameraOnlyApplication,
+        "_launch_application": _launch_application,
         "_start_application_background": _start_application_background,
         "_configure_vd2_startup_background": _configure_vd2_startup_background,
         "_start_live_background": _start_live_background,

@@ -360,6 +360,17 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
                 api._target(api.ASTOR_DEVICE, "DevStop"),
             ]
         )
+        if api.VD2_CAMERA_ONLY:
+            replaced = {
+                (api.STREAK_DEVICE, "PrepareDG645ForHPDTA"), (api.STREAK_DEVICE, "StartApplication"),
+                (api.STREAK_DEVICE, "PrepareVD2Startup"), (api.STREAK_DEVICE, "write_attribute:spectrograph_shutter"),
+                (api.STREAK_DEVICE, "StopApplication"), (api.STREAK_DEVICE, "StopRemoteEx"),
+                (api.KYMERA_DEVICE, "turn_off"),
+            }
+            targets = [item for item in targets if item not in [api._target(*key) for key in replaced]]
+            targets += [api._target(api.STREAK_DEVICE, "StartCameraOnlyApplication"),
+                        api._target(api.KYMERA_DEVICE, "write_attribute:shutter"),
+                        api._target(api.KYMERA_DEVICE, "write_attribute:wavelength_nm")]
         return targets, {
             "servers": api._server_arguments(),
             "recovery_plan": api._recovery_plan(
@@ -381,6 +392,7 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
             "dg645_timing": api.timing_for_range("1 us").as_dict(),
             "owis_axis": api.OWIS_SAMPLE_AXIS,
             "kymera_grating": 2,
+            **({"hpdta_profile": "camera-only", "kymera_wavelength_nm": 550.0} if api.VD2_CAMERA_ONLY else {}),
         }
 
     _initialize_authorization.__module__ = api.__name__
@@ -390,7 +402,7 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
         targets = [
             api._target(api.STREAK_DEVICE, "StopAcquisition"),
             api._target(api.STREAK_DEVICE, "write_attribute:streak_shutter"),
-            api._target(api.STREAK_DEVICE, "write_attribute:spectrograph_shutter"),
+            api._target(*api.tango_optics.parameter_target(api, "spectrograph_shutter")),
             api._target(api.STREAK_DEVICE, "write_attribute:streak_mode"),
             api._target(api.STREAK_DEVICE, "StopApplication"),
             api._target(api.STREAK_DEVICE, "StopRemoteEx"),
@@ -434,7 +446,7 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
             api._target(api.STREAK_DEVICE, "StartSequence"),
             api._target(api.STREAK_DEVICE, "ExecuteRaw"),
             api._target(api.STREAK_DEVICE, "SaveCurrentSequence"),
-        ], {
+        ] + ([api._target(api.DG645_DEVICE, "scpi_write")] if api.VD2_CAMERA_ONLY else []), {
             "phase": request_data.phase,
             "frames_per_his": request_data.frames_per_his,
             "output_root": request_data.output_root,
@@ -443,6 +455,11 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
             "sequence_loops": str(request_data.frames_per_his),
             "wait_query": api.SEQUENCE_WAIT_QUERY,
             "wait_timeout_s": api.SEQUENCE_TIMEOUT_S,
+            **({"dg645_capture": {
+                "base_rate_hz": 5, "burst_count": 2, "burst_period_s": 0.1,
+                "warmup_s": 10 if request_data.phase in {"ABSORPTION", "BASE"} else 0,
+                "cleanup": ["TSRC 5", "BURM 0"],
+            }} if api.VD2_CAMERA_ONLY else {}),
             **({"sample_description": request_data.sample_description} if request_data.sample_description else {}),
             **({"reuse_bruit": request_data.reuse_bruit} if request_data.reuse_bruit != "latest" else {}),
         }
@@ -453,7 +470,10 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
     def _snapshot(proxy: DeviceProxy) -> Dict[str, Any]:
         values: Dict[str, Any] = {}
         errors: Dict[str, str] = {}
-        requested = list(api.READ_ATTRIBUTES.items())
+        external = api.tango_optics.EXTERNAL_FIELDS if api.VD2_CAMERA_ONLY else set()
+        requested = [(key, attr) for key, attr in api.READ_ATTRIBUTES.items() if key not in external]
+        if api.VD2_CAMERA_ONLY:
+            requested.append(("camera_only_application", "camera_only_application"))
         attributes = None
         read_many = getattr(proxy, "read_attributes", None)
         if callable(read_many):
@@ -476,6 +496,13 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
                 values[key] = None
                 errors[key] = str(exc)
 
+        proxies = {}
+        for key in sorted(external):
+            try:
+                values[key] = api.tango_optics.read_external(api, key, proxies)
+            except Exception as exc:
+                values[key] = None
+                errors[key] = str(exc)
         state = str(proxy.state()).split(".")[-1]
         return {
             "device": api.STREAK_DEVICE,

@@ -83,7 +83,7 @@ def _bind_streak_camera_methods_power_dependency_ready_state(api):
         try:
             self._connect_remoteex()
 
-            if bool(int(self.start_application_on_turn_on or 0)):
+            if bool(int(self.start_application_on_turn_on or 0)) and not getattr(self.controller, "camera_only", False):
                 self.controller.start_application()
                 try:
                     snapshot = self.controller.configure_vd2_startup()
@@ -135,6 +135,7 @@ def _bind_streak_camera_methods_power_dependency_ready_state(api):
             default_save_dir=str(self.default_save_dir or ""),
             async_timeout=float(self.async_timeout_s or 120.0),
         )
+        controller.camera_only = bool(getattr(self, "remote_camera_only", False))
         try:
             controller.connect(connect_data_port=bool(int(self.connect_data_port or 0)))
         except Exception:
