@@ -265,7 +265,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
             dg645 = api.DeviceProxy(api.DG645_DEVICE)
             dg645.set_timeout_millis(5000)
             if api.tango_optics.burst_armed(dg645):
-                raise RuntimeError("DG645 Burst is reserved for managed VD2 sequence recording")
+                raise RuntimeError("DG645 Burst is reserved for paired ABS/BASE acquisition")
             if mode == "focus":
                 return
         if mode != "operate":

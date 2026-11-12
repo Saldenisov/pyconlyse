@@ -462,9 +462,8 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
             "wait_query": api.SEQUENCE_WAIT_QUERY,
             "wait_timeout_s": api.SEQUENCE_TIMEOUT_S,
             **({"dg645_capture": {
-                "base_rate_hz": 5, "burst_count": 2, "burst_period_s": 0.1,
-                "warmup_s": 10 if request_data.phase in {"ABSORPTION", "BASE"} else 0,
-                "cleanup": ["TSRC 5", "BURM 0"],
+                "base_rate_hz": 5, "burst_enabled": False, "warmup_s": 0,
+                "internal_cleanup": ["TSRC 5", "BURM 0"],
             }} if api.VD2_CAMERA_ONLY else {}),
             **({"sample_description": request_data.sample_description} if request_data.sample_description else {}),
             **({"reuse_bruit": request_data.reuse_bruit} if request_data.reuse_bruit != "latest" else {}),

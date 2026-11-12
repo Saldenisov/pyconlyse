@@ -365,11 +365,13 @@ Verify the trigger and the two outgoing pulses on the scope before capture.
 A stale or absent HIS spectral header keeps the raw file and blocks H5
 conversion until the calibration is verified.
 
-For the Internal 5 Hz clock, the managed ABS and BASE sequence enables a
-two-pulse burst at 100 ms spacing, waits ten seconds, and then starts camera
-capture. Use an even frame count. After capture the worker verifies single-shot
-standby and Burst OFF before saving. BRUIT uses 5 Hz without the flash-lamp
-warm-up. Check that the dark optical path is configured before recording BRUIT.
+Use **Standard measurement · 5 Hz** for separate ABS, BASE, and BRUIT
+sequences. Set the DG645 trigger mode to Internal at 5 Hz or select the
+appropriate edge of the external ELYSE 5 Hz sync. Burst stays off. With the
+internal clock, DG645 returns to standby before the file is saved. With
+external sync, the selected trigger stays active. Any positive frame count
+supported by the standard protocol can be used. Configure the dark optical
+path before recording BRUIT.
 
 ### Paired ABS/BASE acquisition
 

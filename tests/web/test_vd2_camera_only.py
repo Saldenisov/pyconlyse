@@ -13,7 +13,7 @@ class Generator:
     def __init__(self, events, **settings):
         self.events = events
         self.values = {"BURM": 0, "TSRC": 5, "TRAT": 5, "BURC": 2, "BURP": 0.1, "BURD": 0, **settings}
-        self.reject_off = False
+        self.reject_pause = False
 
     def set_timeout_millis(self, timeout):
         pass
@@ -27,7 +27,7 @@ class Generator:
         assert command == "scpi_write"
         key, raw = value.split()
         self.events.append(value)
-        if not (self.reject_off and value == "BURM 0"):
+        if not (self.reject_pause and value == "TSRC 5"):
             self.values[key] = float(raw)
 
 
@@ -77,54 +77,48 @@ def rig(monkeypatch):
     }[device])
     monkeypatch.setattr(api, "verify_timing", lambda proxy, profile: None)
 
-    def warm(seconds):
-        assert dg645.values["BURM"] == 1 and dg645.values["TSRC"] == 0
-        events.append(("warm", seconds))
-
-    monkeypatch.setattr(optics, "time", SimpleNamespace(sleep=warm))
     return camera, dg645, events
 
 
-@pytest.mark.parametrize(("phase", "fail_on"), [
-    ("ABSORPTION", None), ("BASE", None), ("BRUIT", None),
-    ("ABSORPTION", "StartSequence"), ("ABSORPTION", "SaveCurrentSequence"),
+@pytest.mark.parametrize(("phase", "frame_count", "fail_on"), [
+    ("ABSORPTION", 3, None), ("BASE", 1, None), ("BRUIT", 4, None),
+    ("ABSORPTION", 4, "StartSequence"), ("ABSORPTION", 4, "SaveCurrentSequence"),
 ])
-def test_managed_sequence_pauses_before_saving(tmp_path, rig, phase, fail_on):
+def test_standard_internal_sequence_stays_at_five_hz_and_pauses_before_saving(
+    tmp_path, rig, phase, frame_count, fail_on,
+):
     camera, dg645, events = rig
     camera.fail_on = fail_on
     protocol = Vd2MeasurementProtocol(
         lambda: camera, capture_clock=lambda proxy, request: optics.measurement_clock(api, proxy, request),
     )
-    protocol.start(phase=phase, frames_per_his=4, output_root=str(tmp_path), run_name="test")
+    protocol.start(phase=phase, frames_per_his=frame_count, output_root=str(tmp_path), run_name="test")
     protocol.wait(5)
     assert {key: dg645.values[key] for key in ("BURM", "TSRC", "TRAT")} == {"BURM": 0, "TSRC": 5, "TRAT": 5}
-    if phase == "BRUIT":
-        assert "BURM 1" not in events
-        assert ("warm", 10) not in events
-    else:
-        assert events.index("BURM 1") < events.index("TSRC 0") < events.index(("warm", 10))
-        assert events.index(("warm", 10)) < events.index("StartSequence") < events.index("TSRC 5")
-        assert events.index("TSRC 5") < events.index("BURM 0")
+    assert [event for event in events if isinstance(event, str) and " " in event] == ["TSRC 0", "TSRC 5"]
+    assert ("sequence_loops", str(frame_count)) in events
+    assert events.index("TSRC 0") < events.index("StartSequence") < events.index("TSRC 5")
     if fail_on != "StartSequence":
         assert events.index("WaitForIdle") < events.index("TSRC 5") < events.index("SaveCurrentSequence")
     if fail_on:
         assert "Synthetic camera failure" in protocol.status()["error"]
     else:
         assert protocol.status()["status"] == "completed"
+        assert protocol.status()["capture_rate"] == 5
 
 
-def test_unverified_burst_off_retains_capture_without_processing(tmp_path, rig):
+def test_unverified_standby_retains_capture_without_processing(tmp_path, rig):
     camera, dg645, events = rig
-    dg645.reject_off = True
+    dg645.reject_pause = True
     protocol = Vd2MeasurementProtocol(
         lambda: camera, capture_clock=lambda proxy, request: optics.measurement_clock(api, proxy, request),
         capture_validator=lambda *args: pytest.fail("Unverified clock must not reach conversion"),
     )
     protocol.start(phase="BASE", frames_per_his=4, output_root=str(tmp_path), run_name="test")
     protocol.wait(5)
-    assert "Burst OFF unverified" in protocol.status()["error"]
-    assert dg645.values["TSRC"] == 5
-    assert events.index("TSRC 5") < events.index("BURM 0") < events.index("SaveCurrentSequence")
+    assert "pulse pause" in protocol.status()["error"]
+    assert dg645.values["TSRC"] == 0
+    assert events.index("TSRC 5") < events.index("SaveCurrentSequence")
 
 
 def test_burst_on_is_reserved_for_managed_capture(rig):
@@ -134,18 +128,37 @@ def test_burst_on_is_reserved_for_managed_capture(rig):
     assert events == []
 
 
-def test_managed_sequence_rejects_odd_frame_count_before_firing(rig):
-    camera, _, events = rig
-    with pytest.raises(ValueError, match="even frame count"):
-        with optics.measurement_clock(api, camera, SimpleNamespace(phase="BASE", frames_per_his=3)):
-            pytest.fail("Invalid request reached acquisition")
-    assert events == []
+@pytest.mark.parametrize(("source", "edge"), [(1, "external_rising"), (2, "external_falling")])
+def test_standard_sequence_preserves_external_sync(tmp_path, rig, source, edge):
+    camera, dg645, events = rig
+    dg645.values.update(TSRC=source, TRAT=0.001)
+    machine = {}
+    protocol = Vd2MeasurementProtocol(
+        lambda: camera, capture_clock=lambda proxy, request: optics.measurement_clock(api, proxy, request),
+        snapshot_reader=lambda proxy: machine,
+    )
+    protocol.start(phase="BASE", frames_per_his=3, output_root=str(tmp_path), run_name="test")
+    protocol.wait(5)
+    assert protocol.status()["status"] == "completed"
+    assert protocol.status()["capture_rate"] == 5
+    assert machine["vd2_clock"]["trigger_source"] == edge
+    assert dg645.values["TSRC"] == source and dg645.values["BURM"] == 0
+    assert events == [("sequence_loops", "3"), "StartSequence", "WaitForIdle", "SaveCurrentSequence"]
+
+
+def test_standard_capture_checks_intervals_only_when_two_frames_exist(rig, monkeypatch):
+    observed = []
+    monkeypatch.setattr("vd2_his_timing.verify_frame_rate", lambda *args: observed.append(args))
+    for frame_count in (1, 3):
+        request = SimpleNamespace(phase="BRUIT", frames_per_his=frame_count, his_path="dark.his")
+        optics.validate_saved_capture(api, request, {}, 5)
+    assert observed == [("dark.his", 3, 5)]
 
 
 def test_burst_is_blocked_on_unmanaged_sequence(rig):
     camera, dg645, events = rig
     dg645.values.update(BURM=1, TSRC=0)
-    with pytest.raises(RuntimeError, match="reserved for managed"):
+    with pytest.raises(RuntimeError, match="reserved for paired"):
         api._verify_vd2_timing_ready(camera)
     assert events == []
 

@@ -508,7 +508,7 @@ export function Vd2PhaseProtocol({ protocol, settings, disabled, settingsDisable
     <section className="vd2-phase-protocol" aria-label="VD2 Bruit Base Absorption protocol">
       <header>
         <div>
-          <h2>Measurement protocol</h2>
+          <h2>Standard measurement · 5 Hz</h2>
         </div>
         <div className={`vd2-protocol-state is-${protocol?.status || 'idle'}`}>
           {active ? `${protocol.phase_label || protocol.phase} ${protocol.status}` : (protocol?.status || 'idle')}

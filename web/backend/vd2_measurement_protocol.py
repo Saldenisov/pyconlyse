@@ -212,14 +212,16 @@ class Vd2MeasurementProtocol:
             timing_error = None
             try:
                 clock = self._capture_clock(proxy, request) if self._capture_clock else nullcontext()
-                with clock as configured_rate:
+                with clock as configured_clock:
                     self._update(job_id, status="acquiring")
-                    if configured_rate is not None and machine_before is not None:
-                        machine_before["vd2_clock"] = {
-                            "trigger_source": "internal", "base_rate_hz": 5,
-                            "nominal_capture_rate_hz": configured_rate,
-                            "warmup_s": 10 if configured_rate == 10 else 0,
-                        }
+                    configured_rate = None
+                    if configured_clock is not None:
+                        configured_rate, trigger_source = configured_clock
+                        if machine_before is not None:
+                            machine_before["vd2_clock"] = {
+                                "trigger_source": trigger_source, "base_rate_hz": configured_rate,
+                                "nominal_capture_rate_hz": configured_rate, "warmup_s": 0,
+                            }
                     record("acquiring", machine_before=machine_before)
                     proxy.command_inout("StartSequence")
                     dg645 = (machine_before or {}).get("devices", {}).get("manip/sync/DG645", {}).get("values", {})

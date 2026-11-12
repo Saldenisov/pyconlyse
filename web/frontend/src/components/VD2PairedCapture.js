@@ -65,7 +65,7 @@ export default function VD2PairedCapture({ available, run, settings, disabled, r
     || pairLimit < 1 || pairLimit > 10000 || (mode === 'precision' && (!selected || !validTarget));
   return (
     <section className="vd2-phase-protocol" aria-label="Paired ABS/BASE acquisition">
-      <header><h2>Paired ABS/BASE</h2><small role="status">{run?.stage || STOP_LABELS[run?.stop_reason] || ''}</small></header>
+      <header><h2>Paired ABS/BASE · 10 Hz</h2><small role="status">{run?.stage || STOP_LABELS[run?.stop_reason] || ''}</small></header>
       <div className="vd2-protocol-settings">
         <label><span>Stop condition</span><select value={currentMode} disabled={locked} onChange={event => setMode(event.target.value)}>
           <option value="fixed">Fixed pair count</option>

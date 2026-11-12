@@ -1,7 +1,6 @@
 """VD2 instrument access for the camera-only HPD-TA profile."""
 from contextlib import contextmanager
 import math
-import time
 
 
 KYMERA_ATTRIBUTES = {
@@ -155,7 +154,7 @@ def write_parameter(api, camera, name, value):
         _set(proxy, f"TRAT {rate:.12g}", "TRAT?", rate)
     elif name == "delay_burst_mode":
         if value != "Off":
-            raise ValueError("Burst is armed automatically by an ABS or BASE measurement")
+            raise ValueError("Burst is armed automatically by paired ABS/BASE acquisition")
         pause_internal_clock(proxy)
 
 
@@ -197,7 +196,7 @@ def _confirm_flash_lamp_power(api):
     ids = list(map(int, _value(lamp, "ids")))
     states = list(map(int, _value(lamp, "states")))
     if len(ids) != len(states) or len(set(ids)) != len(ids) or dict(zip(ids, states)).get(1) != 1:
-        raise RuntimeError("VD2 flash lamp supply must be verified ON before warm-up")
+        raise RuntimeError("VD2 flash lamp supply must be verified ON before illuminated acquisition")
 
 
 @contextmanager
@@ -206,30 +205,23 @@ def measurement_clock(api, camera, request):
         yield None
         return
     dg645 = _proxy(api, api.DG645_DEVICE)
-    if _query(dg645, "TSRC?") not in {0, 5} or not math.isclose(
-        _query(dg645, "TRAT?"), 5, rel_tol=0, abs_tol=1e-8
-    ):
-        raise RuntimeError("VD2 managed acquisition requires the internal 5 Hz clock")
-    paired = request.phase in {"ABSORPTION", "BASE"}
-    if paired and request.frames_per_his % 2:
-        raise ValueError("Paired Burst recording requires an even frame count")
+    source = _query(dg645, "TSRC?")
+    if source not in {0, 1, 2, 5}:
+        raise RuntimeError("Select Internal or external 5 Hz sync for standard VD2 acquisition")
+    if source in {0, 5} and not math.isclose(_query(dg645, "TRAT?"), 5, rel_tol=0, abs_tol=1e-8):
+        raise RuntimeError("Standard VD2 acquisition requires an internal clock of 5 Hz")
     api._verify_vd2_timing_ready(camera)
-    if paired:
+    if request.phase in {"ABSORPTION", "BASE"}:
         _confirm_flash_lamp_power(api)
+    if source in {1, 2}:
+        yield 5, "external_rising" if source == 1 else "external_falling"
+        return
+
     acquisition_error = None
     try:
-        pause_internal_clock(dg645)
-        if paired:
-            _set(dg645, "BURC 2", "BURC?", 2)
-            _set(dg645, "BURP 0.1", "BURP?", 0.1)
-            if _query(dg645, "BURD?") != 0:
-                raise RuntimeError("Expected zero DG645 burst delay for paired recording")
-            _set(dg645, "BURM 1", "BURM?", 1)
-        _set(dg645, "TSRC 0", "TSRC?", 0)
-        if paired:
-            validate_paired_burst(dg645)
-            time.sleep(10.0)
-        yield 10 if paired else 5
+        if source == 5:
+            _set(dg645, "TSRC 0", "TSRC?", 0)
+        yield 5, "internal"
     except Exception as exc:
         acquisition_error = exc
         raise
@@ -303,7 +295,7 @@ def validate_saved_capture(api, request, machine_before, rate):
     from vd2_his_timing import verify_frame_rate
 
     try:
-        if rate is not None:
+        if rate is not None and request.frames_per_his > 1:
             verify_frame_rate(request.his_path, request.frames_per_his, rate)
         if request.phase == "BRUIT":
             return  # A dark reference needs detector geometry, even without a wavelength calibration.
