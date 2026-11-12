@@ -16,7 +16,7 @@ export function treatmentFolderUrl(folder) {
 }
 
 export function previewShouldPoll(tab, state, protocol, enabled) {
-  const sequenceAcquiring = protocol?.status === 'acquiring';
+  const sequenceAcquiring = protocol?.status === 'acquiring' || (protocol?.paired?.active && protocol.paired.status === 'acquiring');
   const cameraAvailable = Boolean(state?.connected && state?.application_running)
     || Boolean(state?.state_deferred && sequenceAcquiring);
   return ['acquisition', 'alignment'].includes(tab) && enabled && cameraAvailable

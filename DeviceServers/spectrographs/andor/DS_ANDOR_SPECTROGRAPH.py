@@ -385,6 +385,91 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             self._read_grating_info(self.spectrograph)
             self.refresh_calibration_axis()
 
+    def _connected_kymera(self):
+        if self.spectrograph is None or not self._power_dependency_allows_hardware_operation(force=True):
+            raise RuntimeError("Kymera must be powered and initialized through Tango")
+        return self.spectrograph
+
+    @attribute(dtype=str, access=AttrWriteType.READ_WRITE)
+    def shutter(self):
+        with self._get_lifecycle_lock():
+            mode = self._connected_kymera().get_shutter()
+            return {"closed": "Closed", "opened": "Open", "bnc": "External BNC"}[mode]
+
+    def write_shutter(self, value):
+        mode = {"closed": "closed", "open": "opened", "external bnc": "bnc"}[value.lower()]
+        with self._get_lifecycle_lock():
+            device = self._connected_kymera()
+            device.set_shutter(mode)
+            if device.get_shutter() != mode:
+                raise RuntimeError("Kymera shutter readback differs from the requested mode")
+
+    @attribute(dtype=str, access=AttrWriteType.READ_WRITE)
+    def exit_mirror(self):
+        return {"direct": "Front", "side": "Side"}[self._connected_kymera().get_flipper_port("output")]
+
+    def write_exit_mirror(self, value):
+        port = {"front": "direct", "side": "side"}[value.lower()]
+        self._connected_kymera().set_flipper_port("output", port)
+        self.refresh_calibration_axis()
+
+    @attribute(dtype=int, access=AttrWriteType.READ_WRITE)
+    def turret(self):
+        return self._connected_kymera().get_turret()
+
+    def write_turret(self, value):
+        self._connected_kymera().set_turret(value)
+        self._sync_from_spectrograph(self.spectrograph)
+
+    @attribute(dtype=int, access=AttrWriteType.READ_WRITE)
+    def focus_mirror(self):
+        return self._connected_kymera().get_focus_mirror_position()
+
+    def write_focus_mirror(self, value):
+        self._connected_kymera().set_focus_mirror_position(value)
+
+    @attribute(dtype=int, access=AttrWriteType.READ_WRITE)
+    def side_entry_iris(self):
+        return self._connected_kymera().get_iris_width("side")
+
+    def write_side_entry_iris(self, value):
+        if not 0 <= value <= 100:
+            raise ValueError("Kymera iris width must be between 0 and 100")
+        self._connected_kymera().set_iris_width("side", value)
+
+    def _vd2_input_slit(self, device):
+        if device.is_flipper_present("input"):
+            return "input_" + device.get_flipper_port("input")
+        present = [name for name in ("input_direct", "input_side") if device.is_slit_present(name)]
+        if len(present) != 1:
+            raise RuntimeError("Cannot identify the active Kymera input slit")
+        return present[0]
+
+    @attribute(dtype=float, access=AttrWriteType.READ_WRITE)
+    def active_input_slit_um(self):
+        device = self._connected_kymera()
+        return device.get_slit_width(self._vd2_input_slit(device)) * 1e6
+
+    def write_active_input_slit_um(self, value):
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("Kymera slit width must be finite and nonnegative")
+        device = self._connected_kymera()
+        self._set_slit_width(self._vd2_input_slit(device), value)
+
+    @command(dtype_in=float)
+    def SelectGratingRuling(self, ruling):
+        if not math.isfinite(ruling) or ruling <= 0:
+            raise ValueError("Grating ruling must be finite and positive")
+        with self._get_lifecycle_lock():
+            device = self._connected_kymera()
+            matches = [index for index in range(1, int(device.get_gratings_number()) + 1)
+                       if abs(float(device.get_grating_info(index)[0]) - ruling) <= 0.01]
+            if len(matches) != 1:
+                raise ValueError(f"Kymera has no unique grating with ruling {ruling:g} g/mm")
+            self.set_grating_index(matches[0])
+            if int(device.get_grating()) != matches[0]:
+                raise RuntimeError("Kymera grating selection did not verify")
+
     @command(dtype_out=str)
     def PrepareVD2Grating(self):
         """Select physical grating 2 and verify SDK metadata, never a UI label."""

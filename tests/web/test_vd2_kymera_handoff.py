@@ -1,6 +1,7 @@
 """No live equipment: exclusive HPD-TA / Kymera SDK ownership and cleanup."""
 
 import json
+from itertools import count
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +9,7 @@ import pytest
 from tests.web.test_pump_probe_vd2_api import vd2_api_module as api
 
 
-def rig(monkeypatch, *, busy=False, wrong_blaze=False, stop_error=False):
+def rig(monkeypatch, *, busy=False, wrong_blaze=False, stop_error=False, auto_probe="0", stays_on=False):
     events = []
     values = {"application_running": True, "remoteex_status": "idle",
               "streak_shutter": "Open", "spectrograph_shutter": "Open", "connected": True}
@@ -37,8 +38,16 @@ def rig(monkeypatch, *, busy=False, wrong_blaze=False, stop_error=False):
                 values["connected"] = False
 
     class Kymera:
+        current_state = "ON"
+
         def set_timeout_millis(self, timeout):
-            assert timeout == 45000
+            assert timeout in {2000, 45000}
+
+        def state(self):
+            return self.current_state
+
+        def get_property(self, names):
+            return {name: [auto_probe] if auto_probe is not None else [] for name in names}
 
         def command_inout(self, name):
             events.append((name, None))
@@ -46,6 +55,10 @@ def rig(monkeypatch, *, busy=False, wrong_blaze=False, stop_error=False):
             if name == "PrepareVD2Grating":
                 return json.dumps({"grating": 2, "blaze": 300 if wrong_blaze else 800, "ruling": 150})
             assert name == "turn_off"
+            if stop_error:
+                raise RuntimeError("SDK ownership was not released")
+            if not stays_on:
+                self.current_state = "OFF"
 
     def ensure(device, steps):
         assert device == api.KYMERA_DEVICE
@@ -55,17 +68,10 @@ def rig(monkeypatch, *, busy=False, wrong_blaze=False, stop_error=False):
         events.append(("start Kymera", None))
         return Kymera()
 
-    def stop(starter, server):
-        assert server == api.VD2_SERVERS[api.KYMERA_DEVICE]
-        assert events[-1] == ("turn_off", None)
-        events.append(("stop Kymera", None))
-        if stop_error:
-            raise RuntimeError("SDK ownership was not released")
-
     monkeypatch.setattr(api, "_measurement_protocol", SimpleNamespace(status=lambda: {"status": "idle"}))
     monkeypatch.setattr(api, "_ensure_server", ensure)
     monkeypatch.setattr(api, "_astor", lambda *args: object())
-    monkeypatch.setattr(api, "stop_managed_server", stop)
+    monkeypatch.setattr(api, "stop_managed_server", lambda *_args, **_kwargs: pytest.fail("Retain Kymera server; release SDK only"))
     return Streak(), events, values
 
 
@@ -77,10 +83,10 @@ def test_handoff_closes_shutters_and_stops_hpdta_before_sdk_access(monkeypatch):
         ("ExecuteRaw", "AcqStatus()"),
         ("streak_shutter", "Closed"), ("spectrograph_shutter", "Closed"),
         ("StopApplication", None), ("StopRemoteEx", None), ("start Kymera", None),
-        ("PrepareVD2Grating", None), ("turn_off", None), ("stop Kymera", None),
+        ("PrepareVD2Grating", None), ("turn_off", None),
     ]
     assert not values["application_running"]
-    assert steps[-1]["status"] == "server stopped; released to HPD-TA"
+    assert steps[-1]["status"] == "SDK deinitialized; server retained; released to HPD-TA"
 
 
 def test_active_acquisition_is_not_stopped_or_reconfigured(monkeypatch):
@@ -95,7 +101,7 @@ def test_bad_grating_readback_still_releases_sdk_but_does_not_report_ready(monke
     steps = []
     with pytest.raises(RuntimeError, match="readback mismatch"):
         api._prepare_kymera_for_vd2(streak, steps)
-    assert events[-2:] == [("turn_off", None), ("stop Kymera", None)]
+    assert events[-1:] == [("turn_off", None)]
     assert not any(step["step"] == "Kymera SDK ownership" for step in steps)
 
 
@@ -104,6 +110,25 @@ def test_failed_sdk_release_prevents_hpdta_restart(monkeypatch):
     with pytest.raises(RuntimeError, match="ownership was not released"):
         api._prepare_kymera_for_vd2(streak, [])
     assert not any(name == "StartApplication" for name, _ in events)
+
+
+@pytest.mark.parametrize("auto_probe", ["1", None, "invalid"])
+def test_unknown_or_enabled_background_sdk_probe_blocks_handoff(monkeypatch, auto_probe):
+    streak, events, _ = rig(monkeypatch, auto_probe=auto_probe)
+    with pytest.raises((RuntimeError, ValueError)):
+        api._prepare_kymera_for_vd2(streak, [])
+    assert ("PrepareVD2Grating", None) not in events
+    assert events[-1] == ("turn_off", None)
+    assert not any(name == "StartApplication" for name, _ in events)
+
+
+def test_on_state_after_close_never_claims_sdk_release(monkeypatch):
+    streak, events, _ = rig(monkeypatch, stays_on=True)
+    ticks = count(0, 21)
+    monkeypatch.setattr(api.time, "monotonic", lambda: next(ticks))
+    with pytest.raises(RuntimeError, match="HPD-TA startup blocked"):
+        api._prepare_kymera_for_vd2(streak, [])
+    assert events[-1] == ("turn_off", None)
 
 
 def test_recording_protocol_blocks_preparation_before_power_or_recall(monkeypatch):
@@ -135,6 +160,34 @@ def test_false_application_cache_cannot_hide_an_active_acquisition(monkeypatch):
     with pytest.raises(RuntimeError, match="acquisition is not confirmed idle"):
         api._prepare_kymera_for_vd2(streak, [])
     assert events == [("ExecuteRaw", "AcqStatus()")]
+
+
+def test_cold_optics_do_not_launch_remoteex_before_exclusive_kymera_preparation(monkeypatch):
+    events = []
+    values = {"application_running": False, "connected": False, "remoteex_status": "disconnected"}
+    class Streak:
+        def set_timeout_millis(self, _):
+            pass
+        def state(self):
+            return "ON"
+        def read_attribute(self, name):
+            return SimpleNamespace(value=values[name])
+        def command_inout(self, command):
+            assert events and events[0] == "Kymera prepared and SDK released"
+            events.append(command)
+            if command == "StartRemoteEx":
+                values.update(connected=True, remoteex_status="idle")
+            elif command == "StartApplication":
+                values["application_running"] = True
+            else:
+                pytest.fail(command)
+    streak = Streak()
+    monkeypatch.setattr(api, "_prepare_kymera_for_vd2", lambda *_: events.append("Kymera prepared and SDK released"))
+    monkeypatch.setattr(api, "_remoteex_readback", lambda *_: "1 us")
+    monkeypatch.setattr(api, "_apply_vd2_timing", lambda *_: events.append("Calibrated timing verified"))
+    monkeypatch.setattr(api, "_snapshot", lambda _: {"ready": True})
+    assert api._start_vd2_optics(streak, []) == {"ready": True}
+    assert events == ["Kymera prepared and SDK released", "StartRemoteEx", "StartApplication", "Calibrated timing verified"]
 
 
 @pytest.mark.parametrize("error, allowed", [

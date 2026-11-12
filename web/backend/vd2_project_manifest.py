@@ -262,7 +262,7 @@ def inspect_project(path, allowed=None, verify_files=True, include_results=False
                                 if item["sample"] == name],
                "ready": False, "error": "", "bruit_reference": sample.get("bruit_reference"),
                "pending_bruit_reference": sample.get("pending_bruit_reference"),
-               "artifact_ids": {}, "fingerprints": {}}
+               "paired_runs": sample.get("paired_runs", []), "artifact_ids": {}, "fingerprints": {}}
         try:
             for role, identity in {"BASE": sample.get("phases", {}).get("BASE"),
                                    "ABS": sample.get("phases", {}).get("ABSORPTION"),
@@ -297,6 +297,24 @@ def inspect_project(path, allowed=None, verify_files=True, include_results=False
             "bruit_options": [{"id": key, "sample": item["sample"], "completed_at": item.get("completed_at"), "status": item["status"]}
                               for key, item in data["artifacts"].items()
                               if item.get("phase") == "BRUIT" and item.get("status") in {"completed", "saved", "processing"}]}
+
+
+def record_paired_project_run(root, sample_name, file, result):
+    """Append a paired acquisition without replacing the sample's legacy phases."""
+    path = root / MANIFEST_NAME
+    identity = {"path": _relative(root, file), **fingerprint(file)}
+    record = {key: result[key] for key in (
+        "job_id", "status", "pairs_recorded", "frames_recorded", "stop_reason", "completed_at",
+        "bruit_artifact_id", "first_map_with_electrons", "mode",
+    )}
+    with _lock:
+        data = load_manifest(path)
+        sample = data["samples"].setdefault(sample_name, {
+            "name": sample_name, "folder": sample_name, "description": "", "phases": {}, "bruit_reference": None,
+        })
+        sample.setdefault("paired_runs", []).append({**record, "h5": identity})
+        _write(path, data)
+    return str(path)
 
 
 def record_project_treatment(provenance, saved, preparation):

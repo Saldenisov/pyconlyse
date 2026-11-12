@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import re
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import PureWindowsPath
 from typing import Any, Callable, Mapping
@@ -38,6 +40,8 @@ class PhaseRequest:
     repeat_of: str | None = None
     repeat_series: str | None = None
     reserve_directory: bool = False
+    spectral_axis_nm: tuple[float, ...] | None = None
+    spectral_calibration_id: str | None = None
 
 
 class Vd2MeasurementProtocol:
@@ -55,6 +59,8 @@ class Vd2MeasurementProtocol:
         snapshot_reader=None,
         artifact_finalizer=None,
         point_recorder=None,
+        capture_clock=None,
+        capture_validator=None,
         max_pending_processing=8,
     ):
         if type(max_pending_processing) is not int or max_pending_processing < 1:
@@ -68,6 +74,8 @@ class Vd2MeasurementProtocol:
         self._snapshot_reader = snapshot_reader
         self._artifact_finalizer = artifact_finalizer
         self._point_recorder = point_recorder
+        self._capture_clock = capture_clock
+        self._capture_validator = capture_validator
         self._lock = threading.Lock()
         self._changed = threading.Condition(self._lock)
         self._start_lock = threading.Lock()
@@ -142,7 +150,7 @@ class Vd2MeasurementProtocol:
             provenance = self._artifact_journal.prepare(request) if self._artifact_journal else {}
             state = {
                 "job_id": job_id,
-                "status": "acquiring",
+                "status": "preparing" if self._capture_clock else "acquiring",
                 "phase": request.phase,
                 "phase_label": PHASES[request.phase]["label"],
                 "frames_per_his": request.frames_per_his,
@@ -158,7 +166,7 @@ class Vd2MeasurementProtocol:
                 self._thread = threading.Thread(target=self._acquire, args=(request, provenance, job_id),
                                                 daemon=True, name=f"vd2-{request.phase.lower()}-his")
                 self._thread.start()
-                accepted = {**state, "acquisition_active": True, "acquisition_phase": "acquiring"}
+                accepted = {**state, "acquisition_active": True, "acquisition_phase": state["status"]}
             return accepted
         except Exception as exc:
             with self._changed:
@@ -201,19 +209,46 @@ class Vd2MeasurementProtocol:
             machine_before = self._snapshot_reader(proxy) if self._snapshot_reader else None
             if self._artifact_journal and request.reuse_bruit not in {"latest", "none", ""}:
                 self._artifact_journal.verify_bruit_settings(request, machine_before)
-            record("acquiring", machine_before=machine_before)
-            proxy.command_inout("StartSequence")
-            dg645 = (machine_before or {}).get("devices", {}).get("manip/sync/DG645", {}).get("values", {})
-            rate = None
-            if dg645.get("trigger_source") == 0 and dg645.get("burst_enabled") == 0:
-                rate = dg645.get("trigger_rate_hz")
-            self._update(job_id, capture_started_at=_utc_now(), capture_rate=rate)
-            if self._wait_for_idle is None:
-                proxy.command_inout("WaitForIdle")
-            else:
-                self._wait_for_idle(proxy)
+
+            capture_complete = False
+            timing_error = None
+            try:
+                clock = self._capture_clock(proxy, request) if self._capture_clock else nullcontext()
+                with clock as configured_clock:
+                    self._update(job_id, status="acquiring")
+                    configured_rate = None
+                    if configured_clock is not None:
+                        configured_rate, trigger_source = configured_clock
+                        if machine_before is not None:
+                            machine_before["vd2_clock"] = {
+                                "trigger_source": trigger_source, "base_rate_hz": configured_rate,
+                                "nominal_capture_rate_hz": configured_rate, "warmup_s": 0,
+                            }
+                    record("acquiring", machine_before=machine_before)
+                    proxy.command_inout("StartSequence")
+                    dg645 = (machine_before or {}).get("devices", {}).get("manip/sync/DG645", {}).get("values", {})
+                    rate = configured_rate
+                    if rate is None and dg645.get("trigger_source") == 0 and dg645.get("burst_enabled") == 0:
+                        rate = dg645.get("trigger_rate_hz")
+                    self._update(job_id, capture_started_at=_utc_now(), capture_rate=rate)
+                    if self._wait_for_idle is None:
+                        proxy.command_inout("WaitForIdle")
+                    else:
+                        self._wait_for_idle(proxy)
+                    capture_complete = True
+            except Exception as exc:
+                if not capture_complete:
+                    raise
+                timing_error = exc
             self._update(job_id, status="saving")
             proxy.command_inout("SaveCurrentSequence", request.his_path)
+            if timing_error is not None:
+                raise timing_error
+            if self._capture_validator is not None:
+                calibration = self._capture_validator(request, machine_before, configured_rate)
+                if calibration is not None:
+                    axis, calibration_id = calibration
+                    request = replace(request, spectral_axis_nm=axis, spectral_calibration_id=calibration_id)
             # Capture machine state while this job still owns the camera.
             # The file worker receives plain data, never a Tango proxy.
             machine_after = self._snapshot_reader(proxy) if self._snapshot_reader else None

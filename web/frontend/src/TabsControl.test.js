@@ -93,6 +93,34 @@ test('the tree shows names and fetches metadata only from Details', async () => 
   expect(screen.getByRole('dialog', { name: 'File details' })).toHaveTextContent('2.0KB');
 });
 
+test('the paired HIS workflow saves the operator phase next to Calculate OD', async () => {
+  const payload = {
+    ...sessionPayload,
+    exp_types: ['HIS+NOISE', 'ABS+BASE+NOISE'],
+    data_types: ['ABS+BASE', 'NOISE'],
+    session: {
+      ...sessionPayload.session,
+      exp_type: 'HIS+NOISE',
+      selected_data_type: 'ABS+BASE',
+      required_data_types: ['ABS+BASE', 'NOISE'],
+      paths: { 'ABS+BASE': 'E:/test/paired.his' },
+    },
+  };
+  fetchTreatmentSession.mockResolvedValue(payload);
+  postTreatment.mockClear().mockResolvedValue({
+    ...payload,
+    session: { ...payload.session, first_map_with_electrons: false },
+  });
+  renderStudioTabs({}, <section aria-label="Preview" />);
+  const phase = await screen.findByRole('checkbox', { name: 'First frame with electrons' });
+  expect(phase).toBeChecked();
+  fireEvent.click(phase);
+  await waitFor(() => expect(postTreatment).toHaveBeenCalledWith(
+    'test-session', '/api/treatment/session/config', { first_map_with_electrons: false },
+  ));
+  await waitFor(() => expect(phase).not.toBeChecked());
+});
+
 test('a folder context action submits the entire tree selection for automatic save', async () => {
   const root = 'E:\\DATA_VD2';
   const folders = ['first', 'second'].map(name => ({ name, path: `${root}\\${name}` }));

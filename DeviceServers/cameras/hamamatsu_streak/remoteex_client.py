@@ -40,6 +40,7 @@ class RemoteExImage:
     data_type: str
     pixels: bytes
     sequence_number: Optional[int] = None
+    timestamp_ms: Optional[float] = None
 
 
 class RemoteExClient:
@@ -64,6 +65,12 @@ class RemoteExClient:
         self.last_messages: List[RemoteExResponse] = []
         self.last_response: Optional[RemoteExResponse] = None
         self.last_ring_buffer_sequence: Optional[int] = None
+        self._paired_monitor = False
+        self.first_paired_sequence: Optional[int] = None
+
+    @property
+    def paired_monitor_active(self) -> bool:
+        return self._paired_monitor
 
     @property
     def is_connected(self) -> bool:
@@ -128,6 +135,8 @@ class RemoteExClient:
 
     def close(self) -> None:
         with self._lock:
+            self._paired_monitor = False
+            self.first_paired_sequence = None
             self.close_data_port()
             if self._command_socket is not None:
                 try:
@@ -180,6 +189,12 @@ class RemoteExClient:
                     continue
 
                 if response.is_message:
+                    if (self._paired_monitor and self.first_paired_sequence is None
+                            and response.command_name.lower() == "livemonitor"
+                            and (response.parameter(0) or "").lower() == "ringbuffer"):
+                        number = response.parameter(1) or ""
+                        if number.isdecimal():
+                            self.first_paired_sequence = int(number)
                     messages.append(response)
                     continue
 
@@ -238,6 +253,38 @@ class RemoteExClient:
             self._discard_pending_data()
             response = self.send_command_checked(f"ImgDataGet(Current,{data_type})")
             return self._read_image_response(response, "ImgDataGet")
+
+    def start_paired_monitor(self) -> None:
+        with self._lock:
+            self.connect(connect_data_port=True)
+            self.send_command_checked("AcqLiveMonitor(Off)")
+            self.send_command_checked("AcqLiveMonitorTSFormat(Timestamp)")
+            self.first_paired_sequence = None
+            self._paired_monitor = True
+            self.send_command_checked("AcqLiveMonitor(RingBuffer,64)")
+
+    def stop_paired_monitor(self) -> None:
+        with self._lock:
+            self.send_command_checked("AcqLiveMonitor(Off)")
+            self._paired_monitor = False
+
+    def read_paired_image(self, sequence_number: int) -> RemoteExImage | None:
+        if not self._paired_monitor or not self.is_connected or self._data_socket is None:
+            raise RemoteExProtocolError("Paired ring monitor connection was lost")
+        try:
+            image = self.get_ring_buffer_image("Data", max(0, sequence_number))
+        except RemoteExCommandError as exc:
+            message = exc.response.raw_line.lower()
+            if exc.response.command_name.lower() == "imgringbufferget" and (
+                "current max" in message or "no valid image" in message
+            ):
+                return None
+            raise
+        if sequence_number < 0 and (
+            self.first_paired_sequence is None or image.sequence_number != self.first_paired_sequence
+        ):
+            raise RemoteExProtocolError("Cannot establish the first frame of this paired sequence")
+        return image
 
     def get_ring_buffer_image(
         self, data_type: str = "Data", sequence_number: Optional[int] = None
@@ -326,11 +373,17 @@ class RemoteExClient:
 
         pixel_count = width * height * bytes_per_pixel
         sequence_number = None
+        timestamp_ms = None
         if command_name == "ImgRingBufferGet" and len(response.parameters) >= 5:
             try:
                 sequence_number = int(response.parameters[4])
             except ValueError:
                 pass
+            if len(response.parameters) >= 6:
+                try:
+                    timestamp_ms = float(response.parameters[5])
+                except ValueError:
+                    pass
 
         return RemoteExImage(
             width=width,
@@ -339,6 +392,7 @@ class RemoteExClient:
             data_type=response.parameters[3],
             pixels=self.read_data_exact(pixel_count),
             sequence_number=sequence_number,
+            timestamp_ms=timestamp_ms,
         )
 
     def _discard_pending_data(self) -> None:

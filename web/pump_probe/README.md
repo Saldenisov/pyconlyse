@@ -1,6 +1,12 @@
 # Pump-Probe Experiment Control
 
-Draft spec for replacing the LabVIEW `trancon` workflow with Python/web control in PyConlyse.
+V0 control specification and implemented TRANCON numeric integration.
+
+As of 2026-10-04, V0's **Files → load ZIP/H5/DAT → Corrections** supports
+shot-wise signed OD recalculation, detector RAW background, scaling,
+preview/apply/cancel/reset, and separate DAT/recipe downloads. Source files
+remain unchanged. Native LabVIEW wire screenshot verification is pending.
+See [integration evidence](../../docs/data-treatment/TRANCON_WEB_V0_INTEGRATION_2026-10-04.md).
 
 ## Goal
 
@@ -89,60 +95,26 @@ track 1 = reference
 
 Track mapping must be configurable.
 
-## V0 Raw Block
+## RAW Layouts
 
-Each delay point stores one legacy-compatible raw block:
+The implementation distinguishes two formats. Their background channels have
+separate physical meanings; names alone do not justify a permutation.
 
-```text
-raw block shape = (12, wavelength_pixels)
-```
-
-The block is split exactly as the old `raw_convert.ipynb` expects:
-
-```text
-split into 3 blocks of 4 spectra:
-
-block 0 -> background
-block 1 -> pulse state 1
-block 2 -> pulse state 2
-
-then split each block in half:
-
-background -> BG1, BG2
-state 1    -> Ir1, Is1
-state 2    -> Ir2, Is2
-```
-
-Canonical in-memory shape after parsing:
-
-```text
-raw_data[delay, group, shot, wavelength]
-shape = (n_delays, 6, 2, n_pixels)
-```
-
-Group order:
-
-| index | name | shape per delay |
+| Layout | Group order | Background meaning |
 | --- | --- | --- |
-| 0 | BG1 | `(2, pixels)` |
-| 1 | Ir1 | `(2, pixels)` |
-| 2 | Is1 | `(2, pixels)` |
-| 3 | BG2 | `(2, pixels)` |
-| 4 | Ir2 | `(2, pixels)` |
-| 5 | Is2 | `(2, pixels)` |
+| `trancon-detectors-v1` | `BGI, BGII, IeI, IeII, I0I, I0II` | Detector I and II; each shared across its two pulse states |
+| `v0-pulse-states-v1` | `BG1, Ir1, Is1, BG2, Ir2, Is2` | OFF and ON state; each shared across signal/reference |
 
-`1` and `2` are pulse states:
+Modern TRANCON ZIP stores a wavelength header, then `S_<delay>`, six complete
+shot groups, and `E_` markers. Rows are reshaped as `[group, shot, wavelength]`
+without averaging. Shot count may differ between delay blocks. Incomplete or
+malformed blocks are rejected.
 
-```text
-one state = electrons OFF
-one state = electrons ON
-```
-
-Which state has electrons is configurable:
-
-```text
-first_state_has_electrons = true | false
-```
+V0 HDF5 stores `raw_data[delay, group, shot, wavelength]` and `frame_counts`.
+Only acquired counts are read; unused NaN padding is excluded by those counts.
+Unknown or permuted HDF5 channel semantics permit stored-OD viewing and scaling,
+but block RAW reconstruction. New emulator runs write layout and algorithm
+metadata explicitly.
 
 ## V0 Scan Parameters
 
@@ -197,42 +169,36 @@ Required per-frame metadata:
 
 ## OD Calculation
 
-Let:
+For each TRANCON shot, in the division order of `Raw_data_to_data.vi`:
 
 ```text
-BG1 = mean(raw_data[:, BG1], axis=shots)
-Ir1 = mean(raw_data[:, Ir1], axis=shots)
-Is1 = mean(raw_data[:, Is1], axis=shots)
-
-BG2 = mean(raw_data[:, BG2], axis=shots)
-Ir2 = mean(raw_data[:, Ir2], axis=shots)
-Is2 = mean(raw_data[:, Is2], axis=shots)
+QI  = (I0I  - BGI)  / (IeI  - BGI)
+QII = (I0II - BGII) / (IeII - BGII)
+OD(delay, wavelength) = mean_shots(log10(QI / QII))
 ```
 
-If state 1 is electrons OFF and state 2 is electrons ON:
+For the existing V0 emulator's OFF/ON state convention:
 
 ```text
-S_off = Is1 - BG1
-R_off = Ir1 - BG1
-
-S_on = Is2 - BG2
-R_on = Ir2 - BG2
+OD(delay, wavelength) = mean_shots(
+    log10(((Is1-BG1)/(Ir1-BG1)) / ((Is2-BG2)/(Ir2-BG2)))
+)
 ```
 
-Reference-normalized V0 raw formula:
+`mean_spectra` is a display/storage product. OD uses the mean of per-shot logs;
+it is not computed from `mean_spectra`. Stored HDF5 OD has priority during
+ordinary load. Explicit RAW recalculation starts a new recipe from source shots.
 
-```text
-OD = log10((S_off / R_off) / (S_on / R_on))
-```
+Signed ratios and NaN/+Inf/-Inf are retained internally and in DAT downloads.
+Plotly receives `null` gaps and separate nonfinite counts. No automatic absolute
+value, `nanmean`, clipping, whole-shot rejection, or NaN replacement is applied.
+The `drop_whole_zero` policy excludes a shot only when every pixel in all six
+groups is zero; selection is explicit and excluded counts are reported.
 
-If `first_state_has_electrons=true`, swap ON/OFF state assignment before applying the formula.
-
-Numerical guards:
-
-- reject or mask pixels where denominator is <= 0
-- store mask alongside OD
-- keep raw frames unchanged
-- store mean spectra used for OD
+Detector RAW background accepts two integer count offsets and subtracts each
+from both its detector's numerator and denominator before division/logarithm.
+It is offered only for `trancon-detectors-v1`. Scaling multiplies the OD map by
+a finite scalar through the generated `ScaleUp_corrSD.vi` translation.
 
 ## Web Control UI
 
@@ -383,3 +349,68 @@ shows both the OD heatmap and the raw-group spectra.
 - Whether accelerator pulse state is readable from Tango/PSP.
 - Required output format besides HDF5: CSV, DAT, JSON, or Igor.
 - Where run files should be saved by default.
+
+## VD2 camera-only RemoteEx commissioning
+
+The camera-only path uses `HPDTA8_VD2_RemoteEx.INI` and
+`VD2_RemoteEx_Streak_Only.hwp` under `C:\ProgramData\Hamamatsu\HPDTA`.
+The manual HPD-TA shortcut uses its own profile.
+
+Deploy the Web and both Tango server changes together. On the camera Tango
+device set `remote_camera_only=true` and `start_application_on_turn_on=0`.
+The optional `camera_only_ini_path` property defaults to the path above.
+The Everest local Web launcher defaults to `PYCONLYSE_VD2_CAMERA_ONLY=1`.
+For other launchers, enable this setting once the updated Tango servers are
+installed and RemoteEx DCAM and Kymera Tango readouts have been verified.
+Verify the trigger and the two outgoing pulses on the scope before capture.
+A stale or absent HIS spectral header keeps the raw file and blocks H5
+conversion until the calibration is verified.
+
+Choose **5 Hz · separate ABS and BASE** for individual ABS, BASE, and
+BRUIT sequences. The external trigger stays active and Burst stays off.
+Camera-only shutdown retains the DG645 supply and the Xe lamp cooling supply.
+
+### Paired ABS/BASE acquisition
+
+Choose **10 Hz · paired ABS/BASE** and open **Measurement**. If the project
+has no Bruit with matching detector settings and exposure, the panel prompts
+for a dark reference. It closes the streak shutter before the standard Bruit
+workflow. Block the probe light, confirm the Bruit capture, then confirm
+**Open shutters and continue** after the H5 has been verified. A matching
+completed reference is reused automatically. Fixed-count runs use the camera
+Acquire exposure. Precision runs require matching Live exposure and disabled
+Live rolling average.
+
+Set the 5 Hz input in Hardware Setup. Measurement holds that source and
+enables a two-pulse Burst with 100 ms spacing. The 10-second warmup precedes
+capture. Finishing, stopping, or a capture fault disables Burst and returns to
+the original 5 Hz pulse train. The operator sets **First frame with electrons**.
+The installed system must establish the first-frame phase before beam data
+can be interpreted.
+
+Fixed-count measurements use the native HPD-TA Sequence and keep the original
+HIS alongside the H5. The H5 archives raw frames, timestamps, phase and the
+chosen OD kinetics. Frame count, geometry and 10 Hz intervals must verify
+before the run can report success. Precision measurements use the native
+ring stream and can stop early. A missing frame or unverified cadence stops
+the run and preserves captured data.
+
+Enter a wavelength center and half-width, for example 600 ± 10 nm. The default
+archive calibration is for the 550 nm Kymera center and the verified C13440
+640 × 508 geometry. For a different optical configuration, install a matching
+verified JSON profile with `PYCONLYSE_VD2_SPECTRAL_CALIBRATION`. The server
+checks the detector geometry and Kymera settings against the profile.
+
+The selectable methods are brightness-matched BASE, SAM + matched BASE then
+OD of means, mean OD of adjacent pairs, OD of means, and SAM then OD of means.
+Lamp intensity is measured in the first 30 time rows by default. Those rows
+are excluded from the displayed kinetics. SAM applies the Treatment angle
+limit of 1° and the selected intensity tolerance. Precision mode tests the
+largest pointwise standard error over the band kinetics after two consecutive
+block estimates. The error includes the dark-reference contribution. The
+pair limit bounds the measurement.
+
+Deploy the camera-only profile and the new Tango ring commands together.
+Authorization-enforced installations require exact approvals for the paired
+start, stop and target routes. Validate native timestamps and sustained
+10 Hz streaming on the installed HPD-TA before running with the beam.

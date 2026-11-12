@@ -59,6 +59,10 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
     source_identity = fingerprint(source)
     info = opener.read_critical_info(source)
     count = int(info.number_maps)
+    wavelengths = (info.wavelengths if request.spectral_axis_nm is None
+                   else np.asarray(request.spectral_axis_nm, dtype=float))
+    if wavelengths.shape != (info.wavelengths_length,):
+        raise Vd2ProtocolError("Spectral calibration width does not match HIS; HIS retained")
     if count != request.frames_per_his:
         raise Vd2ProtocolError(
             f"HIS contains {count} frames; expected {request.frames_per_his}; "
@@ -78,7 +82,7 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
             ):
                 raise Vd2ProtocolError("H5 contains an incomplete or cleaned selection; HIS retained")
             for name in ("timedelays", "wavelengths"):
-                if not np.array_equal(handle[name], getattr(info, name)):
+                if not np.array_equal(handle[name], wavelengths if name == "wavelengths" else info.timedelays):
                     raise Vd2ProtocolError(
                         f"Converted {name} differ from HIS; HIS retained"
                     )
@@ -108,6 +112,11 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
             TreatmentDataService().convert_file_to_h5(
                 source, staged, progress_callback=lambda current, total: report(50 * current // max(1, total)),
             )
+            if request.spectral_axis_nm is not None:
+                with h5py.File(staged, "r+") as handle:
+                    handle["wavelengths"][:] = wavelengths
+                    handle["wavelengths"].attrs["unit"] = "nm"
+                    handle["metadata"].attrs["spectral_calibration_id"] = request.spectral_calibration_id
             verify(staged, 50)
             with h5py.File(staged, "r+") as handle:
                 metadata = handle["metadata"].attrs

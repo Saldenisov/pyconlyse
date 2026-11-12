@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .external_snapshot import refresh_external_instruments
+
 import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -96,6 +98,8 @@ class HamamatsuStreakController:
         self.last_command = ""
         self.last_response_text = ""
         self.last_messages: List[str] = []
+        self.camera_only = False
+        self.camera_only_identity = None
 
     @property
     def is_connected(self) -> bool:
@@ -140,6 +144,13 @@ class HamamatsuStreakController:
         automatically: RemoteEx can close its socket after accepting such a
         command. Read-only status calls opt into a reconnect-and-retry path.
         """
+        if self.camera_only:
+            operation, _, arguments = command.strip().partition("(")
+            operation = operation.lower()
+            if operation == "appstart":
+                raise ValueError("Use the verified camera-only application startup command")
+            if operation.startswith("devparam") and arguments.split(",", 1)[0].strip(" )").lower() != "td":
+                raise ValueError("Camera-only RemoteEx accepts only streak-device parameters")
         if not self.client.is_connected:
             self._reconnect_transport(reconnect_timeout)
         send_options = {} if timeout is None else {"timeout": timeout}
@@ -471,6 +482,16 @@ class HamamatsuStreakController:
                 f"Cannot prepare VD2 while RemoteEx is {snapshot.remoteex_status}: "
                 f"{snapshot.busy_command}"
             )
+        if self.camera_only:
+            self.set_streak_shutter("Closed")
+            self.set_time_range("1 us")
+            self.set_streak_mode("Operate")
+            camera = self.refresh_cached_state()
+            if (camera.current_streak_shutter.lower() != "closed"
+                    or camera.current_streak_mode.lower() != "operate"
+                    or camera.current_time_range.lower() != "1 us" or not camera.live_exposure_time):
+                raise RuntimeError("Camera-only startup: streak settings or DCAM readout unverified")
+            return camera
         try:
             return self._configure_vd2_optics(snapshot)
         except Exception as exc:
@@ -717,6 +738,7 @@ class HamamatsuStreakController:
                     or (exc.response.parameter(0) or "").strip().lower() != "application not running"):
                 raise
             self.snapshot.application_running = False
+            self.camera_only_identity = None
             self.snapshot.application_version = ""
             self.snapshot.remoteex_status = "idle"
             self.snapshot.busy_command = ""
@@ -798,78 +820,9 @@ class HamamatsuStreakController:
         self.snapshot.current_focus_time_over = self._safe_query(
             self.get_device_parameter, "TD", "FocusTimeOver"
         )
-        self.snapshot.current_wavelength = self._safe_query(
-            self.get_device_parameter, "Spec", "Wavelength"
-        )
-        self.snapshot.current_grating = self._safe_query(
-            self.get_device_parameter, "Spec", "Grating"
-        )
-        self.snapshot.current_blaze = self._safe_query(
-            self.get_device_parameter, "Spec", "Blaze"
-        )
-        self.snapshot.current_ruling = self._safe_query(
-            self.get_device_parameter, "Spec", "Ruling"
-        )
-        self.snapshot.current_exit_mirror = self._safe_query(
-            self.get_device_parameter, "Spec", "Exit Mirror"
-        )
-        self.snapshot.current_turret = self._safe_query(
-            self.get_device_parameter, "Spec", "Turret"
-        )
-        self.snapshot.current_slit_width = self._safe_query(
-            self.get_device_parameter, "Spec", "Slit Width"
-        )
-        self.snapshot.current_spectrograph_shutter = self._safe_query(
-            self.get_device_parameter, "Spec", "Shutter"
-        )
-        self.snapshot.current_focus_mirror = self._safe_query(
-            self.get_device_parameter, "Spec", "Focus Mirror"
-        )
-        self.snapshot.current_side_entry_iris = self._safe_query(
-            self.get_device_parameter, "Spec", "Side Entry Iris"
-        )
-        self.snapshot.current_delay_trig_mode = self._safe_query(
-            self.get_device_parameter, "Del", "Trig. Mode"
-        )
-        self.snapshot.current_delay_repetition_rate = self._safe_query(
-            self.get_device_parameter, "Del", "Repetition Rate"
-        )
-        self.snapshot.current_delay_setting = self._safe_query(
-            self.get_device_parameter, "Del", "Setting"
-        )
-        self.snapshot.current_delay_a = self._safe_query(
-            self.get_device_parameter, "Del", "Delay A"
-        )
-        self.snapshot.current_delay_b = self._safe_query(
-            self.get_device_parameter, "Del", "Delay B"
-        )
-        self.snapshot.current_delay_c = self._safe_query(
-            self.get_device_parameter, "Del", "Delay C"
-        )
-        self.snapshot.current_delay_d = self._safe_query(
-            self.get_device_parameter, "Del", "Delay D"
-        )
-        self.snapshot.current_delay_e = self._safe_query(
-            self.get_device_parameter, "Del", "Delay E"
-        )
-        self.snapshot.current_delay_f = self._safe_query(
-            self.get_device_parameter, "Del", "Delay F"
-        )
-        self.snapshot.current_delay_g = self._safe_query(
-            self.get_device_parameter, "Del", "Delay G"
-        )
-        self.snapshot.current_delay_h = self._safe_query(
-            self.get_device_parameter, "Del", "Delay H"
-        )
-        self.snapshot.current_delay_ss_trigger = self._safe_query(
-            self.get_device_parameter, "Del", "Ss Trigger"
-        )
-        self.snapshot.current_delay_burst_mode = self._safe_query(
-            self.get_device_parameter, "Del", "Burst Mode"
-        )
-        self.snapshot.current_delay_manual_control = self._safe_query(
-            self.get_device_parameter, "Del", "Man.Ctrl"
-        )
+        if self.camera_only:
+            return self.snapshot
+        refresh_external_instruments(self)
         return self.snapshot
 
     def _safe_query(self, func, *args) -> str:

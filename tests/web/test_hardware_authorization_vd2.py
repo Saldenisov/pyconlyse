@@ -71,7 +71,7 @@ def test_protocol_denial_precedes_worker_and_binds_canonical_his_path(monkeypatc
         "targets": [
             {"device": vd2.STREAK_DEVICE, "command": "write_attribute:sequence_loops"},
             {"device": vd2.STREAK_DEVICE, "command": "StartSequence"},
-            {"device": vd2.STREAK_DEVICE, "command": "WaitForIdle"},
+            {"device": vd2.STREAK_DEVICE, "command": "ExecuteRaw"},
             {"device": vd2.STREAK_DEVICE, "command": "SaveCurrentSequence"},
         ],
         "args": {
@@ -81,6 +81,8 @@ def test_protocol_denial_precedes_worker_and_binds_canonical_his_path(monkeypatc
             "run_name": "run_1",
             "his_path": r"E:\DATA_VD2\run_1\BRUIT.his",
             "sequence_loops": "4",
+            "wait_query": "AsyncCommandStatus()",
+            "wait_timeout_s": 120.0,
         },
         "route_id": "vd2.protocol.start",
         "wrapper_fields": {"phase", "frames_per_his", "output_root", "run_name"},
@@ -105,12 +107,25 @@ def test_initialize_and_deinitialize_denial_precedes_experiment_helpers(monkeypa
     }
     assert calls[0]["args"]["servers"] == vd2._server_arguments()
     assert calls[0]["wrapper_fields"] == set()
+    for device in vd2.RETAINED_INSTRUMENT_SERVERS:
+        assert {"device": device, "command": "Init"} not in initialize_targets
+    for recovery in calls[0]["args"]["recovery_plan"]:
+        if recovery["device"] in vd2.RETAINED_INSTRUMENT_SERVERS:
+            assert recovery["commands"] == ["recover", "turn_on", "DevStart"]
     deinitialize_targets = calls[1]["targets"]
     assert {target["command"] for target in deinitialize_targets} >= {
         "StopAcquisition", "write_attribute:streak_shutter",
-        "write_attribute:spectrograph_shutter", "StopApplication", "StopRemoteEx",
+        "write_attribute:spectrograph_shutter", "write_attribute:streak_mode", "StopApplication", "StopRemoteEx",
         "recover", "DevStop", "DevStart", "set_channels_states",
     }
+    assert calls[1]["args"]["pdu_output_states"] == [
+        {"device": vd2.ZABER_PDU_DEVICE, "output_id": 1, "state": 0},
+        {"device": vd2.VD2_PDU_DEVICE, "output_id": 2, "state": 0},
+        {"device": vd2.VD2_PDU_DEVICE, "output_id": 1, "state": 0},
+    ]
+    assert {"device": vd2.ZABER_PDU_DEVICE, "output_id": 3, "reason": "Zaber always-on supply"} in calls[1]["args"]["retained_power"]
+    assert {"device": vd2.ZABER_PDU_DEVICE, "output_id": 2, "reason": "Xe lamp cooling; physical lamp-off required"} in calls[1]["args"]["retained_power"]
+    assert calls[1]["args"]["streak_mode"] == "Focus"
 
 
 def test_runtime_parameter_and_command_denial_precedes_proxy(monkeypatch):
@@ -148,6 +163,8 @@ def test_local_opt_out_keeps_parameter_and_command_behavior(monkeypatch):
 
         def command_inout(self, name, value=None):
             self.commands.append((name, value))
+            if name == "ExecuteRaw" and value == "DevParamGet(TD,Mode)":
+                return "0,DevParamGet,Focus"
 
         def read_attribute(self, name):
             return type("Attribute", (), {"value": True})()
@@ -163,7 +180,7 @@ def test_local_opt_out_keeps_parameter_and_command_behavior(monkeypatch):
     assert client.post("/api/pump-probe-vd2/parameter/wavelength_nm", json={"value": "532.5"}).status_code == 200
     assert client.post("/api/pump-probe-vd2/command/StartLive").status_code == 200
     assert proxy.writes == [("wavelength_nm", 532.5)]
-    assert proxy.commands == [("StartLive", None)]
+    assert proxy.commands == [("ExecuteRaw", "DevParamGet(TD,Mode)"), ("StartLive", None)]
 
 
 @pytest.mark.parametrize(
