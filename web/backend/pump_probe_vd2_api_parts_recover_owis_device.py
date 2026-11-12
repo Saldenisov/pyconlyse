@@ -320,9 +320,8 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
     _enable_required_power.__qualname__ = "_enable_required_power"
 
     def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
-        # The trigger generator was started first and is switched off before the
-        # camera supply; software and optical closure must precede this function.
-        for output_id in (2, 1):
+        # Camera-only VD2 keeps the DG645 clock available after optical shutdown.
+        for output_id in ((1,) if api.VD2_CAMERA_ONLY else (2, 1)):
             api._disable_pdu_outputs(pdu, steps, {output_id: api.VD2_SHUTDOWN_PDU_OUTPUTS[output_id]}, "SD2")
 
     _disable_vd2_power.__module__ = api.__name__

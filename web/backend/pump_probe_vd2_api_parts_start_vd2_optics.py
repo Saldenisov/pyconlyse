@@ -486,7 +486,8 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
 
         try:
             sd2_pdu = api._ensure_server(api.VD2_PDU_DEVICE, steps)
-            api._progress(steps, "Switching off verified dedicated trigger / camera supplies", stage=2)
+            api._progress(steps, "Switching off dedicated camera supply" if api.VD2_CAMERA_ONLY
+                          else "Switching off verified dedicated trigger / camera supplies", stage=2)
             api._disable_vd2_power(sd2_pdu, steps)
         except Exception as exc:
             detail = f"SD2 trigger/camera shutdown unverified: {exc}"
@@ -496,11 +497,10 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
 
         if errors:
             raise RuntimeError("; ".join(errors))
-        if warnings:
-            return {"steps": steps, "warnings": warnings, "message":
-                    "VD2 flashlamp / camera / trigger supplies are OFF. Xe lamp cooling power unchanged; switch the lamp off manually and leave cooling powered. Zaber power unchanged. Check the reported warnings."}
-        return {"steps": steps, "warnings": warnings, "message":
-                "VD2 safely shut down; flashlamp / camera / trigger supplies verified OFF. Xe lamp cooling power unchanged; switch the lamp off manually and leave cooling powered. Zaber power unchanged; Tango servers retained."}
+        message = ("VD2 lamp and camera supplies are OFF. DG645 power retained."
+                   if api.VD2_CAMERA_ONLY else "VD2 flashlamp / camera / trigger supplies are OFF.")
+        return {"steps": steps, "warnings": warnings,
+                "message": message + " Xe lamp cooling supply and Zaber power retained."}
 
     _shutdown_equipment.__module__ = api.__name__
     _shutdown_equipment.__qualname__ = "_shutdown_equipment"

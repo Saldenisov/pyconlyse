@@ -12,7 +12,8 @@ import vd2_tango_optics as optics
 class Generator:
     def __init__(self, events, **settings):
         self.events = events
-        self.values = {"BURM": 0, "TSRC": 5, "TRAT": 5, "BURC": 2, "BURP": 0.1, "BURD": 0, **settings}
+        self.values = {"BURM": 0, "TSRC": 5, "TRAT": 5, "BURC": 2, "BURP": 0.1, "BURD": 0, "BURT": 0,
+                       **{f"PRES? {i}": 1 for i in range(5)}, **settings}
         self.reject_pause = False
 
     def set_timeout_millis(self, timeout):
@@ -190,12 +191,13 @@ def test_stale_hpdta_wavelength_metadata_is_rejected():
                                    {"wavelength_nm": 400, "lines_per_mm": 150, "grating": 2})
 
 
-def test_paired_clock_warms_arms_with_no_pulses_and_switches_to_external(rig):
+def test_paired_clock_keeps_external_source_through_warmup_and_capture(rig):
     camera, dg645, events = rig
+    dg645.values["TSRC"] = 1
 
     class Stop:
         def wait(self, seconds):
-            assert seconds == 10 and dg645.values["TSRC"] == 0 and dg645.values["BURM"] == 1
+            assert seconds == 10 and dg645.values["TSRC"] == 1 and dg645.values["BURM"] == 1
             events.append("warm")
             return False
 
@@ -203,20 +205,28 @@ def test_paired_clock_warms_arms_with_no_pulses_and_switches_to_external(rig):
             return False
 
     def arm():
-        assert dg645.values["TSRC"] == 5
+        assert dg645.values["TSRC"] == 1 and dg645.values["BURM"] == 1
         events.append("arm")
 
     with optics.paired_capture_clock(api, camera, 1, Stop(), arm) as running:
-        assert running and dg645.values["TSRC"] == 1
+        assert running
         events.append("record")
-    assert events.index("warm") < events.index("arm") < events.index("TSRC 1") < events.index("record")
-    assert events[-2:] == ["TSRC 5", "BURM 0"]
-    assert dg645.values["TRAT"] == 5
+    assert events == ["BURC 2", "BURP 0.1", "BURM 1", "warm", "arm", "record", "BURM 0"]
+    assert dg645.values["TRAT"] == 5 and dg645.values["TSRC"] == 1
 
 
-def test_cancel_during_paired_warmup_disarms_without_starting_camera(rig):
+def test_cancel_during_paired_warmup_turns_burst_off_without_stopping_external_clock(rig):
     camera, dg645, events = rig
+    dg645.values["TSRC"] = 1
     stop = SimpleNamespace(is_set=lambda: False, wait=lambda seconds: True)
-    with optics.paired_capture_clock(api, camera, 0, stop, lambda: pytest.fail("Camera armed")) as running:
+    with optics.paired_capture_clock(api, camera, 1, stop, lambda: pytest.fail("Camera armed")) as running:
         assert not running
-    assert events[-2:] == ["TSRC 5", "BURM 0"]
+    assert events[-1] == "BURM 0" and dg645.values["TSRC"] == 1
+
+
+def test_paired_clock_refuses_unselected_source_without_writing(rig):
+    camera, dg645, events = rig
+    with pytest.raises(ValueError, match="active DG645"):
+        with optics.paired_capture_clock(api, camera, 1, None, lambda: None):
+            pytest.fail("Capture started")
+    assert not events

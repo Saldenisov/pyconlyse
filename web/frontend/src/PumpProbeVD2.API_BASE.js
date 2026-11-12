@@ -86,7 +86,7 @@ const PHASE_PROTOCOLS = {
   BRUIT: {
     label: 'Bruit',
     file: 'BRUIT.his',
-    instruction: 'Close beam. You have 10 s to prepare. Press Space to start immediately.',
+    instruction: 'Block the probe light for Bruit. You have 10 s to prepare. Press Space to start immediately.',
     preparationSeconds: 10,
     tone: 'bruit',
   },
@@ -395,7 +395,7 @@ export function updateRoisFromBounds(rois, id, next, linked, width, height) {
   });
 }
 
-function ProfilePlot({ title, series, axis, selectedId, onSelect, scale }) {
+function ProfilePlot({ title, series, axis, selectedId, onSelect, scale, hideLegend = false }) {
   const container = useRef(null);
   const [size, setSize] = useState({ width: 600, height: 400 });
   useEffect(() => {
@@ -424,10 +424,10 @@ function ProfilePlot({ title, series, axis, selectedId, onSelect, scale }) {
   return (
     <section className="vd2-profile" aria-label={title}>
       <header><strong>{title}</strong><span>{minimum.toFixed(1)} - {maximum.toFixed(1)}</span></header>
-      <div className="vd2-roi-legend" aria-label={`${title} regions`}>
+      {!hideLegend && <div className="vd2-roi-legend" aria-label={`${title} regions`}>
         {series.map(trace => <button type="button" key={trace.id} aria-pressed={trace.id === selectedId}
           style={{ color: trace.color }} onClick={() => onSelect?.(trace.id)}>ROI {trace.index + 1}</button>)}
-      </div>
+      </div>}
       <div ref={container} className="vd2-profile-plot" style={{ aspectRatio: `3 / ${2 * scale}` }}>
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${title} dynamic profile`}>
         <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} />
@@ -482,7 +482,7 @@ function phaseProgress(job) {
   return { label: `ACQ ≈${percent}%`, percent };
 }
 
-export function Vd2PhaseProtocol({ protocol, settings, disabled, settingsDisabled=disabled, onChange, onPhaseClick, onPhaseDoubleClick, project, sampleHolder, serverWorkspace, onMeasure, measurementUnavailable, measuring, measurementMessage }) {
+export function Vd2PhaseProtocol({ pairedMode = false, protocol, settings, disabled, settingsDisabled=disabled, onChange, onPhaseClick, onPhaseDoubleClick, project, sampleHolder, serverWorkspace, onMeasure, measurementUnavailable, measuring, measurementMessage }) {
   const active = protocolHardwareBusy(protocol);
   const [folderMenu, setFolderMenu] = useState(null);
   const actualFolder = protocol?.sample_folder || protocol?.his_path?.replace(/[\\/][^\\/]+$/, '') || plannedRunFolder(settings);
@@ -508,7 +508,7 @@ export function Vd2PhaseProtocol({ protocol, settings, disabled, settingsDisable
     <section className="vd2-phase-protocol" aria-label="VD2 Bruit Base Absorption protocol">
       <header>
         <div>
-          <h2>Standard measurement · 5 Hz</h2>
+          <h2>{pairedMode ? 'Project and sample' : 'Standard measurement · 5 Hz'}</h2>
         </div>
         <div className={`vd2-protocol-state is-${protocol?.status || 'idle'}`}>
           {active ? `${protocol.phase_label || protocol.phase} ${protocol.status}` : (protocol?.status || 'idle')}
@@ -538,9 +538,9 @@ export function Vd2PhaseProtocol({ protocol, settings, disabled, settingsDisable
         </select></label>
       </div>
       <div className="vd2-phase-buttons">
-        {onMeasure && <button type="button" className="vd2-measure-button" disabled={disabled || active || measuring || measurementUnavailable || protocol?.queue_full}
+        {!pairedMode && onMeasure && <button type="button" className="vd2-measure-button" disabled={disabled || active || measuring || measurementUnavailable || protocol?.queue_full}
           onClick={onMeasure}>Do Measurement</button>}
-        {Object.entries(PHASE_PROTOCOLS).map(([phase, definition]) => {
+        {!pairedMode && Object.entries(PHASE_PROTOCOLS).map(([phase, definition]) => {
           const latest = protocol?.phase === phase && protocol.sample_name === settings.runName ? protocol
             : protocol?.processing_jobs?.findLast(job => job.phase === phase && job.sample_name === settings.runName);
           const progress = phaseProgress(latest);

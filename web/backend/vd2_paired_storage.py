@@ -10,6 +10,10 @@ import numpy as np
 from vd2_project_manifest import MANIFEST_NAME, artifact_file, load_manifest
 
 
+class BruitRequired(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class DarkReference:
     identity: str
@@ -22,18 +26,20 @@ class DarkReference:
     description: str
 
 
-def load_dark_reference(root, sample, reuse, roi, precision, stop):
+def load_dark_reference(root, sample, reuse, roi, precision, stop, *, compatible=None):
     try:
         data = load_manifest(root / MANIFEST_NAME)
     except FileNotFoundError as exc:
-        raise ValueError("Record Bruit in this project before paired acquisition") from exc
+        raise BruitRequired("Record Bruit in this project before paired acquisition") from exc
     candidates = [
         artifact for artifact in data["artifacts"].values()
         if artifact["phase"] == "BRUIT" and artifact.get("status") == "completed"
         and (reuse == "latest" or artifact["sample"] == sample)
     ]
+    if compatible is not None:
+        candidates = [artifact for artifact in candidates if compatible(artifact)]
     if not candidates:
-        raise ValueError("Record a completed Bruit for the selected Noise Source")
+        raise BruitRequired("Record a new Bruit for these camera settings")
     artifact = max(candidates, key=lambda entry: entry["completed_at"])
     path = artifact_file(root, artifact)
     blocks = []
@@ -45,7 +51,7 @@ def load_dark_reference(root, sample, reuse, roi, precision, stop):
         if not count or (precision and count < 8):
             raise ValueError("Precision mode requires at least eight Bruit frames" if precision else "Bruit is empty")
         if roi and (roi.width, roi.height) != (width, height):
-            raise ValueError("Selected ROI and Bruit have different detector geometry")
+            raise BruitRequired("Selected ROI and Bruit have different detector geometry")
         wavelengths = np.asarray(file["wavelengths"][:], dtype=float)
         timedelays = np.asarray(file["timedelays"][:], dtype=float)
         if (wavelengths.shape != (width,) or timedelays.shape != (height,)
@@ -64,7 +70,7 @@ def load_dark_reference(root, sample, reuse, roi, precision, stop):
                 block_sum += np.sum(raw[offset:min(end, offset + 4)], axis=0, dtype=np.float64)
             image_sum += block_sum
             if precision:
-                blocks.append(block_sum[roi.slices] / (end - start))
+                blocks.append((block_sum[roi.slices] if roi else block_sum) / (end - start))
         image = image_sum / count
         if not np.isfinite(image).all():
             raise ValueError("Bruit contains invalid detector counts")
@@ -88,8 +94,10 @@ class PairedRecording:
                 "bruit_artifact": json.dumps(dark.artifact["h5"], allow_nan=False),
                 "configuration": json.dumps(config, allow_nan=False),
                 "machine_before": json.dumps(machine, allow_nan=False),
-                "analysis": "mean_pair_od",
+                "analysis": config.get("method", "mean_pair_od"),
+                "paired_map_analysis": "mean_pair_od",
                 "beam_state_source": "operator_first_frame",
+                "camera_sequence_source": "his_frame_index" if config.get("native_sequence") else "camera_ring",
             })
             self.sequence = self.file.create_dataset("camera_sequence", (0,), maxshape=(None,), dtype="i8")
             self.times = self.file.create_dataset("camera_timestamp_ms", (0,), maxshape=(None,), dtype="f8")
@@ -119,11 +127,17 @@ class PairedRecording:
         self.metadata.attrs["frame_count"] = self.frame_count
         self.file.flush()
 
-    def finish(self, analysis, status: dict[str, Any]):
+    def finish(self, analysis, status: dict[str, Any], kinetics=None):
         try:
             self.file.create_dataset("paired_od", data=analysis.map())
             self.file.create_dataset("valid_pair_count", data=analysis.valid_count)
             self.file.create_dataset("roi_block_means_mod", data=analysis.block_mean)
+            if kinetics is not None:
+                self.file.create_dataset("kinetics_time", data=kinetics.time)
+                if kinetics.values is not None:
+                    self.file.create_dataset("kinetics_od_mod", data=kinetics.values)
+                if kinetics.errors is not None:
+                    self.file.create_dataset("kinetics_standard_error_mod", data=kinetics.errors)
             self.metadata.attrs["summary"] = json.dumps(status, allow_nan=False)
             self.metadata.attrs["pair_count"] = status["pairs_recorded"]
             self.metadata.attrs["status"] = status["status"]

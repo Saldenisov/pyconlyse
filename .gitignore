@@ -62,3 +62,6 @@ __pycache__/
 /web/frontend/build.*/
 /tools/xp_python34_extracted/
 /tools/xp_python34_testenv/
+
+# Verified VD2 streak-detector calibration used by camera-only acquisition.
+!web/pump_probe/config/vd2_spectral_calibration_550nm.json

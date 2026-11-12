@@ -13,19 +13,20 @@ const props = {
   onUpdate: jest.fn(), onStop: jest.fn(),
 };
 
-test('precision mode sends the selected detector ROI and operator phase', async () => {
+test('precision mode sends the wavelength band and operator phase', async () => {
   fetchVd2.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, paired: { active: true } }) });
   const view = render(<VD2PairedCapture {...props} />);
   fireEvent.change(screen.getByLabelText('Stop condition'), { target: { value: 'precision' } });
-  expect(screen.getByRole('button', { name: 'Measure pairs' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Measurement' })).toBeEnabled();
   view.rerender(<VD2PairedCapture {...props} roi={{ x0: 8, x1: 2, y0: 4, y1: 8 }} />);
   fireEvent.click(screen.getByLabelText('First frame with electrons'));
-  fireEvent.click(screen.getByRole('button', { name: 'Measure pairs' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Measurement' }));
   await waitFor(() => expect(props.onUpdate).toHaveBeenCalledWith({ active: true }));
   const [url, options] = fetchVd2.mock.calls.at(-1);
   expect(url).toBe('/api/pump-probe-vd2/paired/start');
   expect(JSON.parse(options.body)).toMatchObject({
-    first_map_with_electrons: false, mode: 'precision', target_mod: 2,
+    first_map_with_electrons: false, mode: 'precision', target_mod: 2, method: 'lamp_matched',
+    band: { center_nm: 600, half_width_nm: 10, monitor_rows: 30 },
     roi: { x0: 2, x1: 8, y0: 4, y1: 8, width: 10, height: 20 },
   });
 });
@@ -35,7 +36,23 @@ test('shows signed OD and permits stopping the recording', () => {
     job_id: 'job', target_mod: 2, first_map_with_electrons: true, trigger_source: 'external_rising',
     pairs_recorded: 200, pair_limit: 5000, estimate_mod: -6.32, error_mod: 1.85 }} />);
   expect(screen.getByText('· ΔOD -6.32 mOD')).toBeInTheDocument();
-  expect(screen.getByText('· ROI error 1.85 mOD')).toBeInTheDocument();
+  expect(screen.getByText('· Maximum pointwise error 1.85 mOD')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Stop pairs' }));
   expect(props.onStop).toHaveBeenCalled();
+});
+
+test('missing Bruit closes the streak shutter and resumes after the new reference is verified', async () => {
+  const onBruit = jest.fn();
+  const previous = { job_id: 'older', phase: 'BASE', status: 'completed' };
+  const run = { job_id: 'paired', sample_name: 'sample', status: 'bruit_required', active: false };
+  fetchVd2.mockResolvedValue({ ok: true, json: async () => ({ success: true, paired: { active: true } }) });
+  const view = render(<VD2PairedCapture {...props} run={run} protocol={previous} onBruit={onBruit} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Record Bruit' }));
+  await waitFor(() => expect(onBruit).toHaveBeenCalled());
+  expect(fetchVd2.mock.calls.at(-1)[0]).toMatch(/parameter\/streak_shutter$/);
+  view.rerender(<VD2PairedCapture {...props} run={run} onBruit={onBruit}
+    protocol={{ job_id: 'new-bruit', phase: 'BRUIT', sample_name: 'sample', status: 'completed' }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open shutters and continue' }));
+  await waitFor(() => expect(fetchVd2.mock.calls.at(-1)[0]).toMatch(/paired\/start$/));
+  expect(fetchVd2.mock.calls.at(-2)[0]).toMatch(/alignment\/open-shutters$/);
 });

@@ -22,6 +22,7 @@ import { Vd2RepeatDialog } from "./PumpProbeVD2.API_BASE";
 import { Vd2ErrorTray } from "./PumpProbeVD2.Vd2ErrorTray";
 
 export function renderVd2Acquisition({
+  measurementRate, setMeasurementRate,
   state, preview, previewAvailable, errors, activeErrorId, previewError,
   setAlignmentAverage, setLiveAverageReadError, setPreviewEnabled, busy, activeTab,
   setActiveTab, calibration, calibrationUpdating, calibrationError, previewStream,
@@ -42,6 +43,7 @@ export function renderVd2Acquisition({
   acquisitionReadDeferred, awaitingCameraState, readIssues, statusClass,
   showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
 }) {
+  const pairedMode = Boolean(protocol?.paired?.active) || (protocol?.paired_available && measurementRate === '10');
   return (
     <main className="vd2-page">
       <header className="vd2-header" aria-label="VD2 header">
@@ -103,7 +105,15 @@ export function renderVd2Acquisition({
               </VD2LiveAverage>
               <VD2AlignmentMagnets measurements={alignmentMeasurements} live={state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live'} />
             </> : <>
-            <section className="vd2-control-strip" aria-label="Acquisition controls">
+            {protocol?.paired_available && <label className="vd2-control-strip">
+              <span>Measurement rate</span>
+              <select value={pairedMode ? '10' : '5'} disabled={busy || protocolHardwareActive || Boolean(preparedPhase || guidedRun || guidedChoice)}
+                onChange={event => setMeasurementRate(event.target.value)}>
+                <option value="5">5 Hz · separate ABS and BASE</option>
+                <option value="10">10 Hz · paired ABS/BASE</option>
+              </select>
+            </label>}
+            {!pairedMode && <section className="vd2-control-strip" aria-label="Acquisition controls">
               <div className="vd2-acquisition-actions">
                 <button
                   type="button"
@@ -121,8 +131,9 @@ export function renderVd2Acquisition({
                 <label><span>Frames / HIS</span><input aria-label="Frames / HIS" type="number" min="1" max="100000" step="1" value={protocolSettings.framesPerHis}
                   disabled={!serverWorkspace.ready || busy || protocolStarting || Boolean(repeatConflict) || protocolHardwareActive} onChange={event => updateProtocolSetting('framesPerHis', event.target.value)} /></label>
               </VD2LiveAverage>
-            </section>
+            </section>}
             <Vd2PhaseProtocol
+              pairedMode={pairedMode}
               protocol={protocol}
               project={project}
               settings={protocolSettings}
@@ -138,11 +149,12 @@ export function renderVd2Acquisition({
               measurementMessage={guidedMessage}
               sampleHolder={<VD2SampleHolder disabled={busy || protocolStarting || protocolHardwareActive} />}
             />
-            <VD2PairedCapture available={protocol?.paired_available} run={protocol?.paired} settings={protocolSettings}
+            {pairedMode && <VD2PairedCapture available={protocol?.paired_available} run={protocol?.paired} settings={protocolSettings}
+              protocol={protocol} onBruit={() => prepareProtocolPhase('BRUIT')}
               disabled={!serverWorkspace.ready || busy || protocolStarting || protocolHardwareActive
                 || Boolean(preparedPhase || guidedRun || guidedChoice) || !acquisitionIdle}
               roi={rois.find(roi => roi.id === selectedRoiId)} preview={preview} onUpdate={updatePairedCapture}
-              onStop={() => runCommand('StopAcquisition')} />
+              onStop={() => runCommand('StopAcquisition')} />}
             {projectError && <p role="alert" className="vd2-stage-error">{projectError}</p>}
             <section className="vd2-roi-analysis" aria-label="ROI analysis">
               <aside className="vd2-roi-list">

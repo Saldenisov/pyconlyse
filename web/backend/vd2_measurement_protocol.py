@@ -8,7 +8,7 @@ import re
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import PureWindowsPath
 from typing import Any, Callable, Mapping
@@ -40,6 +40,8 @@ class PhaseRequest:
     repeat_of: str | None = None
     repeat_series: str | None = None
     reserve_directory: bool = False
+    spectral_axis_nm: tuple[float, ...] | None = None
+    spectral_calibration_id: str | None = None
 
 
 class Vd2MeasurementProtocol:
@@ -243,7 +245,10 @@ class Vd2MeasurementProtocol:
             if timing_error is not None:
                 raise timing_error
             if self._capture_validator is not None:
-                self._capture_validator(request, machine_before, configured_rate)
+                calibration = self._capture_validator(request, machine_before, configured_rate)
+                if calibration is not None:
+                    axis, calibration_id = calibration
+                    request = replace(request, spectral_axis_nm=axis, spectral_calibration_id=calibration_id)
             # Capture machine state while this job still owns the camera.
             # The file worker receives plain data, never a Tango proxy.
             machine_after = self._snapshot_reader(proxy) if self._snapshot_reader else None

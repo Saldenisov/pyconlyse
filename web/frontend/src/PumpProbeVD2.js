@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useVd2AcquisitionState } from "./PumpProbeVD2.useVd2AcquisitionState";
 import { useVd2AcquisitionActions } from "./PumpProbeVD2.useVd2AcquisitionActions";
 import { renderVd2Acquisition } from "./PumpProbeVD2.renderVd2Acquisition";
@@ -6,6 +7,7 @@ import './css/PumpProbeVD2.css';
 
 
 function PumpProbeVD2() {
+  const [measurementRate, setMeasurementRate] = useState('5');
   const {
     state, setState, preview, previewAvailable, errors, setErrors, readFailures,
     activeErrorId, setActiveErrorId, previewError, setPreviewError, setAlignmentAverage,
@@ -51,6 +53,7 @@ function PumpProbeVD2() {
   });
 
   return renderVd2Acquisition({
+    measurementRate, setMeasurementRate,
     state, preview, previewAvailable, errors, activeErrorId, previewError,
     setAlignmentAverage, setLiveAverageReadError, setPreviewEnabled, busy, activeTab,
     setActiveTab, calibration, calibrationUpdating, calibrationError, previewStream,

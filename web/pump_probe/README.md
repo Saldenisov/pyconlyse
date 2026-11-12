@@ -365,42 +365,49 @@ Verify the trigger and the two outgoing pulses on the scope before capture.
 A stale or absent HIS spectral header keeps the raw file and blocks H5
 conversion until the calibration is verified.
 
-Use **Standard measurement · 5 Hz** for separate ABS, BASE, and BRUIT
-sequences. Set the DG645 trigger mode to Internal at 5 Hz or select the
-appropriate edge of the external ELYSE 5 Hz sync. Burst stays off. With the
-internal clock, DG645 returns to standby before the file is saved. With
-external sync, the selected trigger stays active. Any positive frame count
-supported by the standard protocol can be used. Configure the dark optical
-path before recording BRUIT.
+Choose **5 Hz · separate ABS and BASE** for individual ABS, BASE, and
+BRUIT sequences. The external trigger stays active and Burst stays off.
+Camera-only shutdown retains the DG645 supply and the Xe lamp cooling supply.
 
 ### Paired ABS/BASE acquisition
 
-In **Acquisition → Paired ABS/BASE**, select a project with a completed BRUIT.
-Use matching detector geometry, gain, sweep and exposure. Open both shutters
-and turn off Live rolling average. Choose the DG645 5 Hz trigger source for
-capture. DG645 warms the lamp internally for 10 s at 10 Hz, pauses while the
-camera arms its ring buffer, then uses the selected sync for capture.
+Choose **10 Hz · paired ABS/BASE** and open **Measurement**. If the project
+has no Bruit with matching detector settings and exposure, the panel prompts
+for a dark reference. It closes the streak shutter before the standard Bruit
+workflow. Block the probe light, confirm the Bruit capture, then confirm
+**Open shutters and continue** after the H5 has been verified. A matching
+completed reference is reused automatically. Fixed-count runs use the camera
+Acquire exposure. Precision runs require matching Live exposure and disabled
+Live rolling average.
 
-The operator sets **First frame with electrons**. Checked assigns ABS to the
-first frame. Unchecked assigns BASE to it. Roles alternate within the
-continuous 10 Hz sequence. A target of 200 pairs means 200 ABS and 200 BASE
-frames. The camera's ring-buffer index and native timestamp detect gaps.
+Set the 5 Hz input in Hardware Setup. Measurement holds that source and
+enables a two-pulse Burst with 100 ms spacing. The 10-second warmup precedes
+capture. Finishing, stopping, or a capture fault disables Burst and returns to
+the original 5 Hz pulse train. The operator sets **First frame with electrons**.
+The installed system must establish the first-frame phase before beam data
+can be interpreted.
 
-The server archives raw frames, camera indices, timestamps and operator
-phase in a new H5 in the sample folder. It records the H5 and BRUIT identity
-in the project manifest and serves a decimated browser preview from the same
-stream. A gap stops recording and preserves the data already received. Stop,
-pair count and precision completion pause DG645 and disable Burst before H5
-finalization.
+Fixed-count measurements use the native HPD-TA Sequence and keep the original
+HIS alongside the H5. The H5 archives raw frames, timestamps, phase and the
+chosen OD kinetics. Frame count, geometry and 10 Hz intervals must verify
+before the run can report success. Precision measurements use the native
+ring stream and can stop early. A missing frame or unverified cadence stops
+the run and preserves captured data.
 
-Live analysis uses mean signed OD of individual pairs. Select an ROI before
-starting precision mode. ROI remains fixed during the run, while the target
-can change. The reported error estimates one standard error of the ROI mean
-from 20-pair contiguous blocks, comparison with 40-pair blocks and a BRUIT
-contribution. The target must hold for two consecutive estimates, with at
-least eight complete blocks before the first estimate. The pair limit bounds
-the run. OD of the ABS and BASE means, matching by probe intensity, and
-replay with specified exclusions remain available in the offline reducer.
+Enter a wavelength center and half-width, for example 600 ± 10 nm. The default
+archive calibration is for the 550 nm Kymera center and the verified C13440
+640 × 508 geometry. For a different optical configuration, install a matching
+verified JSON profile with `PYCONLYSE_VD2_SPECTRAL_CALIBRATION`. The server
+checks the detector geometry and Kymera settings against the profile.
+
+The selectable methods are brightness-matched BASE, SAM + matched BASE then
+OD of means, mean OD of adjacent pairs, OD of means, and SAM then OD of means.
+Lamp intensity is measured in the first 30 time rows by default. Those rows
+are excluded from the displayed kinetics. SAM applies the Treatment angle
+limit of 1° and the selected intensity tolerance. Precision mode tests the
+largest pointwise standard error over the band kinetics after two consecutive
+block estimates. The error includes the dark-reference contribution. The
+pair limit bounds the measurement.
 
 Deploy the camera-only profile and the new Tango ring commands together.
 Authorization-enforced installations require exact approvals for the paired

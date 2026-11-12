@@ -172,7 +172,7 @@ export function useVd2AcquisitionActions({
         return;
       }
       if (!response.ok || !payload.success) throw new Error(payload.error || `Could not start ${phase}`);
-      setProtocol(payload);
+      setProtocol(current => ({ ...current, ...payload }));
       setProtocolSettings(current=>({...current,runName:payload.sample_name||choice.run_name}));
       if (guidedRun) {
         setGuidedRun(run => run && ({ ...run, jobs: [...run.jobs, payload.job_id] }));

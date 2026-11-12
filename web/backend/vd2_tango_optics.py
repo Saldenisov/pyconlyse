@@ -155,7 +155,7 @@ def write_parameter(api, camera, name, value):
     elif name == "delay_burst_mode":
         if value != "Off":
             raise ValueError("Burst is armed automatically by paired ABS/BASE acquisition")
-        pause_internal_clock(proxy)
+        _set(proxy, "BURM 0", "BURM?", 0)
 
 
 
@@ -235,38 +235,40 @@ def measurement_clock(api, camera, request):
 
 @contextmanager
 def paired_capture_clock(api, camera, trigger_source, stop, arm):
-    """Warm at 10 Hz, arm the reader without triggers, then capture at 10 Hz."""
+    """Keep the selected 5 Hz clock running. Burst alone doubles the rate."""
     api._verify_vd2_timing_ready(camera)
     _confirm_flash_lamp_power(api)
     dg645 = _proxy(api, api.DG645_DEVICE)
+    if _query(dg645, "TSRC?") != trigger_source:
+        raise ValueError("Select the active DG645 5 Hz trigger in Hardware Setup first")
+    _validate_five_hz_source(dg645)
+    if burst_armed(dg645):
+        raise ValueError("DG645 Burst must be OFF before starting Measurement")
+    _set(dg645, "BURC 2", "BURC?", 2)
+    _set(dg645, "BURP 0.1", "BURP?", 0.1)
+    if _query(dg645, "BURD?") != 0 or _query(dg645, "BURT?") != 0:
+        raise ValueError("Expected zero Burst delay and T0 on both pulses")
+    for output in range(5):
+        if _query(dg645, f"PRES? {output}") != 1:
+            raise ValueError(f"DG645 output {output} prescale must be one")
+    if stop.is_set():
+        yield False
+        return
     try:
-        pause_internal_clock(dg645)
-        _set(dg645, "TRAT 5", "TRAT?", 5)
-        _set(dg645, "BURC 2", "BURC?", 2)
-        _set(dg645, "BURP 0.1", "BURP?", 0.1)
-        if _query(dg645, "BURD?") != 0:
-            raise RuntimeError("Expected zero DG645 burst delay for paired recording")
         _set(dg645, "BURM 1", "BURM?", 1)
-        if stop.is_set():
-            yield False
-            return
-        _set(dg645, "TSRC 0", "TSRC?", 0)
+        validate_paired_burst(dg645)
         if stop.wait(10.0):
             yield False
             return
-        _set(dg645, "TSRC 5", "TSRC?", 5)
         arm()
-        if stop.is_set():
-            yield False
-            return
-        _set(dg645, f"TSRC {trigger_source}", "TSRC?", trigger_source)
-        validate_paired_burst(dg645)
-        yield True
+        yield not stop.is_set()
     finally:
         try:
-            pause_internal_clock(dg645)
+            _set(dg645, "BURM 0", "BURM?", 0)
+            if _query(dg645, "TSRC?") != trigger_source:
+                raise RuntimeError("DG645 trigger source changed during measurement")
         except Exception as exc:
-            raise RuntimeError(f"DG645 pulse pause or Burst OFF unverified: {exc}") from exc
+            raise RuntimeError(f"Return to 5 Hz unverified: {exc}") from exc
 
 
 def verify_image_optics(settings, kymera_values):
@@ -293,19 +295,27 @@ def validate_saved_capture(api, request, machine_before, rate):
     import numpy as np
     from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
     from vd2_his_timing import verify_frame_rate
+    from vd2_spectral_calibration import verified_wavelengths
 
     try:
         if rate is not None and request.frames_per_his > 1:
             verify_frame_rate(request.his_path, request.frames_per_his, rate)
-        if request.phase == "BRUIT":
-            return  # A dark reference needs detector geometry, even without a wavelength calibration.
-        kymera = machine_before["devices"][api.KYMERA_DEVICE]["values"]
+        if request.phase == "BRUIT" and not (machine_before or {}).get("devices", {}).get(api.KYMERA_DEVICE):
+            return None
         info = HamamatsuFileOpener().read_critical_info(Path(request.his_path))
-        verify_image_optics(api.image_alignment_settings(info.header), kymera)
-        wavelengths = np.asarray(info.wavelengths, dtype=float)
-        if (str(info.scaling_xunit).strip('"').lower() != "nm"
-                or wavelengths.size < 2 or not np.isfinite(wavelengths).all()
-                or not (np.all(np.diff(wavelengths) > 0) or np.all(np.diff(wavelengths) < 0))):
-            raise ValueError("HIS wavelength calibration must be finite and monotonic in nm")
+        if str(info.scaling_xunit).strip('"').lower() != "nm":
+            try:
+                return verified_wavelengths(info.header, machine_before, api.KYMERA_DEVICE)
+            except (OSError, KeyError, ValueError):
+                if request.phase == "BRUIT":
+                    return None  # A dark reference may be stored in detector pixels.
+                raise
+        if request.phase != "BRUIT":
+            kymera = machine_before["devices"][api.KYMERA_DEVICE]["values"]
+            verify_image_optics(api.image_alignment_settings(info.header), kymera)
+            wavelengths = np.asarray(info.wavelengths, dtype=float)
+            if (wavelengths.size < 2 or not np.isfinite(wavelengths).all()
+                    or not (np.all(np.diff(wavelengths) > 0) or np.all(np.diff(wavelengths) < 0))):
+                raise ValueError("HIS wavelength calibration must be finite and monotonic in nm")
     except Exception as exc:
         raise RuntimeError(f"VD2 frame timing or spectral metadata unverified; raw HIS retained: {exc}") from exc

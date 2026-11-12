@@ -219,3 +219,59 @@ def test_real_bruit_and_paired_history_round_trip(rig, tmp_path):
     recorded = sample["paired_runs"][0]
     assert recorded["pairs_recorded"] == 3 and recorded["bruit_artifact_id"] == "dark"
     assert recorded["h5"]["sha256"] == fingerprint(status["h5_path"])["sha256"]
+
+def test_native_sequence_records_exact_pairs_and_saves_after_burst_off(rig):
+    import struct
+    from pathlib import Path
+    run, request, control, events = rig
+
+    class NativeCamera(Camera):
+        loops = "10"
+
+        def write_attribute(self, name, value):
+            assert name == "sequence_loops"
+            self.loops = value
+            self.events.append((name, value))
+
+        def command_inout(self, command, arg=None):
+            self.events.append(command)
+            if command == "SaveCurrentSequence":
+                header = bytearray(64)
+                header[:2] = b"IM"
+                struct.pack_into("<HHH", header, 2, 0, 2, 1)
+                struct.pack_into("<HH", header, 12, 2, int(self.loops))
+                with Path(arg).open("wb") as stream:
+                    for i in range(int(self.loops)):
+                        struct.pack_into("<d", header, 22, 100.0 * i)
+                        stream.write(header)
+                        stream.write(np.asarray([90, 95] if i % 2 == 0 else [110, 105], dtype="<u2").tobytes())
+
+    camera = NativeCamera(events)
+    control._proxy = lambda: camera
+    control._remoteex_readback = lambda _, query: {
+        "SeqParamGet(NoOfLoops)": camera.loops, "AsyncCommandStatus()": "0,0,0",
+    }[query]
+    run.start(control, replace(request, native_sequence=True))
+    run.wait(5)
+    result = run.status()
+    assert (result["status"], result["pairs_recorded"]) == ("completed", 3)
+    assert events == [("sequence_loops", "6"), ("warm", 1), "StartSequence",
+                      "pulses-paused", "SaveCurrentSequence", ("sequence_loops", "10")]
+    with h5py.File(result["h5_path"]) as file:
+        np.testing.assert_array_equal(file["camera_timestamp_ms"][:], np.arange(6) * 100)
+        np.testing.assert_array_equal(file["beam_on"][:], [1, 0] * 3)
+
+
+def test_missing_bruit_requests_a_reference_without_arming_dg645(rig):
+    from vd2_paired_storage import BruitRequired
+    run, request, control, events = rig
+    control._proxy = lambda: Camera(events)
+
+    def missing(*args):
+        raise BruitRequired("Record a new Bruit")
+
+    run._dark_reader = missing
+    run.start(control, replace(request, native_sequence=True))
+    run.wait(5)
+    assert run.status()["status"] == "bruit_required"
+    assert not run.status()["active"] and not events
