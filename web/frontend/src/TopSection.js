@@ -1,7 +1,7 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
-import { fetchSelection, updateSelectionConfig } from './api/treatmentClient';
+import { fetchSelection, postTreatment, updateSelectionConfig } from './api/treatmentClient';
 import { convertPreviewTime, previewCurve } from './treatmentPreviewCurves';
 import './css/TopSection.css';
 import TreatmentError from './components/TreatmentError';
@@ -83,7 +83,8 @@ function nearestFullIndex(value, fullLength, values) {
   return Math.max(0, Math.min(fullLength - 1, Math.round(ratio * (fullLength - 1))));
 }
 
-function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel }) {
+export function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel,
+  reference, drawingReference, onReference }) {
   const shellRef = useRef(null);
   const plotRef = useRef(null);
   const dragStateRef = useRef(null);
@@ -92,6 +93,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
   const previewFrameRef = useRef(null);
   const [metrics, setMetrics] = useState(null);
   const [visualSelection, setVisualSelection] = useState(null);
+  const [referenceDraft, setReferenceDraft] = useState(null);
   const margin = fillPanel ? FULL_HEATMAP_MARGIN : HEATMAP_MARGIN;
 
   const readPlotMetrics = useCallback((rect) => {
@@ -346,7 +348,10 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
     const yAxis = plotRef.current?._fullLayout?.yaxis;
     const yValues = selection?.heatmap?.timedelays || [];
     if (yAxis?.p2l && yValues.length > 0) {
-      return nearestFullIndex(yAxis.p2l(point.localY - point.yOffset), yLength, yValues);
+      const value = yAxis.p2l(point.localY - point.yOffset);
+      const fullAxis = selection?.kinetics?.x;
+      if (fullAxis?.length === yLength) return nearestFullIndex(value, yLength, fullAxis);
+      return nearestFullIndex(value, yLength, yValues);
     }
 
     const ratio = (point.localY - point.yOffset) / Math.max(1, point.innerHeight);
@@ -402,6 +407,12 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
     }
 
     const dragState = dragStateRef.current;
+    if (dragState.mode === 'reference') {
+      if (event.pointerId !== dragState.pointerId) return;
+      const end = yIndexFromPoint(point);
+      setReferenceDraft({ start: Math.min(end, dragState.startYIndex), stop: Math.max(end, dragState.startYIndex) });
+      return;
+    }
     const startSelection = dragState.selection;
     const xLength = selection?.file_info?.wavelengths_length || 0;
     const yLength = selection?.file_info?.timedelays_length || 0;
@@ -452,6 +463,17 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
   const finishDrag = (event) => {
     const dragState = dragStateRef.current;
     if (!dragState) {
+      return;
+    }
+    if (dragState.mode === 'reference') {
+      if (event?.pointerId !== dragState.pointerId) return;
+      dragStateRef.current = null;
+      setReferenceDraft(null);
+      if (event.type === 'pointercancel') return;
+      const end = yIndexFromPoint(getClampedLocalPoint(event));
+      const start = Math.min(end, dragState.startYIndex);
+      const stop = Math.max(end, dragState.startYIndex);
+      if (stop > start) onReference?.({ start, stop });
       return;
     }
 
@@ -511,7 +533,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
     const yAxis = plotRef.current?._fullLayout?.yaxis;
     if (yAxis?.l2p) {
       return metrics.yOffset + yAxis.l2p(
-        interpolateValue(value, yLength, selection?.heatmap?.timedelays || [])
+        selection?.kinetics?.x?.[value] ?? interpolateValue(value, yLength, selection?.heatmap?.timedelays || [])
       );
     }
     return metrics.yOffset + (1 - value / (yLength - 1)) * metrics.innerHeight;
@@ -544,6 +566,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
   };
 
   const regionStyle = buildRegionStyle();
+  const referenceBand = referenceDraft || reference;
 
   return (
     <div className="selection-heatmap-shell" ref={shellRef}>
@@ -554,7 +577,23 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange, fillPanel 
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
       >
-        {regionStyle && (
+        {metrics && referenceBand && (
+          <div className="spectral-reference-band" style={{
+            left: metrics.xOffset, width: metrics.innerWidth,
+            top: Math.min(valueToY(referenceBand.start), valueToY(referenceBand.stop)),
+            height: Math.max(2, Math.abs(valueToY(referenceBand.start) - valueToY(referenceBand.stop))),
+          }} />
+        )}
+        {metrics && drawingReference && <div className="spectral-reference-draw" style={{
+          left: metrics.xOffset, width: metrics.innerWidth, top: metrics.yOffset, height: metrics.innerHeight,
+        }} onPointerDown={event => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          dragStateRef.current = { mode: 'reference', pointerId: event.pointerId,
+            startYIndex: yIndexFromPoint(getClampedLocalPoint(event)) };
+          event.currentTarget.setPointerCapture?.(event.pointerId);
+        }} />}
+        {regionStyle && !drawingReference && (
           <>
             <div
               className="selection-region selection-region-x"
@@ -737,6 +776,7 @@ const TopSection = ({ fillPanel = false }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [previewRange, setPreviewRange] = useState(null);
+  const [referenceDraw, setReferenceDraw] = useState(null);
   const [draft, setDraft] = useState({
     activeDataType: '',
     mapIndex: 0,
@@ -914,6 +954,26 @@ const TopSection = ({ fillPanel = false }) => {
     const active = { ...current, kinetics: shownKinetics, spectrum: shownSpectrum };
     const pinned = comparisonCurves.some((curve) => curve.id === current.id);
 
+    const referenceSource = treatmentContext?.treatmentProfile === 'VD2' && selection.spectral_reference_source;
+    const drawingReference = Boolean(referenceSource && referenceDraw === referenceSource);
+    const reference = referenceSource && selection.spectral_reference?.source === referenceSource
+      ? selection.spectral_reference : null;
+    const saveReference = async (range) => {
+      setReferenceDraw(null);
+      setIsSaving(true);
+      try {
+        const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/config', {
+          spectral_reference: range && { ...range, source: referenceSource },
+        });
+        treatmentContext?.setReferenceSession?.(payload);
+        setError('');
+        requestSelectionRefresh?.();
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsSaving(false);
+      }
+    };
     return (
       <>
         <div className="selection-controls">
@@ -965,6 +1025,13 @@ const TopSection = ({ fillPanel = false }) => {
           <button onClick={applySelection} disabled={isSaving}>
             {isSaving ? 'Applying...' : 'Apply'}
           </button>
+          {referenceSource && <button type="button" aria-pressed={drawingReference} disabled={isSaving}
+            onClick={() => setReferenceDraw(drawingReference ? null : referenceSource)}>
+            {drawingReference ? 'Cancel drawing' : 'Draw pre-pulse window'}
+          </button>}
+          {reference && <button type="button" disabled={isSaving} onClick={() => saveReference(null)}>
+            Clear pre-pulse window
+          </button>}
           {setComparisonCurves && <button type="button" disabled={pinned || isSaving || Boolean(previewRange)}
             title="Keep the current kinetics and spectrum, then open another file or map to compare."
             onClick={() => setComparisonCurves((curves) => curves.some((curve) => curve.id === current.id) ? curves : [...curves, current])}>
@@ -972,6 +1039,8 @@ const TopSection = ({ fillPanel = false }) => {
           </button>}
         </div>
         <div className="selection-path">{selection.file_info.file_path}</div>
+        {drawingReference && <p role="status">Drag along the time axis to mark a window before the pulse.</p>}
+        {reference && <small>Pre-pulse: {selection.kinetics.x[reference.start]?.toPrecision(5)}–{selection.kinetics.x[reference.stop]?.toPrecision(5)} {selection.kinetics.time_scale}</small>}
         {comparisonCurves.length > 0 && <div className="selection-controls" aria-label="Comparison curves">
           {comparisonCurves.map((curve) => <button type="button" key={curve.id}
             title={`${curve.path}\n${curve.ranges}`} aria-label={`Remove ${curve.label} · ${curve.ranges}`}
@@ -989,6 +1058,9 @@ const TopSection = ({ fillPanel = false }) => {
                 fillPanel={fillPanel}
                 onSelectRange={handleHeatmapSelection}
                 onPreviewRange={handleHeatmapPreview}
+                reference={reference}
+                drawingReference={drawingReference}
+                onReference={saveReference}
               />
             </div>
           </div>

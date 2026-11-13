@@ -57,7 +57,7 @@ from treatment_queue_store import (
     _treatment_worker_count,
 )
 from treatment_service import TreatmentDataService, h5py
-from treatment_spectral_od import SPECTRAL_MODES, SPECTRAL_SUM
+from treatment_spectral_od import SPECTRAL_MODES, SPECTRAL_SUM, reference_window
 from treatment_state_repository import TreatmentStateRepository
 from browser_workspace_state import workspace_identity
 
@@ -479,6 +479,7 @@ def _default_state(session_id="") -> Dict[str, object]:
         "map_index": 0,
         "selection": {},
         "calc_mode": SPECTRAL_SUM if vd2 else CALC_MODES[0],
+        "spectral_reference": None,
         "first_map_with_electrons": True,
         "folder_path": folder,
         "save_folder": folder,
@@ -1446,6 +1447,23 @@ def _cache_assignable_source(source_path: str) -> Dict[str, object]:
     return cache_file(source_path)
 
 
+def _checked_spectral_reference(value, state):
+    if value is None:
+        return None
+    role = {"HIS+NOISE": "ABS+BASE", "ABS+BASE+NOISE": "ABS"}.get(state.get("exp_type"))
+    path = (state.get("paths") or {}).get(role)
+    if not path:
+        raise ValueError("Assign an ABS input before setting its reference window")
+    source = (state.get("path_sources") or {}).get(role) or path
+    start, stop = reference_window(value, source)
+    _, info = treatment_service._get_opener_and_info(Path(path))
+    if stop >= info.timedelays_length:
+        raise ValueError("The reference window must end before the last time row")
+    return {"source": source, "start": start, "stop": stop,
+            "time_start": float(info.timedelays[start]), "time_stop": float(info.timedelays[stop]),
+            "time_unit": info.scaling_yunit}
+
+
 class TreatmentSessionStore:
     def __init__(self, repository=None):
         self._lock = Lock()
@@ -1465,6 +1483,8 @@ class TreatmentSessionStore:
         snapshot["paths"] = dict(state["paths"])
         snapshot["path_sources"] = dict(state.get("path_sources") or {})
         snapshot["selection"] = dict(state["selection"])
+        if state.get("spectral_reference"):
+            snapshot["spectral_reference"] = dict(state["spectral_reference"])
         return snapshot
 
     def _get_or_create_state(self, session_id: str) -> Dict[str, object]:
@@ -1547,6 +1567,9 @@ class TreatmentSessionStore:
             sources[data_type] = _ensure_within_allowed_root(source) if source != path else paths[data_type]
 
         active_data_type = str(snapshot.get("active_data_type") or "")
+        reference = snapshot.get("spectral_reference")
+        if reference is not None:
+            reference = _checked_spectral_reference(reference, {**snapshot, "paths": paths, "path_sources": sources})
         if active_data_type not in {"", "OD", "DAT", *DATA_TYPES}:
             raise ValueError("session backup has an invalid active data type")
         dat_preview_path = str(snapshot.get("dat_preview_path") or "")
@@ -1594,6 +1617,7 @@ class TreatmentSessionStore:
                 "map_index": map_index,
                 "selection": selection,
                 "calc_mode": calc_mode,
+                "spectral_reference": reference,
                 "first_map_with_electrons": bool(snapshot.get("first_map_with_electrons", True)),
                 "folder_path": folder,
                 "save_folder": save_folder,
@@ -1614,11 +1638,18 @@ class TreatmentSessionStore:
 
     def update_config(self, session_id: str, payload: Dict[str, object]) -> Dict[str, object]:
         with self._lock:
-            state = self._get_or_create_state(session_id)
+            state = dict(self._get_or_create_state(session_id))
             previous_calculation = (
                 state["exp_type"], state["selected_data_type"],
-                state["calc_mode"], state["first_map_with_electrons"],
+                state["calc_mode"], state["first_map_with_electrons"], state.get("spectral_reference"),
             )
+            if "spectral_reference" in payload:
+                state["spectral_reference"] = _checked_spectral_reference(payload["spectral_reference"], state)
+            if payload.get("exp_type", state["exp_type"]) != state["exp_type"] or (
+                "first_map_with_electrons" in payload and state["exp_type"] == "HIS+NOISE"
+                and bool(payload["first_map_with_electrons"]) != state["first_map_with_electrons"]
+            ):
+                state["spectral_reference"] = None
             requested_exp_type = str(state["exp_type"])
             if "exp_type" in payload:
                 exp_type = str(payload["exp_type"])
@@ -1678,11 +1709,12 @@ class TreatmentSessionStore:
             state["status_label"] = "Treatment session updated."
             if previous_calculation != (
                 state["exp_type"], state["selected_data_type"],
-                state["calc_mode"], state["first_map_with_electrons"],
+                state["calc_mode"], state["first_map_with_electrons"], state.get("spectral_reference"),
             ):
                 state["result_ready"] = False
                 state["result_map_policy"] = "selected_maps"
                 state["cleaning_preview_request"] = None
+            self._sessions[session_id] = state
             self._persist_locked(session_id)
 
         return self.snapshot(session_id)
@@ -1712,7 +1744,7 @@ class TreatmentSessionStore:
             state = self._get_or_create_state(session_id)
             state.update(paths={}, path_sources={}, active_data_type="", map_index=0,
                          noise_ready=False, result_ready=False, dat_preview_path="",
-                         cleaning_preview_request=None, selection={})
+                         cleaning_preview_request=None, selection={}, spectral_reference=None)
             self._persist_locked(session_id)
 
     def set_data_path(
@@ -1738,6 +1770,9 @@ class TreatmentSessionStore:
 
         with self._lock:
             state = self._get_or_create_state(session_id)
+            previous_source = (state.get("path_sources") or {}).get(data_type)
+            if data_type in {"ABS", "ABS+BASE"} and previous_source != normalized_source:
+                state["spectral_reference"] = None
             state["paths"][data_type] = normalized
             state.setdefault("path_sources", {})[data_type] = normalized_source
             state["active_data_type"] = data_type
@@ -2191,8 +2226,8 @@ def _queue_cleaning_plan(payload: Dict[str, object], required_data_types: List[s
         surface_threshold = float(raw_plan.get("surface_threshold", 1.0))
     except (TypeError, ValueError) as exc:
         raise ValueError("cleaning thresholds must be numeric") from exc
-    if angle_threshold <= 0 or surface_threshold <= 0:
-        raise ValueError("cleaning thresholds must be positive")
+    if not all(math.isfinite(value) and value > 0 for value in (angle_threshold, surface_threshold)):
+        raise ValueError("cleaning thresholds must be finite and positive")
 
     return {
         "state": state,
@@ -2209,6 +2244,9 @@ def _queue_recipe(session_id: str, payload: Dict[str, object], *, session_state=
     required_data_types = list(required_paths)
     for file_path in required_paths.values():
         _ensure_readable_treatment_file(file_path)
+    if session.get("calc_mode") in SPECTRAL_MODES:
+        if _checked_spectral_reference(session.get("spectral_reference"), session) is None:
+            raise ValueError("Select the pre-pulse reference window on the current ABS preview")
 
     cleaning_plan = _queue_cleaning_plan(payload, required_data_types)
     runtime = treatment_service.runtime_status(session_id)
@@ -2372,6 +2410,9 @@ def _queue_standard_folder_recipe(session_id: str, payload: Dict[str, object]) -
         folder_calc_mode = session["calc_mode"]
     elif naming == "sample" and exp_type != "HIS":
         folder_calc_mode = SPECTRAL_SUM
+    if raw_calculate and folder_calc_mode in SPECTRAL_MODES:
+        raise ValueError("Load the folder inputs and select the reference window on ABS before Calculate OD. "
+                         "Use Classic OD of averages for automatic folder batches.")
     save_folder = _save_folder_for_measurement({} if naming == "sample" else session, folder)
     save_file_name = f"{_path_name(folder)}.dat" if naming == "sample" else _dated_save_file_name_for_folder(folder)
     save_target = {"save_folder": save_folder, "save_file_name": save_file_name}
@@ -2626,6 +2667,7 @@ def _execute_treatment_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict
         return _execute_standard_folder_queue_job(job_id, recipe)
 
     job_state = deepcopy(recipe["session"])
+    reference = job_state.get("spectral_reference")
     job_state["save_folder"] = str(recipe["output"]["save_folder"])
     job_state["save_file_name"] = str(recipe["output"]["save_file_name"])
     runtime_id = f"queue:{job_id}"
@@ -2708,6 +2750,9 @@ def _execute_treatment_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict
             phase="calculating",
             message="Calculating optical density.",
         )
+        if reference and job_state.get("calc_mode") in SPECTRAL_MODES:
+            role = "ABS+BASE" if job_state["exp_type"] == "HIS+NOISE" else "ABS"
+            job_state["spectral_reference"] = {**reference, "source": job_state["path_sources"][role]}
         result = treatment_service.calc_abs(runtime_id, job_state)
         treatment_queue_store.update_job(
             job_id,
@@ -2715,6 +2760,8 @@ def _execute_treatment_queue_job(job_id: str, recipe: Dict[str, object]) -> Dict
             message="Saving optical-density DAT result.",
         )
         saved = _save_queued_result(runtime_id, job_state)
+        if reference:
+            job_state["spectral_reference"] = reference
         record_treatment_manifest(
             saved,
             session_state=job_state,
@@ -2853,6 +2900,7 @@ def update_session_config():
             "selected_data_type",
             "calc_mode",
             "first_map_with_electrons",
+            "spectral_reference",
         }
         if any(
             field in payload and previous_session.get(field) != updated_session.get(field)
@@ -4083,6 +4131,12 @@ def save_sam_cleaning():
                 assigned_path,
                 source_path=source_path,
             )
+            reference = before_save_state.get("spectral_reference")
+            previous_source = (before_save_state.get("path_sources") or {}).get(active_data_type)
+            if reference and reference["source"] == previous_source and active_data_type in {"ABS", "ABS+BASE"}:
+                session_store.update_config(session_id, {
+                    "spectral_reference": {**reference, "source": source_path},
+                })
             treatment_service.reset_runtime(session_id)
             saved["assigned_data_type"] = active_data_type
             saved["assigned_path"] = assigned_path
@@ -4161,6 +4215,27 @@ def preview_vd2_manifest():
         return _error(str(exc), session_id)
 
 
+@treatment_api.route("/manifest/vd2/abs-preview", methods=["POST"])
+def preview_vd2_manifest_abs():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    try:
+        path = _ensure_within_allowed_root(str(payload.get("manifest_path") or ""))
+        if is_smb_path(path):
+            raise ValueError("Open the VD2 manifest through its local project folder")
+        plan = inspect_project(path, allowed=_ensure_readable_treatment_file, verify_files=False)
+        sample = next((item for item in plan["samples"] if item["name"] == payload.get("sample")), None)
+        if not sample or not sample["ready"]:
+            raise ValueError("Select a completed sample with ABS data")
+        source = sample["inputs"]["ABS"]
+        selection = treatment_service.get_selection_view(
+            {"active_data_type": "ABS", "paths": {"ABS": source}}
+        )
+        return _json_response({"success": True, "selection": selection}, session_id)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return _error(str(exc), session_id)
+
+
 @treatment_api.route("/manifest/vd2/queue", methods=["POST"])
 def queue_vd2_manifest():
     session_id = _current_session_id()
@@ -4170,6 +4245,9 @@ def queue_vd2_manifest():
         calc_mode = payload.get("calc_mode", SPECTRAL_SUM)
         if calc_mode not in ("averaged", *SPECTRAL_MODES):
             raise ValueError("Unsupported VD2 manifest calculation mode")
+        references = payload.get("spectral_references", {})
+        if not isinstance(references, dict):
+            raise ValueError("Reference windows must be keyed by sample name")
         mode = payload.get("mode")
         if mode not in (None, "all", "new"):
             raise ValueError("Calculation mode must be all or new")
@@ -4199,6 +4277,8 @@ def queue_vd2_manifest():
             state.update(exp_type="ABS+BASE+NOISE", calc_mode=calc_mode, selected_data_type="ABS",
                          paths=sample["inputs"], path_sources=sample["inputs"], folder_path=folder,
                          save_folder=save_folder, save_file_name=f"{name}.dat", selection={})
+            if calc_mode in SPECTRAL_MODES:
+                state["spectral_reference"] = _checked_spectral_reference(references.get(name), state)
             recipe = _queue_recipe(session_id, {
                 "profile": "VD2", "label": name, "allow_overwrite": False,
                 "cleaning": {"enabled": clean, "state": "pending" if clean else "not_requested", "data_types": ["ABS", "BASE", "NOISE"] if clean else [],

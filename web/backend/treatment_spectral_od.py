@@ -12,8 +12,16 @@ from utilities.dataio import H5Opener
 SPECTRAL_SUM = "matched_spectral_sum"
 SPECTRAL_INDIVIDUAL = "matched_spectral_individual"
 SPECTRAL_MODES = (SPECTRAL_SUM, SPECTRAL_INDIVIDUAL)
-REFERENCE_ROWS = 30
 MATCH_WINDOW = 20
+
+
+def reference_window(value, source):
+    if not isinstance(value, dict) or value.get("source") != str(source):
+        raise ValueError("Select the pre-pulse reference window on the current ABS preview")
+    start, stop = value.get("start"), value.get("stop")
+    if type(start) is not int or type(stop) is not int or not 0 <= start < stop:
+        raise ValueError("Invalid pre-pulse reference window")
+    return start, stop
 
 
 @contextmanager
@@ -38,26 +46,28 @@ def maps(opener, path, info, h5py, include_excluded=False):
     yield np.arange(info.number_maps), read, None
 
 
-def calculate(abs_frames, base_frames, noise, mode, log_ratio, frame_stride=None):
+def calculate(abs_frames, base_frames, noise, mode, log_ratio, window, frame_stride=None):
     """The ABS frames only receive the common BRUIT subtraction."""
     a_ids, read_abs = abs_frames
     b_ids, read_base = base_frames
     if not len(a_ids) or not len(b_ids):
         raise ValueError("Brightness matching requires active ABS and BASE frames")
-    if noise.ndim != 2 or noise.shape[1] <= REFERENCE_ROWS:
-        raise ValueError("Spectral correction needs 30 reference rows and later signal rows")
+    start, stop = window
+    if noise.ndim != 2 or not 0 <= start < stop < noise.shape[1]:
+        raise ValueError("The reference window must end before the last time row")
+    rows = slice(start, stop)
 
     def reference(image):
         if image.shape != noise.shape:
             raise ValueError("ABS, BASE and BRUIT frame shapes do not match")
-        spectrum = (image[:, :REFERENCE_ROWS] - noise[:, :REFERENCE_ROWS]).sum(axis=1)
+        spectrum = (image[:, rows] - noise[:, rows]).sum(axis=1)
         return spectrum.sum(), gaussian_filter1d(spectrum, 5, mode="nearest")
 
     base_references = {index: reference(read_base(index)) for index in b_ids}
     b_ids = np.array([i for i in b_ids if np.isfinite(base_references[i][0])
                       and base_references[i][0] > 0], dtype=int)
     if not len(b_ids):
-        raise ValueError("BASE has no positive intensity in the first 30 rows")
+        raise ValueError("BASE has no positive intensity in the selected reference window")
     brightness = np.log([base_references[i][0] for i in b_ids])
     if frame_stride is None:
         order = np.argsort(brightness, kind="stable")
@@ -103,7 +113,7 @@ def calculate(abs_frames, base_frames, noise, mode, log_ratio, frame_stride=None
             np.add(summed_base, b, out=summed_base, where=valid)
         counts += valid
     if not counts.any():
-        raise ValueError("No usable ABS/BASE matches in the first 30 rows")
+        raise ValueError("No usable ABS/BASE matches in the selected reference window")
     if mode == SPECTRAL_INDIVIDUAL:
         return np.divide(summed_base, counts, out=np.full_like(summed_base, np.nan), where=counts > 0)
     return log_ratio(summed_base, summed_abs)

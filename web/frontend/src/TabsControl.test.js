@@ -856,7 +856,7 @@ describe('Studio treatment inputs', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Apply mask to H5' })).toBeEnabled());
 
     fireEvent.click(screen.getByText('Cleaning settings'));
-    fireEvent.change(screen.getByLabelText('Angle Threshold (degrees)'), { target: { value: '2.0' } });
+    fireEvent.change(screen.getByLabelText('SAM angle (°)'), { target: { value: '2.0' } });
     expect(screen.getByRole('button', { name: 'Apply mask to H5' })).toBeDisabled();
     expect(screen.getByText(/must be refreshed with the current thresholds/i)).toBeInTheDocument();
   });

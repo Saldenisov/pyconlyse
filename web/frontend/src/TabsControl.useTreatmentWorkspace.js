@@ -35,6 +35,10 @@ export function useTreatmentWorkspace({
     }
   });
   const [treatment, setTreatment] = useState(null);
+  const referenceSession = treatmentContext?.referenceSession;
+  useEffect(() => {
+    if (referenceSession?.session_id === treatmentSessionId) setTreatment(referenceSession);
+  }, [referenceSession, treatmentSessionId]);
   const filesLayoutRef = useRef(null);
   const treeResizeRef = useRef(null);
   const queueWasRunningRef = useRef(false);

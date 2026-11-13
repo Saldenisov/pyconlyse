@@ -1,6 +1,6 @@
 import TreatmentError from './components/TreatmentError';
 import SkanaPanel from './SkanaPanel';
-import { vd2OdLabels, vd2OdModes } from './treatmentOdModes';
+import { spectralSum, spectralIndividual, vd2OdLabels, vd2OdModes } from './treatmentOdModes';
 import { MIN_TREE_WIDTH } from "./TabsControl.PROFILE_PRESETS";
 import { MAX_TREE_WIDTH } from "./TabsControl.PROFILE_PRESETS";
 import { ParametersZone } from "./TabsControl.PROFILE_PRESETS";
@@ -47,6 +47,7 @@ export function renderTreatmentWorkspace({
   QueuePanel, activeQueueJob, lastFolderJob,
 }) {
   const odModes = vd2OdModes(session.exp_type, treatment.calc_modes || [], session.calc_mode);
+  const missingReference = [spectralSum, spectralIndividual].includes(session.calc_mode) && !session.spectral_reference;
   const odModePicker = !isV0Profile && odModes.length > 1 && (
     <label className="treatment-experiment-type">Calculation mode
       <select value={session.calc_mode} disabled={isBusy || treatmentQueue?.running}
@@ -108,8 +109,9 @@ export function renderTreatmentWorkspace({
           </button>}
           {treeFirst && phaseOption}
           {treeFirst && odModePicker}
+          {treeFirst && missingReference && session.ready_for_calc && <small>Draw a pre-pulse window on the ABS preview.</small>}
           {treeFirst && <button type="button" onClick={handleCalcAbs}
-            disabled={isBusy || isQueueLoading || treatmentQueue?.running || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
+            disabled={isBusy || isQueueLoading || treatmentQueue?.running || !session.ready_for_calc || missingReference || Boolean(pendingCleaningPreview)}>
             Calculate OD
           </button>}
           <button
@@ -213,7 +215,7 @@ export function renderTreatmentWorkspace({
                     <h3>3 Calculate</h3>
                     {phaseOption}
                     {odModePicker}
-                    <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
+                    <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc || missingReference || Boolean(pendingCleaningPreview)}>
                       Calculate OD
                     </button>
                     <span>{session.result_ready ? 'Result ready to save' : session.ready_for_calc ? vd2OdLabels[session.calc_mode] : 'Assign the required input files'}</span>
@@ -432,7 +434,7 @@ export function renderTreatmentWorkspace({
                   </select>
                 </label>
                 <label>
-                  Angle Threshold (degrees)
+                  SAM angle (°)
                   <input
                     type="number"
                     min="0.01"
@@ -442,7 +444,7 @@ export function renderTreatmentWorkspace({
                   />
                 </label>
                 <label>
-                  Surface Threshold (%)
+                  Surface deviation (%)
                   <input
                     type="number"
                     min="0.01"
@@ -451,6 +453,10 @@ export function renderTreatmentWorkspace({
                     onChange={(event) => handleCleaningThresholdChange('surface', event.target.value)}
                   />
                 </label>
+                <button type="button" disabled={isBusy} onClick={() => {
+                  handleCleaningThresholdChange('angle', '1');
+                  handleCleaningThresholdChange('surface', '1');
+                }}>Reset SAM defaults</button>
                 <label>
                   Output H5 Name
                   <input

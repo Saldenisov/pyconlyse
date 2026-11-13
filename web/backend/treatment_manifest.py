@@ -239,6 +239,7 @@ def record_treatment_manifest(
         "session": {
             "experiment_type": str(session_state.get("exp_type") or ""),
             "calculation_mode": str(session_state.get("calc_mode") or ""),
+            "spectral_reference": session_state.get("spectral_reference"),
             "first_map_with_electrons": bool(
                 session_state.get("first_map_with_electrons")
             ),

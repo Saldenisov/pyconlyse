@@ -25,6 +25,7 @@ def test_vd2_spectral_modes_use_selected_frames_and_correct_only_base(tmp_path, 
     import h5py
     dark = np.full((3, 32), 10)
     a0, a1 = (np.full_like(dark, level) for level in (20, 80))
+    a0[:, :5], a1[:, :5] = 180, 5
     a0[:, 30:], a1[:, 30:] = 10, 70
     b0, b1 = (np.full_like(dark, level) for level in (20, 40))
     paths = {}
@@ -41,8 +42,13 @@ def test_vd2_spectral_modes_use_selected_frames_and_correct_only_base(tmp_path, 
             handle["map_selection/included"] = included
         paths[role] = str(path)
     service = TreatmentDataService()
-    result = service.calc_abs("vd2", {"exp_type": "ABS+BASE+NOISE", "calc_mode": mode, "paths": paths})
+    result = service.calc_abs("vd2", {"exp_type": "ABS+BASE+NOISE", "calc_mode": mode, "paths": paths,
+                                      "spectral_reference": {"source": paths["ABS"], "start": 5, "stop": 30}})
     np.testing.assert_allclose(np.asarray(result["sample"])[:, 30:], expected)
+    if mode != "averaged":
+        with pytest.raises(ValueError, match="current ABS preview"):
+            service.calc_abs("vd2", {"exp_type": "ABS+BASE+NOISE", "calc_mode": mode, "paths": paths,
+                                    "spectral_reference": {"source": paths["BASE"], "start": 5, "stop": 30}})
 
 
 class FakeOpener:
@@ -486,6 +492,9 @@ def test_cleaned_h5_preserves_raw_maps_and_uses_selection_for_averages(service, 
     ]
     info = _critical_info(output_path, 3, [500.0, 550.0], [10.0, 20.0])
     removed_records = [{"index": 1, "reason": "angle", "sam_angle": 30.0}]
+    with h5py.File(output_path, "w") as h5_file:
+        h5_file["beam_on"] = [0, 1, -1]
+        h5_file["background"] = np.zeros((2, 2))
 
     service._write_cleaned_h5(
         output_path=output_path,
@@ -507,6 +516,8 @@ def test_cleaned_h5_preserves_raw_maps_and_uses_selection_for_averages(service, 
         assert h5_file["map_selection"]["included"][:].tolist() == [True, False, True]
         assert "deleted" not in h5_file
         assert h5_file["map_selection"].attrs["method"] == "sam"
+        assert h5_file["beam_on"][:].tolist() == [0, 1, -1]
+        np.testing.assert_array_equal(h5_file["background"][:], np.zeros((2, 2)))
 
     opener = H5Opener()
     selected_maps = list(opener.give_all_maps(output_path))

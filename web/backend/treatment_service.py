@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from treatment_od_stitching import TreatmentODStitching
-from treatment_spectral_od import SPECTRAL_MODES, calculate as spectral_od, maps as spectral_maps, paired_frames
+from treatment_spectral_od import SPECTRAL_MODES, calculate as spectral_od, maps as spectral_maps, paired_frames, reference_window
 from treatment_network_path import (
     copy_local_file_to_smb_atomic,
     is_smb_path,
@@ -219,6 +219,21 @@ class TreatmentDataService(TreatmentODStitching):
             timedelays = np.asarray(measurement.timedelays, dtype=float)
             time_scale = measurement.time_scale
             file_info = self._format_file_info(file_path, info, data.shape)
+        paths = session_state.get("paths") or {}
+        sources = session_state.get("path_sources") or {}
+        reference_source = None
+        if resolved_active_data_type == "ABS":
+            reference_source = sources.get("ABS") or paths.get("ABS")
+        elif resolved_active_data_type == "ABS+BASE":
+            if H5Opener is not None and isinstance(opener, H5Opener):
+                with h5py.File(file_path, "r") as handle:
+                    abs_ids, _ = paired_frames(np.array([map_index]), handle,
+                                              session_state.get("first_map_with_electrons", True))
+                    is_abs = bool(len(abs_ids))
+            else:
+                is_abs = map_index % 2 == (0 if session_state.get("first_map_with_electrons", True) else 1)
+            if is_abs:
+                reference_source = sources.get("ABS+BASE") or paths.get("ABS+BASE")
         cursor_state = self._normalize_selection(session_state.get("selection"), data.shape)
 
         x1 = cursor_state["x1"]
@@ -249,6 +264,8 @@ class TreatmentDataService(TreatmentODStitching):
             "active_data_type": resolved_active_data_type,
             "assigned_data_types": assigned_data_types,
             "map_index": map_index,
+            "spectral_reference_source": reference_source,
+            "spectral_reference": session_state.get("spectral_reference"),
             "file_info": file_info,
             "heatmap": {
                 "z": self._finite_list(heatmap_sample),
@@ -1142,6 +1159,8 @@ class TreatmentDataService(TreatmentODStitching):
         include_excluded = bool(session_state.get("include_excluded_maps", False))
         mode = session_state.get("calc_mode")
         if mode in SPECTRAL_MODES:
+            source = (session_state.get("path_sources") or {}).get("ABS") or str(abs_path)
+            window = reference_window(session_state.get("spectral_reference"), source)
             for key in ("wavelengths", "timedelays"):
                 if any(not np.array_equal(getattr(abs_info, key), getattr(other, key))
                        for other in (base_info, noise_info)):
@@ -1149,7 +1168,7 @@ class TreatmentDataService(TreatmentODStitching):
             with (spectral_maps(abs_opener, abs_path, abs_info, h5py, include_excluded) as (a_ids, a_read, _),
                   spectral_maps(base_opener, base_path, base_info, h5py, include_excluded) as (b_ids, b_read, _)):
                 noise = self._spectral_noise(noise_path, include_excluded, abs_info)
-                result = spectral_od((a_ids, a_read), (b_ids, b_read), noise, mode, self._safe_log10_ratio)
+                result = spectral_od((a_ids, a_read), (b_ids, b_read), noise, mode, self._safe_log10_ratio, window)
             return result, abs_info, abs_path
 
         def average(opener, path):
@@ -1221,8 +1240,10 @@ class TreatmentDataService(TreatmentODStitching):
                     base = self._average_spectral_frames(base_ids, read) - noise
                     result = self._safe_log10_ratio(base, absorption)
                 else:
+                    source = (session_state.get("path_sources") or {}).get("ABS+BASE") or str(data_path)
+                    window = reference_window(session_state.get("spectral_reference"), source)
                     result = spectral_od((abs_ids, read), (base_ids, read), noise, mode,
-                                         self._safe_log10_ratio, frame_stride=2)
+                                         self._safe_log10_ratio, window, frame_stride=2)
             return result, info, data_path
         if not hasattr(opener, "give_pair_maps"):
             raise ValueError("Selected file type does not support paired HIS maps")
@@ -1367,9 +1388,9 @@ class TreatmentDataService(TreatmentODStitching):
         source_indices: Optional[List[int]] = None,
         previous_removed_records: Optional[List[Dict[str, object]]] = None,
     ):
-        if angle_threshold <= 0:
+        if not np.isfinite(angle_threshold) or angle_threshold <= 0:
             raise ValueError("angle_threshold must be positive")
-        if surface_threshold <= 0:
+        if not np.isfinite(surface_threshold) or surface_threshold <= 0:
             raise ValueError("surface_threshold must be positive")
 
         _active_data_type, file_path = self._resolve_active_path(session_state)
@@ -1680,9 +1701,18 @@ class TreatmentDataService(TreatmentODStitching):
         included[np.asarray(selected_indices, dtype=int)] = True
         kept_indices_array = np.flatnonzero(included).astype(np.int64)
         removed_indices_array = np.flatnonzero(~included).astype(np.int64)
+        paired_metadata = {}
+        if original_file_path.suffix.lower() == ".h5" and original_file_path.is_file():
+            with h5py.File(original_file_path, "r") as original:
+                if "beam_on" in original:
+                    paired_metadata = {key: np.asarray(original[key]) for key in (
+                        "beam_on", "camera_sequence", "camera_timestamp_ms", "background",
+                    ) if key in original}
 
         with h5py.File(output_path, "w") as h5_file:
             metadata_group = h5_file.create_group("metadata")
+            for key, values in paired_metadata.items():
+                h5_file.create_dataset(key, data=values)
             h5_file.create_dataset("timedelays", data=np.asarray(info.timedelays, dtype=float))
             h5_file.create_dataset("wavelengths", data=np.asarray(info.wavelengths, dtype=float))
             h5_file.create_dataset(

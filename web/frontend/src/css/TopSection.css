@@ -265,3 +265,23 @@
     display: none;
   }
 }
+.spectral-reference-band,
+.spectral-reference-draw {
+  position: absolute;
+}
+
+.manifest-abs-reference .selection-heatmap-shell {
+  height: 340px;
+}
+
+.spectral-reference-band {
+  background: rgb(56 189 248 / 18%);
+  border-block: 1px solid #38bdf8;
+  pointer-events: none;
+}
+
+.spectral-reference-draw {
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+}

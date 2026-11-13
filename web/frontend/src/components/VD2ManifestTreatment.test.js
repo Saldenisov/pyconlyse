@@ -4,6 +4,9 @@ import VD2ManifestTreatment from './VD2ManifestTreatment';
 import { postTreatment, fetchTreatmentQueue } from '../api/treatmentClient';
 
 jest.mock('../api/treatmentClient', () => ({ postTreatment: jest.fn(), fetchTreatmentQueue: jest.fn() }));
+jest.mock('../TopSection', () => ({
+  SelectionHeatmap: ({ onReference }) => <button type="button" onClick={() => onReference({ start: 5, stop: 24 })}>Mark rows</button>,
+}));
 const path = 'E:\\DATA_VD2\\2026\\day\\project\\vd2-manifest.json';
 const manifest = { manifest_path: path, samples: [
   { name: 'sample1', ready: true, bruit_sample: 'sample1', bruit_reused: false },
@@ -23,16 +26,23 @@ test('loading a manifest reviews ready and incomplete samples without starting w
 });
 
 test('processing queues selected samples with cleaning enabled and displays DAT result', async () => {
-  postTreatment.mockResolvedValueOnce({ manifest }).mockResolvedValueOnce({ queue: {
+  const source = 'sample2/ABS.h5';
+  postTreatment.mockResolvedValueOnce({ manifest })
+    .mockResolvedValueOnce({ selection: { spectral_reference_source: source } })
+    .mockResolvedValueOnce({ queue: {
     running: false, pending_count: 0, jobs: [{ job_id: 'job', status: 'completed', phase: 'saved', label: 'sample2', saved: { save_path: 'sample2.dat' } }],
   } });
   render(<VD2ManifestTreatment initialManifest={path} />);
   await screen.findByText('sample2');
   fireEvent.click(screen.getAllByRole('checkbox')[0]);
+  expect(screen.getByRole('button', { name: 'Calculate new only' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Draw ABS window · sample2' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark rows' }));
   fireEvent.click(screen.getByRole('button', { name: 'Calculate new only' }));
-  await waitFor(() => expect(postTreatment).toHaveBeenCalledTimes(2));
-  expect(postTreatment.mock.calls[1].slice(1)).toEqual(['/api/treatment/manifest/vd2/queue', {
+  await waitFor(() => expect(postTreatment).toHaveBeenCalledTimes(3));
+  expect(postTreatment.mock.calls[2].slice(1)).toEqual(['/api/treatment/manifest/vd2/queue', {
     manifest_path: path, samples: ['sample2'], mode: 'new', clean: true, calc_mode: 'matched_spectral_sum', angle_threshold: 1, surface_threshold: 1,
+    spectral_references: { sample2: { source, start: 5, stop: 24 } },
   }]);
   expect(await screen.findByLabelText('Manifest treatment jobs')).toHaveTextContent('sample2 · completed');
 });
@@ -53,9 +63,10 @@ test('cleaning thresholds are collapsed and explicit edits reach the reviewed ma
   fireEvent.click(screen.getByText('Cleaning settings'));
   fireEvent.change(screen.getByLabelText('SAM angle'), { target: { value: '2' } });
   fireEvent.change(screen.getByLabelText('SAM surface'), { target: { value: '3' } });
+  fireEvent.change(screen.getByLabelText('Calculation mode'), { target: { value: 'averaged' } });
   fireEvent.click(screen.getByRole('button', { name: 'Recalculate all' }));
   await waitFor(() => expect(postTreatment).toHaveBeenCalledTimes(2));
-  expect(postTreatment.mock.calls[1][2]).toEqual({ manifest_path: path, samples: ['sample1', 'sample2'], mode: 'all', clean: true, calc_mode: 'matched_spectral_sum', angle_threshold: 2, surface_threshold: 3 });
+  expect(postTreatment.mock.calls[1][2]).toEqual({ manifest_path: path, samples: ['sample1', 'sample2'], mode: 'all', clean: true, calc_mode: 'averaged', angle_threshold: 2, surface_threshold: 3 });
 });
 
 test('manifest dialog supports Escape without starting treatment', async () => {
