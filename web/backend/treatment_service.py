@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from treatment_od_stitching import TreatmentODStitching
+from treatment_spectral_od import SPECTRAL_MODES, calculate as spectral_od, maps as spectral_maps, paired_frames
 from treatment_network_path import (
     copy_local_file_to_smb_atomic,
     is_smb_path,
@@ -1135,10 +1136,21 @@ class TreatmentDataService(TreatmentODStitching):
         noise_path = self._require_path(session_state, "NOISE")
 
         abs_opener, abs_info = self._get_opener_and_info(abs_path)
-        base_opener, _ = self._get_opener_and_info(base_path)
-        noise_opener, _ = self._get_opener_and_info(noise_path)
+        base_opener, base_info = self._get_opener_and_info(base_path)
+        noise_opener, noise_info = self._get_opener_and_info(noise_path)
 
         include_excluded = bool(session_state.get("include_excluded_maps", False))
+        mode = session_state.get("calc_mode")
+        if mode in SPECTRAL_MODES:
+            for key in ("wavelengths", "timedelays"):
+                if any(not np.array_equal(getattr(abs_info, key), getattr(other, key))
+                       for other in (base_info, noise_info)):
+                    raise ValueError("ABS, BASE and BRUIT axes do not match")
+            with (spectral_maps(abs_opener, abs_path, abs_info, h5py, include_excluded) as (a_ids, a_read, _),
+                  spectral_maps(base_opener, base_path, base_info, h5py, include_excluded) as (b_ids, b_read, _)):
+                noise = self._spectral_noise(noise_path, include_excluded, abs_info)
+                result = spectral_od((a_ids, a_read), (b_ids, b_read), noise, mode, self._safe_log10_ratio)
+            return result, abs_info, abs_path
 
         def average(opener, path):
             if include_excluded and H5Opener is not None and isinstance(opener, H5Opener):
@@ -1154,6 +1166,23 @@ class TreatmentDataService(TreatmentODStitching):
 
         result = self._safe_log10_ratio(base_data - noise_data, abs_data - noise_data)
         return result, abs_info, abs_path
+
+    def _spectral_noise(self, path, include_excluded, signal_info):
+        opener, info = self._get_opener_and_info(path)
+        if any(not np.array_equal(getattr(info, key), getattr(signal_info, key))
+               for key in ("wavelengths", "timedelays")):
+            raise ValueError("BRUIT axes do not match the paired data")
+        with spectral_maps(opener, path, info, h5py, include_excluded) as (indices, read, _):
+            return self._average_spectral_frames(indices, read)
+
+    @staticmethod
+    def _average_spectral_frames(indices, read):
+        if not len(indices):
+            raise ValueError("No active frames in the selected phase")
+        total = np.array(read(indices[0]), dtype=float)
+        for index in indices[1:]:
+            total += read(index)
+        return total / len(indices)
 
     def _calc_his(
         self, session_state: Dict[str, object]
@@ -1175,6 +1204,26 @@ class TreatmentDataService(TreatmentODStitching):
     ) -> Tuple[np.ndarray, object, Path]:
         data_path = self._require_path(session_state, "ABS+BASE")
         opener, info = self._get_opener_and_info(data_path)
+        mode = session_state.get("calc_mode")
+        if mode in SPECTRAL_MODES or (
+            mode == "averaged" and H5Opener is not None and isinstance(opener, H5Opener)
+        ):
+            include_excluded = bool(session_state.get("include_excluded_maps", False))
+            with spectral_maps(opener, data_path, info, h5py, include_excluded) as (indices, read, handle):
+                if handle is not None and "beam_on" in handle and "background" in handle:
+                    noise = np.asarray(handle["background"], dtype=float)
+                else:
+                    noise = self._spectral_noise(self._require_path(session_state, "NOISE"), include_excluded, info)
+                first_abs = bool(session_state.get("first_map_with_electrons", True))
+                abs_ids, base_ids = paired_frames(indices, handle, first_abs)
+                if mode == "averaged":
+                    absorption = self._average_spectral_frames(abs_ids, read) - noise
+                    base = self._average_spectral_frames(base_ids, read) - noise
+                    result = self._safe_log10_ratio(base, absorption)
+                else:
+                    result = spectral_od((abs_ids, read), (base_ids, read), noise, mode,
+                                         self._safe_log10_ratio, frame_stride=2)
+            return result, info, data_path
         if not hasattr(opener, "give_pair_maps"):
             raise ValueError("Selected file type does not support paired HIS maps")
 

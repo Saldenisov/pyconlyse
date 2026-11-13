@@ -3,6 +3,7 @@ import { fetchTreatmentQueue, postTreatment } from '../api/treatmentClient';
 import { namespaceToken } from '../browserWorkspaceIdentity';
 import { cleanServerPath } from '../serverPaths';
 import VD2FolderPicker from './VD2FolderPicker';
+import { spectralSum, spectralIndividual, vd2OdLabels } from '../treatmentOdModes';
 
 export default function VD2ManifestTreatment({ initialManifest = '', initialSample='', sessionId: suppliedSession, onLoaded, dialog = false, onClose }) {
   const [fallbackSession] = useState(()=>`manifest-${namespaceToken()}`);
@@ -16,6 +17,7 @@ export default function VD2ManifestTreatment({ initialManifest = '', initialSamp
   const [queueError,setQueueError]=useState('');
   const [notice, setNotice] = useState('');
   const [clean, setClean] = useState(true);
+  const [calcMode, setCalcMode] = useState(spectralSum);
   const alive=useRef(true),sequence=useRef(0),loadedPath=useRef('');
   const dialogNode = useRef(null);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
@@ -79,7 +81,7 @@ export default function VD2ManifestTreatment({ initialManifest = '', initialSamp
     setBusy(true); setError(''); setNotice('');
     try {
       const response = await postTreatment(sessionId, '/api/treatment/manifest/vd2/queue', {
-        manifest_path: plan.manifest_path, samples: selected, mode, clean,
+        manifest_path: plan.manifest_path, samples: selected, mode, clean, calc_mode: calcMode,
         angle_threshold: Number(thresholds.angle), surface_threshold: Number(thresholds.surface),
       });
       if (alive.current) {
@@ -109,6 +111,13 @@ export default function VD2ManifestTreatment({ initialManifest = '', initialSamp
         </label>)}
       </div>
       <div className="vd2-manifest-actions">
+        <label>Calculation mode
+          <select value={calcMode} disabled={busy || queue?.running} onChange={event => setCalcMode(event.target.value)}>
+            {[spectralSum, spectralIndividual, 'averaged'].map(mode => (
+              <option key={mode} value={mode}>{vd2OdLabels[mode]}</option>
+            ))}
+          </select>
+        </label>
         <button type="button" disabled={busy || !selected.length || queue?.running} onClick={() => calculate('new')}>Calculate new only</button>
         <button type="button" disabled={busy || !selected.length || queue?.running} onClick={() => calculate('all')}>Recalculate all</button>
         <label><input type="checkbox" checked={clean} onChange={event => setClean(event.target.checked)} disabled={busy || queue?.running} /> SAM cleaning</label>

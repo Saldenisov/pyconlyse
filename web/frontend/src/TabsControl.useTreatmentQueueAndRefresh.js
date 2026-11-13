@@ -6,6 +6,7 @@ import { hasRecoverableTreatmentWork } from "./TabsControl.PROFILE_PRESETS";
 import { readSessionBackup } from "./TabsControl.PROFILE_PRESETS";
 import { requiredDataTypesForExpType } from "./TabsControl.PROFILE_PRESETS";
 import { shouldApplyAutoPreset } from "./TabsControl.PROFILE_PRESETS";
+import { spectralSum } from "./treatmentOdModes";
 import { pathName } from "./TabsControl.PROFILE_PRESETS";
 import { mergeTreatmentQueue } from "./TabsControl.PROFILE_PRESETS";
 import { folderPathChain } from "./TabsControl.PROFILE_PRESETS";
@@ -517,10 +518,11 @@ export function useTreatmentQueueAndRefresh({
     }
 
     if (
-      nextExpType === 'ABS+BASE+NOISE' &&
       Object.prototype.hasOwnProperty.call(normalizedPatch, 'exp_type')
+      && !Object.prototype.hasOwnProperty.call(normalizedPatch, 'calc_mode')
     ) {
-      normalizedPatch.calc_mode = 'averaged';
+      normalizedPatch.calc_mode = treatmentProfile === 'VD2' && nextExpType !== 'HIS'
+        ? spectralSum : nextExpType === 'HIS' || nextExpType === 'ABS+BASE+NOISE' ? 'averaged' : 'individual';
     }
 
     applyPayload(postTreatment(treatmentSessionId, '/api/treatment/session/config', normalizedPatch));

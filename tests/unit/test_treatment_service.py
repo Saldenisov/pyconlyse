@@ -16,6 +16,35 @@ import treatment_service as treatment_service_module
 from utilities.dataio import H5Opener
 
 
+@pytest.mark.parametrize(("mode", "expected"), [
+    ("matched_spectral_sum", np.log10(5 / 4)),
+    ("matched_spectral_individual", (np.log10(2) + np.log10(8 / 7)) / 2),
+    ("averaged", 0.0),
+])
+def test_vd2_spectral_modes_use_selected_frames_and_correct_only_base(tmp_path, mode, expected):
+    import h5py
+    dark = np.full((3, 32), 10)
+    a0, a1 = (np.full_like(dark, level) for level in (20, 80))
+    a0[:, 30:], a1[:, 30:] = 10, 70
+    b0, b1 = (np.full_like(dark, level) for level in (20, 40))
+    paths = {}
+    for role, frames, included in (
+        ("ABS", [a0, a1], [True, True]),
+        ("BASE", [b0, b1], [False, True]),
+        ("NOISE", [np.zeros_like(dark)], [True]),
+    ):
+        path = tmp_path / f"{role}.h5"
+        with h5py.File(path, "w") as handle:
+            handle["raw_data"] = np.stack(frames) + dark
+            handle["wavelengths"] = [599, 600, 601]
+            handle["timedelays"] = np.arange(32)
+            handle["map_selection/included"] = included
+        paths[role] = str(path)
+    service = TreatmentDataService()
+    result = service.calc_abs("vd2", {"exp_type": "ABS+BASE+NOISE", "calc_mode": mode, "paths": paths})
+    np.testing.assert_allclose(np.asarray(result["sample"])[:, 30:], expected)
+
+
 class FakeOpener:
     def __init__(self, measurements):
         self._measurements = list(measurements)

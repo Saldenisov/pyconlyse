@@ -57,6 +57,7 @@ from treatment_queue_store import (
     _treatment_worker_count,
 )
 from treatment_service import TreatmentDataService, h5py
+from treatment_spectral_od import SPECTRAL_MODES, SPECTRAL_SUM
 from treatment_state_repository import TreatmentStateRepository
 from browser_workspace_state import workspace_identity
 
@@ -71,7 +72,7 @@ DATA_TYPES = [
     "ABS+BASE",
     "ABS+BASE+NOISE",
 ]
-CALC_MODES = ["individual", "averaged"]
+CALC_MODES = ["individual", "averaged", *SPECTRAL_MODES]
 QUEUE_CLEANING_STATES = {"not_requested", "applied", "pending"}
 REQUIRED_DATA_TYPES = {
     "HIS": ["ABS+BASE+NOISE"],
@@ -465,9 +466,10 @@ def _clear_root_exists_cache(root: Optional[str] = None) -> None:
             _root_exists_cache.pop(root, None)
 
 
-def _default_state() -> Dict[str, object]:
+def _default_state(session_id="") -> Dict[str, object]:
     folder = _default_folder()
-    default_exp_type = EXP_TYPES[1]
+    vd2 = _saved_session_profile(session_id) == "vd2" if session_id else False
+    default_exp_type = "ABS+BASE+NOISE" if vd2 else EXP_TYPES[1]
     default_required = REQUIRED_DATA_TYPES[default_exp_type]
     return {
         "exp_type": default_exp_type,
@@ -476,7 +478,7 @@ def _default_state() -> Dict[str, object]:
         "dat_preview_path": "",
         "map_index": 0,
         "selection": {},
-        "calc_mode": CALC_MODES[0],
+        "calc_mode": SPECTRAL_SUM if vd2 else CALC_MODES[0],
         "first_map_with_electrons": True,
         "folder_path": folder,
         "save_folder": folder,
@@ -1468,7 +1470,7 @@ class TreatmentSessionStore:
     def _get_or_create_state(self, session_id: str) -> Dict[str, object]:
         state = self._sessions.get(session_id)
         if state is None:
-            state = _default_state()
+            state = _default_state(session_id)
             self._sessions[session_id] = state
             self._persist_locked(session_id)
         return state
@@ -1505,7 +1507,7 @@ class TreatmentSessionStore:
                 if self._repository:
                     self._repository.delete_session()
                 return self._clone_state(_default_state())
-            self._sessions[session_id] = _default_state()
+            self._sessions[session_id] = _default_state(session_id)
             self._persist_locked(session_id)
             return self._clone_state(self._sessions[session_id])
 
@@ -1645,9 +1647,15 @@ class TreatmentSessionStore:
                 calc_mode = str(payload["calc_mode"])
                 if calc_mode not in CALC_MODES:
                     raise ValueError(f"Unsupported calc_mode '{calc_mode}'")
+                if requested_exp_type == "HIS" and calc_mode in SPECTRAL_MODES:
+                    raise ValueError("Spectral correction requires a separate BRUIT reference")
                 state["calc_mode"] = calc_mode
-
-            if requested_exp_type == "ABS+BASE+NOISE":
+            elif requested_exp_type != previous_calculation[0]:
+                if _saved_session_profile(session_id) == "v0" and requested_exp_type == "HIS+NOISE":
+                    state["calc_mode"] = "individual"
+                else:
+                    state["calc_mode"] = SPECTRAL_SUM if requested_exp_type != "HIS" else "averaged"
+            if requested_exp_type == "ABS+BASE+NOISE" and state["calc_mode"] == "individual":
                 state["calc_mode"] = "averaged"
 
             if "first_map_with_electrons" in payload:
@@ -2359,6 +2367,11 @@ def _queue_standard_folder_recipe(session_id: str, payload: Dict[str, object]) -
         )
 
     session = session_store.snapshot(session_id)
+    folder_calc_mode = "averaged"
+    if naming == "sample" and exp_type == session["exp_type"]:
+        folder_calc_mode = session["calc_mode"]
+    elif naming == "sample" and exp_type != "HIS":
+        folder_calc_mode = SPECTRAL_SUM
     save_folder = _save_folder_for_measurement({} if naming == "sample" else session, folder)
     save_file_name = f"{_path_name(folder)}.dat" if naming == "sample" else _dated_save_file_name_for_folder(folder)
     save_target = {"save_folder": save_folder, "save_file_name": save_file_name}
@@ -2388,7 +2401,7 @@ def _queue_standard_folder_recipe(session_id: str, payload: Dict[str, object]) -
         "session_config": {
             "exp_type": exp_type,
             "selected_data_type": REQUIRED_DATA_TYPES[exp_type][0],
-            "calc_mode": session["calc_mode"] if naming == "sample" and exp_type != "ABS+BASE+NOISE" else "averaged",
+            "calc_mode": folder_calc_mode,
             "first_map_with_electrons": session["first_map_with_electrons"] if naming == "sample" else True,
         },
         "folder_set": {
@@ -4154,6 +4167,9 @@ def queue_vd2_manifest():
     payload = request.get_json(silent=True) or {}
     try:
         plan = _vd2_manifest_plan(payload)
+        calc_mode = payload.get("calc_mode", SPECTRAL_SUM)
+        if calc_mode not in ("averaged", *SPECTRAL_MODES):
+            raise ValueError("Unsupported VD2 manifest calculation mode")
         mode = payload.get("mode")
         if mode not in (None, "all", "new"):
             raise ValueError("Calculation mode must be all or new")
@@ -4180,7 +4196,7 @@ def queue_vd2_manifest():
             folder = str(Path(sample["inputs"]["ABS"]).parent)
             save_folder = plan["project_folder"] if mode else folder
             state = _default_state()
-            state.update(exp_type="ABS+BASE+NOISE", calc_mode="averaged", selected_data_type="ABS",
+            state.update(exp_type="ABS+BASE+NOISE", calc_mode=calc_mode, selected_data_type="ABS",
                          paths=sample["inputs"], path_sources=sample["inputs"], folder_path=folder,
                          save_folder=save_folder, save_file_name=f"{name}.dat", selection={})
             recipe = _queue_recipe(session_id, {

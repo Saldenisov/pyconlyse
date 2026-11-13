@@ -1,3 +1,5 @@
+import { spectralSum, vd2OdLabels, vd2OdModes } from './treatmentOdModes';
+
 const PROFILE_PRESETS = {
   V0: {
     exp_type: 'HIS+NOISE',
@@ -8,7 +10,7 @@ const PROFILE_PRESETS = {
   VD2: {
     exp_type: 'ABS+BASE+NOISE',
     selected_data_type: 'ABS',
-    calc_mode: 'averaged',
+    calc_mode: spectralSum,
     first_map_with_electrons: true,
   },
 };
@@ -215,12 +217,13 @@ const ParametersZone = ({
         <select
           aria-label="Calculation mode"
           value={session.calc_mode}
-          disabled={busy || isAbsBaseNoiseMode}
+          disabled={busy || (profileName !== 'VD2' && isAbsBaseNoiseMode)}
           onChange={(event) => onConfigChange({ calc_mode: event.target.value })}
         >
-          {(isAbsBaseNoiseMode ? ['averaged'] : calcModes).map((item) => (
+          {(profileName === 'VD2' ? vd2OdModes(session.exp_type, calcModes, session.calc_mode)
+            : (isAbsBaseNoiseMode ? ['averaged'] : calcModes.filter(item => ['averaged', 'individual'].includes(item)))).map((item) => (
             <option key={item} value={item}>
-              {item}
+              {vd2OdLabels[item] || item}
             </option>
           ))}
         </select>

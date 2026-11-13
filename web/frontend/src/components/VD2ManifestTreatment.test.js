@@ -32,7 +32,7 @@ test('processing queues selected samples with cleaning enabled and displays DAT 
   fireEvent.click(screen.getByRole('button', { name: 'Calculate new only' }));
   await waitFor(() => expect(postTreatment).toHaveBeenCalledTimes(2));
   expect(postTreatment.mock.calls[1].slice(1)).toEqual(['/api/treatment/manifest/vd2/queue', {
-    manifest_path: path, samples: ['sample2'], mode: 'new', clean: true, angle_threshold: 1, surface_threshold: 1,
+    manifest_path: path, samples: ['sample2'], mode: 'new', clean: true, calc_mode: 'matched_spectral_sum', angle_threshold: 1, surface_threshold: 1,
   }]);
   expect(await screen.findByLabelText('Manifest treatment jobs')).toHaveTextContent('sample2 · completed');
 });
@@ -55,7 +55,7 @@ test('cleaning thresholds are collapsed and explicit edits reach the reviewed ma
   fireEvent.change(screen.getByLabelText('SAM surface'), { target: { value: '3' } });
   fireEvent.click(screen.getByRole('button', { name: 'Recalculate all' }));
   await waitFor(() => expect(postTreatment).toHaveBeenCalledTimes(2));
-  expect(postTreatment.mock.calls[1][2]).toEqual({ manifest_path: path, samples: ['sample1', 'sample2'], mode: 'all', clean: true, angle_threshold: 2, surface_threshold: 3 });
+  expect(postTreatment.mock.calls[1][2]).toEqual({ manifest_path: path, samples: ['sample1', 'sample2'], mode: 'all', clean: true, calc_mode: 'matched_spectral_sum', angle_threshold: 2, surface_threshold: 3 });
 });
 
 test('manifest dialog supports Escape without starting treatment', async () => {

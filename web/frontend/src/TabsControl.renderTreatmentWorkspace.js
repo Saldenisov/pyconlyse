@@ -1,5 +1,6 @@
 import TreatmentError from './components/TreatmentError';
 import SkanaPanel from './SkanaPanel';
+import { vd2OdLabels, vd2OdModes } from './treatmentOdModes';
 import { MIN_TREE_WIDTH } from "./TabsControl.PROFILE_PRESETS";
 import { MAX_TREE_WIDTH } from "./TabsControl.PROFILE_PRESETS";
 import { ParametersZone } from "./TabsControl.PROFILE_PRESETS";
@@ -45,6 +46,15 @@ export function renderTreatmentWorkspace({
   stitchOutputPath, stitchZoneMap, stitchDatFiles, sourceBrowser, detailSummary,
   QueuePanel, activeQueueJob, lastFolderJob,
 }) {
+  const odModes = vd2OdModes(session.exp_type, treatment.calc_modes || [], session.calc_mode);
+  const odModePicker = !isV0Profile && odModes.length > 1 && (
+    <label className="treatment-experiment-type">Calculation mode
+      <select value={session.calc_mode} disabled={isBusy || treatmentQueue?.running}
+        onChange={event => handleConfigChange({ calc_mode: event.target.value })}>
+        {odModes.map(mode => <option key={mode} value={mode}>{vd2OdLabels[mode]}</option>)}
+      </select>
+    </label>
+  );
   const phaseOption = ['HIS', 'HIS+NOISE'].includes(session.exp_type) && (
     <div className="parameter-checkbox">
       <label>
@@ -97,6 +107,7 @@ export function renderTreatmentWorkspace({
             {isStudioLayout ? 'Treatment' : 'Files'}
           </button>}
           {treeFirst && phaseOption}
+          {treeFirst && odModePicker}
           {treeFirst && <button type="button" onClick={handleCalcAbs}
             disabled={isBusy || isQueueLoading || treatmentQueue?.running || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
             Calculate OD
@@ -201,10 +212,11 @@ export function renderTreatmentWorkspace({
                   <section className="treatment-step">
                     <h3>3 Calculate</h3>
                     {phaseOption}
+                    {odModePicker}
                     <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
                       Calculate OD
                     </button>
-                    <span>{session.result_ready ? 'Result ready to save' : session.ready_for_calc ? session.calc_mode : 'Assign the required input files'}</span>
+                    <span>{session.result_ready ? 'Result ready to save' : session.ready_for_calc ? vd2OdLabels[session.calc_mode] : 'Assign the required input files'}</span>
                   </section>
                   {pendingCleaningPreview && (
                     <div className="treatment-cleaning-pending" role="status">
