@@ -151,6 +151,13 @@ def _bind_streak_camera_methods_write_delay_e(api):
         return self._launch_application()
 
     def StartCameraOnlyApplication(self):
+        return self._start_camera_only_application()
+
+    def StartCameraOnlyFocus(self):
+        """Start only HPD-TA and the streak camera, in Focus with its shutter closed."""
+        return self._start_camera_only_application(focus_only=True)
+
+    def _start_camera_only_application(self, *, focus_only=False):
         ini = api.checked_camera_only_ini(self.camera_only_ini_path)
         if self._windows_process_running("HPDTA95.exe"):
             raise RuntimeError("Close the existing HPD-TA session before starting the camera-only profile")
@@ -162,9 +169,9 @@ def _bind_streak_camera_methods_write_delay_e(api):
                 raise RuntimeError("Cannot confirm the RemoteEx host has no HPD-TA session") from exc
         else:
             raise RuntimeError("Close the existing RemoteEx HPD-TA session before starting the camera-only profile")
-        return self._launch_application(ini)
+        return self._launch_application(ini, focus_only=focus_only)
 
-    def _launch_application(self, camera_only_ini=None):
+    def _launch_application(self, camera_only_ini=None, *, focus_only=False):
         if not self._power_dependency_allows_hardware_operation(force=True):
             raise RuntimeError(self._power_dependency_status)
         if self._application_start_thread is not None and self._application_start_thread.is_alive():
@@ -192,13 +199,14 @@ def _bind_streak_camera_methods_write_delay_e(api):
         self._application_start_thread = api.threading.Thread(
             target=self._start_application_background,
             args=(controller, camera_only_ini),
+            kwargs={"focus_only": True} if focus_only else {},
             daemon=True,
             name="hamamatsu-start-application",
         )
         self._application_start_thread.start()
         return self.application_version_value
 
-    def _start_application_background(self, controller, camera_only_ini=None) -> None:
+    def _start_application_background(self, controller, camera_only_ini=None, *, focus_only=False) -> None:
         try:
             if camera_only_ini is None:
                 controller.start_application()
@@ -210,13 +218,17 @@ def _bind_streak_camera_methods_write_delay_e(api):
             self.set_state(api.DevState.FAULT)
             self.set_status(self._startup_configuration_error)
             return
-        self._configure_vd2_startup_background(controller)
+        if focus_only:
+            self._configure_vd2_startup_background(controller, focus_only=True)
+        else:
+            self._configure_vd2_startup_background(controller)
 
     def _configure_vd2_startup_background(
-        self, controller: HamamatsuStreakController
+        self, controller: HamamatsuStreakController, *, focus_only=False
     ) -> None:
         try:
-            snapshot = controller.configure_vd2_startup()
+            snapshot = (controller.configure_vd2_startup(focus_only=True)
+                        if focus_only else controller.configure_vd2_startup())
             if getattr(controller, "camera_only", False):
                 identity = api.remoteex_process_identity()
                 if identity is None:
@@ -292,6 +304,8 @@ def _bind_streak_camera_methods_write_delay_e(api):
         "StopRemoteEx": StopRemoteEx,
         "StartApplication": StartApplication,
         "StartCameraOnlyApplication": StartCameraOnlyApplication,
+        "StartCameraOnlyFocus": StartCameraOnlyFocus,
+        "_start_camera_only_application": _start_camera_only_application,
         "_launch_application": _launch_application,
         "_start_application_background": _start_application_background,
         "_configure_vd2_startup_background": _configure_vd2_startup_background,

@@ -79,7 +79,7 @@ class ProfileClient:
             if (location, parameter, value) == ("Spec", "Shutter", "Open"):
                 if self.open_camera_with_spectrograph:
                     self.values[("TD", "Shutter")] = "Open"
-        elif name == "DevParamGet":
+        elif name in {"DevParamGet", "CamParamGet"}:
             key = tuple(args)
             if key == ("Spec", "Shutter") and self.values[key] == "Open" and self.fail_open_readback:
                 self.fail_open_readback = False
@@ -120,6 +120,17 @@ def test_optical_write_timeout_is_not_replayed_and_names_failed_command():
     assert rig.sent_commands.count("DevParamSet(Spec,Shutter,Open)") == 1
     assert rig.values[("Spec", "Shutter")] == "Closed"
     assert rig.values[("TD", "Shutter")] == "Closed"
+
+
+def test_camera_only_focus_closes_shutter_without_entering_operate():
+    rig = ProfileClient()
+    rig.values[("Live", "Exposure")] = "20 ms"
+    controller = HamamatsuStreakController(rig)
+    controller.camera_only = True
+    snapshot = controller.configure_vd2_startup(focus_only=True)
+    assert rig.writes == ["DevParamSet(TD,Shutter,Closed)", "DevParamSet(TD,Mode,Focus)"]
+    assert snapshot.current_streak_shutter == "Closed"
+    assert snapshot.current_streak_mode == "Focus"
 
 
 def test_preparation_verifies_optics_before_opening_kymera_and_keeps_camera_closed():

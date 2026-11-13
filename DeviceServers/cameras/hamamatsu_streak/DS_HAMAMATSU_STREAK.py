@@ -573,6 +573,10 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     StartCameraOnlyApplication = (command)(_streak_camera_methods_write_delay_e["StartCameraOnlyApplication"])
 
+    StartCameraOnlyFocus = (command)(_streak_camera_methods_write_delay_e["StartCameraOnlyFocus"])
+
+    _start_camera_only_application = _streak_camera_methods_write_delay_e["_start_camera_only_application"]
+
     _launch_application = _streak_camera_methods_write_delay_e["_launch_application"]
 
     @attribute(dtype=bool, access=AttrWriteType.READ)

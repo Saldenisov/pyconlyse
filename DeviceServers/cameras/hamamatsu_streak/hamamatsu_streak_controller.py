@@ -472,8 +472,10 @@ class HamamatsuStreakController:
         self.snapshot.current_turret = self.get_device_parameter("Spec", "Turret")
         return self.snapshot.current_turret
 
-    def configure_vd2_startup(self) -> HamamatsuStreakSnapshot:
+    def configure_vd2_startup(self, *, focus_only: bool = False) -> HamamatsuStreakSnapshot:
         """Put HPD-TA optics in the VD2 starting state after AppStart."""
+        if focus_only and not self.camera_only:
+            raise RuntimeError("Focus startup requires the camera-only profile")
         snapshot = self.refresh_cached_state()
         if not snapshot.application_running:
             raise RuntimeError("HPD-TA must be running before VD2 preparation")
@@ -484,12 +486,15 @@ class HamamatsuStreakController:
             )
         if self.camera_only:
             self.set_streak_shutter("Closed")
-            self.set_time_range("1 us")
-            self.set_streak_mode("Operate")
+            mode = "Focus" if focus_only else "Operate"
+            if not focus_only:
+                self.set_time_range("1 us")
+            self.set_streak_mode(mode)
             camera = self.refresh_cached_state()
             if (camera.current_streak_shutter.lower() != "closed"
-                    or camera.current_streak_mode.lower() != "operate"
-                    or camera.current_time_range.lower() != "1 us" or not camera.live_exposure_time):
+                    or camera.current_streak_mode.lower() != mode.lower()
+                    or (not focus_only and camera.current_time_range.lower() != "1 us")
+                    or not camera.live_exposure_time):
                 raise RuntimeError("Camera-only startup: streak settings or DCAM readout unverified")
             return camera
         try:
