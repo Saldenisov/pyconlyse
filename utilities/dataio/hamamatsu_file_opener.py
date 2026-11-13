@@ -8,6 +8,7 @@ Created on 17 avr. 2015
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+import re
 from typing import Union, Tuple
 
 import numpy as np
@@ -90,7 +91,7 @@ class HamamatsuFileOpener(Opener):
             if number_maps == 0:
                 number_maps = 1
 
-            timedelays = self.get_timedelays_stat(filepath=file_path, header=header, file_type=file_type,
+            timedelays = self.get_timedelays_stat(filepath=file_path, header=header,
                                                   timedelays_length=timedelays_length,
                                                   scaling_yunit=scaling_yunit, scaling_yscale=scaling_yscale)
 
@@ -150,24 +151,30 @@ class HamamatsuFileOpener(Opener):
         else:
             return False, comments
 
-    def get_timedelays_stat(self, filepath: Path, header: str, file_type,
+    def get_timedelays_stat(self, filepath: Path, header: str,
                             timedelays_length,
                             scaling_yunit, scaling_yscale) -> np.array:
+        # HPD-TA can embed a calibrated Y axis while X contains detector pixels.
+        marker = re.search(r'ScalingYScalingFile="#([^"\r\n]*)', header)
+        if marker is not None:
+            reference = re.fullmatch(r'(\d+)(?:,(\d+))?', marker.group(1))
+            if reference is None:
+                raise ValueError("Invalid Hamamatsu time calibration reference")
+            offset, count = reference.groups()
+            if int(offset) < 64 or (count is not None and int(count) != timedelays_length):
+                raise ValueError("Hamamatsu time calibration does not match image height")
+            with filepath.open('rb') as file:
+                file.seek(int(offset))
+                table = file.read(timedelays_length * 4)
+            if len(table) != timedelays_length * 4:
+                raise ValueError("Truncated Hamamatsu time calibration table")
+            timedelays = np.frombuffer(table, dtype='<f4')
+            if not np.isfinite(timedelays).all():
+                raise ValueError("Hamamatsu time calibration contains nonfinite values")
+            return timedelays
 
-        if file_type == 'Normal':
-            from_byte = int(header.split("ScalingYScalingFile=")[1][2:].split(",")[0])
-            with open(filepath, 'rb') as file:
-                file.seek(from_byte, 0)
-                # Data byte array
-                timedelays_bytes = bytearray(file.read(timedelays_length * 4))
-            timedelays = np.frombuffer(timedelays_bytes, dtype=np.float32)
-
-        else:
-            divider = 1
-            if scaling_yunit == 'ps':
-                divider = 1000
-            timedelays = [i * scaling_yscale / divider for i in range(timedelays_length)]
-        return timedelays
+        divider = 1000 if scaling_yunit == 'ps' else 1
+        return [i * scaling_yscale / divider for i in range(timedelays_length)]
 
     def get_wavelengths_stat(self, filepath: Path, header: str, file_type,
                              wavelengths_length) -> np.array:
