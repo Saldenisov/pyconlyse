@@ -120,13 +120,12 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
     alignment_snapshots.__qualname__ = "alignment_snapshots"
 
     def _lifecycle():
-        global _lifecycle_instance
         with api._lifecycle_factory_lock:
             if api._lifecycle_instance is None:
                 path = api.os.environ.get("PYCONLYSE_EXPERIMENT_STATE_DB") or str(
                     api.Path.home() / ".pyconlyse" / "experiment_preparation.sqlite3"
                 )
-                _lifecycle_instance = api.ExperimentLifecycle(path)
+                api._lifecycle_instance = api.ExperimentLifecycle(path)
             return api._lifecycle_instance
 
     _lifecycle.__module__ = api.__name__
