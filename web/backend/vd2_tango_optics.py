@@ -288,7 +288,7 @@ def verify_image_optics(settings, kymera_values):
         raise RuntimeError("HPD-TA wavelength/grating metadata do not match Tango Kymera")
 
 
-def validate_saved_capture(api, request, machine_before, rate):
+def validate_saved_capture(api, request, machine_before, rate, machine_after=None):
     if not api.VD2_CAMERA_ONLY:
         return
     from pathlib import Path
@@ -305,7 +305,10 @@ def validate_saved_capture(api, request, machine_before, rate):
         info = HamamatsuFileOpener().read_critical_info(Path(request.his_path))
         if str(info.scaling_xunit).strip('"').lower() != "nm":
             try:
-                return verified_wavelengths(info.header, machine_before, api.KYMERA_DEVICE)
+                calibration = verified_wavelengths(info.header, machine_before, api.KYMERA_DEVICE)
+                if machine_after is not None and verified_wavelengths(info.header, machine_after, api.KYMERA_DEVICE) != calibration:
+                    raise ValueError("Wavelength calibration changed during acquisition")
+                return calibration
             except (OSError, KeyError, ValueError):
                 if request.phase == "BRUIT":
                     return None  # A dark reference may be stored in detector pixels.

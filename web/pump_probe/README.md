@@ -363,8 +363,12 @@ The Everest local Web launcher defaults to `PYCONLYSE_VD2_CAMERA_ONLY=1`.
 For other launchers, enable this setting once the updated Tango servers are
 installed and RemoteEx DCAM and Kymera Tango readouts have been verified.
 Verify the trigger and the two outgoing pulses on the scope before capture.
-A stale or absent HIS spectral header keeps the raw file and blocks H5
-conversion until the calibration is verified.
+A camera-only HIS stores detector pixels until the save pipeline matches the
+camera's spectral profile to the detector crop and Kymera readback. The pipeline
+inserts a native wavelength table into the HIS and verifies frame bytes and time
+delays before publishing it. H5 uses the same wavelength and time tables. If the
+profile does not match, the original HIS is retained. Dark references without a
+verified optics match can still be recorded in pixels.
 
 Choose **5 Hz · separate ABS and BASE** for individual ABS, BASE, and
 BRUIT sequences. The external trigger stays active and Burst stays off.
@@ -398,8 +402,11 @@ the run and preserves captured data.
 Enter a wavelength center and half-width, for example 600 ± 10 nm. The default
 archive calibration is for the 550 nm Kymera center and the verified C13440
 640 × 508 geometry. For a different optical configuration, install a matching
-verified JSON profile with `PYCONLYSE_VD2_SPECTRAL_CALIBRATION`. The server
-checks the detector geometry and Kymera settings against the profile.
+verified JSON profile through the camera Tango device property
+`spectral_calibration_path` (or the camera process environment variable
+`PYCONLYSE_VD2_SPECTRAL_CALIBRATION`). The read-only Tango attribute
+`spectral_calibration` returns the profile ID, detector geometry, Kymera settings
+and the full `wavelengths_nm` table. The table can represent nonlinear dispersion.
 
 The selectable methods are brightness-matched BASE, SAM + matched BASE then
 OD of means, mean OD of adjacent pairs, OD of means, and SAM then OD of means.

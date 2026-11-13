@@ -244,14 +244,14 @@ class Vd2MeasurementProtocol:
             proxy.command_inout("SaveCurrentSequence", request.his_path)
             if timing_error is not None:
                 raise timing_error
+            # Capture the readback while this job still owns the camera.
+            # The file worker receives plain data, never a Tango proxy.
+            machine_after = self._snapshot_reader(proxy) if self._snapshot_reader else None
             if self._capture_validator is not None:
-                calibration = self._capture_validator(request, machine_before, configured_rate)
+                calibration = self._capture_validator(request, machine_before, configured_rate, machine_after)
                 if calibration is not None:
                     axis, calibration_id = calibration
                     request = replace(request, spectral_axis_nm=axis, spectral_calibration_id=calibration_id)
-            # Capture machine state while this job still owns the camera.
-            # The file worker receives plain data, never a Tango proxy.
-            machine_after = self._snapshot_reader(proxy) if self._snapshot_reader else None
             record("saved", machine_after=machine_after)
             with self._changed:
                 self._jobs[job_id].update(status="queued", postprocessing=True)

@@ -261,8 +261,8 @@ _measurement_protocol = Vd2MeasurementProtocol(
     point_recorder=_remember_measurement_point,
     capture_clock=(lambda proxy, request: tango_optics.measurement_clock(_refactor_modules[__name__], proxy, request))
     if VD2_CAMERA_ONLY else None,
-    capture_validator=lambda request, before, rate: tango_optics.validate_saved_capture(
-        _refactor_modules[__name__], request, before, rate
+    capture_validator=lambda request, before, rate, after: tango_optics.validate_saved_capture(
+        _refactor_modules[__name__], request, before, rate, after
     ),
 )
 _phase_destinations = PhaseDestinations()

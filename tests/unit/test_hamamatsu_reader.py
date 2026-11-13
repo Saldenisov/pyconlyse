@@ -8,7 +8,7 @@ from utilities.errors.myexceptions import NoSuchFileType
 
 def write_his(path, pixel_code=2, maps=2, *, time_table=None, time_count=None):
     comment = (
-        'ScalingXScalingFile="Other",ScalingXScale=1,ScalingXUnit="No unit",'
+        'ScalingXType=1,ScalingXScale=1,ScalingXUnit="No unit",ScalingXScalingFile="Other",'
         'ScalingYScale=0.5,ScalingYUnit="ns",'
     ).encode("utf-8")
     if time_table is not None:

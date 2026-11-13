@@ -51,16 +51,24 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
     import numpy as np
     from treatment_service import TreatmentDataService
     from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
+    from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths
 
     source = Path(request.his_path)
     output = source.with_suffix(".h5")
     report = progress or (lambda _: None)
     opener = HamamatsuFileOpener()
+    if request.spectral_axis_nm is not None:
+        original = opener.read_critical_info(source)
+        if original.number_maps != request.frames_per_his:
+            raise Vd2ProtocolError("HIS frame count does not match the request; original retained")
+        if output.exists() and original.scaling_xunit != 'nm':
+            raise Vd2ProtocolError("Existing H5 prevents recalibrating the source HIS; both files retained")
+        embed_his_wavelengths(source, request.spectral_axis_nm)
+        opener = HamamatsuFileOpener()
     source_identity = fingerprint(source)
     info = opener.read_critical_info(source)
     count = int(info.number_maps)
-    wavelengths = (info.wavelengths if request.spectral_axis_nm is None
-                   else np.asarray(request.spectral_axis_nm, dtype=float))
+    wavelengths = info.wavelengths
     if wavelengths.shape != (info.wavelengths_length,):
         raise Vd2ProtocolError("Spectral calibration width does not match HIS; HIS retained")
     if count != request.frames_per_his:
@@ -86,6 +94,12 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
                     raise Vd2ProtocolError(
                         f"Converted {name} differ from HIS; HIS retained"
                     )
+            if request.spectral_axis_nm is not None and (
+                handle["wavelengths"].attrs.get("unit") != "nm"
+                or handle["timedelays"].attrs.get("unit") != info.scaling_yunit
+                or handle["metadata"].attrs.get("spectral_calibration_id") != request.spectral_calibration_id
+            ):
+                raise Vd2ProtocolError("Converted calibration metadata differs from HIS; HIS retained")
             for index in range(count):
                 measurement, error = opener.read_map(source, index)
                 if measurement is False or not np.array_equal(
@@ -114,8 +128,8 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
             )
             if request.spectral_axis_nm is not None:
                 with h5py.File(staged, "r+") as handle:
-                    handle["wavelengths"][:] = wavelengths
                     handle["wavelengths"].attrs["unit"] = "nm"
+                    handle["timedelays"].attrs["unit"] = info.scaling_yunit
                     handle["metadata"].attrs["spectral_calibration_id"] = request.spectral_calibration_id
             verify(staged, 50)
             with h5py.File(staged, "r+") as handle:

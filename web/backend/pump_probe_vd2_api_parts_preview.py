@@ -185,6 +185,15 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
                 entry["observed_at"] = api.datetime.now(api.timezone.utc).isoformat()
             except Exception as exc:
                 entry["errors"]["device"] = api._control_error(exc)
+            if device == api.STREAK_DEVICE and api.VD2_CAMERA_ONLY:
+                # Pin the profile at capture time. A camera that cannot supply
+                # its calibration must not silently use a different profile.
+                profile = entry["values"].pop("spectral_calibration", None)
+                try:
+                    result["streak_spectral_calibration"] = api.json.loads(profile) if profile else {}
+                except ValueError as exc:
+                    result["streak_spectral_calibration"] = {}
+                    entry["errors"]["spectral_calibration"] = str(exc)
         for key, reader in (("owis_sample", api._owis_sample_stage_state), ("zaber_mirror", api._zaber_stage_state)):
             try:
                 result[key] = reader()

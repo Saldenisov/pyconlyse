@@ -10,6 +10,8 @@ from uuid import uuid4
 
 import numpy as np
 
+from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
+from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths
 from vd2_measurement_protocol import Vd2MeasurementProtocol, _utc_now
 from vd2_paired_analysis import DetectorROI, ERROR_CONFIRMATIONS, PairedAnalysis
 from vd2_paired_kinetics import KineticAnalysis, METHODS, SpectralBand
@@ -220,6 +222,7 @@ class PairedAcquisition:
             camera.set_timeout_millis(4000)
             api._assert_preparation_idle(camera, ignore_paired=True)
             machine = api._machine_snapshot(camera)
+            camera_only = getattr(api, "VD2_CAMERA_ONLY", False)
             current = machine["streak_control"].get("values", {})
             if request.band and not request.native_sequence and not api.equivalent(
                 "acquire_exposure_time", current.get("acquire_exposure_time"), current.get("live_exposure_time")
@@ -244,10 +247,11 @@ class PairedAcquisition:
                     camera.command_query(command)
                 except Exception as exc:
                     raise RuntimeError(f"Paired camera command unavailable before warm-up: {command}") from exc
-            if request.band:
+            if request.band or camera_only:
                 axis, calibration_id = verified_wavelengths(dark.description, machine, api.KYMERA_DEVICE)
                 dark = replace(dark, wavelengths=np.asarray(axis))
                 machine["spectral_calibration_id"] = calibration_id
+            if request.band:
                 kinetics = KineticAnalysis(dark.image, dark.wavelengths, dark.timedelays, request.band,
                                            request.method, request.sam_surface_percent, dark.roi_blocks)
             folder = (root / request.sample_name).resolve()
@@ -265,6 +269,8 @@ class PairedAcquisition:
                 completed = native_capture(api, camera, self._clock, TRIGGER_SOURCES[request.trigger_source],
                                            self._stop, 2 * request.pair_limit, source, self._update)
                 if completed:
+                    if camera_only:
+                        self._calibrate_sequence(api, camera, source, request, machine, dark)
                     self._archive_sequence(source, request, dark, recording, analysis, kinetics)
                     stop_reason = "pair_count_reached"
                 return
@@ -328,6 +334,19 @@ class PairedAcquisition:
             preview = {"time": kinetics.time[index].tolist(), "od_mod": kinetics.values[index].tolist()}
         self._update(estimate_mod=kinetics.estimate_mod, error_mod=kinetics.error_mod,
                      roi_pairs=kinetics.pairs_used, kinetics=preview)
+
+    def _calibrate_sequence(self, api, camera, path, request, machine, dark):
+        info = HamamatsuFileOpener().read_critical_info(path)
+        if info.number_maps != 2 * request.pair_limit:
+            raise ValueError("Incomplete paired sequence; original HIS retained")
+        axis, calibration_id = verified_wavelengths(info.header, machine, api.KYMERA_DEVICE)
+        after = api._machine_snapshot(camera)
+        if (verified_wavelengths(info.header, after, api.KYMERA_DEVICE) != (axis, calibration_id)
+                or not np.array_equal(axis, dark.wavelengths)):
+            raise ValueError("Paired wavelength calibration changed during acquisition; original HIS retained")
+        if info.scaling_yunit != dark.time_scale or not np.array_equal(info.timedelays, dark.timedelays):
+            raise ValueError("Sequence time calibration differs from Bruit; record a new Bruit. Original HIS retained")
+        embed_his_wavelengths(path, axis)
 
     def _archive_sequence(self, path, request, dark, recording, analysis, kinetics):
         expected = 2 * request.pair_limit

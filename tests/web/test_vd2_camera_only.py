@@ -191,6 +191,29 @@ def test_stale_hpdta_wavelength_metadata_is_rejected():
                                    {"wavelength_nm": 400, "lines_per_mm": 150, "grating": 2})
 
 
+def test_camera_profile_follows_recorded_detector_and_kymera():
+    from DeviceServers.cameras.hamamatsu_streak.spectral_calibration import (
+        load_spectral_calibration, verified_wavelengths,
+    )
+
+    profile = load_spectral_calibration()
+    header = '[Camera],' + ','.join(f'{key}="{value}"' for key, value in profile['camera'].items())
+    values = dict(profile['kymera'])
+    machine = {'streak_spectral_calibration': profile,
+               'devices': {api.KYMERA_DEVICE: {'values': values}}}
+    axis, identity = verified_wavelengths(header, machine, api.KYMERA_DEVICE)
+    assert len(axis) == 640 and identity == profile['id']
+    values['wavelength_nm'] = 560.0
+    with pytest.raises(ValueError, match='does not match Kymera wavelength_nm'):
+        verified_wavelengths(header, machine, api.KYMERA_DEVICE)
+    values['wavelength_nm'] = profile['kymera']['wavelength_nm']
+    with pytest.raises(ValueError, match='does not match the HIS camera geometry'):
+        verified_wavelengths(header.replace('HOffs="176"', 'HOffs="178"'), machine, api.KYMERA_DEVICE)
+    machine['streak_spectral_calibration'] = {}
+    with pytest.raises(ValueError, match='Camera spectral calibration is unavailable'):
+        verified_wavelengths(header, machine, api.KYMERA_DEVICE)
+
+
 def test_paired_clock_keeps_external_source_through_warmup_and_capture(rig):
     camera, dg645, events = rig
     dg645.values["TSRC"] = 1

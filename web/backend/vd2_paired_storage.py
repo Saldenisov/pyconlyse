@@ -85,8 +85,12 @@ class PairedRecording:
         try:
             self.file.create_dataset("wavelengths", data=dark.wavelengths)
             self.file.create_dataset("timedelays", data=dark.timedelays)
+            self.file["timedelays"].attrs["unit"] = dark.time_scale
             self.file.create_dataset("background", data=dark.image)
             self.metadata = self.file.create_group("metadata")
+            if machine.get("spectral_calibration_id"):
+                self.file["wavelengths"].attrs["unit"] = "nm"
+                self.metadata.attrs["spectral_calibration_id"] = machine["spectral_calibration_id"]
             self.metadata.attrs.update({
                 "phase": "PAIRED", "status": "recording", "frame_count": 0, "pair_count": 0,
                 "time_scale": dark.time_scale, "description": dark.description,

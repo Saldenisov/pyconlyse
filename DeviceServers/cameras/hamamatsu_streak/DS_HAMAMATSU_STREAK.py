@@ -31,6 +31,7 @@ from DeviceServers.cameras.hamamatsu_streak.camera_only_profile import (
 )
 from DeviceServers.cameras.hamamatsu_streak.remoteex_client import RemoteExClient
 from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import RemoteExTransportError
+from DeviceServers.cameras.hamamatsu_streak.spectral_calibration import load_spectral_calibration
 
 
 class DS_HAMAMATSU_STREAK(DS_General):
@@ -49,6 +50,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     ini_path = device_property(dtype=str, default_value="")
     camera_only_ini_path = device_property(dtype=str, default_value=DEFAULT_REMOTE_INI)
     remote_camera_only = device_property(dtype=bool, default_value=False)
+    spectral_calibration_path = device_property(dtype=str, default_value="")
     default_save_dir = device_property(dtype=str, default_value="")
     command_timeout_s = device_property(dtype=float, default_value=5.0)
     async_timeout_s = device_property(dtype=float, default_value=120.0)
@@ -800,6 +802,13 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.last_saved_sequence_path_value = saved
         self.get_controller_status()
         return saved
+
+    @attribute(dtype=str)
+    def spectral_calibration(self):
+        """Profile for this detector, exposed without any RemoteEx query."""
+        if not self.remote_camera_only:
+            return ""
+        return json.dumps(load_spectral_calibration(self.spectral_calibration_path), allow_nan=False)
 
     @command(dtype_in=str, dtype_out=str)
     def DumpCurrentImageData(self, path: str):
