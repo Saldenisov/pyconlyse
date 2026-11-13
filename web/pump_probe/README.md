@@ -406,7 +406,21 @@ verified JSON profile through the camera Tango device property
 `spectral_calibration_path` (or the camera process environment variable
 `PYCONLYSE_VD2_SPECTRAL_CALIBRATION`). The read-only Tango attribute
 `spectral_calibration` returns the profile ID, detector geometry, Kymera settings
-and the full `wavelengths_nm` table. The table can represent nonlinear dispersion.
+and the wavelength calibration. For an individual setting it also returns
+`center_pixel` (the possibly fractional zero-based column of the recorded crop
+whose wavelength equals the Kymera readback) and the signed local
+`dispersion_nm_per_pixel` of that table.
+
+For a wavelength scan, keep the fixed optics in `kymera` and replace its
+`wavelength_nm` and the top-level `wavelengths_nm` with an ordered
+`wavelength_settings` list. Each entry stores `wavelength_nm` from the Kymera
+readback and a measured `wavelengths_nm` table for the same detector crop.
+Keep the measured lamp peak positions and the reference wavelengths alongside
+each table so the fit can be revisited. The camera reports the center pixel
+and local dispersion for each setting. VD2 interpolates wavelength at each
+detector column between adjacent calibrated settings. It rejects settings
+outside the measured range, with the same 0.05 nm allowance for Tango readback
+at the endpoints. A single-setting profile still applies only at its own setting.
 
 The selectable methods are brightness-matched BASE, SAM + matched BASE then
 OD of means, mean OD of adjacent pairs, OD of means, and SAM then OD of means.

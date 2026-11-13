@@ -8,6 +8,9 @@ import re
 import numpy as np
 
 
+SETTING_TOLERANCE_NM = 0.05
+
+
 def camera_geometry(header):
     section = re.search(r"(?:^|[\r\n])\[Camera\][^\r\n\[]*", header)
     if not section:
@@ -25,7 +28,18 @@ def load_spectral_calibration(path=None):
     profile = json.loads((Path(configured) if configured else default).read_text(encoding="utf-8"))
     if not isinstance(profile["id"], str) or not profile["id"].strip() or not profile["kymera"]:
         raise ValueError("Invalid streak spectral calibration identity")
-    wavelength_table(profile["wavelengths_nm"], int(profile["camera"]["HWidth"]))
+    width = int(profile["camera"]["HWidth"])
+    if "wavelength_settings" in profile:
+        if "wavelength_nm" in profile["kymera"] or "wavelengths_nm" in profile:
+            raise ValueError("Use either a scanned profile or a fixed wavelength table")
+        settings = _scanned_tables(profile, width)
+        for entry, (setting, axis) in zip(profile["wavelength_settings"], settings):
+            entry["center_pixel"], entry["dispersion_nm_per_pixel"] = _center_and_dispersion(axis, setting)
+    else:
+        axis = wavelength_table(profile["wavelengths_nm"], width)
+        setting = profile["kymera"].get("wavelength_nm")
+        if setting is not None and min(axis[0], axis[-1]) <= setting <= max(axis[0], axis[-1]):
+            profile["center_pixel"], profile["dispersion_nm_per_pixel"] = _center_and_dispersion(axis, setting)
     return profile
 
 
@@ -37,6 +51,56 @@ def wavelength_table(values, width):
             or not (np.all(diff > 0) or np.all(diff < 0))):
         raise ValueError("Invalid streak wavelength calibration")
     return axis
+
+
+def _center_and_dispersion(axis, setting):
+    """Locate the readback wavelength in zero-based columns of the recorded image."""
+    pixels = np.arange(len(axis))
+    ordered_axis, ordered_pixels = (axis, pixels) if axis[0] < axis[-1] else (axis[::-1], pixels[::-1])
+    if not ordered_axis[0] <= setting <= ordered_axis[-1]:
+        raise ValueError("Kymera setting is outside its measured wavelength table")
+    pixel = float(np.interp(setting, ordered_axis, ordered_pixels))
+    left = min(int(pixel), len(axis) - 2)
+    return pixel, float(axis[left + 1] - axis[left])
+
+
+def _scanned_tables(profile, width):
+    settings = []
+    for entry in profile["wavelength_settings"]:
+        setting = entry["wavelength_nm"]
+        if type(setting) not in (int, float) or not math.isfinite(setting) or setting <= 0:
+            raise ValueError("Invalid Kymera wavelength in scan")
+        axis = wavelength_table(entry["wavelengths_nm"], width)
+        if not min(axis[0], axis[-1]) <= setting <= max(axis[0], axis[-1]):
+            raise ValueError("Kymera setting is outside its measured wavelength table")
+        if settings and (setting <= settings[-1][0]
+                         or (axis[0] < axis[-1]) != (settings[-1][1][0] < settings[-1][1][-1])):
+            raise ValueError("Kymera scan settings must increase and all tables must have the same direction")
+        settings.append((setting, axis))
+    if not settings:
+        raise ValueError("Kymera wavelength scan is empty")
+    return settings
+
+
+def _axis_for_setting(settings, readback):
+    if type(readback) not in (int, float) or not math.isfinite(readback):
+        raise ValueError("Kymera wavelength readback is unavailable")
+    first_setting, first_axis = settings[0]
+    last_setting, last_axis = settings[-1]
+    if not first_setting - SETTING_TOLERANCE_NM <= readback <= last_setting + SETTING_TOLERANCE_NM:
+        raise ValueError("Kymera wavelength is outside the measured calibration scan")
+    if readback <= first_setting:
+        return first_axis
+    if readback >= last_setting:
+        return last_axis
+    for (lower, lower_axis), (upper, upper_axis) in zip(settings, settings[1:]):
+        if readback <= upper:
+            if readback == upper:
+                return upper_axis
+            fraction = (readback - lower) / (upper - lower)
+            # Interpolate the same detector columns across settings. Each
+            # measured table can have its own offset, dispersion and curvature.
+            return (1 - fraction) * lower_axis.astype(float) + fraction * upper_axis
 
 
 def verified_wavelengths(header, machine, kymera_device):
@@ -52,12 +116,20 @@ def verified_wavelengths(header, machine, kymera_device):
     for key, expected in profile["kymera"].items():
         current = optics.get(key)
         if isinstance(expected, (int, float)):
-            if type(current) not in (int, float) or not math.isclose(current, expected, abs_tol=0.05, rel_tol=0):
+            if type(current) not in (int, float) or not math.isclose(
+                current, expected, abs_tol=SETTING_TOLERANCE_NM, rel_tol=0
+            ):
                 raise ValueError(f"Spectral calibration does not match Kymera {key}")
         elif not isinstance(current, str) or current.casefold() != expected.casefold():
             raise ValueError(f"Spectral calibration does not match Kymera {key}")
     geometry = camera_geometry(header)
     if geometry != profile["camera"]:
         raise ValueError("Spectral calibration does not match the HIS camera geometry")
-    axis = wavelength_table(profile["wavelengths_nm"], int(geometry["HWidth"]))
+    width = int(geometry["HWidth"])
+    if "wavelength_settings" in profile:
+        settings = _scanned_tables(profile, width)
+        values = _axis_for_setting(settings, optics.get("wavelength_nm"))
+    else:
+        values = profile["wavelengths_nm"]
+    axis = wavelength_table(values, width)
     return tuple(axis.tolist()), profile["id"]

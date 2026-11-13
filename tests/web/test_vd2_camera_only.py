@@ -203,6 +203,8 @@ def test_camera_profile_follows_recorded_detector_and_kymera():
                'devices': {api.KYMERA_DEVICE: {'values': values}}}
     axis, identity = verified_wavelengths(header, machine, api.KYMERA_DEVICE)
     assert len(axis) == 640 and identity == profile['id']
+    assert profile["center_pixel"] == pytest.approx(425.548, abs=0.001)
+    assert profile["dispersion_nm_per_pixel"] == pytest.approx(0.5155, abs=0.0001)
     values['wavelength_nm'] = 560.0
     with pytest.raises(ValueError, match='does not match Kymera wavelength_nm'):
         verified_wavelengths(header, machine, api.KYMERA_DEVICE)
@@ -211,6 +213,40 @@ def test_camera_profile_follows_recorded_detector_and_kymera():
         verified_wavelengths(header.replace('HOffs="176"', 'HOffs="178"'), machine, api.KYMERA_DEVICE)
     machine['streak_spectral_calibration'] = {}
     with pytest.raises(ValueError, match='Camera spectral calibration is unavailable'):
+        verified_wavelengths(header, machine, api.KYMERA_DEVICE)
+
+
+def test_scanned_profile_preserves_dispersion_and_anchors_between_measured_settings(tmp_path):
+    import json
+    from DeviceServers.cameras.hamamatsu_streak.spectral_calibration import (
+        load_spectral_calibration, verified_wavelengths,
+    )
+
+    profile = load_spectral_calibration()
+    profile["camera"]["HWidth"] = "4"
+    profile["kymera"].pop("wavelength_nm")
+    for key in ("wavelengths_nm", "center_pixel", "dispersion_nm_per_pixel"):
+        profile.pop(key)
+    profile["wavelength_settings"] = [
+        {"wavelength_nm": 500, "wavelengths_nm": [480, 500, 522, 546]},
+        {"wavelength_nm": 510, "wavelengths_nm": [495, 514, 537, 562]},
+    ]
+    path = tmp_path / "scan.json"
+    path.write_text(json.dumps(profile), encoding="utf-8")
+    profile = load_spectral_calibration(path)
+    assert [entry["center_pixel"] for entry in profile["wavelength_settings"]] == pytest.approx([1, 15 / 19])
+    assert [entry["dispersion_nm_per_pixel"] for entry in profile["wavelength_settings"]] == [22, 19]
+
+    header = '[Camera],' + ','.join(f'{key}="{value}"' for key, value in profile["camera"].items())
+    values = {**profile["kymera"], "wavelength_nm": 505}
+    machine = {"streak_spectral_calibration": profile, "devices": {api.KYMERA_DEVICE: {"values": values}}}
+    assert verified_wavelengths(header, machine, api.KYMERA_DEVICE) == (
+        (487.5, 507, 529.5, 554), profile["id"],
+    )
+    values["wavelength_nm"] = 510
+    assert verified_wavelengths(header, machine, api.KYMERA_DEVICE)[0] == (495, 514, 537, 562)
+    values["wavelength_nm"] = 520
+    with pytest.raises(ValueError, match="outside the measured calibration scan"):
         verified_wavelengths(header, machine, api.KYMERA_DEVICE)
 
 
