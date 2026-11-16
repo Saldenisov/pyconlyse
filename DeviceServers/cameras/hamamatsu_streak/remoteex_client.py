@@ -252,7 +252,16 @@ class RemoteExClient:
             self.connect(connect_data_port=True)
             self._discard_pending_data()
             response = self.send_command_checked(f"ImgDataGet(Current,{data_type})")
-            return self._read_image_response(response, "ImgDataGet")
+            try:
+                return self._read_image_response(response, "ImgDataGet")
+            except OSError as exc:
+                # A late tail from this frame can arrive after the next drain.
+                # Reopen the data socket before another image request.
+                self.close_data_port()
+                raise RemoteExTransportError(f"RemoteEx image data transfer failed: {exc}") from exc
+            except (RemoteExTransportError, RemoteExProtocolError):
+                self.close_data_port()
+                raise
 
     def start_paired_monitor(self) -> None:
         with self._lock:

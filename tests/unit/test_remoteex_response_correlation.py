@@ -62,3 +62,30 @@ def test_unrelated_stream_is_bounded():
     with pytest.raises(RemoteExTransportError, match="Too many unrelated replies"):
         client.send_command_checked("Status()")
     assert len(sock.sent) == 1
+
+
+class ImageDataSocket(PacketSocket):
+    def __init__(self, payload):
+        super().__init__(payload)
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def test_partial_display_frame_reopens_only_the_data_socket(monkeypatch):
+    client, command = client_with_packets(b"0,ImgDataGet,2,2,1,Display\r" * 2)
+    interrupted = ImageDataSocket(b"\x01\x02")
+    fresh = ImageDataSocket(b"RemoteEx Data Ready\r\x11\x12\x13\x14")
+    client._data_socket = interrupted
+    monkeypatch.setattr(client, "_discard_pending_data", lambda: None)
+    monkeypatch.setattr(client, "_open_socket", lambda port: fresh)
+
+    with pytest.raises(RemoteExTransportError, match="RemoteEx image data transfer failed"):
+        client.get_current_image()
+
+    assert interrupted.closed
+    assert client.is_connected
+    interrupted.payload.extend(b"\x03\x04")  # The old frame's tail is late.
+    assert client.get_current_image().pixels == b"\x11\x12\x13\x14"
+    assert command.sent == [b"ImgDataGet(Current,Display)\r"] * 2
