@@ -37,6 +37,7 @@ class Camera:
     def __init__(self, events, fail_on=None):
         self.events = events
         self.fail_on = fail_on
+        self.acq_status = "idle"
 
     def set_timeout_millis(self, timeout):
         pass
@@ -47,7 +48,7 @@ class Camera:
     def read_attribute(self, name):
         return SimpleNamespace(value={
             "camera_only_application": True, "application_running": True,
-            "connected": True, "remoteex_status": "idle",
+            "connected": True, "remoteex_status": self.acq_status.split(",")[0],
         }[name])
 
     def write_attribute(self, name, value):
@@ -58,7 +59,7 @@ class Camera:
             return {
                 "DevParamGet(TD,Mode)": "0,DevParamGet,Operate",
                 "DevParamGet(TD,Time Range)": "0,DevParamGet,1 us",
-                "AcqStatus()": "0,AcqStatus,idle",
+                "AcqStatus()": f"0,AcqStatus,{self.acq_status}",
             }[value]
         self.events.append(command)
         if command == self.fail_on:
@@ -186,8 +187,10 @@ def test_wavelength_readback_uses_kymera_without_remoteex(rig, monkeypatch):
     assert events == []
 
 
-def test_select_blaze_500_by_physical_grating_index(rig, monkeypatch):
+@pytest.mark.parametrize("acq_status", ["idle", "busy,live"])
+def test_select_blaze_500_by_physical_grating_index(rig, monkeypatch, acq_status):
     camera, _, events = rig
+    camera.acq_status = acq_status
     actual = {"grating": 2, "blaze_wavelength_nm": 800.0}
 
     def move(attribute, value):
@@ -221,6 +224,68 @@ def test_select_blaze_500_by_physical_grating_index(rig, monkeypatch):
         [api._target(api.KYMERA_DEVICE, "write_attribute:grating")],
         {"name": "grating_index", "value": 3},
     )
+
+
+@pytest.mark.parametrize(
+    ("acq_status", "phase", "target", "value", "result", "expected_events"),
+    [
+        ("busy,live", "idle", "delay_trigger_mode", "Internal", 200, ["TSRC 0"]),
+        ("idle", "idle", "delay_trigger_mode", "Internal", 200, ["TSRC 5"]),
+        ("busy,live", "idle", "delay_repetition_rate", 5, 200, ["TRAT 5"]),
+        ("busy,live", "acquiring", "delay_repetition_rate", 5, 503, []),
+        ("busy,sequence", "idle", "delay_repetition_rate", 5, 503, []),
+        ("busy,sequence", "idle", "grating_index", 3, 503, []),
+        ("busy,live", "idle", "time_range", "1 us", 503, []),
+    ],
+)
+def test_manual_tango_settings_require_live_or_idle(
+    rig, monkeypatch, acq_status, phase, target, value, result, expected_events,
+):
+    camera, dg645, events = rig
+    camera.acq_status = acq_status
+    dg645.values["TSRC"] = 1
+    monkeypatch.setattr(api, "_proxy", lambda: camera)
+    monkeypatch.setattr(api, "_protocol_hardware_phase", lambda: phase)
+    monkeypatch.setattr(api, "_snapshot", lambda proxy: {})
+    monkeypatch.setattr(api, "_approval_or_response", lambda *args: None)
+    app = Flask(__name__)
+    app.register_blueprint(api.pump_probe_vd2_api)
+
+    reply = app.test_client().post(f"/api/pump-probe-vd2/parameter/{target}", json={"value": value})
+
+    assert reply.status_code == result, reply.get_json()
+    assert events == expected_events
+
+
+def test_alignment_opens_tango_kymera_shutter_with_live_running(rig, monkeypatch):
+    camera, _, events = rig
+    camera.acq_status = "busy,live"
+    actual = {"shutter": "Closed"}
+
+    def move(name, value):
+        events.append((name, value))
+        actual[name] = value
+
+    native_query = camera.command_inout
+    monkeypatch.setattr(camera, "command_inout", lambda command, value=None:
+                        "0,DevParamGet,Open" if value == "DevParamGet(TD,Shutter)"
+                        else native_query(command, value))
+    kymera = SimpleNamespace(
+        state=lambda: "ON",
+        set_timeout_millis=lambda timeout: None,
+        read_attribute=lambda name: SimpleNamespace(value=actual[name]),
+        write_attribute=move,
+    )
+    monkeypatch.setattr(api, "DeviceProxy", lambda device: {api.KYMERA_DEVICE: kymera}[device])
+    monkeypatch.setattr(api, "_proxy", lambda: camera)
+    monkeypatch.setattr(api, "_approval_or_response", lambda *args: None)
+    app = Flask(__name__)
+    app.register_blueprint(api.pump_probe_vd2_api)
+
+    reply = app.test_client().post("/api/pump-probe-vd2/alignment/open-shutters", json={})
+
+    assert reply.status_code == 200, reply.get_json()
+    assert events == [("streak_shutter", "Open"), ("shutter", "Open")]
 
 
 def test_stale_hpdta_wavelength_metadata_is_rejected():

@@ -120,7 +120,7 @@ def read_external(api, name, proxies=None):
     raise ValueError(f"{name} is a full-profile HPD-TA setting")
 
 
-def write_parameter(api, camera, name, value):
+def write_parameter(api, camera, name, value, *, live=False):
     device, command = parameter_target(api, name)
     if device == api.STREAK_DEVICE:
         if command.startswith("write_attribute:"):
@@ -160,7 +160,7 @@ def write_parameter(api, camera, name, value):
         if value not in TRIGGER_SOURCES:
             raise ValueError("Unknown DG645 trigger source")
         source = TRIGGER_SOURCES[value]
-        if source == 0:
+        if source == 0 and not live:
             pause_internal_clock(proxy)
         else:
             _set(proxy, f"TSRC {source}", "TSRC?", source)

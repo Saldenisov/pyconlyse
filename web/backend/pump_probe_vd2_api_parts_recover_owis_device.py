@@ -455,11 +455,20 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
     _verify_owis_sample_axis.__module__ = api.__name__
     _verify_owis_sample_axis.__qualname__ = "_verify_owis_sample_axis"
 
-    def _assert_preparation_idle(streak=None, *, ignore_paired=False):
+    def _assert_preparation_idle(streak=None, *, ignore_paired=False, allow_live=False):
         phase = (api._measurement_protocol.status().get("acquisition_phase")
                  if ignore_paired else api._protocol_hardware_phase())
         if phase in {"preparing", "acquiring", "saving", "processing"}:
+            if allow_live:
+                raise RuntimeError("VD2 measurement owns the optical and timing settings")
             raise RuntimeError("Stop the VD2 measurement before Prepare")
+        if allow_live:
+            # Cached Busy also covers ordinary Live. Require the exact RemoteEx
+            # status so a recording or a lost connection still blocks a write.
+            status = api._remoteex_readback(streak, "AcqStatus()").lower()
+            if status not in {"idle", "busy,live"}:
+                raise RuntimeError(f"Optical and timing settings require idle or Live: {status}")
+            return status == "busy,live"
         if streak is None:
             try:
                 streak = api._wait_for_device(api.STREAK_DEVICE, timeout_s=1.0)

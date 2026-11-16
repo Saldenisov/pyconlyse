@@ -41,11 +41,14 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
             if name in {"time_range", "grating", "grating_index", "wavelength_nm", "exit_mirror", "turret"}:
                 with api._alignment_axes_lock:
                     api._alignment_axes = None
-            if timing is not None or device != api.STREAK_DEVICE:
+            live = False
+            if timing is not None:
                 api._assert_preparation_idle(proxy)
+            elif device != api.STREAK_DEVICE:
+                live = api._assert_preparation_idle(proxy, allow_live=True)
             if api.VD2_CAMERA_ONLY and not bool(api._value(proxy, "camera_only_application")):
                 raise RuntimeError("Start the camera-only HPD-TA profile before changing VD2 settings")
-            api.tango_optics.write_parameter(api, proxy, name, value)
+            api.tango_optics.write_parameter(api, proxy, name, value, live=live)
             if timing is not None:
                 raw_range = api._remoteex_readback(proxy, "DevParamGet(TD,Time Range)")
                 try:
@@ -246,7 +249,7 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
             return blocked
         try:
             proxy = api._proxy()
-            api._assert_preparation_idle(proxy)
+            api._assert_preparation_idle(proxy, allow_live=api.VD2_CAMERA_ONLY)
             if api.VD2_CAMERA_ONLY and not bool(api._value(proxy, "camera_only_application")):
                 raise RuntimeError("VD2 requires the camera-only HPD-TA profile")
             for name, query in zip(names, ("DevParamGet(TD,Shutter)", "DevParamGet(Spec,Shutter)")):
