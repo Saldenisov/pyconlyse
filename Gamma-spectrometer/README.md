@@ -4,48 +4,26 @@ Standalone PyQt5 application for two Avantes spectrometers and Arduino TTL contr
 
 This subproject does not use Tango.
 
-On Windows with Python 3.11 and Git already installed, run this from the `Gamma-spectrometer` folder:
+## Windows на экспериментальном ноутбуке
+
+Скачайте ветку [Avantes](https://github.com/Saldenisov/pyconlyse/tree/Avantes). Если Git уже есть, скопируйте в PowerShell:
+
+```powershell
+git clone --branch Avantes --single-branch https://github.com/Saldenisov/pyconlyse.git pyconlyse-avantes
+cd .\pyconlyse-avantes\Gamma-spectrometer
+.\run_avantes_dual_viewer.bat
+```
+
+Если Git ещё нет, [скачайте ZIP ветки Avantes](https://github.com/Saldenisov/pyconlyse/archive/refs/heads/Avantes.zip), распакуйте его, откройте папку `Gamma-spectrometer` и дважды щёлкните `run_avantes_dual_viewer.bat`.
+
+При первом запуске нужен интернет. BAT проверит 64-разрядный Python 3.11 и Git, скачает переносимые копии при необходимости, создаст окружение в `.gamma-tools\venv311` и установит зависимости. Для MCR-ALS используется проверенный пакет `pyMCR 0.3.2`. После проверки импортов откроется окно программы для работы со спектрометрами. Права администратора для этого запуска не требуются.
+
+При следующих запусках используйте тот же BAT. Окружение используется повторно. Если запуск прервётся, окно покажет ошибку. Для пробы на двух эмулируемых спектрометрах запустите `run_gamma_demo.bat`.
+
+Чтобы только установить пакеты, запустите из папки `Gamma-spectrometer`:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install_gamma_packages.ps1
-```
-
-The installer installs and checks the packages in a project-local `.venv`. Both `run_avantes_dual_viewer.bat` and `run_gamma_demo.bat` use that environment when present. Pass `-EnvironmentPath` to install into a separate test environment, or `-PythonPath` to select a specific Python interpreter.
-
-## Windows 10 First Run
-
-Run:
-
-```text
-first_run_gamma_spectrometer.bat
-```
-
-It opens an elevated PowerShell window, installs Miniconda if needed, creates or updates:
-
-```text
-pyconlyse311
-```
-
-Then it starts `avantes_dual_viewer.py`.
-
-Second-time start:
-
-```text
-run_avantes_dual_viewer.bat
-```
-
-For an existing `pyconlyse311` installation, update it with `conda env update -n pyconlyse311 -f environment-py311.yml` to add `h5py` and `pyMCR`.
-
-Diagnostic log:
-
-```text
-first_run_gamma_spectrometer.log
-```
-
-Optional interactive installer:
-
-```bat
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File first_run_gamma_spectrometer.ps1 -Prompt
 ```
 
 ## Conda Setup

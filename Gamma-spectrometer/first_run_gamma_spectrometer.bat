@@ -1,5 +1,4 @@
 @echo off
 setlocal
-set SCRIPT_DIR=%~dp0
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%first_run_gamma_spectrometer.ps1" -EnvName pyconlyse311
-pause
+call "%~dp0run_avantes_dual_viewer.bat" %*
+exit /b %ERRORLEVEL%

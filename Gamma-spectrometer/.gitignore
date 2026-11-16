@@ -3,3 +3,4 @@ __pycache__/
 logs/
 avantes_dual_viewer_settings.json
 .venv/
+.gamma-tools/
