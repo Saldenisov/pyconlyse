@@ -19,12 +19,20 @@ def _signature(info):
     return info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_ino
 
 
-def _copy_frames(source, target=None):
+def _copy_frames(source, target=None, *, size=None):
     digest = hashlib.sha256()
-    while block := source.read(1024 * 1024):
+    while size != 0:
+        maximum = 1024 * 1024 if size is None else min(size, 1024 * 1024)
+        block = source.read(maximum)
+        if not block:
+            if size is not None:
+                raise ValueError("Truncated native pixel data")
+            break
         digest.update(block)
         if target is not None:
             target.write(block)
+        if size is not None:
+            size -= len(block)
     return digest.digest()
 
 
@@ -106,22 +114,36 @@ def embed_native_axes(path, wavelengths=None, *, calibration_id=None, valid_colu
             count = struct.unpack_from('<H', fixed, 14)[0] or 1
             kind = struct.unpack_from('<H', fixed, 12)[0]
             frame_size = info.wavelengths_length * info.timedelays_length * info.bytes_per_point
+            image_file = path.suffix.lower() == ".img"
+            payload_size = count * (64 + frame_size) - 64
+            payload_end = info.data_pos + payload_size
             if (fixed[:2] != b'IM' or kind not in (0, 2, 3)
-                    or (path.suffix.lower() == ".img" and count != 1)
-                    or count * (64 + frame_size) + len(comment) != original.st_size):
+                    or (image_file and count != 1)
+                    or payload_end > original.st_size):
                 raise ValueError("Unsupported or incomplete native image data")
-            # The first comment holds all calibration tables. Identify the
-            # binary boundary by native absolute offsets before changing text.
-            refs = list(_TABLE_REFERENCE.finditer(comment))
-            starts = [int(ref[2]) for ref in refs if ref.start() + 64 < int(ref[2]) < info.data_pos]
-            boundary = min(starts, default=info.data_pos) - 64
-            text, tables = comment[:boundary], comment[boundary:]
+            references = list(_TABLE_REFERENCE.finditer(comment))
+            starts = [int(ref[2]) for ref in references if ref.start() + 64 < int(ref[2]) < info.data_pos]
+            # HPD-TA writes IMG tables after the pixels, and HIS tables
+            # immediately before the first frame. Preserve either native layout.
+            trailing_tables = image_file and not starts
+            if trailing_tables:
+                text = comment
+                table_start = payload_end
+                source.seek(table_start)
+                tables = source.read()
+                source.seek(info.data_pos)
+            else:
+                if payload_end != original.st_size:
+                    raise ValueError("Unexpected data after the native frames")
+                table_start = min(starts, default=info.data_pos)
+                text, tables = comment[:table_start - 64], comment[table_start - 64:]
+            table_end = table_start + len(tables)
             if update_y:
                 y_ref = re.search(rb'ScalingYScalingFile="#(\d{7})(?:,\d{4})?"', text)
-                if y_ref is None or not 64 + boundary <= int(y_ref[1]) <= info.data_pos - delays.nbytes:
-                    raise ValueError("No supported native Y table; original HIS retained")
-                at = int(y_ref[1]) - 64 - boundary
-                tables = tables[:at] + delays.tobytes() + tables[at + delays.nbytes:]
+                if y_ref is None or not table_start <= int(y_ref[1]) <= table_end - delays.nbytes:
+                    raise ValueError("No supported native Y table; original retained")
+                offset = int(y_ref[1]) - table_start
+                tables = tables[:offset] + delays.tobytes() + tables[offset + delays.nbytes:]
             x_table = b""
             shift = len(metadata)
             template = b'ScalingXType=2,ScalingXScale=1,ScalingXUnit="nm",ScalingXScalingFile="#%07d,%04d"'
@@ -137,7 +159,7 @@ def embed_native_axes(path, wavelengths=None, *, calibration_id=None, valid_colu
                 x_table = axis.tobytes()
             for ref in _TABLE_REFERENCE.finditer(text):
                 offset = int(ref[2])
-                if not 64 + boundary <= offset < info.data_pos:
+                if not table_start <= offset < table_end:
                     raise ValueError("Invalid calibration offset in native comment")
             if update_x:
                 # Omit the original X reference while shifting all other table pointers.
@@ -146,14 +168,17 @@ def embed_native_axes(path, wavelengths=None, *, calibration_id=None, valid_colu
                 lambda ref: ref[1] + (b'%07d' % (int(ref[2]) + shift + len(x_table))) + ref[3], text
             )
             if update_x:
-                text = text.replace(b"__PYCONLYSE_X_TABLE__", template % (64 + boundary + shift, len(axis)), 1)
-            updated = text + metadata + x_table + tables
+                text = text.replace(b"__PYCONLYSE_X_TABLE__", template % (table_start + shift, len(axis)), 1)
+            table_data = x_table + tables
+            updated = text + metadata + (b"" if trailing_tables else table_data)
             if len(updated) > 65535 or (axis is not None and len(axis) > 9999):
                 raise ValueError("Calibration exceeds the native header limits")
             struct.pack_into('<H', fixed, 2, len(updated))
             target.write(fixed)
             target.write(updated)
-            digest = _copy_frames(source, target)
+            digest = _copy_frames(source, target, size=payload_size)
+            if trailing_tables:
+                target.write(table_data)
             target.flush()
             os.fsync(target.fileno())
 
@@ -168,7 +193,7 @@ def embed_native_axes(path, wavelengths=None, *, calibration_id=None, valid_colu
             raise ValueError("Staged native file calibration did not verify; original retained")
         with staged.open('rb') as stream:
             stream.seek(readback.data_pos)
-            if _copy_frames(stream) != digest:
+            if _copy_frames(stream, size=payload_size) != digest:
                 raise ValueError("Staged native file frame bytes did not verify; original retained")
         if _signature(path.stat()) != _signature(original):
             raise ValueError("Native file changed during calibration; original retained")
