@@ -5,6 +5,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Union
+from uuid import uuid4
 
 import numpy as np
 from tango import AttrWriteType, DevState
@@ -53,6 +54,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             return float(default)
 
     def init_device(self):
+        self._spectral_revision = uuid4().hex
         self.spectrograph = None
         self.serial_number_value = ""
         self.current_wavelength_nm = 0.0
@@ -72,6 +74,11 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
                 self.turn_on()
             except Exception as exc:
                 self.warn(f"Auto-start spectrograph failed: {exc}", True)
+
+    @attribute(dtype=str)
+    def spectral_revision(self):
+        """Change identity whenever the optical wavelength geometry may change."""
+        return self._spectral_revision
 
     @attribute(label="serial number", dtype=str, access=AttrWriteType.READ)
     def serial_number(self):
@@ -324,6 +331,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
         return 0
 
     def turn_on_local(self) -> Union[int, str]:
+        self._spectral_revision = uuid4().hex
         if self.spectrograph is not None:
             self.set_state(DevState.ON)
             return 0
@@ -340,6 +348,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             return f"Could not turn on spectrograph via pylablib: {exc}"
 
     def turn_off_local(self) -> Union[int, str]:
+        self._spectral_revision = uuid4().hex
         if self.spectrograph is not None:
             try:
                 self.spectrograph.close()
@@ -352,6 +361,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
 
     def release_power_dependency_local(self) -> None:
         """Release the local SDK handle after external supply loss."""
+        self._spectral_revision = uuid4().hex
         spectrograph = self.spectrograph
         self.spectrograph = None
         if spectrograph is not None:
@@ -371,6 +381,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             self.warn(f"Calibration update failed: {exc}")
 
     def set_wavelength_nm(self, value: float):
+        self._spectral_revision = uuid4().hex
         self.current_wavelength_nm = float(value)
         if self.spectrograph:
             self.spectrograph.set_wavelength(float(value) * 1e-9)
@@ -378,6 +389,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             self.refresh_calibration_axis()
 
     def set_grating_index(self, value: int):
+        self._spectral_revision = uuid4().hex
         self.current_grating = int(value)
         if self.spectrograph:
             self.spectrograph.set_grating(int(value))
@@ -409,6 +421,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
         return {"direct": "Front", "side": "Side"}[self._connected_kymera().get_flipper_port("output")]
 
     def write_exit_mirror(self, value):
+        self._spectral_revision = uuid4().hex
         port = {"front": "direct", "side": "side"}[value.lower()]
         self._connected_kymera().set_flipper_port("output", port)
         self.refresh_calibration_axis()
@@ -418,6 +431,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
         return self._connected_kymera().get_turret()
 
     def write_turret(self, value):
+        self._spectral_revision = uuid4().hex
         self._connected_kymera().set_turret(value)
         self._sync_from_spectrograph(self.spectrograph)
 
@@ -426,6 +440,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
         return self._connected_kymera().get_focus_mirror_position()
 
     def write_focus_mirror(self, value):
+        self._spectral_revision = uuid4().hex
         self._connected_kymera().set_focus_mirror_position(value)
 
     @attribute(dtype=int, access=AttrWriteType.READ_WRITE)
@@ -433,6 +448,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
         return self._connected_kymera().get_iris_width("side")
 
     def write_side_entry_iris(self, value):
+        self._spectral_revision = uuid4().hex
         if not 0 <= value <= 100:
             raise ValueError("Kymera iris width must be between 0 and 100")
         self._connected_kymera().set_iris_width("side", value)
@@ -498,6 +514,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             # Validate the target before moving; a changed turret must fail closed.
             verified_info(2)
             if int(spectrograph.get_grating()) != 2:
+                self._spectral_revision = uuid4().hex
                 spectrograph.set_grating(2)
             actual = int(spectrograph.get_grating())
             if actual != 2:
@@ -522,10 +539,11 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
 
     @command
     def GoToZeroOrder(self):
+        self._spectral_revision = uuid4().hex
         if not self.spectrograph:
             raise RuntimeError("Spectrograph is not opened")
         self.spectrograph.goto_zero_order()
-        self.refresh_calibration_axis()
+        self._sync_from_spectrograph(self.spectrograph)
 
 
 if __name__ == "__main__":

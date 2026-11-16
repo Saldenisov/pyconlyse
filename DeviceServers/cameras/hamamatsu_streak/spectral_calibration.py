@@ -157,7 +157,29 @@ def _valid_columns(entries, readback, width):
     return _column_limits(entries[-1]["valid_columns"], width)
 
 
-def wavelength_calibration(header, machine, kymera_device):
+def _matches_camera(header, expected, image_shape):
+    if image_shape is None or re.search(r"(?:^|[\r\n])\[Camera\]", header):
+        return camera_geometry(header) == expected
+
+    # HPD-TA IMG omits the Camera section. For a frame from this device server,
+    # certify the recorded ROI and binning using the native Acquisition section.
+    match = re.search(r"(?:^|[\r\n])\[Acquisition\][^\r\n\[]*", header)
+    if not match:
+        return False
+    fields = dict(re.findall(r'([A-Za-z]+)="([^"]*)"', match.group()))
+    binning = tuple(int(value) for value in expected["BinningKeyVal"].split("x"))
+    origin = (int(expected["HOffs"]) * binning[0], int(expected["VOffs"]) * binning[1])
+    shape = int(expected["HWidth"]), int(expected["VWidth"])
+    return (
+        tuple(image_shape) == shape
+        and fields.get("pntBinning") == f"{binning[0]},{binning[1]}"
+        and fields.get("pntOrigCh") == f"{origin[0]},{origin[1]}"
+        and fields.get("areSource") == f"0,0,{shape[0]},{shape[1]}"
+        and ",miMirrorRotate=0" in match.group() + ","
+    )
+
+
+def wavelength_calibration(header, machine, kymera_device, *, image_shape=None):
     """Use the camera's profile with the optical settings recorded at capture."""
     machine = machine or {}
     profile = machine.get("streak_spectral_calibration")
@@ -176,10 +198,10 @@ def wavelength_calibration(header, machine, kymera_device):
         mismatch = _matching_optics(profile, optics)
         if mismatch is not None:
             raise ValueError(f"Spectral calibration does not match Kymera {mismatch}")
-    geometry = camera_geometry(header)
-    if geometry != profile["camera"]:
-        raise ValueError("Spectral calibration does not match the HIS camera geometry")
-    width = int(geometry["HWidth"])
+    if not _matches_camera(header, profile["camera"], image_shape):
+        layout = "HIS" if image_shape is None else "IMG"
+        raise ValueError(f"Spectral calibration does not match the {layout} camera geometry")
+    width = int(profile["camera"]["HWidth"])
     bounds = None
     if "wavelength_settings" in profile:
         settings = _scanned_tables(profile, width)

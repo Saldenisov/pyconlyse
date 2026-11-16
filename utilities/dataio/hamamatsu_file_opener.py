@@ -58,7 +58,7 @@ class HamamatsuFileOpener(Opener):
 
     @lru_cache(maxsize=100)
     def read_critical_info(self, file_path: Path) -> CriticalInfoHamamatsu:
-        if file_path.suffix in self.ALLOWED_FILES_TYPES:
+        if file_path.suffix.lower() in self.ALLOWED_FILES_TYPES:
             pos = 0
             with open(file_path, 'rb') as file:
                 head_64_bytes = bytearray(file.read(64))
@@ -129,9 +129,9 @@ class HamamatsuFileOpener(Opener):
 
             # Data double array
             if info.bytes_per_point == 4:
-                number_type = np.int32
+                number_type = "<i4"
             elif info.bytes_per_point == 2:
-                number_type = np.int16
+                number_type = "<i2"
             elif info.bytes_per_point == 1:
                 number_type = np.int8
             else:
@@ -184,7 +184,7 @@ class HamamatsuFileOpener(Opener):
                 file.seek(from_, 0)
                 wavelengts_bytes = bytearray(file.read(wavelengths_length * 4))
 
-            wavelengths = np.frombuffer(wavelengts_bytes, dtype=np.float32)
+            wavelengths = np.frombuffer(wavelengts_bytes, dtype="<f4")
         else:
             wavelengths = np.arange(wavelengths_length)
 

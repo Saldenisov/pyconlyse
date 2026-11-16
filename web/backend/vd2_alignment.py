@@ -6,10 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def image_alignment_settings(header):
+def image_alignment_settings(header, *, camera_only=False):
     """Stable calibration identity from the current image, not Tango's cache."""
     settings = {}
-    labels = {"time_range": "Time Range", "wavelength_nm": "Wavelength", "grating": "Grating"}
+    labels = {"time_range": "Time Range"}
+    if not camera_only:
+        labels.update(wavelength_nm="Wavelength", grating="Grating")
     labels.update({label: label for label in ("ScalingXScale", "ScalingYScale", "ScalingXUnit", "ScalingYUnit",
                                             "ScalingXScalingFile", "ScalingYScalingFile")})
     for key, label in labels.items():
@@ -74,6 +76,7 @@ def alignment_measurement_key(settings, width, height, average_settings=None):
 def read_alignment_axes(path):
     import numpy as np
     from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
+    from utilities.dataio.hamamatsu_his_calibration import spectral_calibration_metadata
 
     info = HamamatsuFileOpener().read_critical_info(Path(path))
     axes = {}
@@ -98,4 +101,5 @@ def read_alignment_axes(path):
             "width": int(info.wavelengths_length),
             "height": int(info.timedelays_length), "wavelength_unit": "nm",
             "time_unit": time_unit, "source": "current_hpdta_img",
+            "spectral_calibration": spectral_calibration_metadata(info.header),
             "captured_at": datetime.now(timezone.utc).isoformat()}

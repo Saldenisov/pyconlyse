@@ -11,7 +11,7 @@ import numpy as np
 from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
 
 
-_TABLE_REFERENCE = re.compile(rb'(=\"#)(\d{7})(,\d{4}\")')
+_TABLE_REFERENCE = re.compile(rb'(=\"#)(\d{7})((?:,\d{4})?\")')
 _PIXEL_X = re.compile(rb'ScalingXType=1,ScalingXScale=[^,]+,ScalingXUnit="(?:|No unit|pixel)",ScalingXScalingFile="Other"')
 
 
@@ -49,12 +49,12 @@ def time_origin_metadata(header):
     return float(match[1]) if match else None
 
 
-def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_columns=None,
-                          replace_existing=False, zero_time=False):
-    """Publish a verified replacement only for the known camera-only HIS layout."""
+def embed_native_axes(path, wavelengths=None, *, calibration_id=None, valid_columns=None,
+                      replace_existing=False, zero_time=False):
+    """Write axes to a native IMG or HIS with the original frame payload intact."""
     path = Path(path)
-    if path.suffix.lower() != '.his' or path.is_symlink():
-        raise ValueError("Expected a native HIS file")
+    if path.suffix.lower() not in {'.his', '.img'} or path.is_symlink():
+        raise ValueError("Expected a native IMG or HIS file")
 
     original = path.stat()
     info = HamamatsuFileOpener().read_critical_info(path)
@@ -62,27 +62,27 @@ def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_
     if axis is not None and (axis.shape != (info.wavelengths_length,) or len(axis) < 2
             or not np.isfinite(axis).all()
             or not (np.all(np.diff(axis) > 0) or np.all(np.diff(axis) < 0))):
-        raise ValueError("Invalid wavelength table for HIS detector width")
+        raise ValueError("Invalid wavelength table for detector width")
     metadata = b""
     if valid_columns is not None:
         low, high = valid_columns
         if (not isinstance(calibration_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", calibration_id)
                 or any(type(column) is not int for column in (low, high))
                 or axis is None or not 0 <= low < high < len(axis)):
-            raise ValueError("Invalid HIS calibration identity or measured columns")
+            raise ValueError("Invalid native calibration identity or measured columns")
         metadata = (f'\r\n[PyConlyseSpectral],ID="{calibration_id}",ValidColumns="{low},{high}"\r\n'
                     .encode("ascii"))
     parsed_metadata = spectral_calibration_metadata(info.header)
     if axis is not None and parsed_metadata and parsed_metadata != (calibration_id, valid_columns):
-        raise ValueError("HIS already bears different PyConlyse calibration metadata")
+        raise ValueError("File already bears different PyConlyse calibration metadata")
     update_x = axis is not None
     if axis is not None and info.scaling_xunit == 'nm':
         matches_axis = np.array_equal(info.wavelengths, axis)
         if not matches_axis and not replace_existing:
-            raise ValueError("HIS already has a different wavelength calibration")
+            raise ValueError("File already has a different wavelength calibration")
         update_x = not matches_axis or bool(metadata and not parsed_metadata)
     elif axis is not None and info.file_type != 'Other':
-        raise ValueError("Unsupported HIS spectral header; original retained")
+        raise ValueError("Unsupported native spectral header; original retained")
 
     if not update_x:
         metadata = b""
@@ -98,7 +98,7 @@ def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_
         return axis
 
     # A sibling inherits the experiment folder's permissions on Windows.
-    staged = path.with_name(f'.his-calibration-{uuid4().hex}.his')
+    staged = path.with_name(f'.hamamatsu-calibration-{uuid4().hex}{path.suffix.lower()}')
     try:
         with path.open('rb') as source, staged.open('xb') as target:
             fixed = bytearray(source.read(64))
@@ -106,9 +106,10 @@ def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_
             count = struct.unpack_from('<H', fixed, 14)[0] or 1
             kind = struct.unpack_from('<H', fixed, 12)[0]
             frame_size = info.wavelengths_length * info.timedelays_length * info.bytes_per_point
-            if (fixed[:2] != b'IM' or kind not in (1, 2, 3)
+            if (fixed[:2] != b'IM' or kind not in (0, 2, 3)
+                    or (path.suffix.lower() == ".img" and count != 1)
                     or count * (64 + frame_size) + len(comment) != original.st_size):
-                raise ValueError("Unsupported or incomplete native HIS sequence")
+                raise ValueError("Unsupported or incomplete native image data")
             # The first comment holds all calibration tables. Identify the
             # binary boundary by native absolute offsets before changing text.
             refs = list(_TABLE_REFERENCE.finditer(comment))
@@ -137,7 +138,7 @@ def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_
             for ref in _TABLE_REFERENCE.finditer(text):
                 offset = int(ref[2])
                 if not 64 + boundary <= offset < info.data_pos:
-                    raise ValueError("Invalid calibration offset in native HIS comment")
+                    raise ValueError("Invalid calibration offset in native comment")
             if update_x:
                 # Omit the original X reference while shifting all other table pointers.
                 text = field_pattern.sub(b"__PYCONLYSE_X_TABLE__", text, count=1)
@@ -148,7 +149,7 @@ def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_
                 text = text.replace(b"__PYCONLYSE_X_TABLE__", template % (64 + boundary + shift, len(axis)), 1)
             updated = text + metadata + x_table + tables
             if len(updated) > 65535 or (axis is not None and len(axis) > 9999):
-                raise ValueError("Calibration exceeds the native HIS header limits")
+                raise ValueError("Calibration exceeds the native header limits")
             struct.pack_into('<H', fixed, 2, len(updated))
             target.write(fixed)
             target.write(updated)
@@ -164,14 +165,18 @@ def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_
                 or not np.array_equal(readback.timedelays, delays)
                 or (update_y and time_origin_metadata(readback.header) != float(old_delays[0]))
                 or (valid_columns is not None and spectral_calibration_metadata(readback.header) != (calibration_id, valid_columns))):
-            raise ValueError("Staged HIS calibration did not verify; original retained")
+            raise ValueError("Staged native file calibration did not verify; original retained")
         with staged.open('rb') as stream:
             stream.seek(readback.data_pos)
             if _copy_frames(stream) != digest:
-                raise ValueError("Staged HIS frame bytes did not verify; original retained")
+                raise ValueError("Staged native file frame bytes did not verify; original retained")
         if _signature(path.stat()) != _signature(original):
-            raise ValueError("Native HIS changed during calibration; original retained")
+            raise ValueError("Native file changed during calibration; original retained")
         os.replace(staged, path)
     finally:
         staged.unlink(missing_ok=True)
     return axis
+
+
+# Existing sequence callers use the same byte writer as the single-image save.
+embed_his_wavelengths = embed_native_axes

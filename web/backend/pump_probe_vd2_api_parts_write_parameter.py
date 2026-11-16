@@ -91,14 +91,18 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
         if signature != api._alignment_signature(proxy):
             raise RuntimeError("Optical settings changed during calibration; refresh calibration")
         acquired = axes["acquisition_settings"]
-        acquired_wavelength = float(acquired["wavelength_nm"])
-        current_wavelength = float(signature["wavelength_nm"])
-        if (acquired["time_range"].replace(" ", "").lower() != signature["time_range"].replace(" ", "").lower()
-                or acquired["grating"].lower() != signature["grating"].lower()
-                or not acquired["wavelength_nm"]
-                or not all(map(api.math.isfinite, (acquired_wavelength, current_wavelength)))
-                or abs(acquired_wavelength - current_wavelength) > 0.001):
-            raise RuntimeError("Current image predates optical settings; refresh calibration after a new frame")
+        if acquired["time_range"].replace(" ", "").lower() != signature["time_range"].replace(" ", "").lower():
+            raise RuntimeError("Current image predates the time range; refresh calibration after a new frame")
+        if api.VD2_CAMERA_ONLY:
+            if not axes.get("spectral_calibration"):
+                raise RuntimeError("Start a fresh acquisition at the selected Kymera setting before exporting calibration")
+        else:
+            acquired_center = float(acquired["wavelength_nm"])
+            current_center = float(signature["wavelength_nm"])
+            if (acquired["grating"].lower() != signature["grating"].lower()
+                    or not all(map(api.math.isfinite, (acquired_center, current_center)))
+                    or abs(acquired_center - current_center) > 0.001):
+                raise RuntimeError("Current image predates optical settings; refresh calibration after a new frame")
         axes["settings"] = signature
         axes["calibration_key"] = api.alignment_calibration_key(signature, axes["width"], axes["height"])
         with api._alignment_axes_lock:

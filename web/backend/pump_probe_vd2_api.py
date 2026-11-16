@@ -561,22 +561,22 @@ _pump_probe_vd2_api_parts_write_parameter = _bind_pump_probe_vd2_api_parts_write
 write_parameter = (pump_probe_vd2_api.route("/parameter/<name>", methods=["POST"]))((_serialized_vd2_mutation)(_pump_probe_vd2_api_parts_write_parameter["write_parameter"]))
 
 
-def _alignment_signature(proxy):
-    settings = image_alignment_settings(_remoteex_readback(proxy, "ImgStatusGet(Current,All)"))
+def _alignment_signature(proxy, header=None):
+    if header is None:
+        header = _remoteex_readback(proxy, "ImgStatusGet(Current,All)")
+    settings = image_alignment_settings(header, camera_only=VD2_CAMERA_ONLY)
     if VD2_CAMERA_ONLY:
         kymera = DeviceProxy(KYMERA_DEVICE)
-        kymera.set_timeout_millis(5000)
-        if str(kymera.state()).split(".")[-1] != "ON":
-            raise RuntimeError("Kymera is not ON; wavelength calibration unavailable")
-        tango_optics.verify_image_optics(settings, {
-            key: _value(kymera, key) for key in ("wavelength_nm", "lines_per_mm", "grating")
-        })
+        kymera.set_timeout_millis(1500)
+        names = ("spectral_revision", "wavelength_nm", "grating")
+        values = dict(zip(names, (item.value for item in kymera.read_attributes(names)), strict=True))
+        settings.update(values)
     return settings
 
 
 def _alignment_frame_metadata(proxy):
     header = _remoteex_readback(proxy, "ImgStatusGet(Current,All)")
-    return image_alignment_settings(header), image_intensity_settings(header)
+    return _alignment_signature(proxy, header), image_intensity_settings(header)
 
 
 _assert_alignment_live_or_idle = _pump_probe_vd2_api_parts_write_parameter["_assert_alignment_live_or_idle"]

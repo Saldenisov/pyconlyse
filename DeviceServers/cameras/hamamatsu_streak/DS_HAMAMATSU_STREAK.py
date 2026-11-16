@@ -31,7 +31,7 @@ from DeviceServers.cameras.hamamatsu_streak.camera_only_profile import (
 )
 from DeviceServers.cameras.hamamatsu_streak.remoteex_client import RemoteExClient
 from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import RemoteExTransportError
-from DeviceServers.cameras.hamamatsu_streak.spectral_calibration import load_spectral_calibration
+from DeviceServers.cameras.hamamatsu_streak.spectral_calibration import load_spectral_calibration, wavelength_calibration
 
 
 class DS_HAMAMATSU_STREAK(DS_General):
@@ -51,6 +51,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     camera_only_ini_path = device_property(dtype=str, default_value=DEFAULT_REMOTE_INI)
     remote_camera_only = device_property(dtype=bool, default_value=False)
     spectral_calibration_path = device_property(dtype=str, default_value="")
+    kymera_device = device_property(dtype=str, default_value="manip/CR/ANDOR_KYMERA1")
     default_save_dir = device_property(dtype=str, default_value="")
     command_timeout_s = device_property(dtype=float, default_value=5.0)
     async_timeout_s = device_property(dtype=float, default_value=120.0)
@@ -73,6 +74,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.client = None
         self.controller = None
         self._sequence_reconnect_pending = False
+        self._image_optics = None
         self._application_start_thread = None
         self._live_start_thread = None
         self.connected_value = False
@@ -618,6 +620,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command
     def StopApplication(self):
+        self._image_optics = None
         controller = self._require_controller()
         try:
             controller.stop_application()
@@ -656,17 +659,42 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.last_response_value = controller.last_response_text
         self.set_state(DevState.ON)
 
+    def _read_image_optics(self):
+        kymera = DeviceProxy(self.kymera_device)
+        kymera.set_timeout_millis(1500)
+        if kymera.state() != DevState.ON:
+            raise RuntimeError("Kymera is not ON")
+        names = ("spectral_revision", "grating", "wavelength_nm", "lines_per_mm", "blaze_wavelength_nm",
+                 "exit_mirror", "turret", "focus_mirror", "side_entry_iris")
+        return {name: attribute.value for name, attribute in zip(names, kymera.read_attributes(names), strict=True)}
+
+    def _capture_image_optics(self, controller):
+        self._image_optics = None
+        if not self._camera_only_profile_verified():
+            return None
+        try:
+            status = ",".join(controller.execute_raw("AcqStatus()", timeout=2.0).parameters)
+            if status.casefold() == "idle":
+                return controller.camera_only_identity, self._read_image_optics()
+        except Exception as exc:
+            self.warn(f"IMG optical settings could not be captured: {str(exc).splitlines()[0]}")
+        return None
+
     @command
     def AcquireSingle(self):
         controller = self._require_controller()
+        optics = self._capture_image_optics(controller)
         controller.acquire_single()
+        self._image_optics = optics
         self.last_command_value = controller.last_command
         self.last_response_value = controller.last_response_text
 
     @command
     def Acquire(self):
         controller = self._require_controller()
+        optics = self._capture_image_optics(controller)
         controller.start_acquire()
+        self._image_optics = optics
         self.last_command_value = controller.last_command
         self.last_response_value = controller.last_response_text
 
@@ -680,7 +708,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.busy_command_value = "AcqStart(Live)"
         self.set_state(DevState.RUNNING)
         if self.remote_camera_only:
+            optics = self._capture_image_optics(controller)
             self._start_live_background(controller, propagate=True)
+            self._image_optics = optics
             return
         self._live_start_thread = threading.Thread(
             target=self._start_live_background,
@@ -695,14 +725,18 @@ class DS_HAMAMATSU_STREAK(DS_General):
     @command
     def StartAnalogIntegration(self):
         controller = self._require_controller()
+        optics = self._capture_image_optics(controller)
         controller.start_analog_integration()
+        self._image_optics = optics
         self.last_command_value = controller.last_command
         self.last_response_value = controller.last_response_text
 
     @command
     def StartSequence(self):
         controller = self._require_controller()
+        optics = self._capture_image_optics(controller)
         controller.start_sequence(wait=False)
+        self._image_optics = optics
         self._sequence_reconnect_pending = False
         self.remoteex_status_value = "busy"
         self.set_state(DevState.RUNNING)
@@ -729,6 +763,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command
     def StartPairedLive(self):
+        self._image_optics = None
         if not self._camera_only_profile_verified():
             raise RuntimeError("Paired capture requires the camera-only HPD-TA profile")
         controller = self._require_controller()
@@ -790,7 +825,44 @@ class DS_HAMAMATSU_STREAK(DS_General):
         controller = self._require_controller()
         saved = controller.save_current_image(path)
         self.last_saved_image_path_value = saved
+        target = Path(path)
+        if self.remote_camera_only and target.suffix.lower() == ".img":
+            self._calibrate_saved_image(target)
         return saved
+
+    def _calibrate_saved_image(self, path):
+        from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
+        from utilities.dataio.hamamatsu_his_calibration import embed_native_axes
+
+        deadline = time.monotonic() + 3.0
+        while not path.is_file() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        info = HamamatsuFileOpener().read_critical_info(path)
+        if not self._camera_only_profile_verified():
+            embed_native_axes(path, zero_time=True)
+            return
+
+        try:
+            current_optics = self._read_image_optics() if self._image_optics else {}
+        except Exception as exc:
+            self.warn(f"IMG Kymera readback unavailable: {str(exc).splitlines()[0]}")
+            current_optics = {}
+        try:
+            session, optics = self._image_optics or (None, {})
+            if (session != self._require_controller().camera_only_identity
+                    or not optics.get("spectral_revision") or optics != current_optics):
+                raise ValueError("Kymera settings are unverified for this image")
+            axis, identity, columns = wavelength_calibration(
+                info.header, {"devices": {self.kymera_device: {"values": optics}},
+                              "streak_spectral_calibration": load_spectral_calibration(self.spectral_calibration_path)},
+                self.kymera_device, image_shape=(info.wavelengths_length, info.timedelays_length),
+            )
+        except (ValueError, OSError, KeyError) as exc:
+            embed_native_axes(path, zero_time=True)
+            self.warn(f"{path.name}: {exc}. Native wavelength unit: {info.scaling_xunit or 'pixel'}")
+            return
+        embed_native_axes(path, axis, calibration_id=identity, valid_columns=columns,
+                          replace_existing=columns is not None, zero_time=True)
 
     @command(dtype_in=str, dtype_out=str)
     def SaveCurrentSequence(self, path: str):
