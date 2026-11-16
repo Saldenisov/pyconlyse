@@ -478,6 +478,10 @@ def _bind_pump_probe_vd2_api_parts_recovery_snapshots(api):
         requested = [(key, attr) for key, attr in api.READ_ATTRIBUTES.items() if key not in external]
         if api.VD2_CAMERA_ONLY:
             requested.append(("camera_only_application", "camera_only_application"))
+            values["grating_options"] = [
+                {"value": index, "label": f"{index} · Blaze {blaze} nm"}
+                for index, blaze in api.tango_optics.VD2_GRATING_BLAZE_NM.items()
+            ]
         attributes = None
         read_many = getattr(proxy, "read_attributes", None)
         if callable(read_many):

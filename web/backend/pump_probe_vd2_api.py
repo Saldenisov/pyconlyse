@@ -204,6 +204,7 @@ WRITABLE_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "focus_time_over": {"attribute": "focus_time_over", "coerce": _string},
     "wavelength_nm": {"attribute": "wavelength_nm", "coerce": _number},
     "grating": {"attribute": "grating", "coerce": _string},
+    "grating_index": {"attribute": "grating", "coerce": tango_optics.grating_index},
     "exit_mirror": {"attribute": "exit_mirror", "coerce": _string},
     "turret": {"attribute": "turret", "coerce": _string},
     "slit_width_um": {"attribute": "slit_width_um", "coerce": _number},

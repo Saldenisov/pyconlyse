@@ -3,9 +3,11 @@ from contextlib import contextmanager
 import math
 
 
+VD2_GRATING_BLAZE_NM = {1: 300, 2: 800, 3: 500}
+
 KYMERA_ATTRIBUTES = {
     "wavelength_nm": "wavelength_nm", "grating": "lines_per_mm",
-    "blaze": "blaze_wavelength_nm", "ruling": "lines_per_mm",
+    "blaze": "blaze_wavelength_nm", "ruling": "lines_per_mm", "grating_index": "grating",
     "exit_mirror": "exit_mirror", "turret": "turret",
     "slit_width_um": "active_input_slit_um", "spectrograph_shutter": "shutter",
     "focus_mirror": "focus_mirror", "side_entry_iris": "side_entry_iris",
@@ -24,6 +26,12 @@ DG_FIELDS = set(DG_CHANNELS) | {
 }
 EXTERNAL_FIELDS = set(KYMERA_ATTRIBUTES) | DG_FIELDS
 TRIGGER_SOURCES = {"Internal": 0, "Ext. rising": 1, "Ext. falling": 2}
+
+
+def grating_index(value):
+    if type(value) is not int or value not in VD2_GRATING_BLAZE_NM:
+        raise ValueError("Select installed Kymera grating 1, 2, or 3")
+    return value
 
 
 def parameter_target(api, name):
@@ -125,6 +133,15 @@ def write_parameter(api, camera, name, value):
         proxy.set_timeout_millis(45000)
         if name == "grating":
             proxy.command_inout(command, float(str(value).removesuffix(" g/mm")))
+        elif name == "grating_index":
+            index = grating_index(value)
+            proxy.set_timeout_millis(60000)
+            if _value(proxy, "grating") != index:
+                proxy.write_attribute("grating", index)
+            if (_value(proxy, "grating") != index or not math.isclose(
+                    _value(proxy, "blaze_wavelength_nm"), VD2_GRATING_BLAZE_NM[index],
+                    rel_tol=0, abs_tol=0.01)):
+                raise RuntimeError(f"Kymera did not verify grating {index} and its blaze")
         else:
             if name in {"turret", "focus_mirror", "side_entry_iris"}:
                 value = int(value)

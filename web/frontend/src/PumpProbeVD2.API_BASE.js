@@ -140,18 +140,23 @@ export function EditableField({ field, value, onApply, busy }) {
   };
 
   if (field.options) {
-    const options = field.options.includes(valueText(value))
-      ? field.options
-      : [valueText(value), ...field.options];
+    const options = field.options.map((option) =>
+      typeof option === 'string' ? { value: option, label: option } : option);
+    const selected = options.find((option) => String(option.value) === displayValue);
+    const placeholder = field.fixedOptions ? '' : displayValue;
     return (
       <select
         id={`vd2-${field.key}`}
         aria-label={field.label}
-        value={valueText(value)}
+        value={selected?.value ?? placeholder}
         disabled={busy}
-        onChange={(event) => onApply(field.key, event.target.value)}
+        onChange={(event) => {
+          const option = options.find((item) => String(item.value) === event.target.value);
+          if (option) onApply(field.key, option.value);
+        }}
       >
-        {options.map((option) => <option value={option} key={option}>{option}</option>)}
+        {!selected && <option value={placeholder} disabled={field.fixedOptions}>{displayValue}</option>}
+        {options.map(({ value, label }) => <option value={value} key={value}>{label}</option>)}
       </select>
     );
   }
@@ -186,6 +191,11 @@ export function EditableField({ field, value, onApply, busy }) {
 }
 
 function ParameterCard({ card, values, onApply, busy }) {
+  const fields = card.fields.map((field) => (
+    field.key === 'grating' && Array.isArray(values.grating_options)
+      ? { ...field, key: 'grating_index', options: values.grating_options, fixedOptions: true }
+      : field
+  ));
   return (
     <section className={`vd2-card vd2-card-${card.tone}`}>
       <header>
@@ -197,7 +207,7 @@ function ParameterCard({ card, values, onApply, busy }) {
           <span role="columnheader">Parameter</span>
           <span role="columnheader">Value</span>
         </div>
-        {card.fields.map((field) => (
+        {fields.map((field) => (
           <div className="vd2-table-row" role="row" key={field.key}>
             <label role="cell" htmlFor={`vd2-${field.key}`}>{field.label}</label>
             <div role="cell">

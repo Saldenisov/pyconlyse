@@ -2,6 +2,27 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PumpProbeVD2, { EditableField, fetchVd2, refreshVd2Passive, TIME_RANGES, Vd2PhaseProtocol } from './PumpProbeVD2';
 
+import { CARDS, ParameterCard } from './PumpProbeVD2.API_BASE';
+
+test('Kymera shows three installed gratings and switches to blaze 500 by index', () => {
+  const apply = jest.fn();
+  const card = CARDS.find(({ tone }) => tone === 'spectrograph');
+  render(<ParameterCard card={card} onApply={apply} values={{
+    grating: '150 g/mm', grating_index: 2, blaze: 800,
+    grating_options: [
+      { value: 1, label: '1 · Blaze 300 nm' },
+      { value: 2, label: '2 · Blaze 800 nm' },
+      { value: 3, label: '3 · Blaze 500 nm' },
+    ],
+  }} />);
+  const select = screen.getByRole('combobox', { name: 'Grating' });
+  expect(select).toHaveValue('2');
+  expect(within(select).getAllByRole('option').map((option) => option.textContent))
+    .toEqual(['1 · Blaze 300 nm', '2 · Blaze 800 nm', '3 · Blaze 500 nm']);
+  fireEvent.change(select, { target: { value: '3' } });
+  expect(apply).toHaveBeenCalledWith('grating_index', 3);
+});
+
 jest.mock('./useVd2ServerWorkspace',()=>({...jest.requireActual('./useVd2ServerWorkspace'),__esModule:true,
   default:()=>({ready:true,message:'Session saved on server.',error:'',history:async()=>[],restore:async()=>{}})}));
 

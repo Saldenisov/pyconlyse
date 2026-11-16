@@ -186,6 +186,43 @@ def test_wavelength_readback_uses_kymera_without_remoteex(rig, monkeypatch):
     assert events == []
 
 
+def test_select_blaze_500_by_physical_grating_index(rig, monkeypatch):
+    camera, _, events = rig
+    actual = {"grating": 2, "blaze_wavelength_nm": 800.0}
+
+    def move(attribute, value):
+        events.append((attribute, value))
+        actual.update(grating=value, blaze_wavelength_nm=500.0)
+
+    kymera = SimpleNamespace(state=lambda: "ON", set_timeout_millis=lambda timeout: None,
+                             read_attribute=lambda name: SimpleNamespace(value=actual[name]),
+                             write_attribute=move)
+    monkeypatch.setattr(api, "_proxy", lambda: camera)
+    monkeypatch.setattr(api, "DeviceProxy", lambda device: {api.KYMERA_DEVICE: kymera}[device])
+    monkeypatch.setattr(api, "_snapshot", lambda proxy: {"values": {
+        "grating_index": optics.read_external(api, "grating_index"), "blaze": actual["blaze_wavelength_nm"],
+    }})
+    approved = []
+    monkeypatch.setattr(api, "_approval_or_response", lambda *args: approved.append(args))
+    app = Flask(__name__)
+    app.register_blueprint(api.pump_probe_vd2_api)
+    client = app.test_client()
+    path = "/api/pump-probe-vd2/parameter/grating_index"
+
+    rejected = client.post(path, json={"value": 150})
+    assert rejected.status_code == 400
+    assert not events and not approved
+
+    reply = client.post(path, json={"value": 3})
+    assert reply.status_code == 200, reply.get_json()
+    assert reply.get_json()["values"] == {"grating_index": 3, "blaze": 500.0}
+    assert events == [("grating", 3)]
+    assert approved[0][1:3] == (
+        [api._target(api.KYMERA_DEVICE, "write_attribute:grating")],
+        {"name": "grating_index", "value": 3},
+    )
+
+
 def test_stale_hpdta_wavelength_metadata_is_rejected():
     with pytest.raises(RuntimeError, match="do not match Tango Kymera"):
         optics.verify_image_optics({"wavelength_nm": "550", "grating": "150 g/mm"},

@@ -8,7 +8,7 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
 
     def write_parameter(name: str):
         spec = api.WRITABLE_PARAMETERS.get(name)
-        if spec is None:
+        if spec is None or (name == "grating_index" and not api.VD2_CAMERA_ONLY):
             return api.jsonify({"success": False, "error": f"Unsupported parameter: {name}"}), 404
 
         payload, rejected = api._mutation_payload({"value"})
@@ -38,7 +38,7 @@ def _bind_pump_probe_vd2_api_parts_write_parameter(api):
             if blocked is not None:
                 return blocked
             proxy = api._proxy()
-            if name in {"time_range", "grating", "wavelength_nm", "exit_mirror", "turret"}:
+            if name in {"time_range", "grating", "grating_index", "wavelength_nm", "exit_mirror", "turret"}:
                 with api._alignment_axes_lock:
                     api._alignment_axes = None
             if timing is not None or device != api.STREAK_DEVICE:
