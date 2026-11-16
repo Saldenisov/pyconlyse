@@ -3,7 +3,7 @@
   "version": 1,
   "profiles": [
     {
-      "id": "vd2-kymera-hg-20261116-g1",
+      "id": "vd2-kymera-hg-20261116-g1-r2",
       "source": "Hg I, 2026-11-16; E:/DATA_VD2/20261116/Kymera-Hg-UV-blaze300-10nm-101835/repeat-25ms-wider-slit-102957",
       "camera": {
         "CameraName": "C13440-20CU",
@@ -18,7 +18,7 @@
         "lines_per_mm": 150.0,
         "blaze_wavelength_nm": 300,
         "exit_mirror": "Front",
-        "focus_mirror": 300,
+        "focus_mirror": 315,
         "turret": 1,
         "side_entry_iris": 50,
         "grating": 1
