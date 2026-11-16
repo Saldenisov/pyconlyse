@@ -25,7 +25,7 @@ export function previewShouldPoll(tab, state, protocol, enabled) {
     || Boolean(state?.state_deferred && sequenceAcquiring);
   return hasVd2Preview(tab) && enabled && cameraAvailable
     && !protocolSaveActive(protocol)
-    && (state?.remoteex_status === 'busy' || sequenceAcquiring);
+    && (state?.acquisition_status === 'busy' || state?.remoteex_status === 'busy' || sequenceAcquiring);
 }
 
 export function protocolHardwareBusy(protocol) {

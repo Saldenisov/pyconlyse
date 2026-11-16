@@ -23,6 +23,30 @@ test('reports a brief read failure and verified recovery to history without repl
   } finally { view.unmount(); jest.useRealTimers(); }
 });
 
+test('retains the verified rolling average across temporary camera-lock contention', async () => {
+  jest.useFakeTimers();
+  const onReadError = jest.fn();
+  let response = { success: true, enabled: true, frames: 4 };
+  global.fetch = jest.fn(async () => ({
+    ok: response.success,
+    status: response.success ? 200 : 409,
+    json: async () => response,
+  }));
+  const view = render(<VD2LiveAverage onReadError={onReadError} />);
+  try {
+    await screen.findByText('Current: On · 4 frames');
+    response = { success: false, code: 'VD2_CONTROL_LOCKED', error: 'Another camera read' };
+    await act(async () => { jest.advanceTimersByTime(5000); });
+    expect(screen.getByText('Current: On · 4 frames')).toBeInTheDocument();
+    expect(screen.getByLabelText('Rolling average frames')).toBeEnabled();
+    expect(onReadError).toHaveBeenLastCalledWith('');
+
+    response = { success: true, enabled: false, frames: 3 };
+    await act(async () => { jest.advanceTimersByTime(5000); });
+    expect(screen.getByText('Current: Off · 3 frames')).toBeInTheDocument();
+  } finally { view.unmount(); jest.useRealTimers(); }
+});
+
 test('active Live reads current averaging settings and permits explicit changes', async () => {
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ success: true, enabled: false, frames: 2 }) }));
   render(<VD2LiveAverage liveActive />);

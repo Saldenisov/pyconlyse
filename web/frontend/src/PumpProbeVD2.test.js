@@ -124,7 +124,10 @@ test('the Live tab shows only preview and compact hardware controls, with delays
       const { value } = JSON.parse(options.body);
       commands.push({ delay_e: value });
       delayE = Number(value);
-      payload = cameraState();
+      const snapshot = cameraState();
+      delete snapshot.acquisition_status;
+      delete snapshot.acquisition_mode;
+      payload = { ...snapshot, remoteex_status: 'idle' };
     } else if (url.endsWith('/command/StopAcquisition')) {
       commands.push('stop');
       live = false;
@@ -158,6 +161,7 @@ test('the Live tab shows only preview and compact hardware controls, with delays
     expect(controls.getByLabelText('Time range')).toBeDisabled();
     expect(screen.getByLabelText('Frame display rate')).toBeInTheDocument();
 
+    const framesBeforeChange = draw.mock.calls.length;
     const e = dg.getByRole('spinbutton', { name: 'Delay E' });
     expect(e).toHaveValue(2061.5);
     fireEvent.focus(e);
@@ -165,6 +169,8 @@ test('the Live tab shows only preview and compact hardware controls, with delays
     fireEvent.blur(e);
     await waitFor(() => expect(commands).toEqual(['start', { delay_e: '0.0020665' }]));
     await waitFor(() => expect(off).toBeEnabled());
+    expect(on).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(draw.mock.calls.length).toBeGreaterThan(framesBeforeChange + 1));
     fireEvent.click(off);
     await waitFor(() => expect(on).toBeEnabled());
     expect(commands).toEqual(['start', { delay_e: '0.0020665' }, 'stop']);

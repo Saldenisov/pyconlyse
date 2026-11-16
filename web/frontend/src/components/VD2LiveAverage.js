@@ -31,6 +31,9 @@ export default function VD2LiveAverage({ disabled = false, children, onReadError
     try {
       const response = await fetch(API, { credentials: 'include' });
       const payload = await response.json();
+      // Another client may hold the shared camera lock briefly. Keep the last
+      // successful readback and retry on the regular refresh interval.
+      if (response.status === 409 && payload.code === 'VD2_CONTROL_LOCKED') return;
       if (!response.ok || !payload.success || typeof payload.enabled !== 'boolean' || !Number.isInteger(payload.frames)
           || payload.frames < 2 || payload.frames > 255) throw new Error(payload.error || 'Live rolling average unavailable');
       if (alive.current && started === generation.current) applyReadback(payload);

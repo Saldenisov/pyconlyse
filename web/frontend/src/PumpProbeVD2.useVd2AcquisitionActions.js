@@ -57,7 +57,23 @@ export function useVd2AcquisitionActions({
         updatePairedCapture(payload.paired);
         return;
       }
-      setState(payload);
+      if (path.startsWith('/parameter/')) {
+        stateReadEpoch.current += 1;
+        setState(previous => {
+          // A parameter response reports cached device values, not a new AcqStatus.
+          if (!payload.connected || !payload.application_running || payload.acquisition_status != null) {
+            return payload;
+          }
+          return {
+            ...payload,
+            acquisition_status: previous?.acquisition_status,
+            acquisition_mode: previous?.acquisition_mode,
+            remoteex_status: previous?.remoteex_status === 'busy' ? 'busy' : payload.remoteex_status,
+          };
+        });
+      } else {
+        setState(payload);
+      }
       if (['/command/StartLive', '/command/StartSequence', '/command/Acquire', '/command/AcquireSingle'].includes(path)) {
         previewPaused.current = false;
         setPreviewEnabled(true);

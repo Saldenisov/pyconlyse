@@ -5,6 +5,7 @@ import useFrameDisplayRate from './useFrameDisplayRate';
 import { AlignmentSignalBuffer } from './vd2AlignmentSearch';
 import { startPreviewPolling } from './vd2PreviewPolling';
 import { createPreviewFreshnessClock } from './vd2PreviewFreshness';
+import { DEFERRED_ACQUISITION_READ } from './components/VD2ReadDiagnostics';
 import { alignmentRegionGeometry } from './vd2RoiMath';
 import { ALIGNMENT_REGION_KEY, DEFAULT_ALIGNMENT_REGION, useVd2Memory, validAcquisitionRois, validAlignmentRegion } from './vd2AlignmentMemory';
 import { hasVd2Preview, previewShouldPoll, protocolHardwareBusy, protocolSaveActive } from './vd2AlignmentMath';
@@ -174,7 +175,9 @@ export function useVd2AcquisitionState(measurementRate) {
         }));
         return;
       }
-      setState(payload);
+      const acquisitionDeferred = payload.attribute_errors?.acquisition_status === DEFERRED_ACQUISITION_READ;
+      setState(current => acquisitionDeferred && payload.connected && payload.application_running
+        && current?.remoteex_status === 'busy' ? { ...payload, remoteex_status: 'busy' } : payload);
       if(payload.recovery_warning)reportPollError(payload.recovery_warning,'recovery');
       else {lastPollError.current.recovery='';resolveReadErrors('recovery');}
       lastPollError.current.state = '';
@@ -286,27 +289,14 @@ export function useVd2AcquisitionState(measurementRate) {
   }, [previewFreshness]);
 
   const previewPolling = previewShouldPoll(activeTab, state, protocol, previewEnabled);
+  const previewAllowed = hasVd2Preview(activeTab) && previewEnabled && !protocolSaving
+    && (previewPolling || Boolean(state?.connected && state?.application_running));
   useEffect(() => {
-    if (
-      !hasVd2Preview(activeTab)
-      || !previewEnabled
-      || (!previewPolling && (!state?.connected || !state?.application_running))
-      || protocolSaving
-    ) return undefined;
+    if (!previewAllowed) return undefined;
     if (!previewPolling) { loadPreview(); return undefined; }
     const stop = startPreviewPolling(loadPreview);
     return () => { stop(); previewController.current?.abort(); };
-  }, [
-    activeTab,
-    loadPreview,
-    previewEnabled,
-    state?.application_running,
-    state?.connected,
-    state?.remoteex_status,
-    protocol?.status,
-    protocolSaving,
-    previewPolling,
-  ]);
+  }, [activeTab, loadPreview, previewAllowed, previewPolling]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setPreviewClock(performance.now()), 500);

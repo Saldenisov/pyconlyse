@@ -252,7 +252,9 @@ export function renderVd2Acquisition({
             <div className="vd2-preview-meta">
               <span>{preview ? `${preview.width} x ${preview.height}` : 'Waiting for frame'}</span>
               <span>{previewStream === 'no_valid_image' ? (preview ? 'No current image · Previous frame' : 'Waiting for first frame')
-                : protocolSaving ? protocol.status : state?.acquisition_status === 'busy' || previewStream === 'acquiring' ? 'Acquiring' : 'Last frame'}</span>
+                : protocolSaving ? protocol.status
+                  : preview && previewStream === 'acquiring' && !previewFresh ? 'Waiting for a new frame'
+                    : state?.acquisition_status === 'busy' || previewStream === 'acquiring' ? 'Acquiring' : 'Last frame'}</span>
               {preview && <span>{preview.minimum} - {preview.maximum}</span>}
               <button type="button" onClick={() => { previewPaused.current = false; setPreviewEnabled(true); loadPreview(); }} disabled={busy}>Refresh frame</button>
               {liveTab ? <div className="vd2-live-actions" role="group" aria-label="Live controls">
