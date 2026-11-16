@@ -5,110 +5,99 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
     """Bind implementation to the owning module and its runtime state."""
 
     def toggle_data_collection(self):
-        """Toggle data collection mode."""
-        if not self.data_collection_active:
-            # Start data collection
-            if not self.has_reference or not self.has_background:
-                api.QMessageBox.warning(self, "Error", "Please measure reference and background first")
+        if self.current_measurement_role is not None or self.analysis_worker is not None:
+            return
+        if self.data_collection_active or self.collection_paused:
+            self.set_collection_state(active=False, paused=False)
+            self.log_run_event("stop")
+            self.statusBar().showMessage(f"Collection stopped ({self.collection_point_index} points). Add Blank is available.")
+            return
+        if self.blank_schedule is not None or not self.validate_collection_rate(show_warning=True):
+            return
+        if not self.spec1_widget.spec or not self.spec2_widget.spec:
+            api.QMessageBox.warning(self, "Start DC", "Connect both spectrometers first")
+            return
+
+        path = api.Path(self.save_folder_input.text()).expanduser() / (
+            (self.save_name_input.text().strip() or "avantes_measurement") + ".h5"
+        )
+        old_path = self.collection_file_path
+        resume = False
+        if old_path and path.with_suffix("") == old_path.with_suffix("") and old_path.exists():
+            mode = self.ask_collection_start_mode(old_path, self.collection_point_index)
+            if mode is None:
                 return
+            resume = mode == "resume"
 
-            if not self.validate_collection_rate(show_warning=True):
-                return
-
-            interval_ms = int(self.collection_rate_spin.value() * 1000)
-            if interval_ms < 100:
-                api.QMessageBox.warning(self, "Error", "Minimum collection rate is 0.1s (100ms)")
-                return
-
-            try:
-                save_dir = api.Path(self.save_folder_input.text()).expanduser()
-                save_dir.mkdir(parents=True, exist_ok=True)
-            except Exception as e:
-                api.QMessageBox.critical(self, "Save Folder Error", f"Cannot use save folder:\n{str(e)}")
-                return
-
-            base_name = self.save_name_input.text().strip() or "avantes_measurement"
-            previous_collection_file_path = self.collection_file_path
-            self.collection_file_path = save_dir / f"{base_name}.dat"
-            resume_collection = False
-            has_loaded_points = bool(self.collection_data)
-            target_is_loaded = (
-                self.loaded_collection_file_path is not None
-                and self.collection_file_path == self.loaded_collection_file_path
-            )
-            target_is_current = (
-                self.collection_file_path.exists()
-                and has_loaded_points
-                and previous_collection_file_path is not None
-                and self.collection_file_path == previous_collection_file_path
-            )
-            if target_is_loaded or target_is_current:
-                start_mode = self.ask_collection_start_mode(self.collection_file_path, len(self.collection_data))
-                if start_mode is None:
-                    return
-                resume_collection = start_mode == "resume"
-                if resume_collection and not self.can_resume_collection_wavelengths():
-                    return
-                if not resume_collection:
-                    new_path = self.choose_new_collection_file_path(self.collection_file_path)
-                    if new_path is None:
-                        return
-                    self.collection_file_path = new_path
-                    self.save_folder_input.setText(str(new_path.parent))
-                    self.save_name_input.setText(new_path.stem)
-
-            if self.continuous_mode:
-                self.stop_live_preview()
-
-            self.data_collection_active = True
-            if resume_collection:
-                self.collection_point_index = len(self.collection_data)
-                existing_times = [float(point.get("time", 0.0)) for point in self.collection_data]
-                self.collection_time_offset_s = self.get_resume_collection_time_offset(existing_times)
-                self.loaded_collection_file_path = self.collection_file_path
-                self.update_loaded_collection_label(self.collection_file_path)
+        try:
+            if resume and old_path.suffix.lower() in {".h5", ".hdf5"}:
+                run = api.AvantesRun(old_path)
+                wavelengths, serials, epoch, count = run.info()
+                if not self.match_run_hardware(wavelengths, serials):
+                    raise ValueError("Connected spectrometers differ from the saved run")
+                if not self.same_detector_setup(self.current_detector_setup(), run.detector_setup()):
+                    raise ValueError("Restore the integration times and trigger modes used in the saved run")
+                run = self.standard_run(run)
             else:
-                self.collection_data = []
-                self.collection_point_index = 0
-                self.collection_time_offset_s = 0.0
-                self.loaded_collection_file_path = None
-                self.update_loaded_collection_label(None)
-                self.reset_od_heatmap()
-                if self.collection_file_path.exists():
-                    self.collection_file_path.unlink()
-            self.collection_start_time = api.time.time()
-            self.collection_point_start_time = None
-            self.collection_next_due_time = None
+                if not self.has_reference or not self.has_background:
+                    raise ValueError("Measure Background and Reference before starting a new run")
+                wavelengths, serials = self.current_hardware()
+                if not self.calibration_matches_detector_setup():
+                    raise ValueError("Remeasure Background and Reference with the current detector settings")
+                offset = 0.0
+                if resume:
+                    loaded_grid = self.od_heatmap_wavelengths
+                    if wavelengths[0].shape != loaded_grid.shape or not api.np.allclose(wavelengths[0], loaded_grid, atol=1e-3, rtol=0):
+                        raise ValueError("Ch1 wavelength calibration differs from the DAT file")
+                    offset = self.get_resume_collection_time_offset(self.od_heatmap_times)
+                epoch = api.time.time() - offset
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if path.exists():
+                    path = self.suggest_new_collection_file_path(path)
+                settings = self.get_settings_dict()
+                settings["exposure"] = dict(self.exposure_setup, start_offset_s=offset)
+                settings["emulator"] = dict(enabled=self.emulate_hardware, demo_kinetics=self.demo_kinetics_enabled,
+                                            duration_s=self.demo_kinetics_duration_s, max_od=self.demo_kinetics_max_od)
+                run = api.AvantesRun.create(path, wavelengths, serials, epoch, settings, self.calibration_blocks)
+                count = 0
+                if resume:
+                    for t, row in zip(self.od_heatmap_times, self.od_heatmap_rows):
+                        count = run.append(t, api.np.nan, None, None, None, row, {"source": "legacy_dat"})
+                    run.append_event("import_dat", api.time.time(), path=str(old_path), rows=count)
+                initial = self.calibration_blocks.get("initial_blank")
+                if initial:
+                    block = initial[0]
+                    od = self.calculate_optical_density(*api.valid_counts(block), apply_zero_baseline=False)
+                    run.add_blank(offset, initial, od, initial=True)
+            self.restore_run_calibration(run)
+            run.append_event("resume" if resume else "start", api.time.time())
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
+            self.logger.exception("Cannot start data collection")
+            api.QMessageBox.critical(self, "Start DC", str(api.exc))
+            return
 
-            self.start_collection_btn.setText("Stop DC")
-            self.collection_countdown_timer.start()
-            self.update_collection_countdown_label()
-            self.logger.info(
-                f"DATA COLLECTION: Started ({'resume' if resume_collection else 'new'}, "
-                f"rate={self.collection_rate_spin.value()}s, detector_avg={self.get_detector_average_count()}, "
-                f"file={self.collection_file_path})"
-            )
-            self.statusBar().showMessage(f"Data collection active ({self.collection_rate_spin.value()}s interval)")
-            self.collect_data_point()
-        else:
-            # Stop data collection
-            self.data_collection_active = False
-            self.collection_timer.stop()
-            self.lamp_warmup_timer.stop()
-            self.collection_countdown_timer.stop()
-            self.start_collection_btn.setText("Start DC")
-
-            n_points = len(self.collection_data) if hasattr(self, 'collection_data') else 0
-            self.update_collection_countdown_label()
-            self.logger.info(f"DATA COLLECTION: Stopped ({n_points} data points collected, file={self.collection_file_path})")
-            self.statusBar().showMessage(f"Data collection stopped ({n_points} points)")
+        if self.continuous_mode:
+            self.stop_live_preview()
+        self.collection_run = run
+        self.exposure_state = run.irradiation_state()
+        self.run_volumes = run.sample_volumes()
+        self.collection_file_path = run.path
+        self.collection_start_time = epoch
+        self.collection_point_index = count
+        self.save_folder_input.setText(str(run.path.parent))
+        self.save_name_input.setText(run.path.stem)
+        self.update_loaded_collection_label(run.path)
+        self.reset_od_heatmap()
+        self.collection_point_start_time = None
+        self.set_collection_state(active=True, paused=False)
+        self.collect_data_point()
 
     def collect_data_point(self):
         """Collect a data point during active data collection."""
         if not self.data_collection_active or not self.has_reference or not self.has_background:
             return
-        if self.measurement_thread and self.measurement_thread.isRunning():
-            api.QTimer.singleShot(50, self.collect_data_point)
+        if self.current_measurement_role is not None:
+            self.collection_timer.start(50)
             return
 
         n_avg = self.get_detector_average_count()
@@ -123,7 +112,9 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.collection_point_start_time = api.time.time()
         self.statusBar().showMessage(f"Collecting point {self.collection_point_index + 1} (avg={n_avg})...")
         self.update_collection_countdown_label()
-        self.single_measurement(averages_override=n_avg, measurement_role="collection")
+        if not self.single_measurement(averages_override=n_avg, measurement_role="collection"):
+            self.set_collection_state(active=False, paused=True)
+            self.log_run_event("acquisition_paused", reason="spectrometer not ready")
 
     def schedule_next_collection_point(self):
         """Schedule next collection point without overlapping hardware averaging."""
@@ -224,7 +215,8 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         if not hasattr(self, "collection_countdown_label"):
             return
         if not self.data_collection_active:
-            self.collection_countdown_label.setText(f"Next: -- | Points: {points}")
+            state = "Paused" if self.collection_paused else "Next: --"
+            self.collection_countdown_label.setText(f"{state} | Points: {points}")
             return
         if getattr(self, "current_measurement_role", None) == "collection":
             self.collection_countdown_label.setText(f"Collecting... | Points: {points}")
@@ -256,7 +248,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         if not hasattr(self, "loaded_collection_label"):
             return
         if path is None:
-            self.loaded_collection_label.setText("No DAT loaded")
+            self.loaded_collection_label.setText("No run opened")
             self.loaded_collection_label.setToolTip("")
             return
         text = str(path)
@@ -264,12 +256,13 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.loaded_collection_label.setToolTip(text)
 
     def ask_collection_start_mode(self, path: api.Path, n_points: int) -> api.Optional[str]:
-        """Ask whether to append to a loaded DAT file or start from scratch."""
+        """Ask whether to continue an existing acquisition or start a new file."""
         msg = api.QMessageBox(self)
         msg.setIcon(api.QMessageBox.Question)
         msg.setWindowTitle("Start Data Collection")
-        msg.setText(f"DAT file already loaded:\n{path}")
-        msg.setInformativeText(f"{n_points} existing points found. Continue writing this file?")
+        msg.setText(f"Existing run:\n{path}")
+        action = "Import the DAT and resume in a new HDF5 file?" if path.suffix.lower() == ".dat" else "Resume this HDF5 run?"
+        msg.setInformativeText(f"{n_points} existing points. {action}")
         resume_btn = msg.addButton("Resume", api.QMessageBox.AcceptRole)
         new_btn = msg.addButton("Start New", api.QMessageBox.DestructiveRole)
         msg.addButton("Cancel", api.QMessageBox.RejectRole)
@@ -281,69 +274,13 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
             return "new"
         return None
 
-    def suggest_new_collection_file_path(self, path: api.Path) -> api.Path:
-        """Return an unused DAT path next to the loaded file."""
+    def suggest_new_collection_file_path(self, path):
+        """Find a free sibling name. HDF5 exclusive creation also checks for races."""
         for index in range(1, 1000):
-            suffix = "_new" if index == 1 else f"_new_{index}"
-            candidate = path.with_name(f"{path.stem}{suffix}.dat")
+            candidate = path.with_name(f"{path.stem}_{index:03d}.h5")
             if not candidate.exists():
                 return candidate
-        return path.with_name(f"{path.stem}_{api.datetime.now():%Y%m%d_%H%M%S}.dat")
-
-    def choose_new_collection_file_path(self, current_path: api.Path) -> api.Optional[api.Path]:
-        """Choose a new DAT path and reflect it in the main collection controls."""
-        default_path = self.suggest_new_collection_file_path(current_path)
-        filename, _ = api.QFileDialog.getSaveFileName(
-            self,
-            "Start New DAT",
-            str(default_path),
-            "Avantes DAT (*.dat);;All Files (*)",
-        )
-        if not filename:
-            return None
-
-        path = api.Path(filename).expanduser()
-        if path.suffix.lower() != ".dat":
-            path = path.with_suffix(".dat")
-
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            api.QMessageBox.critical(self, "Save Folder Error", f"Cannot use save folder:\n{e}")
-            return None
-
-        if path.exists():
-            reply = api.QMessageBox.question(
-                self,
-                "Overwrite DAT?",
-                f"File exists:\n{path}\n\nOverwrite it?",
-                api.QMessageBox.Yes | api.QMessageBox.No,
-                api.QMessageBox.No,
-            )
-            if reply != api.QMessageBox.Yes:
-                return None
-
-        self.save_folder_input.setText(str(path.parent))
-        self.save_name_input.setText(path.stem)
-        return path
-
-    def can_resume_collection_wavelengths(self) -> bool:
-        """Ensure current spectrometer wavelengths match loaded DAT columns."""
-        current = self.spec1_widget.wavelengths if self.spec1_widget else None
-        loaded = self.od_heatmap_wavelengths
-        if current is None or loaded is None:
-            return True
-
-        current = api.np.asarray(current, dtype=float)
-        loaded = api.np.asarray(loaded, dtype=float)
-        if current.shape != loaded.shape or not api.np.allclose(current, loaded, atol=1e-3, rtol=0):
-            api.QMessageBox.warning(
-                self,
-                "Resume Error",
-                "Cannot resume this DAT file: current wavelength grid differs from loaded file.",
-            )
-            return False
-        return True
+        raise ValueError("Choose a new run name")
 
     def get_resume_collection_time_offset(self, times) -> float:
         """Return first resumed timestamp anchor: last time plus last positive delta."""
@@ -365,6 +302,8 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
 
     def load_collection_dat(self):
         """Load a saved data-collection DAT file and display it as an OD map."""
+        if not self.may_open_collection():
+            return
         filename, _ = api.QFileDialog.getOpenFileName(
             self,
             "Load Avantes Measurement DAT",
@@ -402,17 +341,9 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.od_heatmap_wavelengths = wavelengths
         self.od_heatmap_times = [float(value) for value in times]
         self.od_heatmap_rows = [api.np.array(row, dtype=float) for row in rows]
-        self.collection_data = [
-            {"time": float(t), "od": api.np.array(row, dtype=float)}
-            for t, row in zip(times, rows)
-        ]
-        self.collection_point_index = len(self.collection_data)
-        self.collection_time_offset_s = self.get_resume_collection_time_offset(self.od_heatmap_times)
-        self.collection_file_path = path
-        self.loaded_collection_file_path = path
-        self.save_folder_input.setText(str(path.parent))
-        self.save_name_input.setText(path.stem)
-        self.update_loaded_collection_label(path)
+        self.collection_run = None
+        self.collection_point_index = len(rows)
+        self.set_open_collection_path(path)
 
         if len(rows):
             self.curve_od.setData(wavelengths, rows[-1])
@@ -428,57 +359,91 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.logger.info(f"DATA LOAD: Loaded {path} ({len(rows)} points, {len(wavelengths)} wavelengths)")
 
     def update_analysis_buttons(self):
-        """Enable controls that require complete OD prerequisites."""
-        enabled = self.has_reference and self.has_background
-        self.start_collection_btn.setEnabled(enabled)
-        self.track_wl_btn.setEnabled(enabled)
-        has_current = self.spec1_widget.last_data is not None and self.spec2_widget.last_data is not None
-        self.zero_reference_btn.setEnabled(enabled and has_current)
+        busy = self.current_measurement_role is not None or self.analysis_worker is not None
+        running = self.data_collection_active or self.collection_paused
+        calibrated = self.has_reference and self.has_background
+        can_append_blank = self.collection_run is not None and not busy
+        self.start_collection_btn.setEnabled(
+            not busy and (running or self.blank_schedule is None and (calibrated or self.collection_run is not None))
+        )
+        self.pause_collection_btn.setEnabled(
+            not busy and running and (not self.collection_paused or self.blank_schedule is None)
+        )
+        self.track_wl_btn.setEnabled(calibrated)
+        preparing = not running and not busy and self.blank_schedule is None
+        self.measure_ref_btn.setEnabled(preparing)
+        self.measure_bg_btn.setEnabled(preparing)
+        self.initial_blank_btn.setEnabled(preparing and calibrated)
+        self.zero_reference_btn.setEnabled(preparing and calibrated and self.last_sample_pair is not None)
+        self.clear_btn.setEnabled(preparing)
+        self.continuous_btn.setEnabled(not running and self.blank_schedule is None and self.analysis_worker is None)
+        for action in (self.recalculate_action, self.mcr_action):
+            action.setEnabled(self.can_analyze_run())
+        can_show_mcr = self.collection_run is not None and self.analysis_worker is None
+        self.show_mcr_action.setEnabled(can_show_mcr)
+        self.show_mcr_btn.setEnabled(can_show_mcr)
+        self.geometry_action.setEnabled(self.may_open_collection())
+        rate, irradiating = self.exposure_state
+        self.irradiation_action.setEnabled(can_show_mcr)
+        self.irradiation_action.setText("Mark irradiation off" if irradiating else "Mark irradiation on")
+        if api.np.isfinite(rate):
+            self.irradiation_action.setToolTip(f"Recording state for {rate:g} Gy/h")
+        else:
+            self.irradiation_action.setToolTip("Record the state of the external irradiation source")
+        self.update_exposure_label()
+        self.add_blank_btn.setText("Capture Blank" if self.blank_due else "Add Blank…")
+        if self.blank_due:
+            can_append_blank = can_append_blank and not self.data_collection_active
+        else:
+            can_append_blank = self.collection_run is not None and self.blank_schedule is None and (not busy or running)
+        self.add_blank_btn.setEnabled(can_append_blank and self.analysis_worker is None)
+        self.cancel_blank_btn.setVisible(self.blank_schedule is not None)
+        self.cancel_blank_btn.setEnabled(self.current_measurement_role != "blank")
+        for widget in (self.spec1_widget, self.spec2_widget):
+            widget.connect_btn.setEnabled(not running and not busy)
+            widget.integration_spin.setEnabled(not running and not busy)
+            widget.trigger_combo.setEnabled(not running and not busy)
 
     def clear_zero_baseline(self):
         """Clear the stored OD zero baseline."""
         self.zero_baseline_wavelengths = None
         self.zero_baseline_od = None
+        self.calibration_blocks.pop("sample_t0", None)
 
     def reset_od_heatmap(self):
         """Clear OD time map for a new data collection run."""
         self.od_heatmap_rows = []
         self.od_heatmap_times = []
         self.od_heatmap_wavelengths = None
-        self.render_od_heatmap()
-
-    def update_od_heatmap(
-        self,
-        wavelengths: api.np.ndarray,
-        od_spectrum: api.Optional[api.np.ndarray],
-        elapsed_time: api.Optional[float] = None,
-    ):
-        """Append one OD spectrum to the time map."""
-        if wavelengths is None or od_spectrum is None:
-            return
-
-        self.od_heatmap_wavelengths = wavelengths
-        self.od_heatmap_rows.append(api.np.array(od_spectrum, dtype=float))
-        if elapsed_time is None:
-            elapsed_time = float(len(self.od_heatmap_rows))
-        self.od_heatmap_times.append(float(elapsed_time))
+        if self.od_heatmap_window is not None:
+            self.od_heatmap_window.detail_range = None
         self.render_od_heatmap()
 
     def render_od_heatmap(self):
-        """Render heatmap data if floating window exists."""
-        if self.od_heatmap_window is not None:
-            self.od_heatmap_window.set_heatmap(
-                self.od_heatmap_wavelengths,
-                self.od_heatmap_rows,
-                self.od_heatmap_times,
-            )
+        window = self.od_heatmap_window
+        if window is None or self.analysis_worker is not None:
+            return
+        if self.collection_run is not None:
+            try:
+                wavelengths, rows, times = self.collection_run.view(
+                    window.od_source.currentData(), window.detail_range
+                )
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                self.logger.error("Unable to read OD map: %s", api.exc)
+                return
+        else:
+            stride = max(1, (len(self.od_heatmap_rows) + 499) // 500)
+            wavelengths = self.od_heatmap_wavelengths
+            rows = self.od_heatmap_rows[::stride]
+            times = self.od_heatmap_times[::stride]
+        window.set_heatmap(wavelengths, rows, times, self.collection_point_index)
 
     def toggle_od_heatmap_window(self):
         """Open the floating OD time map, or close it if already visible."""
         if self.od_heatmap_window is not None:
             window = self.od_heatmap_window
             self.od_heatmap_window = None
-            self.show_od_map_btn.setText("Show")
+            self.show_od_map_btn.setText("Show DC")
             window.close()
             return
 
@@ -492,7 +457,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.od_heatmap_window.show()
         self.od_heatmap_window.raise_()
         self.od_heatmap_window.activateWindow()
-        self.show_od_map_btn.setText("Hide")
+        self.show_od_map_btn.setText("Hide DC")
 
     def get_export_base_path(self) -> api.Path:
         """Return base path for manual export files."""
@@ -531,15 +496,12 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         "update_loaded_collection_label": update_loaded_collection_label,
         "ask_collection_start_mode": ask_collection_start_mode,
         "suggest_new_collection_file_path": suggest_new_collection_file_path,
-        "choose_new_collection_file_path": choose_new_collection_file_path,
-        "can_resume_collection_wavelengths": can_resume_collection_wavelengths,
         "get_resume_collection_time_offset": get_resume_collection_time_offset,
         "load_collection_dat": load_collection_dat,
         "load_collection_dat_file": load_collection_dat_file,
         "update_analysis_buttons": update_analysis_buttons,
         "clear_zero_baseline": clear_zero_baseline,
         "reset_od_heatmap": reset_od_heatmap,
-        "update_od_heatmap": update_od_heatmap,
         "render_od_heatmap": render_od_heatmap,
         "toggle_od_heatmap_window": toggle_od_heatmap_window,
         "show_od_heatmap_window": show_od_heatmap_window,

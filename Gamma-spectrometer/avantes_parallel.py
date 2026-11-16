@@ -100,7 +100,8 @@ def parallel_measure(spectrometers: List, num_measurements: int = 1,
 
 def parallel_poll_and_get_data(spectrometers: List, timeout: float = 5.0, 
                                 poll_interval: float = 0.001,
-                                max_retries: int = 3) -> Dict[int, Tuple[bool, Optional[np.ndarray]]]:
+                                max_retries: int = 3,
+                                diagnostics: Optional[dict] = None) -> Dict[int, Tuple[bool, Optional[np.ndarray]]]:
     """
     Poll multiple spectrometers in parallel and retrieve data when ready.
     
@@ -117,6 +118,8 @@ def parallel_poll_and_get_data(spectrometers: List, timeout: float = 5.0,
         Time between poll attempts in seconds (default: 0.001)
     max_retries : int, optional
         Maximum retries for data retrieval errors (default: 3)
+    diagnostics : dict, optional
+        Receives the device tick, saturation indices when available, and readout errors.
         
     Returns
     -------
@@ -151,6 +154,18 @@ def parallel_poll_and_get_data(spectrometers: List, timeout: float = 5.0,
                         tick_count, data = spec.get_data()
                         results[idx] = (True, data)
                         data_ready[idx] = True
+                        if diagnostics is not None:
+                            info = {"device_tick": int(tick_count) if tick_count is not None else None,
+                                    "saturated_pixels": None}
+                            diagnostics[idx] = info
+                            get_saturation = getattr(spec, "get_saturated_pixels", None)
+                            if callable(get_saturation):
+                                try:
+                                    pixels = np.asarray(get_saturation())
+                                    if pixels.shape == np.shape(data):
+                                        info["saturated_pixels"] = np.flatnonzero(pixels).tolist()
+                                except Exception as exc:
+                                    info["saturation_error"] = str(exc)
                     except Exception as get_error:
                         # Handle ERR_INVALID_MEAS_DATA - data not ready yet
                         if "INVALID_MEAS_DATA" in str(get_error) and retry_count[idx] < max_retries:
@@ -165,11 +180,17 @@ def parallel_poll_and_get_data(spectrometers: List, timeout: float = 5.0,
                 print(f"Error polling/retrieving data from spectrometer {idx}: {e}")
                 results[idx] = (False, None)
                 data_ready[idx] = True  # Mark as done (failed)
+                if diagnostics is not None:
+                    diagnostics[idx] = {"error": str(e)}
         
         # Small sleep to prevent CPU spinning
         if not all(data_ready.values()):
             time.sleep(poll_interval)
     
+    if diagnostics is not None:
+        for idx, ready in data_ready.items():
+            if not ready:
+                diagnostics[idx] = {"error": "readout timeout"}
     return results
 
 

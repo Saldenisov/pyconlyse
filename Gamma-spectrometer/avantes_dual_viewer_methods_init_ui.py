@@ -246,8 +246,13 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         self.zero_reference_btn = api.QPushButton("Set Zero")
         self.zero_reference_btn.clicked.connect(self.set_zero_baseline_from_current)
         self.zero_reference_btn.setEnabled(False)
-        self.zero_reference_btn.setToolTip("Store current no-sample OD as a zero baseline spectrum")
+        self.zero_reference_btn.setToolTip("Store the latest sample spectrum as the kinetic zero")
         btn_layout.addWidget(self.zero_reference_btn)
+
+        self.initial_blank_btn = api.QPushButton("Initial Blank")
+        self.initial_blank_btn.setEnabled(False)
+        self.initial_blank_btn.clicked.connect(self.measure_initial_blank)
+        avg_layout.addWidget(self.initial_blank_btn)
 
         self.stop_measure_btn = api.QPushButton("Stop Measurement")
         self.stop_measure_btn.clicked.connect(self.stop_measurement)
@@ -267,7 +272,7 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         data_layout.addWidget(api.QLabel("Rate (s):"), 0, 0)
         self.collection_rate_spin = api.QDoubleSpinBox()
         self.collection_rate_spin.setRange(0.1, 86400.0)
-        self.collection_rate_spin.setValue(1.0)
+        self.collection_rate_spin.setValue(15.0)
         self.collection_rate_spin.setSingleStep(1.0)
         self.collection_rate_spin.setToolTip("Time between saved data points")
         self.collection_rate_spin.valueChanged.connect(self.on_collection_rate_changed)
@@ -278,14 +283,19 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         self.start_collection_btn.setEnabled(False)
         data_layout.addWidget(self.start_collection_btn, 0, 2)
 
-        self.show_od_map_btn = api.QPushButton("Show")
+        self.show_od_map_btn = api.QPushButton("Show DC")
         self.show_od_map_btn.clicked.connect(self.toggle_od_heatmap_window)
         self.show_od_map_btn.setToolTip("Show OD time map")
         data_layout.addWidget(self.show_od_map_btn, 0, 3)
 
+        self.show_mcr_btn = api.QPushButton("Show MCR")
+        self.show_mcr_btn.setEnabled(False)
+        self.show_mcr_btn.clicked.connect(self.show_mcr)
+        data_layout.addWidget(self.show_mcr_btn, 0, 4)
+
         self.collection_countdown_label = api.QLabel("Next: -- | Points: 0")
         self.collection_countdown_label.setToolTip("Next data-collection point countdown and saved point count")
-        data_layout.addWidget(self.collection_countdown_label, 0, 4)
+        data_layout.addWidget(self.collection_countdown_label, 6, 0, 1, 5)
 
         data_layout.addWidget(api.QLabel("Folder:"), 1, 0)
         self.save_folder_input = api.QLineEdit(str(api.Path.home() / "AvantesData"))
@@ -301,9 +311,34 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         data_layout.addWidget(self.save_name_input, 2, 1, 1, 4)
 
         data_layout.addWidget(api.QLabel("Loaded:"), 3, 0)
-        self.loaded_collection_label = api.QLabel("No DAT loaded")
+        self.loaded_collection_label = api.QLabel("No run opened")
         self.loaded_collection_label.setWordWrap(True)
         data_layout.addWidget(self.loaded_collection_label, 3, 1, 1, 4)
+
+        blank_controls = api.QHBoxLayout()
+        self.pause_collection_btn = api.QPushButton("Pause DC")
+        self.pause_collection_btn.setEnabled(False)
+        self.pause_collection_btn.clicked.connect(self.toggle_collection_pause)
+        blank_controls.addWidget(self.pause_collection_btn)
+
+        self.add_blank_btn = api.QPushButton("Add Blank…")
+        self.add_blank_btn.setEnabled(False)
+        self.add_blank_btn.clicked.connect(self.schedule_blank)
+        blank_controls.addWidget(self.add_blank_btn)
+
+        self.cancel_blank_btn = api.QPushButton("Cancel Blank")
+        self.cancel_blank_btn.setVisible(False)
+        self.cancel_blank_btn.clicked.connect(self.cancel_blank)
+        blank_controls.addWidget(self.cancel_blank_btn)
+        blank_controls.addStretch()
+        data_layout.addLayout(blank_controls, 4, 0, 1, 5)
+        self.blank_status = api.QLabel()
+        self.blank_status.setWordWrap(True)
+        data_layout.addWidget(self.blank_status, 5, 0, 1, 5)
+        self.exposure_label = api.QLabel()
+        self.exposure_label.setWordWrap(True)
+        data_layout.addWidget(self.exposure_label, 7, 0, 1, 5)
+        self.update_exposure_label()
 
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
@@ -355,7 +390,20 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
     def create_menu_bar(self):
         """Create top-level application menus."""
         data_menu = self.menuBar().addMenu("Data")
+        data_menu.addAction("Open HDF5…", self.load_collection_hdf5)
         data_menu.addAction("Load DAT...", self.load_collection_dat)
+
+        analysis = self.menuBar().addMenu("Analysis")
+        self.recalculate_action = analysis.addAction("Recalculate OD from blanks", self.recalculate_blank_od)
+        self.mcr_action = analysis.addAction("Run MCR-ALS…", self.run_mcr)
+        self.show_mcr_action = analysis.addAction("Show latest MCR-ALS", self.show_latest_mcr)
+        for action in (self.recalculate_action, self.mcr_action, self.show_mcr_action):
+            action.setEnabled(False)
+
+        experiment = self.menuBar().addMenu("Experiment")
+        self.geometry_action = experiment.addAction("Dose and sample geometry…", self.edit_exposure_setup)
+        self.irradiation_action = experiment.addAction("Mark irradiation on", self.toggle_irradiation_marker)
+        self.irradiation_action.setEnabled(False)
 
         settings_menu = self.menuBar().addMenu("Settings")
         self.populate_settings_menu(settings_menu)
@@ -483,9 +531,9 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
 
     def single_measurement(self, averages_override=None, measurement_role=None):
         """Perform a single parallel measurement."""
-        if self.measurement_thread and self.measurement_thread.isRunning():
+        if self.current_measurement_role is not None:
             self.statusBar().showMessage("Measurement already in progress...")
-            return
+            return False
 
         spec1 = self.spec1_widget.spec
         spec2 = self.spec2_widget.spec
@@ -497,7 +545,7 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
             else:
                 self.logger.error("Spectrometer connection lost - stopping live preview")
                 self.stop_live_preview()
-            return
+            return False
 
         # Validate connections are still active
         try:
@@ -513,15 +561,14 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
                 self.stop_live_preview()
             else:
                 api.QMessageBox.critical(self, "Error", f"Connection error:\n{str(e)}")
-            return
+            return False
 
         if not cfg1 or not cfg2:
             if not self.continuous_mode:
                 api.QMessageBox.warning(self, "Error", "Failed to create measurement configuration")
-            return
+            return False
 
         # Disable controls during measurement
-        self.set_controls_enabled(False)
         if measurement_role:
             self.current_measurement_role = measurement_role
         else:
@@ -533,6 +580,31 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
             )
         self.statusBar().showMessage("Measuring...")
 
+        self.measurement_metadata = {
+            "utc_s": api.time.time(),
+            "role": self.current_measurement_role,
+            "channels": [
+                dict(self.get_spectrometer_settings(widget),
+                     integration_ms=float(cfg.m_IntegrationTime),
+                     averages=int(cfg.m_NrAverages),
+                     trigger_mode=int(cfg.m_Trigger.m_Mode),
+                     trigger_source=int(cfg.m_Trigger.m_Source),
+                     integration_delay=int(getattr(cfg, 'm_IntegrationDelay', 0)),
+                     start_pixel=int(getattr(cfg, 'm_StartPixel', 0)),
+                     stop_pixel=int(cfg.m_StopPixel))
+                for widget, cfg in zip((self.spec1_widget, self.spec2_widget), (cfg1, cfg2))
+            ],
+            "arduino_frequency_hz": self.arduino_frequency_hz,
+            "lamp_on": self.is_lamp_enabled(),
+            "avantes_trigger_on": self.is_avantes_enabled(),
+            "collection_interval_s": self.collection_rate_spin.value(),
+        }
+        if self.demo_kinetics_enabled:
+            spec1.sample_optical_density = 0.0
+            if self.current_measurement_role == "collection":
+                elapsed = self.measurement_metadata["utc_s"] - self.collection_start_time
+                spec1.sample_optical_density = self.get_demo_species_od(self.spec1_widget.wavelengths, elapsed)
+        self.update_analysis_buttons()
         # Start measurement thread
         self.measurement_thread = api.MeasurementThread(
             spectrometers=[spec1, spec2],
@@ -543,6 +615,7 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         self.measurement_thread.measurement_error.connect(self.on_measurement_error)
         self.measurement_thread.finished.connect(self.on_measurement_finished)
         self.measurement_thread.start()
+        return True
 
     def continuous_measurement(self):
         """Trigger measurement for live preview mode."""

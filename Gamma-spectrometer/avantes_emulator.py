@@ -134,6 +134,7 @@ class EmulatedAvantesSpectrometer:
         self._shape_drift = self._rng.normal(0.0, [0.002, 0.0015, 0.001])
         self._phase = self._rng.uniform(0.0, 2.0 * np.pi)
         self._fiber_transfer = self._make_fiber_transfer()
+        self.sample_optical_density = 0.0
 
     @staticmethod
     def _seed(serial: str, channel_index: int) -> int:
@@ -200,6 +201,7 @@ class EmulatedAvantesSpectrometer:
         amplitude_jitter = self._rng.normal(1.0, 0.015)
         spectral_drift = self._next_spectral_drift()
         intensity = lamp * self._fiber_transfer * spectral_drift * amplitude_jitter
+        intensity *= 10 ** (-self.sample_optical_density)
         intensity = self._apply_intensity_dependent_fiber_transport(intensity)
 
         intensity *= 23000.0 * min(integration_ms, 20.0)

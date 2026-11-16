@@ -155,11 +155,32 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
             self.times = None
             self.heatmap = None
             self._regions_initialized = False
+            self.detail_range = None
 
             central_widget = api.QWidget()
             central_layout = api.QVBoxLayout(central_widget)
             central_layout.setContentsMargins(0, 0, 0, 0)
             self.setCentralWidget(central_widget)
+
+            controls = api.QHBoxLayout()
+            self.od_source = api.QComboBox()
+            for label, source in (
+                ("Measured OD (Set Zero applied)", "od_delta"),
+                ("OD vs initial blank", "od_vs_blank"),
+                ("OD corrected for blank drift", "od_corrected"),
+                ("Estimated blank drift", "blank_drift"),
+                ("OD vs lamp reference", "od_raw"),
+            ):
+                self.od_source.addItem(label, source)
+            self.od_source.currentIndexChanged.connect(parent.render_od_heatmap)
+            controls.addWidget(self.od_source)
+            detail = api.QPushButton("Load Zoomed Time Range")
+            detail.clicked.connect(self.load_detail)
+            controls.addWidget(detail)
+            overview = api.QPushButton("Overview")
+            overview.clicked.connect(self.show_overview)
+            controls.addWidget(overview)
+            central_layout.addLayout(controls)
 
             self.plot = api.pg.PlotWidget(title="OD Time Map")
             self.plot.setLabel('left', 'Time', units='s')
@@ -168,8 +189,9 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
             self.plot.getAxis('bottom').enableAutoSIPrefix(False)
             self.plot.showGrid(x=True, y=True)
 
-            self.mesh_item = api.pg.PColorMeshItem(colorMap=api.pg.colormap.get("viridis"))
-            self.plot.addItem(self.mesh_item)
+            self.image_item = api.pg.ImageItem(axisOrder="row-major")
+            self.image_item.setColorMap(api.pg.colormap.get("viridis"))
+            self.plot.addItem(self.image_item)
 
             self.wavelength_region = api.pg.LinearRegionItem([350, 450], orientation='vertical')
             self.time_region = api.pg.LinearRegionItem([0, 1], orientation='horizontal')
@@ -204,40 +226,52 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
             """Keep the parent Show/Hide button in sync."""
             self.parent_viewer.od_heatmap_window = None
             if hasattr(self.parent_viewer, "show_od_map_btn"):
-                self.parent_viewer.show_od_map_btn.setText("Show")
+                self.parent_viewer.show_od_map_btn.setText("Show DC")
             super().closeEvent(event)
 
-        def set_heatmap(self, wavelengths, rows, times):
-            """Render OD rows as wavelength x elapsed-time image."""
-            if wavelengths is None or not rows:
-                self.wavelengths = None
-                self.times = None
-                self.heatmap = None
-                self.mesh_item.setVisible(False)
+        def load_detail(self):
+            self.detail_range = tuple(self.plot.viewRange()[1])
+            self.parent_viewer.render_od_heatmap()
+
+        def show_overview(self):
+            self.detail_range = None
+            self.parent_viewer.render_od_heatmap()
+
+        def set_heatmap(self, wavelengths, rows, times, total_points):
+            """Render at most 500 measured rows and preserve exact data for cursor profiles."""
+            self.wavelengths = wavelengths
+            self.times = api.np.asarray(times, dtype=float)
+            self.heatmap = api.np.array(rows, dtype=float) if len(rows) else None
+            if self.heatmap is None:
+                self.image_item.setVisible(False)
                 self.kinetics_curve.setData([], [])
                 self.spectrum_curve.setData([], [])
-                self.plot.setYRange(0, 1, padding=0)
-                self.plot.enableAutoRange(axis='x')
+                self.plot.setTitle("OD Time Map (no points in range)")
                 return
-
-            self.wavelengths = api.np.asarray(wavelengths, dtype=float)
-            self.times = api.np.asarray(times, dtype=float)
-            self.heatmap = api.np.nan_to_num(api.np.vstack(rows), nan=0.0, posinf=0.0, neginf=0.0)
 
             x_edges = self._edges_from_centers(self.wavelengths)
             y_edges = self._time_edges(self.times)
-            x_grid, y_grid = api.np.meshgrid(x_edges, y_edges)
-
-            self.mesh_item.setVisible(True)
-            self.mesh_item.setData(x_grid, y_grid, self.heatmap)
-            self.plot.setTitle(f"OD Time Map ({len(rows)} points)")
-            x_min = float(x_edges[0])
-            x_max = float(x_edges[-1])
-            y_min = float(y_edges[0])
-            y_max = max(float(y_edges[-1]), 1.0)
+            x_min, x_max = float(x_edges[0]), float(x_edges[-1])
+            y_min, y_max = float(y_edges[0]), float(y_edges[-1])
+            finite = api.np.isfinite(self.heatmap)
+            self.image_item.setVisible(bool(finite.any()))
+            if finite.any():
+                # Rasterize by actual elapsed time. Empty bins show gaps such as a DC pause.
+                height = min(500, len(self.times))
+                width = min(1024, len(self.wavelengths))
+                target_wl = x_min + (api.np.arange(width) + 0.5) * (x_max - x_min) / width
+                edges = api.np.searchsorted(x_edges, target_wl, side="right") - 1
+                time_bins = api.np.clip(((self.times - y_min) * height / (y_max - y_min)).astype(int),
+                                    0, height - 1)
+                image = api.np.full((height, width), api.np.nan, dtype=api.np.float32)
+                image[time_bins] = self.heatmap[:, edges]
+                levels = api.np.min(self.heatmap[finite]), api.np.max(self.heatmap[finite])
+                self.image_item.setImage(image, autoLevels=False, levels=levels)
+                self.image_item.setRect(api.QRectF(x_min, y_min, x_max - x_min, y_max - y_min))
+            note = "" if finite.any() else " | no valid OD"
+            self.plot.setTitle(f"OD Time Map ({len(rows)} shown / {total_points} recorded{note})")
             self.plot.setXRange(x_min, x_max, padding=0)
             self.plot.setYRange(y_min, y_max, padding=0)
-
             self._initialize_regions(x_min, x_max, y_min, y_max)
             self.update_profiles()
 
@@ -259,6 +293,8 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
                 return api.np.array([max(0.0, times[0] - width / 2.0), times[0] + width / 2.0])
             edges = self._edges_from_centers(times)
             edges[0] = max(0.0, edges[0])
+            if edges[-1] <= edges[0]:
+                edges[-1] = edges[0] + 1.0
             return edges
 
         def _initialize_regions(self, x_min, x_max, y_min, y_max):
@@ -282,8 +318,11 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
             time_mask = (self.times >= min(time_min, time_max)) & (self.times <= max(time_min, time_max))
 
             if api.np.any(wl_mask):
-                kinetics = api.np.nanmean(self.heatmap[:, wl_mask], axis=1)
-                self.kinetics_curve.setData(self.times, kinetics)
+                kinetics = self.mean_profile(self.heatmap[:, wl_mask], axis=1)
+                if api.np.isfinite(kinetics).any():
+                    self.kinetics_curve.setData(self.times, kinetics)
+                else:
+                    self.kinetics_curve.setData([], [])
                 self.kinetics_plot.setTitle(
                     f"Kinetics: mean OD {min(wl_min, wl_max):.1f}-{max(wl_min, wl_max):.1f} nm"
                 )
@@ -291,7 +330,7 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
                 self.kinetics_curve.setData([], [])
 
             if api.np.any(time_mask):
-                spectrum = api.np.nanmean(self.heatmap[time_mask, :], axis=0)
+                spectrum = self.mean_profile(self.heatmap[time_mask, :], axis=0)
                 self.spectrum_curve.setData(self.wavelengths, spectrum)
                 self.spectrum_plot.setTitle(
                     f"Spectrum: mean OD {min(time_min, time_max):.1f}-{max(time_min, time_max):.1f} s"
@@ -299,10 +338,11 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
             else:
                 self.spectrum_curve.setData([], [])
 
-        def closeEvent(self, event):
-            """Allow Show button to recreate window after user closes it."""
-            self.parent_viewer.od_heatmap_window = None
-            event.accept()
+        @staticmethod
+        def mean_profile(values, axis):
+            counts = api.np.isfinite(values).sum(axis=axis)
+            totals = api.np.nansum(values, axis=axis)
+            return api.np.divide(totals, counts, out=api.np.full_like(totals, api.np.nan), where=counts > 0)
 
     ODHeatmapWindow.__module__ = api.__name__
     ODHeatmapWindow.__qualname__ = "ODHeatmapWindow"
@@ -367,6 +407,7 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
             self.configs = configs
             self.num_measurements = num_measurements
             self.running = True
+            self.diagnostics = {}
 
         def run(self):
             """Execute parallel measurement in background thread."""
@@ -387,7 +428,8 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
                 data_results = api.parallel_poll_and_get_data(
                     self.spectrometers,
                     timeout=10.0,
-                    poll_interval=0.001
+                    poll_interval=0.001,
+                    diagnostics=self.diagnostics,
                 )
 
                 self.measurement_complete.emit(data_results)

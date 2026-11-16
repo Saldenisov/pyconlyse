@@ -4,211 +4,113 @@
 def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
     """Bind implementation to the owning module and its runtime state."""
 
-    def on_measurement_complete(self, results: dict):
-        """Handle completed measurement."""
-        # Store data for OD calculation
-        data1 = None
-        data2 = None
-        wavelengths1 = None
-
-        # Update plots
-        for idx, (success, data) in results.items():
-            if success and data is not None:
-                if idx == 0:  # Ch1
-                    wavelengths1 = self.spec1_widget.wavelengths
-                    if wavelengths1 is not None and len(wavelengths1) == len(data):
-                        data1 = data
-                        self.curve1.setData(wavelengths1, data)
-                        self.spec1_widget.update_statistics(data)
-                elif idx == 1:  # Ch2
-                    wavelengths2 = self.spec2_widget.wavelengths
-                    if wavelengths2 is not None and len(wavelengths2) == len(data):
-                        data2 = data
-                        self.curve2.setData(wavelengths2, data)
-                        self.spec2_widget.update_statistics(data)
-
-        measurement_role = getattr(self, "current_measurement_role", None)
-
-        # Handle reference measurement collection
-        skip_normal_status = False
-        if measurement_role == "reference" and self.measuring_reference and data1 is not None and data2 is not None:
-            self.reference_measurements.append({'ch1': data1, 'ch2': data2})
-            skip_normal_status = True
-            count = len(self.reference_measurements)
-            target = max(1, int(self.reference_target_blocks))
-            if count < target:
-                self.statusBar().showMessage(f"Measuring reference block {count + 1}/{target}...")
-                self.logger.info(f"REFERENCE: Block {count}/{target} collected")
-                self.pending_ref_bg_role = "reference"
-                return
-            self.statusBar().showMessage("Reference measured")
-            self.measure_reference_complete()
-            skip_normal_status = False
-
-        # Handle background measurement collection
-        # Check the flag BEFORE appending to avoid collecting after completion
-        if measurement_role == "background" and self.measuring_background:
-            if data1 is not None and data2 is not None:
-                self.background_measurements.append({'ch1': data1, 'ch2': data2})
-                skip_normal_status = True
-                count = len(self.background_measurements)
-                target = max(1, int(self.background_target_blocks))
-                if count < target:
-                    self.statusBar().showMessage(f"Measuring background block {count + 1}/{target}...")
-                    self.logger.info(f"BACKGROUND: Block {count}/{target} collected")
-                    self.pending_ref_bg_role = "background"
-                    return
-                self.statusBar().showMessage("Background measured")
-                self.measure_background_complete()
-                skip_normal_status = False
-
-        completed_collection_point = measurement_role == "collection" and data1 is not None and data2 is not None
-        collection_elapsed = None
-        collection_pulses = self.get_detector_average_count() if completed_collection_point else 0
-        if completed_collection_point:
-            if self.collection_point_index == 0 and self.collection_time_offset_s <= 0:
-                collection_elapsed = 0.0
+    def on_measurement_complete(self, results):
+        role = self.current_measurement_role
+        metadata = dict(self.measurement_metadata, completed_utc_s=api.time.time())
+        metadata["readout"] = {str(i): info for i, info in self.measurement_thread.diagnostics.items()}
+        widgets = self.spec1_widget, self.spec2_widget
+        spectra = []
+        for idx, (widget, curve) in enumerate(zip(widgets, (self.curve1, self.curve2))):
+            success, data = results.get(idx, (False, None))
+            if success and data is not None and widget.wavelengths is not None and len(data) == len(widget.wavelengths):
+                spectrum = api.np.array(data, dtype=float, copy=True)
+                curve.setData(widget.wavelengths, spectrum)
+                widget.update_statistics(spectrum)
             else:
-                collection_elapsed = self.collection_time_offset_s + (api.time.time() - self.collection_start_time)
-            skip_normal_status = True
+                spectrum = None
+            spectra.append(spectrum)
 
-        # Calculate and plot Optical Density (only if both reference AND background exist)
-        od_spectrum = None
-        if data1 is not None and data2 is not None and wavelengths1 is not None:
-            if self.has_reference and self.has_background:
-                od_spectrum = self.calculate_optical_density(
-                    data1,
-                    data2,
-                    elapsed_time=collection_elapsed if completed_collection_point else None,
-                )
-                if od_spectrum is not None:
-                    self.curve_od.setData(wavelengths1, od_spectrum)
-                    # Apply manual limits if not in auto mode
-                    if not self.od_x_auto_check.isChecked():
-                        self.plot_od.setXRange(self.od_x_min_spin.value(), self.od_x_max_spin.value(), padding=0)
-                    if not self.od_y_auto_check.isChecked():
-                        self.plot_od.setYRange(self.od_y_min_spin.value(), self.od_y_max_spin.value(), padding=0)
-            else:
-                # Clear OD plot if requirements not met
-                self.curve_od.setData([], [])
-
-        # Update measurement counter
-        if not hasattr(self, '_measurement_count'):
-            self._measurement_count = 0
+        ch1, ch2 = spectra
+        paired = ch1 is not None and ch2 is not None
+        metadata["channel_ok"] = [ch1 is not None, ch2 is not None]
+        block = dict(ch1=ch1, ch2=ch2, metadata=metadata)
         self._measurement_count += 1
-        self.update_analysis_buttons()
 
-        # Update wavelength tracker if active
-        if self.wavelength_tracker_window and od_spectrum is not None:
-            self.wavelength_tracker_window.update_od_value(od_spectrum, wavelengths1)
-
-        if completed_collection_point:
-            self.save_collection_point(
-                collection_elapsed,
-                wavelengths1,
-                od_spectrum,
-            )
-            self.collection_data.append(
-                {
-                    'time': collection_elapsed,
-                    'ch1': data1,
-                    'ch2': data2,
-                    'od': od_spectrum,
-                    'pulse_average': collection_pulses,
-                }
-            )
-            self.collection_point_index += 1
-            self.update_od_heatmap(wavelengths1, od_spectrum, collection_elapsed)
-            self.statusBar().showMessage(
-                f"Saved point {self.collection_point_index} ({collection_pulses} pulses)"
-            )
-            self.update_collection_countdown_label()
-            self.schedule_next_collection_point()
-
-        # Update status (unless we're in the middle of collecting reference/background)
-        if not skip_normal_status:
-            if self.continuous_mode:
-                status_parts = [f"{self._measurement_count} measurements"]
-                if self.has_reference:
-                    status_parts.append("REF: ✓")
-                if self.has_background:
-                    status_parts.append("BG: ✓")
-                if self.has_reference and self.has_background:
-                    status_parts.append("OD: Active")
-                if self.data_collection_active:
-                    status_parts.append("Recording")
-                self.statusBar().showMessage(" | ".join(status_parts))
+        if role in {"reference", "background"}:
+            measuring = self.measuring_reference if role == "reference" else self.measuring_background
+            if not measuring:
+                return
+            if not paired:
+                self.stop_measurement()
+                self.statusBar().showMessage(f"{role.title()} failed: incomplete readout")
+                return
+            blocks = self.reference_measurements if role == "reference" else self.background_measurements
+            target = self.reference_target_blocks if role == "reference" else self.background_target_blocks
+            blocks.append(block)
+            if len(blocks) < target:
+                self.pending_ref_bg_role = role
+                self.statusBar().showMessage(f"Measuring {role} block {len(blocks) + 1}/{target}…")
+            elif role == "reference":
+                self.measure_reference_complete()
             else:
-                self.statusBar().showMessage("Measurement complete")
-
-    def on_measurement_error(self, error_msg: str):
-        """Handle measurement error."""
-        self.logger.error(f"Measurement error: {error_msg}")
-        self.pending_ref_bg_role = None
-
-        if getattr(self, "current_measurement_role", None) == "collection" and self.data_collection_active:
-            self.statusBar().showMessage(f"Collection warning: {error_msg[:50]}...")
-            self.schedule_next_collection_point()
+                self.measure_background_complete()
             return
 
-        # Check if it's a recoverable error (data timing issue)
-        is_recoverable = "INVALID_MEAS_DATA" in error_msg
+        if role in {"blank", "initial_blank"}:
+            if paired:
+                self.save_blank(role, block)
+            else:
+                self.blank_status.setText("Blank readout incomplete. Retry the capture.")
+                if role == "blank":
+                    self.log_run_event("blank_failed", metadata=metadata)
+            return
 
-        if is_recoverable and self.continuous_mode:
-            # Log but continue in live preview for timing issues.
-            self.logger.warning("Recoverable error in live preview - will retry next cycle")
-            self.statusBar().showMessage(f"Warning: {error_msg[:50]}...")
+        if role in {"preview", "manual", "collection"}:
+            self.last_sample_pair = block if paired and metadata["lamp_on"] else None
+
+        elapsed = None
+        if role == "collection":
+            elapsed = metadata["utc_s"] - self.collection_start_time
+        od_raw = self.calculate_optical_density(*api.valid_counts(block),
+                                               apply_zero_baseline=False) if paired else None
+        od = self.apply_kinetic_zero(od_raw)
+        if od is not None:
+            self.curve_od.setData(widgets[0].wavelengths, od)
+            if self.wavelength_tracker_window:
+                self.wavelength_tracker_window.update_od_value(od, widgets[0].wavelengths)
+
+        if role == "collection":
+            try:
+                self.collection_point_index = self.collection_run.append(
+                    elapsed, metadata["utc_s"], ch1, ch2, od_raw, od, metadata
+                )
+            except (OSError, ValueError, RuntimeError) as exc:
+                self.fail_run_write(api.exc)
+                return
+            if self.od_heatmap_window is not None and not self.map_refresh_timer.isActive():
+                self.map_refresh_timer.start()
+            suffix = "" if paired else " (incomplete readout)"
+            self.statusBar().showMessage(f"Saved point {self.collection_point_index}{suffix}")
+            if not self.closing_requested:
+                self.schedule_next_collection_point()
+        elif self.continuous_mode:
+            self.statusBar().showMessage(f"{self._measurement_count} preview measurements")
         else:
-            # Fatal error - stop live preview.
+            self.statusBar().showMessage("Measurement complete")
+
+    def on_measurement_error(self, error_msg):
+        self.logger.error("Measurement error: %s", error_msg)
+        role = self.current_measurement_role
+        if role in {"collection", "blank", "initial_blank", "reference", "background"}:
+            self.measurement_metadata["error"] = error_msg
+            self.on_measurement_complete({})
+        elif "INVALID_MEAS_DATA" not in error_msg and self.continuous_mode:
+            self.stop_live_preview()
+            self.statusBar().showMessage(f"Error: {error_msg}")
+        else:
             self.statusBar().showMessage(f"Error: {error_msg}")
 
-            if self.continuous_mode:
-                self.logger.error("Stopping live preview due to fatal error")
-                self.continuous_timer.stop()
-                self.continuous_mode = False
-            else:
-                api.QMessageBox.critical(self, "Measurement Error", error_msg)
-
     def on_measurement_finished(self):
-        """Handle measurement thread finished."""
         pending_role = self.pending_ref_bg_role
         self.pending_ref_bg_role = None
         self.current_measurement_role = None
-        if pending_role == "reference" and self.measuring_reference:
-            self.single_measurement(measurement_role="reference")
+        if self.closing_requested:
+            api.QTimer.singleShot(0, self.close)
             return
-        if pending_role == "background" and self.measuring_background:
-            self.single_measurement(measurement_role="background")
-            return
-        if self.data_collection_active:
-            self.update_collection_countdown_label()
-
-    def save_collection_point(
-        self,
-        elapsed_time: float,
-        wavelengths: api.np.ndarray,
-        od_spectrum: api.Optional[api.np.ndarray],
-    ):
-        """Append one OD spectrum row to tab-delimited DAT file."""
-        if self.collection_file_path is None or wavelengths is None:
-            return
-
-        if od_spectrum is None:
-            od_spectrum = api.np.full_like(wavelengths, api.np.nan, dtype=float)
-
-        write_header = not self.collection_file_path.exists()
-        row = api.np.concatenate(([elapsed_time], api.np.asarray(od_spectrum, dtype=float)))
-        with open(self.collection_file_path, "a", encoding="utf-8") as f:
-            if write_header:
-                wavelength_header = "\t".join(f"{wl:.3f}" for wl in wavelengths)
-                f.write(f"time_s\t{wavelength_header}\n")
-            api.np.savetxt(f, row.reshape(1, -1), delimiter="\t", fmt="%.8g")
-        self.logger.info(f"DATA COLLECTION: Saved point {self.collection_point_index + 1} to {self.collection_file_path}")
-
-    def set_controls_enabled(self, enabled: bool):
-        """Enable/disable measurement controls."""
-        # No individual button controls needed in new workflow
-        pass
+        if pending_role is not None and not self.single_measurement(measurement_role=pending_role):
+            self.stop_measurement()
+        self.update_collection_countdown_label()
+        self.update_analysis_buttons()
 
     def export_data(self):
         """Export current data to CSV files."""
@@ -267,75 +169,16 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
             self.logger.error(f"Export failed: {str(e)}")
             api.QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{str(e)}")
 
-    def calculate_optical_density(
-        self,
-        ch1_current: api.np.ndarray,
-        ch2_current: api.np.ndarray,
-        elapsed_time: api.Optional[float] = None,
-        apply_zero_baseline: bool = True,
-    ) -> api.Optional[api.np.ndarray]:
-        """Calculate optical density using ratio of ratios method with background subtraction.
-
-        OD = log10((I0_ch1 - BG_ch1) / (I0_ch2 - BG_ch2)) / ((I_ch1 - BG_ch1) / (I_ch2 - BG_ch2)))
-
-        where:
-        - I0 are reference measurements (lamp ON)
-        - BG are background measurements (lamp OFF)
-        - I are current measurements
-
-        Parameters
-        ----------
-        ch1_current : np.ndarray
-            Current Ch1 spectrum intensity
-        ch2_current : np.ndarray
-            Current Ch2 spectrum intensity
-
-        Returns
-        -------
-        np.ndarray or None
-            Optical density spectrum, or None if calculation fails or reference/background missing
-        """
-        # Require both reference and background for proper OD calculation
+    def calculate_optical_density(self, ch1_current, ch2_current, apply_zero_baseline=True):
         if not self.has_reference or not self.has_background:
             return None
-
-        try:
-            # Avoid division by zero
-            with api.np.errstate(divide='ignore', invalid='ignore'):
-                # Add small offset to avoid division by zero
-                offset = 1.0
-
-                # Background-corrected reference ratio: (I0_ch1 - BG_ch1) / (I0_ch2 - BG_ch2)
-                ref_ch1_corrected = self.reference_ch1 - self.background_ch1 + offset
-                ref_ch2_corrected = self.reference_ch2 - self.background_ch2 + offset
-                ref_ratio = ref_ch1_corrected / ref_ch2_corrected
-
-                # Background-corrected current ratio: (I_ch1 - BG_ch1) / (I_ch2 - BG_ch2)
-                curr_ch1_corrected = ch1_current - self.background_ch1 + offset
-                curr_ch2_corrected = ch2_current - self.background_ch2 + offset
-                curr_ratio = curr_ch1_corrected / curr_ch2_corrected
-
-                # OD = log10(ref_ratio / curr_ratio)
-                od = api.np.log10(ref_ratio / curr_ratio)
-
-                if elapsed_time is not None and self.demo_kinetics_enabled:
-                    od += self.get_demo_species_od(api.np.asarray(self.spec1_widget.wavelengths), elapsed_time)
-
-                if (
-                    apply_zero_baseline
-                    and self.zero_baseline_od is not None
-                    and len(self.zero_baseline_od) == len(od)
-                ):
-                    od = od - self.zero_baseline_od
-
-                # Replace inf and nan with 0
-                od[~api.np.isfinite(od)] = 0
-
-            return od
-
-        except Exception as e:
-            self.logger.error(f"Failed to calculate OD: {e}")
-            return None
+        wavelengths, _ = self.current_hardware()
+        od = api.optical_density(
+            ch1_current, ch2_current,
+            (self.reference_ch1, self.reference_ch2),
+            (self.background_ch1, self.background_ch2), wavelengths,
+        )
+        return self.apply_kinetic_zero(od) if apply_zero_baseline else od
 
     def get_demo_species_od(self, wavelengths: api.np.ndarray, elapsed_time: float) -> api.np.ndarray:
         """Return a synthetic growing UV-visible species OD spectrum."""
@@ -387,10 +230,9 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         self.clear_zero_baseline()
         self.has_reference = False
         self.has_background = False
-
-        # Disable buttons that require reference
-        self.start_collection_btn.setEnabled(False)
-        self.track_wl_btn.setEnabled(False)
+        self.calibration_blocks.clear()
+        self.last_sample_pair = None
+        self.update_analysis_buttons()
 
         self.statusBar().showMessage("Plots cleared")
 
@@ -498,22 +340,31 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
 
     def closeEvent(self, event):
         """Handle window close event."""
+        self.blank_timer.stop()
+        self.map_refresh_timer.stop()
+        self.continuous_timer.stop()
+        self.collection_timer.stop()
+        self.lamp_warmup_timer.stop()
+        self.collection_countdown_timer.stop()
+        if self.current_measurement_role is not None or self.analysis_worker is not None:
+            self.closing_requested = True
+            self.statusBar().showMessage("Finishing the current operation before closing…")
+            event.ignore()
+            return
+
+        if self.collection_run is not None:
+            try:
+                if self.blank_schedule is not None:
+                    self.collection_run.append_event("blank_cancelled", api.time.time(), reason="application closed",
+                                                     due_utc_s=self.blank_schedule["due_utc_s"])
+                if self.data_collection_active or self.collection_paused:
+                    self.collection_run.append_event("stop", api.time.time(), reason="application closed")
+            except (OSError, ValueError, RuntimeError) as exc:
+                self.logger.error("Failed to save shutdown event: %s", api.exc)
+
         count = self._measurement_count if hasattr(self, '_measurement_count') else 0
         self.logger.info("="*60)
         self.logger.info(f"SHUTDOWN: Application closing ({count} measurements completed)")
-
-        # Stop timers
-        if self.continuous_mode:
-            self.continuous_timer.stop()
-        if self.data_collection_active:
-            self.collection_timer.stop()
-            self.lamp_warmup_timer.stop()
-            self.collection_countdown_timer.stop()
-
-        # Stop measurement thread
-        if self.measurement_thread and self.measurement_thread.isRunning():
-            self.measurement_thread.stop()
-            self.measurement_thread.wait()
 
         # Close wavelength tracker
         if self.wavelength_tracker_window:
@@ -536,8 +387,6 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         "on_measurement_complete": on_measurement_complete,
         "on_measurement_error": on_measurement_error,
         "on_measurement_finished": on_measurement_finished,
-        "save_collection_point": save_collection_point,
-        "set_controls_enabled": set_controls_enabled,
         "export_data": export_data,
         "calculate_optical_density": calculate_optical_density,
         "get_demo_species_od": get_demo_species_od,

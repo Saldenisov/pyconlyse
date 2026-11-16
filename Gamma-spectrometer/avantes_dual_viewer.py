@@ -24,7 +24,6 @@ Usage:
     python avantes_dual_viewer.py
 """
 
-
 if __package__:
     from .avantes_dual_viewer_parts_env_bool import _bind_avantes_dual_viewer_parts_env_bool
 else:
@@ -52,6 +51,16 @@ if __package__:
 else:
     from avantes_dual_viewer_methods_on_measurement_complete import _bind_avantes_dual_viewer_methods_on_measurement_complete
 
+if __package__:
+    from .avantes_dual_viewer_methods_blanks import _bind_avantes_dual_viewer_methods_blanks
+else:
+    from avantes_dual_viewer_methods_blanks import _bind_avantes_dual_viewer_methods_blanks
+
+if __package__:
+    from .avantes_dual_viewer_methods_analysis import _bind_avantes_dual_viewer_methods_analysis
+else:
+    from avantes_dual_viewer_methods_analysis import _bind_avantes_dual_viewer_methods_analysis
+
 import json
 import os
 import sys
@@ -67,9 +76,9 @@ from PyQt5.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QGroupBox, QGridLayout, QFileDialog, QMessageBox,
     QCheckBox, QSplitter, QMenu, QDialog, QDialogButtonBox, QFormLayout,
-    QSizePolicy
+    QSizePolicy, QInputDialog
 )
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread
+from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread, QRectF
 from PyQt5.QtGui import QFont
 
 import pyqtgraph as pg
@@ -95,6 +104,10 @@ from avantes_parallel import (
     parallel_poll_and_get_data
 )
 from arduino_trigger_controller import ArduinoTriggerController
+from avantes_analysis import fit_mcr, read_mcr
+from avantes_h5 import SCHEMA_VERSION, optical_volume_ml
+from avantes_mcr_view import ask_mcr_options, show_mcr_dialog
+from avantes_run import AvantesRun, mean_counts, optical_density, valid_counts
 from avantes_emulator import (
     ARDUINO_TRIGGER_HZ,
     EmulatedArduinoTriggerController,
@@ -121,6 +134,20 @@ CollectionSettingsDialog = _avantes_dual_viewer_parts_env_bool["CollectionSettin
 
 MeasurementThread = _avantes_dual_viewer_parts_env_bool["MeasurementThread"]
 del _avantes_dual_viewer_parts_env_bool
+
+
+class RunAnalysisThread(QThread):
+    def __init__(self, operation):
+        super().__init__()
+        self.operation = operation
+        self.result = None
+        self.error = None
+
+    def run(self):
+        try:
+            self.result = self.operation()
+        except (KeyError, ValueError, RuntimeError, OSError) as exc:
+            self.error = str(exc)
 
 
 class SpectrometerWidget(QGroupBox):
@@ -424,14 +451,24 @@ class AvantesDualViewer(QMainWindow):
         self.reference_target_blocks = 1
         self.background_target_blocks = 1
         self.pending_ref_bg_role = None
-        self.collection_data = []
+        self.collection_run = None
+        self.analysis_worker = None
+        self.mcr_options = {}
+        self.exposure_setup = dict(window_diameter_mm=8.0, path_length_mm=10.0)
+        self.exposure_state = (np.nan, False)
+        self.run_volumes = (np.nan, np.nan)
+        self.collection_paused = False
+        self.calibration_blocks = {}
+        self.last_sample_pair = None
+        self.measurement_metadata = None
+        self.blank_schedule = None
+        self.blank_due = False
+        self.closing_requested = False
         self.collection_point_index = 0
         self.collection_start_time = None
         self.collection_point_start_time = None
         self.collection_file_path = None
-        self.loaded_collection_file_path = None
         self.collection_next_due_time = None
-        self.collection_time_offset_s = 0.0
         self.lamp_warmup_seconds = 120.0
         self.lamp_min_off_seconds = 60.0
         self.arduino_frequency_hz = ARDUINO_TRIGGER_HZ
@@ -468,6 +505,14 @@ class AvantesDualViewer(QMainWindow):
         self.collection_countdown_timer = QTimer()
         self.collection_countdown_timer.setInterval(1000)
         self.collection_countdown_timer.timeout.connect(self.update_collection_countdown_label)
+        self.blank_timer = QTimer(self)
+        self.blank_timer.setSingleShot(True)
+        self.blank_timer.setTimerType(Qt.PreciseTimer)
+        self.blank_timer.timeout.connect(self.on_blank_due)
+        self.map_refresh_timer = QTimer(self)
+        self.map_refresh_timer.setSingleShot(True)
+        self.map_refresh_timer.setInterval(500)
+        self.map_refresh_timer.timeout.connect(self.render_od_heatmap)
 
         # Setup logging
         self.setup_logging()
@@ -477,178 +522,139 @@ class AvantesDualViewer(QMainWindow):
         # Auto-connect both spectrometers after UI is ready
         QTimer.singleShot(500, self.auto_connect_spectrometers)
 
-    _avantes_dual_viewer_methods_init_ui = _bind_avantes_dual_viewer_methods_init_ui(_refactor_modules[__name__])
-    init_ui = _avantes_dual_viewer_methods_init_ui["init_ui"]
-
-    create_control_panel = _avantes_dual_viewer_methods_init_ui["create_control_panel"]
-
-    create_menu_bar = _avantes_dual_viewer_methods_init_ui["create_menu_bar"]
-
-    create_settings_menu = _avantes_dual_viewer_methods_init_ui["create_settings_menu"]
-
-    populate_settings_menu = _avantes_dual_viewer_methods_init_ui["populate_settings_menu"]
-
-    update_od_axis_limits = _avantes_dual_viewer_methods_init_ui["update_od_axis_limits"]
-
-    link_detector_averages = _avantes_dual_viewer_methods_init_ui["link_detector_averages"]
-
-    get_live_preview_interval_ms = _avantes_dual_viewer_methods_init_ui["get_live_preview_interval_ms"]
-
-    update_live_preview_interval = _avantes_dual_viewer_methods_init_ui["update_live_preview_interval"]
-
-    get_collection_min_rate_s = _avantes_dual_viewer_methods_init_ui["get_collection_min_rate_s"]
-
-    get_detector_average_count = _avantes_dual_viewer_methods_init_ui["get_detector_average_count"]
-
-    validate_collection_rate = _avantes_dual_viewer_methods_init_ui["validate_collection_rate"]
-
-    single_measurement = _avantes_dual_viewer_methods_init_ui["single_measurement"]
-
-    continuous_measurement = _avantes_dual_viewer_methods_init_ui["continuous_measurement"]
-
-    get_arduino_state = _avantes_dual_viewer_methods_init_ui["get_arduino_state"]
-
-    set_arduino_frequency_hz = _avantes_dual_viewer_methods_init_ui["set_arduino_frequency_hz"]
-
-    sync_arduino_frequency_from_controller = _avantes_dual_viewer_methods_init_ui["sync_arduino_frequency_from_controller"]
-
-    open_collection_settings = _avantes_dual_viewer_methods_init_ui["open_collection_settings"]
-    del _avantes_dual_viewer_methods_init_ui
+    def apply_kinetic_zero(self, od):
+        if od is not None and self.zero_baseline_od is not None:
+            return od - self.zero_baseline_od
+        return od
 
     _avantes_dual_viewer_methods_get_settings_dict = _bind_avantes_dual_viewer_methods_get_settings_dict(_refactor_modules[__name__])
     get_settings_dict = _avantes_dual_viewer_methods_get_settings_dict["get_settings_dict"]
-
     get_spectrometer_settings = _avantes_dual_viewer_methods_get_settings_dict["get_spectrometer_settings"]
-
     apply_settings_dict = _avantes_dual_viewer_methods_get_settings_dict["apply_settings_dict"]
-
     apply_spectrometer_settings = _avantes_dual_viewer_methods_get_settings_dict["apply_spectrometer_settings"]
-
     load_settings_json = _avantes_dual_viewer_methods_get_settings_dict["load_settings_json"]
-
     load_settings_from_file = _avantes_dual_viewer_methods_get_settings_dict["load_settings_from_file"]
-
     save_settings_json_as = _avantes_dual_viewer_methods_get_settings_dict["save_settings_json_as"]
-
     update_settings_json = _avantes_dual_viewer_methods_get_settings_dict["update_settings_json"]
-
     write_settings_json = _avantes_dual_viewer_methods_get_settings_dict["write_settings_json"]
-
     is_lamp_enabled = _avantes_dual_viewer_methods_get_settings_dict["is_lamp_enabled"]
-
     is_avantes_enabled = _avantes_dual_viewer_methods_get_settings_dict["is_avantes_enabled"]
-
     set_lamp_on = _avantes_dual_viewer_methods_get_settings_dict["set_lamp_on"]
-
     set_lamp_off = _avantes_dual_viewer_methods_get_settings_dict["set_lamp_off"]
-
     set_lamp_and_avantes = _avantes_dual_viewer_methods_get_settings_dict["set_lamp_and_avantes"]
-
     set_avantes_only = _avantes_dual_viewer_methods_get_settings_dict["set_avantes_only"]
-
     set_arduino_off = _avantes_dual_viewer_methods_get_settings_dict["set_arduino_off"]
-
     toggle_continuous_readout = _avantes_dual_viewer_methods_get_settings_dict["toggle_continuous_readout"]
-
     stop_live_preview = _avantes_dual_viewer_methods_get_settings_dict["stop_live_preview"]
-
     stop_measurement = _avantes_dual_viewer_methods_get_settings_dict["stop_measurement"]
-
     measure_reference = _avantes_dual_viewer_methods_get_settings_dict["measure_reference"]
-
     measure_background = _avantes_dual_viewer_methods_get_settings_dict["measure_background"]
-
     measure_reference_complete = _avantes_dual_viewer_methods_get_settings_dict["measure_reference_complete"]
-
     set_zero_baseline_from_current = _avantes_dual_viewer_methods_get_settings_dict["set_zero_baseline_from_current"]
-
     measure_background_complete = _avantes_dual_viewer_methods_get_settings_dict["measure_background_complete"]
     del _avantes_dual_viewer_methods_get_settings_dict
 
-    _avantes_dual_viewer_methods_toggle_data_collection = _bind_avantes_dual_viewer_methods_toggle_data_collection(_refactor_modules[__name__])
-    toggle_data_collection = _avantes_dual_viewer_methods_toggle_data_collection["toggle_data_collection"]
-
-    collect_data_point = _avantes_dual_viewer_methods_toggle_data_collection["collect_data_point"]
-
-    schedule_next_collection_point = _avantes_dual_viewer_methods_toggle_data_collection["schedule_next_collection_point"]
-
-    on_collection_rate_changed = _avantes_dual_viewer_methods_toggle_data_collection["on_collection_rate_changed"]
-
-    schedule_collection_due_time = _avantes_dual_viewer_methods_toggle_data_collection["schedule_collection_due_time"]
-
-    prepare_lamp_for_collection = _avantes_dual_viewer_methods_toggle_data_collection["prepare_lamp_for_collection"]
-
-    format_seconds_for_countdown = _avantes_dual_viewer_methods_toggle_data_collection["format_seconds_for_countdown"]
-
-    update_collection_countdown_label = _avantes_dual_viewer_methods_toggle_data_collection["update_collection_countdown_label"]
-
-    browse_save_folder = _avantes_dual_viewer_methods_toggle_data_collection["browse_save_folder"]
-
-    update_loaded_collection_label = _avantes_dual_viewer_methods_toggle_data_collection["update_loaded_collection_label"]
-
-    ask_collection_start_mode = _avantes_dual_viewer_methods_toggle_data_collection["ask_collection_start_mode"]
-
-    suggest_new_collection_file_path = _avantes_dual_viewer_methods_toggle_data_collection["suggest_new_collection_file_path"]
-
-    choose_new_collection_file_path = _avantes_dual_viewer_methods_toggle_data_collection["choose_new_collection_file_path"]
-
-    can_resume_collection_wavelengths = _avantes_dual_viewer_methods_toggle_data_collection["can_resume_collection_wavelengths"]
-
-    get_resume_collection_time_offset = _avantes_dual_viewer_methods_toggle_data_collection["get_resume_collection_time_offset"]
-
-    load_collection_dat = _avantes_dual_viewer_methods_toggle_data_collection["load_collection_dat"]
-
-    load_collection_dat_file = _avantes_dual_viewer_methods_toggle_data_collection["load_collection_dat_file"]
-
-    update_analysis_buttons = _avantes_dual_viewer_methods_toggle_data_collection["update_analysis_buttons"]
-
-    clear_zero_baseline = _avantes_dual_viewer_methods_toggle_data_collection["clear_zero_baseline"]
-
-    reset_od_heatmap = _avantes_dual_viewer_methods_toggle_data_collection["reset_od_heatmap"]
-
-    update_od_heatmap = _avantes_dual_viewer_methods_toggle_data_collection["update_od_heatmap"]
-
-    render_od_heatmap = _avantes_dual_viewer_methods_toggle_data_collection["render_od_heatmap"]
-
-    toggle_od_heatmap_window = _avantes_dual_viewer_methods_toggle_data_collection["toggle_od_heatmap_window"]
-
-    show_od_heatmap_window = _avantes_dual_viewer_methods_toggle_data_collection["show_od_heatmap_window"]
-
-    get_export_base_path = _avantes_dual_viewer_methods_toggle_data_collection["get_export_base_path"]
-
-    open_wavelength_tracker = _avantes_dual_viewer_methods_toggle_data_collection["open_wavelength_tracker"]
-    del _avantes_dual_viewer_methods_toggle_data_collection
+    _avantes_dual_viewer_methods_init_ui = _bind_avantes_dual_viewer_methods_init_ui(_refactor_modules[__name__])
+    init_ui = _avantes_dual_viewer_methods_init_ui["init_ui"]
+    create_control_panel = _avantes_dual_viewer_methods_init_ui["create_control_panel"]
+    create_menu_bar = _avantes_dual_viewer_methods_init_ui["create_menu_bar"]
+    create_settings_menu = _avantes_dual_viewer_methods_init_ui["create_settings_menu"]
+    populate_settings_menu = _avantes_dual_viewer_methods_init_ui["populate_settings_menu"]
+    update_od_axis_limits = _avantes_dual_viewer_methods_init_ui["update_od_axis_limits"]
+    link_detector_averages = _avantes_dual_viewer_methods_init_ui["link_detector_averages"]
+    get_live_preview_interval_ms = _avantes_dual_viewer_methods_init_ui["get_live_preview_interval_ms"]
+    update_live_preview_interval = _avantes_dual_viewer_methods_init_ui["update_live_preview_interval"]
+    get_collection_min_rate_s = _avantes_dual_viewer_methods_init_ui["get_collection_min_rate_s"]
+    get_detector_average_count = _avantes_dual_viewer_methods_init_ui["get_detector_average_count"]
+    validate_collection_rate = _avantes_dual_viewer_methods_init_ui["validate_collection_rate"]
+    single_measurement = _avantes_dual_viewer_methods_init_ui["single_measurement"]
+    continuous_measurement = _avantes_dual_viewer_methods_init_ui["continuous_measurement"]
+    get_arduino_state = _avantes_dual_viewer_methods_init_ui["get_arduino_state"]
+    set_arduino_frequency_hz = _avantes_dual_viewer_methods_init_ui["set_arduino_frequency_hz"]
+    sync_arduino_frequency_from_controller = _avantes_dual_viewer_methods_init_ui["sync_arduino_frequency_from_controller"]
+    open_collection_settings = _avantes_dual_viewer_methods_init_ui["open_collection_settings"]
+    del _avantes_dual_viewer_methods_init_ui
 
     _avantes_dual_viewer_methods_on_measurement_complete = _bind_avantes_dual_viewer_methods_on_measurement_complete(_refactor_modules[__name__])
     on_measurement_complete = _avantes_dual_viewer_methods_on_measurement_complete["on_measurement_complete"]
-
     on_measurement_error = _avantes_dual_viewer_methods_on_measurement_complete["on_measurement_error"]
-
     on_measurement_finished = _avantes_dual_viewer_methods_on_measurement_complete["on_measurement_finished"]
-
-    save_collection_point = _avantes_dual_viewer_methods_on_measurement_complete["save_collection_point"]
-
-    set_controls_enabled = _avantes_dual_viewer_methods_on_measurement_complete["set_controls_enabled"]
-
     export_data = _avantes_dual_viewer_methods_on_measurement_complete["export_data"]
-
     calculate_optical_density = _avantes_dual_viewer_methods_on_measurement_complete["calculate_optical_density"]
-
     get_demo_species_od = _avantes_dual_viewer_methods_on_measurement_complete["get_demo_species_od"]
-
     clear_plots = _avantes_dual_viewer_methods_on_measurement_complete["clear_plots"]
-
     setup_logging = _avantes_dual_viewer_methods_on_measurement_complete["setup_logging"]
-
-
     auto_connect_spectrometers = _avantes_dual_viewer_methods_on_measurement_complete["auto_connect_spectrometers"]
-
     auto_connect_spec2 = _avantes_dual_viewer_methods_on_measurement_complete["auto_connect_spec2"]
-
     auto_start_continuous = _avantes_dual_viewer_methods_on_measurement_complete["auto_start_continuous"]
-
     closeEvent = _avantes_dual_viewer_methods_on_measurement_complete["closeEvent"]
     del _avantes_dual_viewer_methods_on_measurement_complete
+
+    _avantes_dual_viewer_methods_toggle_data_collection = _bind_avantes_dual_viewer_methods_toggle_data_collection(_refactor_modules[__name__])
+    toggle_data_collection = _avantes_dual_viewer_methods_toggle_data_collection["toggle_data_collection"]
+    collect_data_point = _avantes_dual_viewer_methods_toggle_data_collection["collect_data_point"]
+    schedule_next_collection_point = _avantes_dual_viewer_methods_toggle_data_collection["schedule_next_collection_point"]
+    on_collection_rate_changed = _avantes_dual_viewer_methods_toggle_data_collection["on_collection_rate_changed"]
+    schedule_collection_due_time = _avantes_dual_viewer_methods_toggle_data_collection["schedule_collection_due_time"]
+    prepare_lamp_for_collection = _avantes_dual_viewer_methods_toggle_data_collection["prepare_lamp_for_collection"]
+    format_seconds_for_countdown = _avantes_dual_viewer_methods_toggle_data_collection["format_seconds_for_countdown"]
+    update_collection_countdown_label = _avantes_dual_viewer_methods_toggle_data_collection["update_collection_countdown_label"]
+    browse_save_folder = _avantes_dual_viewer_methods_toggle_data_collection["browse_save_folder"]
+    update_loaded_collection_label = _avantes_dual_viewer_methods_toggle_data_collection["update_loaded_collection_label"]
+    ask_collection_start_mode = _avantes_dual_viewer_methods_toggle_data_collection["ask_collection_start_mode"]
+    suggest_new_collection_file_path = _avantes_dual_viewer_methods_toggle_data_collection["suggest_new_collection_file_path"]
+    get_resume_collection_time_offset = _avantes_dual_viewer_methods_toggle_data_collection["get_resume_collection_time_offset"]
+    load_collection_dat = _avantes_dual_viewer_methods_toggle_data_collection["load_collection_dat"]
+    load_collection_dat_file = _avantes_dual_viewer_methods_toggle_data_collection["load_collection_dat_file"]
+    update_analysis_buttons = _avantes_dual_viewer_methods_toggle_data_collection["update_analysis_buttons"]
+    clear_zero_baseline = _avantes_dual_viewer_methods_toggle_data_collection["clear_zero_baseline"]
+    reset_od_heatmap = _avantes_dual_viewer_methods_toggle_data_collection["reset_od_heatmap"]
+    render_od_heatmap = _avantes_dual_viewer_methods_toggle_data_collection["render_od_heatmap"]
+    toggle_od_heatmap_window = _avantes_dual_viewer_methods_toggle_data_collection["toggle_od_heatmap_window"]
+    show_od_heatmap_window = _avantes_dual_viewer_methods_toggle_data_collection["show_od_heatmap_window"]
+    get_export_base_path = _avantes_dual_viewer_methods_toggle_data_collection["get_export_base_path"]
+    open_wavelength_tracker = _avantes_dual_viewer_methods_toggle_data_collection["open_wavelength_tracker"]
+    del _avantes_dual_viewer_methods_toggle_data_collection
+
+    _avantes_dual_viewer_methods_blanks = _bind_avantes_dual_viewer_methods_blanks(_refactor_modules[__name__])
+    current_hardware = _avantes_dual_viewer_methods_blanks["current_hardware"]
+    match_run_hardware = _avantes_dual_viewer_methods_blanks["match_run_hardware"]
+    calibration_matches_detector_setup = _avantes_dual_viewer_methods_blanks["calibration_matches_detector_setup"]
+    current_detector_setup = _avantes_dual_viewer_methods_blanks["current_detector_setup"]
+    same_detector_setup = _avantes_dual_viewer_methods_blanks["same_detector_setup"]
+    restore_run_calibration = _avantes_dual_viewer_methods_blanks["restore_run_calibration"]
+    set_collection_state = _avantes_dual_viewer_methods_blanks["set_collection_state"]
+    log_run_event = _avantes_dual_viewer_methods_blanks["log_run_event"]
+    fail_run_write = _avantes_dual_viewer_methods_blanks["fail_run_write"]
+    toggle_collection_pause = _avantes_dual_viewer_methods_blanks["toggle_collection_pause"]
+    measure_initial_blank = _avantes_dual_viewer_methods_blanks["measure_initial_blank"]
+    schedule_blank = _avantes_dual_viewer_methods_blanks["schedule_blank"]
+    on_blank_due = _avantes_dual_viewer_methods_blanks["on_blank_due"]
+    cancel_blank = _avantes_dual_viewer_methods_blanks["cancel_blank"]
+    start_blank_measurement = _avantes_dual_viewer_methods_blanks["start_blank_measurement"]
+    save_blank = _avantes_dual_viewer_methods_blanks["save_blank"]
+    del _avantes_dual_viewer_methods_blanks
+
+    _avantes_dual_viewer_methods_analysis = _bind_avantes_dual_viewer_methods_analysis(_refactor_modules[__name__])
+    may_open_collection = _avantes_dual_viewer_methods_analysis["may_open_collection"]
+    load_collection_hdf5 = _avantes_dual_viewer_methods_analysis["load_collection_hdf5"]
+    load_collection_hdf5_file = _avantes_dual_viewer_methods_analysis["load_collection_hdf5_file"]
+    set_open_collection_path = _avantes_dual_viewer_methods_analysis["set_open_collection_path"]
+    edit_exposure_setup = _avantes_dual_viewer_methods_analysis["edit_exposure_setup"]
+    update_exposure_label = _avantes_dual_viewer_methods_analysis["update_exposure_label"]
+    toggle_irradiation_marker = _avantes_dual_viewer_methods_analysis["toggle_irradiation_marker"]
+    standard_run = _avantes_dual_viewer_methods_analysis["standard_run"]
+    ensure_standard_run = _avantes_dual_viewer_methods_analysis["ensure_standard_run"]
+    start_run_analysis = _avantes_dual_viewer_methods_analysis["start_run_analysis"]
+    recalculate_blank_od = _avantes_dual_viewer_methods_analysis["recalculate_blank_od"]
+    run_mcr = _avantes_dual_viewer_methods_analysis["run_mcr"]
+    can_analyze_run = _avantes_dual_viewer_methods_analysis["can_analyze_run"]
+    on_run_analysis_finished = _avantes_dual_viewer_methods_analysis["on_run_analysis_finished"]
+    show_mcr = _avantes_dual_viewer_methods_analysis["show_mcr"]
+    load_latest_mcr = _avantes_dual_viewer_methods_analysis["load_latest_mcr"]
+    show_latest_mcr = _avantes_dual_viewer_methods_analysis["show_latest_mcr"]
+    show_mcr_result = _avantes_dual_viewer_methods_analysis["show_mcr_result"]
+    del _avantes_dual_viewer_methods_analysis
 
 
 def main():

@@ -131,6 +131,9 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
 
     def load_settings_from_file(self, path: api.Path, show_message: bool = False):
         """Load JSON settings from path."""
+        if not self.may_open_collection():
+            self.statusBar().showMessage("Stop acquisition and finish the blank schedule before loading settings")
+            return
         try:
             settings = api.json.loads(path.read_text(encoding="utf-8"))
             self.apply_settings_dict(settings)
@@ -320,9 +323,13 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
 
     def measure_reference(self):
         """Measure reference spectra by averaging N measurements (with lamp ON)."""
+        if not self.may_open_collection():
+            return
         if not self.spec1_widget.spec or not self.spec2_widget.spec:
             api.QMessageBox.warning(self, "Error", "Both spectrometers must be connected")
             return
+        if self.continuous_mode:
+            self.stop_live_preview()
 
         # Ensure lamp is ON and wait for thermalization
         self.statusBar().showMessage("Preparing lamp...")
@@ -346,16 +353,23 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         )
         self.statusBar().showMessage(f"Measuring reference block 1/{n_blocks} (Avantes avg={n_avg})...")
 
-        self.single_measurement(measurement_role="reference")
+        if not self.single_measurement(measurement_role="reference"):
+            self.stop_measurement()
 
     def measure_background(self):
         """Measure background spectra by averaging N measurements (with lamp OFF)."""
+        if not self.may_open_collection():
+            return
         if not self.spec1_widget.spec or not self.spec2_widget.spec:
             api.QMessageBox.warning(self, "Error", "Both spectrometers must be connected")
             return
+        if self.continuous_mode:
+            self.stop_live_preview()
 
         # Ensure lamp is OFF
-        self.set_avantes_only()
+        if not self.set_avantes_only():
+            self.statusBar().showMessage("Could not switch off the probe lamp")
+            return
 
         n_avg = self.get_detector_average_count()
         n_blocks = self.ref_blocks_spin.value()
@@ -373,21 +387,23 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         )
         self.statusBar().showMessage(f"Measuring background block 1/{n_blocks} (Avantes avg={n_avg})...")
 
-        self.single_measurement(measurement_role="background")
+        if not self.single_measurement(measurement_role="background"):
+            self.stop_measurement()
 
     def measure_reference_complete(self):
         """Called when reference measurement is complete."""
         if self.reference_measurements:
-            self.reference_ch1 = api.np.mean([m['ch1'] for m in self.reference_measurements], axis=0)
-            self.reference_ch2 = api.np.mean([m['ch2'] for m in self.reference_measurements], axis=0)
+            self.reference_ch1, self.reference_ch2 = api.mean_counts(self.reference_measurements)
             self.reference_wavelengths = self.spec1_widget.wavelengths
+            self.calibration_blocks["reference"] = self.reference_measurements
             self.clear_zero_baseline()
+            self.last_sample_pair = None
             self.has_reference = True
 
             # Display reference lines on plots (magenta/purple)
             if self.reference_wavelengths is not None:
                 self.ref_curve1.setData(self.reference_wavelengths, self.reference_ch1)
-                self.ref_curve2.setData(self.reference_wavelengths, self.reference_ch2)
+                self.ref_curve2.setData(self.spec2_widget.wavelengths, self.reference_ch2)
 
             n_blocks = len(self.reference_measurements)
             n_avg = self.get_detector_average_count()
@@ -412,36 +428,28 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         self.update_analysis_buttons()
 
     def set_zero_baseline_from_current(self):
-        """Store current no-sample OD as a baseline to subtract from future OD."""
-        data1 = self.spec1_widget.last_data
-        data2 = self.spec2_widget.last_data
-        wavelengths = self.spec1_widget.wavelengths
-
-        if data1 is None or data2 is None or wavelengths is None:
-            api.QMessageBox.warning(self, "Set Zero", "No current spectra available")
+        """Use the latest paired sample measurement as the kinetic zero."""
+        block = self.last_sample_pair
+        if block is None or self.data_collection_active or self.collection_paused:
             return
-
-        if not self.has_reference or not self.has_background:
-            api.QMessageBox.warning(self, "Set Zero", "Measure background and reference first")
+        od = self.calculate_optical_density(*api.valid_counts(block), apply_zero_baseline=False)
+        if od is None or not api.np.any(api.np.isfinite(od)):
+            api.QMessageBox.warning(self, "Set Zero", "Sample OD is unavailable")
             return
-
-        od_spectrum = self.calculate_optical_density(data1, data2, apply_zero_baseline=False)
-        if od_spectrum is not None:
-            self.zero_baseline_wavelengths = api.np.array(wavelengths, dtype=float, copy=True)
-            self.zero_baseline_od = api.np.array(od_spectrum, dtype=float, copy=True)
-            corrected_od = od_spectrum - self.zero_baseline_od
-            self.curve_od.setData(self.zero_baseline_wavelengths, corrected_od)
-
+        self.calibration_blocks["sample_t0"] = [block]
+        self.zero_baseline_wavelengths = api.np.array(self.spec1_widget.wavelengths, dtype=float, copy=True)
+        self.zero_baseline_od = od
+        self.curve_od.setData(self.zero_baseline_wavelengths, od - od)
         self.update_analysis_buttons()
-        self.logger.info("ZERO: Baseline OD set from current spectra")
-        self.statusBar().showMessage("Zero baseline set from current spectra")
+        self.statusBar().showMessage("Kinetic zero saved from current sample spectrum")
 
     def measure_background_complete(self):
         """Called when background measurement is complete."""
         if self.background_measurements:
-            self.background_ch1 = api.np.mean([m['ch1'] for m in self.background_measurements], axis=0)
-            self.background_ch2 = api.np.mean([m['ch2'] for m in self.background_measurements], axis=0)
+            self.background_ch1, self.background_ch2 = api.mean_counts(self.background_measurements)
+            self.calibration_blocks["background"] = self.background_measurements
             self.clear_zero_baseline()
+            self.last_sample_pair = None
             self.has_background = True
 
             # Display background lines on plots (blue)
@@ -449,7 +457,7 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             wavelengths = self.spec1_widget.wavelengths
             if wavelengths is not None:
                 self.bg_curve1.setData(wavelengths, self.background_ch1)
-                self.bg_curve2.setData(wavelengths, self.background_ch2)
+                self.bg_curve2.setData(self.spec2_widget.wavelengths, self.background_ch2)
                 n_blocks = len(self.background_measurements)
                 n_avg = self.get_detector_average_count()
                 self.logger.info(

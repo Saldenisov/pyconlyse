@@ -1,5 +1,10 @@
 @echo off
+setlocal
 cd /d "%~dp0"
+if exist ".venv\Scripts\python.exe" (
+    ".venv\Scripts\python.exe" -E -s avantes_dual_viewer.py
+    goto finish
+)
 set "CONDA_EXE=%ProgramData%\miniconda3\Scripts\conda.exe"
 if not exist "%CONDA_EXE%" set "CONDA_EXE=%ProgramData%\miniconda3\condabin\conda.bat"
 if not exist "%CONDA_EXE%" set "CONDA_EXE=%USERPROFILE%\miniconda3\Scripts\conda.exe"
@@ -7,5 +12,8 @@ if not exist "%CONDA_EXE%" set "CONDA_EXE=%USERPROFILE%\miniconda3\condabin\cond
 if not exist "%CONDA_EXE%" set "CONDA_EXE=%LOCALAPPDATA%\miniconda3\Scripts\conda.exe"
 if not exist "%CONDA_EXE%" set "CONDA_EXE=%LOCALAPPDATA%\miniconda3\condabin\conda.bat"
 if not exist "%CONDA_EXE%" set "CONDA_EXE=conda"
-"%CONDA_EXE%" run -n pyconlyse311 python avantes_dual_viewer.py
+call "%CONDA_EXE%" run -n pyconlyse311 python avantes_dual_viewer.py
+:finish
+set "GAMMA_EXIT=%ERRORLEVEL%"
 pause
+exit /b %GAMMA_EXIT%

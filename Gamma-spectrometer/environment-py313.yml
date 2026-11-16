@@ -7,11 +7,14 @@ dependencies:
   - pip
   - git
   - numpy
+  - h5py
+  - scipy
   - pyqt=5.15.*
   - pyqtgraph=0.14.0
   - requests
   - beautifulsoup4=4.14.3
   - pyzmq
   - pip:
+      - pyMCR==0.3.2
       - git+https://github.com/MSLNZ/msl-equipment.git@main
       - git+https://github.com/MSLNZ/msl-equipment.git@main#subdirectory=packages/resources
