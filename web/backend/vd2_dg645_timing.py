@@ -25,20 +25,16 @@ def _range_seconds(value):
 @dataclass(frozen=True)
 class TimingProfile:
     time_range: str
-    delay_a_ms: Decimal
     delay_e_ms: Decimal
 
     @property
-    def commands(self):
-        return tuple(
-            f"DLAY {channel},0,{format(delay_ms * Decimal('0.001'), 'f')}"
-            for channel, delay_ms in ((2, self.delay_a_ms), (6, self.delay_e_ms))
-        )
+    def command(self):
+        return f"DLAY 6,0,{format(self.delay_e_ms * Decimal('0.001'), 'f')}"
 
     def as_dict(self):
         return {"time_range": self.time_range, "reference": "T0", "delay_unit": "ms",
-                "delay_a": str(self.delay_a_ms), "delay_e": str(self.delay_e_ms),
-                "commands": list(self.commands), "gates": "unchanged"}
+                "delay_a": "manual", "delay_e": str(self.delay_e_ms),
+                "commands": [self.command], "gates": "unchanged"}
 
 
 @lru_cache(maxsize=1)
@@ -46,16 +42,15 @@ def _profiles():
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))["timing_calibration"]
     if config["reference"] != "T0" or config["delay_unit"] != "ms":
         raise ValueError("VD2 calibration must use T0 reference and millisecond delays")
-    delay_a = Decimal(config["delay_a"])
     result = {}
     for label, value in config["delay_e_by_time_range"].items():
         delay_e = Decimal(value)
-        if not all(delay.is_finite() and delay >= 0 for delay in (delay_a, delay_e)):
-            raise ValueError("VD2 calibrated delays must be finite and non-negative")
+        if not delay_e.is_finite() or delay_e < 0:
+            raise ValueError("VD2 calibrated delay E must be finite and non-negative")
         key = _range_seconds(label)
         if key in result:
             raise ValueError(f"Duplicate calibrated time range: {label}")
-        result[key] = TimingProfile(label, delay_a, delay_e)
+        result[key] = TimingProfile(label, delay_e)
     return result
 
 
@@ -67,25 +62,27 @@ def timing_for_range(value):
 
 
 def verify_timing(dg645, profile):
-    for channel, expected_ms in ((2, profile.delay_a_ms), (6, profile.delay_e_ms)):
+    # A remains operator-controlled. Verify its readback and reference, while
+    # the calibrated streak-camera trigger on E still needs an exact setpoint.
+    for channel, expected_ms in ((2, None), (6, profile.delay_e_ms)):
         raw = str(dg645.command_inout("scpi_query", f"DLAY? {channel}")).strip()
         try:
             reference, seconds = raw.split(",")
             measured = Decimal(seconds.strip())
-            expected = expected_ms * Decimal("0.001")
-            valid = (int(reference.strip()) == 0 and measured.is_finite()
-                     and abs(measured - expected) <= _READBACK_TOLERANCE_S)
+            valid = int(reference.strip()) == 0 and measured.is_finite() and measured >= 0
+            if valid and expected_ms is not None:
+                valid = abs(measured - expected_ms * Decimal("0.001")) <= _READBACK_TOLERANCE_S
         except (ValueError, InvalidOperation):
             valid = False
         if not valid:
-            raise RuntimeError(f"DG645 channel {channel} timing unverified: {raw}; expected T0 + {expected_ms} ms")
+            expected = f"T0 + {expected_ms} ms" if expected_ms is not None else "a finite non-negative T0 delay"
+            raise RuntimeError(f"DG645 channel {channel} timing unverified: {raw}; expected {expected}")
 
 
 def apply_timing(dg645, profile):
     # Writes are sent once. A timeout can mean an accepted write; never replay
     # it or restore a guessed old setting. A partial failure remains explicit.
-    for command in profile.commands:
-        dg645.command_inout("scpi_write", command)
+    dg645.command_inout("scpi_write", profile.command)
     if str(dg645.command_inout("scpi_query", "*OPC?")).strip() not in {"1", "+1"}:
         raise RuntimeError("DG645 did not confirm timing command completion")
     verify_timing(dg645, profile)

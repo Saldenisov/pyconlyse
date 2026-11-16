@@ -6,6 +6,7 @@ from flask import Flask
 import pytest
 
 from tests.web.test_pump_probe_vd2_api import vd2_api_module as api
+from vd2_dg645_timing import timing_for_range, verify_timing
 from vd2_measurement_protocol import Vd2MeasurementProtocol
 import vd2_tango_optics as optics
 
@@ -29,6 +30,10 @@ class Generator:
         assert command == "scpi_write"
         key, raw = value.split()
         self.events.append(value)
+        if key == "DLAY":
+            channel, reference, seconds = raw.split(",")
+            self.values[f"DLAY? {channel}"] = f"{reference},{seconds}"
+            return
         if not (self.reject_pause and value == "TSRC 5"):
             self.values[key] = float(raw)
 
@@ -156,6 +161,51 @@ def test_standard_capture_checks_intervals_only_when_two_frames_exist(rig, monke
         request = SimpleNamespace(phase="BRUIT", frames_per_his=frame_count, his_path="dark.his")
         optics.validate_saved_capture(api, request, {}, 5)
     assert observed == [("dark.his", 3, 5)]
+
+
+@pytest.mark.parametrize(
+    ("a", "e", "blocked_channel"),
+    [
+        ("0,+0.002185000000", "0,+0.002206500000", None),
+        ("0,+0.002185000000", "0,+0.002206000000", 6),
+        ("1,+0.002185000000", "0,+0.002206500000", 2),
+        ("0,NaN", "0,+0.002206500000", 2),
+    ],
+)
+def test_live_accepts_manual_delay_a_and_still_checks_calibrated_e(rig, monkeypatch, a, e, blocked_channel):
+    camera, dg645, events = rig
+    dg645.values.update({"DLAY? 2": a, "DLAY? 6": e})
+    monkeypatch.setattr(api, "verify_timing", verify_timing)
+    monkeypatch.setattr(api, "_proxy", lambda: camera)
+    monkeypatch.setattr(api, "_snapshot", lambda _: {})
+    monkeypatch.setattr(api, "_approval_or_response", lambda *args: None)
+    app = Flask(__name__)
+    app.register_blueprint(api.pump_probe_vd2_api)
+
+    reply = app.test_client().post("/api/pump-probe-vd2/command/StartLive", json={})
+
+    if blocked_channel is None:
+        assert reply.status_code == 200, reply.get_json()
+        assert events == ["TSRC 0", "StartLive"]
+    else:
+        assert reply.status_code == 503, reply.get_json()
+        assert f"channel {blocked_channel} timing unverified" in reply.get_json()["error"]
+        assert not events
+    assert dg645.values["DLAY? 2"] == a
+
+
+def test_applying_sweep_timing_leaves_manual_delay_a_in_place(rig, monkeypatch):
+    _, dg645, events = rig
+    manual_a = "0,+0.002185000000"
+    dg645.values.update({"DLAY? 2": manual_a, "DLAY? 6": "0,+0.002206500000", "*OPC": "1"})
+    monkeypatch.setattr(api, "verify_timing", verify_timing)
+    profile = timing_for_range("2 us")
+
+    api._apply_vd2_timing(profile, [])
+
+    assert profile.as_dict()["commands"] == events == ["DLAY 6,0,0.0022054"]
+    assert dg645.values["DLAY? 2"] == manual_a
+    assert dg645.values["DLAY? 6"] == "0,0.0022054"
 
 
 def test_burst_is_blocked_on_unmanaged_sequence(rig):

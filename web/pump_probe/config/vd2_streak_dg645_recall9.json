@@ -55,5 +55,5 @@
     },
     "gates": "not supplied; preserve existing settings"
   },
-  "note": "Operator-supplied A/E calibration and output roles, 2026-10-09. Delays are milliseconds; time-range labels use ns/us/ms. A is fixed. Preserve B, C, D, F, G, H and all output levels until operator parameters are supplied. No interpolation or automatic persistent *SAV command. Recall 9 stores one baseline setup, not the 20-entry calibration table. Physical pulse timing verification remains pending."
+  "note": "Operator-supplied A/E calibration and output roles, 2026-10-09. Delays are milliseconds; time-range labels use ns/us/ms. The A value is the Recall 9 baseline. During operation A is manual, and the sweep range sets E. Preserve B, C, D, F, G, H and all output levels until operator parameters are supplied. No interpolation or automatic persistent *SAV command. Recall 9 stores one baseline setup, not the 20-entry calibration table. Physical pulse timing verification remains pending."
 }

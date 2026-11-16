@@ -45,7 +45,7 @@ const CARDS = [
   },
   {
     title: 'DG645 delay generator',
-    subtitle: 'A = T0 + 2.0417 ms; E follows the calibrated Time range. Gates unchanged.',
+    subtitle: 'A is set by the operator. E follows the calibrated Time range.',
     tone: 'timing',
     fields: [
       { key: 'delay_trigger_mode', label: 'Trig. mode', options: ['Ext. rising', 'Ext. falling', 'Internal'] },

@@ -240,7 +240,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
     _remoteex_readback.__qualname__ = "_remoteex_readback"
 
     def _apply_vd2_timing(profile, steps):
-        api._progress(steps, f"Applying DG645 A=T0+{profile.delay_a_ms} ms, E=T0+{profile.delay_e_ms} ms for {profile.time_range}; gates unchanged", stage=2)
+        api._progress(steps, f"Applying DG645 E=T0+{profile.delay_e_ms} ms for {profile.time_range}; A is operator-controlled", stage=2)
         try:
             dg645 = api.DeviceProxy(api.DG645_DEVICE)
             dg645.set_timeout_millis(5000)
@@ -249,7 +249,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
             steps.append({"step": "DG645 calibrated timing", "status": "failed", "detail": str(exc)})
             raise RuntimeError(f"DG645 timing unverified; keep acquisition stopped: {exc}") from exc
         steps.append({"step": "DG645 calibrated timing", "status":
-                      f"verified {profile.time_range}: A=T0+{profile.delay_a_ms} ms; E=T0+{profile.delay_e_ms} ms; gates unchanged"})
+                      f"verified {profile.time_range}: E=T0+{profile.delay_e_ms} ms; manual A read back"})
 
     _apply_vd2_timing.__module__ = api.__name__
     _apply_vd2_timing.__qualname__ = "_apply_vd2_timing"

@@ -96,14 +96,14 @@ stopped application cannot prove safe camera mode while its supply is still ON.
 Repeating an already completed shutdown does not restart software to set Focus.
 
 The operator's 20-entry calibration is stored in
-`web/pump_probe/config/vd2_streak_dg645_recall9.json`: A = T0 + 2.0417 ms;
-E = T0 + the tabulated millisecond delay for each ns/us/ms sweep range.
-Decimal conversion preserves supplied digits. Only A/E (`DLAY 2,0,...` and
-`DLAY 6,0,...`, seconds) are written and read back. No gate-channel write,
-interpolation, or persistent `*SAV` is added. The command format and channel
+`web/pump_probe/config/vd2_streak_dg645_recall9.json`. The sweep range writes
+and verifies E (`DLAY 6,0,...`, seconds) with decimal precision. It reads
+A relative to T0 and leaves its value under operator control. A cold Prepare
+recalls slot 9, where the saved A is 2.0417 ms. There is no interpolation,
+gate-channel write, or persistent `*SAV`. The command format and channel
 mapping follow the [DG645 manual, page 56](https://www.thinksrs.com/downloads/pdfs/manuals/DG645m.pdf).
 Output roles are fixed by the operator: AB = pre-pulse, CD = main flashlamp
-pulse, EF = streak-camera trigger, GH = gate. A never varies with sweep range.
+pulse, EF = streak-camera trigger, GH = gate.
 B/D/F pulse widths, existing C-to-A relation, and G/H settings are retained;
 new gate parameters and physical calibration verification remain pending.
 
