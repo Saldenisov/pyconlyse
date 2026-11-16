@@ -2,6 +2,8 @@ import VD2TranslationStages, { VD2SampleHolder } from './components/VD2Translati
 import VD2PDUControl from './components/VD2PDUControl';
 import VD2RoiEditor from './components/VD2RoiEditor';
 import VD2LiveAverage from './components/VD2LiveAverage';
+import VD2LiveSettings from './components/VD2LiveSettings';
+import { hasVd2Preview } from './vd2AlignmentMath';
 import VD2PairedCapture from './components/VD2PairedCapture';
 import VD2ReadDiagnostics from './components/VD2ReadDiagnostics';
 import FrameDisplayRate from './components/FrameDisplayRate';
@@ -43,6 +45,7 @@ export function renderVd2Acquisition({
   acquisitionReadDeferred, awaitingCameraState, readIssues, statusClass,
   showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
 }) {
+  const liveTab = activeTab === 'live';
   const pairedActive = Boolean(protocol?.paired?.active);
   const pairedMode = pairedActive || (protocol?.paired_available && measurementRate === '10');
   const live = state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live';
@@ -112,18 +115,28 @@ export function renderVd2Acquisition({
 
       <div className="vd2-tabs" role="tablist" aria-label="VD2 control views">
         <button type="button" role="tab" aria-selected={activeTab === 'acquisition'} className={activeTab === 'acquisition' ? 'is-active' : ''} onClick={() => setActiveTab('acquisition')}>Acquisition</button>
+        <button type="button" role="tab" aria-selected={liveTab} className={liveTab ? 'is-active' : ''}
+          onClick={() => {
+            previewPaused.current = false;
+            setPreviewEnabled(true);
+            setActiveTab('live');
+          }}>Live</button>
         <button type="button" role="tab" aria-selected={activeTab === 'hardware'} className={activeTab === 'hardware' ? 'is-active' : ''} onClick={() => setActiveTab('hardware')}>Hardware setup</button>
         <button type="button" role="tab" aria-selected={activeTab === 'delay-lines'} className={activeTab === 'delay-lines' ? 'is-active' : ''} onClick={() => setActiveTab('delay-lines')}>Delay Lines</button>
         <button type="button" role="tab" aria-selected={activeTab === 'pdu'} className={activeTab === 'pdu' ? 'is-active' : ''} onClick={() => setActiveTab('pdu')}>PDU</button>
         <button type="button" role="tab" aria-selected={activeTab === 'alignment'} className={activeTab === 'alignment' ? 'is-active' : ''} onClick={() => setActiveTab('alignment')}>Alignment</button>
       </div>
 
-      {['acquisition', 'alignment'].includes(activeTab) && (
-        <div className={`vd2-acquisition-workspace ${imageRight ? 'is-image-right' : ''} ${activeTab === 'alignment' ? 'is-alignment' : ''}`}
+      {hasVd2Preview(activeTab) && (
+        <div className={liveTab ? 'vd2-live-workspace'
+            : `vd2-acquisition-workspace ${imageRight ? 'is-image-right' : ''} ${activeTab === 'alignment' ? 'is-alignment' : ''}`}
           style={{ '--vd2-image-width': `${imageWidth}px` }}
           onDragOver={event => { if (dragPanel) event.preventDefault(); }}
           onDrop={event => { if (dragPanel) { event.preventDefault(); const box = event.currentTarget.getBoundingClientRect(); setImageRight(event.clientX > box.left + box.width / 2); setDragPanel(false); } }}>
-          <div className="vd2-acquisition-sidebar">
+          {liveTab ? <VD2LiveSettings values={values} onApply={writeParameter} live={live}
+            disabled={alignmentControlsBlocked || (!acquisitionIdle && !live)}
+            onAverageReadError={setLiveAverageReadError} />
+            : <div className="vd2-acquisition-sidebar">
             {activeTab === 'alignment' ? <>
               <AlignmentRegion region={alignmentRegion} onChange={(key, value) => setAlignmentRegion(current => ({ ...current, [key]: value }))}
                 calibrationUpdating={calibrationUpdating} calibrated={Boolean(calibration) && previewAvailable}
@@ -215,11 +228,11 @@ export function renderVd2Acquisition({
               <RoiProfiles preview={preview} rois={rois} selectedId={selectedRoiId} onSelect={setSelectedRoiId} />
             </section>
             </>}
-          </div>
+          </div>}
 
-        <div className="vd2-panel-splitter" role="separator" aria-label="Resize live image" aria-orientation="vertical" tabIndex="0"
+        {!liveTab && <div className="vd2-panel-splitter" role="separator" aria-label="Resize live image" aria-orientation="vertical" tabIndex="0"
           aria-valuemin="320" aria-valuemax="760" aria-valuenow={imageWidth} onPointerDown={resizeImage}
-          onKeyDown={event => { if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); setImageWidth(clamp(imageWidth + (event.key === 'ArrowRight' ? 20 : -20) * (imageRight ? -1 : 1), 320, 760)); } }} />
+          onKeyDown={event => { if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); setImageWidth(clamp(imageWidth + (event.key === 'ArrowRight' ? 20 : -20) * (imageRight ? -1 : 1), 320, 760)); } }} />}
         <div className="vd2-image-column">
         <section className="vd2-preview" aria-label="Live streak-camera preview">
           <LutControl
@@ -232,8 +245,9 @@ export function renderVd2Acquisition({
           />
           <header>
             <div>
-              <h2 draggable onDragStart={() => setDragPanel(true)} onDragEnd={() => setDragPanel(false)} title="Drag image panel to either side">↔ Live image</h2>
-              <p>C13440-20CU display frame</p>
+              {liveTab ? <h2>Live image</h2>
+                : <h2 draggable onDragStart={() => setDragPanel(true)} onDragEnd={() => setDragPanel(false)}
+                  title="Drag image panel to either side">↔ Live image</h2>}
             </div>
             <div className="vd2-preview-meta">
               <span>{preview ? `${preview.width} x ${preview.height}` : 'Waiting for frame'}</span>
@@ -241,7 +255,14 @@ export function renderVd2Acquisition({
                 : protocolSaving ? protocol.status : state?.acquisition_status === 'busy' || previewStream === 'acquiring' ? 'Acquiring' : 'Last frame'}</span>
               {preview && <span>{preview.minimum} - {preview.maximum}</span>}
               <button type="button" onClick={() => { previewPaused.current = false; setPreviewEnabled(true); loadPreview(); }} disabled={busy}>Refresh frame</button>
-              <button type="button" onClick={() => setImageRight(current => !current)} aria-label="Swap image and controls" title="Move image to the other side">↔</button>
+              {liveTab ? <div className="vd2-live-actions" role="group" aria-label="Live controls">
+                <button type="button" className={live ? 'is-live' : ''} aria-pressed={live}
+                  disabled={alignmentControlsBlocked || !acquisitionIdle}
+                  onClick={() => runCommand('StartLive')}>Live On</button>
+                <button type="button" className="vd2-stop" disabled={alignmentControlsBlocked || !live}
+                  onClick={() => runCommand('StopAcquisition')}>Live Off</button>
+              </div> : <button type="button" onClick={() => setImageRight(current => !current)}
+                aria-label="Swap image and controls" title="Move image to the other side">↔</button>}
             </div>
           </header>
           {previewError && <div className="vd2-preview-error" role="alert">{previewError}</div>}
@@ -268,7 +289,7 @@ export function renderVd2Acquisition({
             <div className="vd2-image-stage">
               <canvas ref={previewCanvas} className="vd2-preview-canvas" />
               <FrameDisplayRate hz={previewStride > 1 && !previewFresh ? 0 : previewHz} />
-              {preview && (
+              {preview && !liveTab && (
                 <svg
                   ref={previewOverlay}
                   className="vd2-roi-overlay"

@@ -190,7 +190,7 @@ export function EditableField({ field, value, onApply, busy }) {
   );
 }
 
-function ParameterCard({ card, values, onApply, busy }) {
+function ParameterCard({ card, values, onApply, busy, compact = false, disabledFields }) {
   const fields = card.fields.map((field) => (
     field.key === 'grating' && Array.isArray(values.grating_options)
       ? { ...field, key: 'grating_index', options: values.grating_options, fixedOptions: true }
@@ -200,18 +200,19 @@ function ParameterCard({ card, values, onApply, busy }) {
     <section className={`vd2-card vd2-card-${card.tone}`}>
       <header>
         <h2>{card.title}</h2>
-        <p>{card.subtitle}</p>
+        {!compact && card.subtitle && <p>{card.subtitle}</p>}
       </header>
       <div className="vd2-table" role="table" aria-label={`${card.title} parameters`}>
-        <div className="vd2-table-head" role="row">
+        {!compact && <div className="vd2-table-head" role="row">
           <span role="columnheader">Parameter</span>
           <span role="columnheader">Value</span>
-        </div>
+        </div>}
         {fields.map((field) => (
           <div className="vd2-table-row" role="row" key={field.key}>
             <label role="cell" htmlFor={`vd2-${field.key}`}>{field.label}</label>
             <div role="cell">
-              <EditableField field={field} value={values[field.key]} onApply={onApply} busy={busy} />
+              <EditableField field={field} value={values[field.key]} onApply={onApply}
+                busy={busy || disabledFields?.includes(field.key)} />
             </div>
           </div>
         ))}

@@ -7,7 +7,7 @@ import { startPreviewPolling } from './vd2PreviewPolling';
 import { createPreviewFreshnessClock } from './vd2PreviewFreshness';
 import { alignmentRegionGeometry } from './vd2RoiMath';
 import { ALIGNMENT_REGION_KEY, DEFAULT_ALIGNMENT_REGION, useVd2Memory, validAcquisitionRois, validAlignmentRegion } from './vd2AlignmentMemory';
-import { previewShouldPoll, protocolHardwareBusy, protocolSaveActive } from './vd2AlignmentMath';
+import { hasVd2Preview, previewShouldPoll, protocolHardwareBusy, protocolSaveActive } from './vd2AlignmentMath';
 import { API_BASE } from "./PumpProbeVD2.API_BASE";
 import { fetchVd2 } from "./PumpProbeVD2.API_BASE";
 import { defaultVd2RunName } from "./PumpProbeVD2.API_BASE";
@@ -29,7 +29,10 @@ export function useVd2AcquisitionState(measurementRate) {
   const [liveAverageReadError, setLiveAverageReadError] = useState('');
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState(() => new URLSearchParams(window.location.search).get('tab') === 'alignment' ? 'alignment' : 'acquisition');
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    return hasVd2Preview(tab) ? tab : 'acquisition';
+  });
   const [calibration, setCalibration] = useState(null);
   const [calibrationUpdating, setCalibrationUpdating] = useState(false);
   const [calibrationError, setCalibrationError] = useState('');
@@ -285,7 +288,7 @@ export function useVd2AcquisitionState(measurementRate) {
   const previewPolling = previewShouldPoll(activeTab, state, protocol, previewEnabled);
   useEffect(() => {
     if (
-      !['acquisition', 'alignment'].includes(activeTab)
+      !hasVd2Preview(activeTab)
       || !previewEnabled
       || (!previewPolling && (!state?.connected || !state?.application_running))
       || protocolSaving
@@ -315,7 +318,7 @@ export function useVd2AcquisitionState(measurementRate) {
     && String(state?.acquisition_mode).toLowerCase() === 'live' && alignmentAverage?.enabled
     ? alignmentAverage.frames : 1;
   const { hz: previewHz, frameDisplayed } = useFrameDisplayRate('vd2',
-    ['acquisition', 'alignment'].includes(activeTab) && previewEnabled, previewStride);
+    hasVd2Preview(activeTab) && previewEnabled, previewStride);
 
   useEffect(() => {
     const canvas = previewCanvas.current;

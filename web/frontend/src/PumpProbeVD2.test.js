@@ -93,6 +93,89 @@ async function openRepeat() {
   return screen.findByRole('dialog',{name:'Repeat Absorption'});
 }
 
+test('the Live tab shows only preview and compact hardware controls, with delays in microseconds', async () => {
+  const image = { data: new Uint8ClampedArray(16) };
+  const draw = jest.fn();
+  const canvas = jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+    createImageData: () => image, putImageData: draw,
+  });
+  let live = false;
+  let delayE = 0.0020615;
+  const commands = [];
+  const cameraState = () => ({
+    success: true, state: 'ON', connected: true, application_running: true,
+    acquisition_status: live ? 'busy' : 'idle', acquisition_mode: live ? 'Live' : null,
+    remoteex_status: live ? 'busy' : 'idle',
+    values: { time_range: '1 us', delay_a: 0.0020417, delay_e: delayE, wavelength_nm: 550 },
+  });
+  global.fetch = jest.fn(async (url, options) => {
+    let payload = { success: true, status: 'idle' };
+    if (url === '/api/pump-probe-vd2/state') payload = cameraState();
+    else if (url.endsWith('/live/rolling-average')) payload = { success: true, frames: 2, enabled: false };
+    else if (url.endsWith('/preview')) payload = live ? {
+      success: true, frame_available: true, stream_state: 'acquiring', width: 2, height: 2,
+      pixels_b64: 'AAECAw==', received_at: new Date().toISOString(),
+    } : { success: true, frame_available: false, stream_state: 'no_valid_image' };
+    else if (url.endsWith('/command/StartLive')) {
+      commands.push('start');
+      live = true;
+      payload = cameraState();
+    } else if (url.endsWith('/parameter/delay_e')) {
+      const { value } = JSON.parse(options.body);
+      commands.push({ delay_e: value });
+      delayE = Number(value);
+      payload = cameraState();
+    } else if (url.endsWith('/command/StopAcquisition')) {
+      commands.push('stop');
+      live = false;
+      payload = cameraState();
+    }
+    return { ok: true, headers: { get: () => new Date().toUTCString() }, json: async () => payload };
+  });
+
+  const view = render(<PumpProbeVD2 />);
+  try {
+    const tabs = within(screen.getByRole('tablist', { name: 'VD2 control views' })).getAllByRole('tab');
+    expect(tabs.slice(0, 3).map(tab => tab.textContent)).toEqual(['Acquisition', 'Live', 'Hardware setup']);
+    fireEvent.click(tabs[1]);
+    expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('region', { name: 'ROI analysis' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Absorption' })).not.toBeInTheDocument();
+    const controls = within(screen.getByRole('complementary', { name: 'Live instrument settings' }));
+    expect(controls.getByRole('table', { name: 'Streak camera parameters' })).toBeInTheDocument();
+    expect(controls.getByRole('table', { name: 'Kymera parameters' })).toBeInTheDocument();
+    const dg = within(controls.getByRole('table', { name: 'DG645 delay generator parameters' }));
+    expect(await dg.findByDisplayValue('2041.7')).toBeEnabled();
+    expect(commands).toEqual([]);
+
+    const on = screen.getByRole('button', { name: 'Live On' });
+    const off = screen.getByRole('button', { name: 'Live Off' });
+    expect(off).toBeDisabled();
+    fireEvent.click(on);
+    await waitFor(() => expect(draw).toHaveBeenCalled());
+    await waitFor(() => expect(off).toBeEnabled());
+    expect(on).toHaveAttribute('aria-pressed', 'true');
+    expect(controls.getByLabelText('Time range')).toBeDisabled();
+    expect(screen.getByLabelText('Frame display rate')).toBeInTheDocument();
+
+    const e = dg.getByRole('spinbutton', { name: 'Delay E' });
+    expect(e).toHaveValue(2061.5);
+    fireEvent.focus(e);
+    fireEvent.change(e, { target: { value: '2066.5' } });
+    fireEvent.blur(e);
+    await waitFor(() => expect(commands).toEqual(['start', { delay_e: '0.0020665' }]));
+    await waitFor(() => expect(off).toBeEnabled());
+    fireEvent.click(off);
+    await waitFor(() => expect(on).toBeEnabled());
+    expect(commands).toEqual(['start', { delay_e: '0.0020665' }, 'stop']);
+    expect(off).toBeDisabled();
+  } finally {
+    view.unmount();
+    canvas.mockRestore();
+    global.fetch = originalFetch;
+  }
+});
+
 test('Acquisition shows averaging then 100 Frames / HIS; timing controls stay in Hardware setup', async () => {
   repeatFixture();
   const view = render(<PumpProbeVD2 />);

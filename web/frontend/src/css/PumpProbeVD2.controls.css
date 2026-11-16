@@ -145,3 +145,45 @@
 .vd2-roi-overlay .vd2-correction-overlay { pointer-events: none; }
 .vd2-roi-overlay .vd2-correction-overlay rect { stroke: #ffcf61; fill: #ffcf6122; }
 .vd2-roi-overlay .vd2-correction-overlay rect.is-fixed { stroke: #63cb90; fill: #63cb9022; }
+
+.vd2-live-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 700px) minmax(250px, 330px);
+  grid-template-areas: "preview sidebar";
+  align-items: start;
+  gap: 9px;
+  margin: 8px auto 0;
+  max-width: 1039px;
+}
+.vd2-live-settings { grid-area: sidebar; display: grid; gap: 5px; min-width: 0; }
+.vd2-live-settings .vd2-card header { padding: 4px 7px; }
+.vd2-live-settings .vd2-card h2 { margin: 0; font-size: 12px; }
+.vd2-live-settings .vd2-table { padding: 4px; }
+.vd2-live-settings .vd2-table-row {
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: 4px;
+  min-height: 20px;
+  margin-bottom: 2px;
+}
+.vd2-live-settings .vd2-table-row:last-child { margin-bottom: 0; }
+.vd2-live-settings .vd2-table-row > label { background: transparent; color: #d1dae3; }
+.vd2-live-settings .vd2-table select,
+.vd2-live-settings .vd2-table input,
+.vd2-live-settings .vd2-readonly,
+.vd2-live-settings .vd2-table-row > label {
+  box-sizing: border-box;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 4px;
+  font-size: 11px;
+}
+.vd2-live-settings .vd2-editable-input span { font-size: 10px; }
+.vd2-live-actions { display: flex; gap: 4px; }
+.vd2-live-actions .is-live:disabled { opacity: 1; border-color: #63cb90; color: #a7e8bb; background: #183b2a; }
+@media (max-width: 760px) {
+  .vd2-live-workspace {
+    grid-template-columns: minmax(0, 620px);
+    grid-template-areas: "preview" "sidebar";
+    justify-content: center;
+  }
+}

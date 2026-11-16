@@ -15,11 +15,15 @@ export function treatmentFolderUrl(folder) {
   return `/datatreatment?${new URLSearchParams({ profile: 'VD2', folder }).toString()}`;
 }
 
+export function hasVd2Preview(tab) {
+  return ['acquisition', 'live', 'alignment'].includes(tab);
+}
+
 export function previewShouldPoll(tab, state, protocol, enabled) {
   const sequenceAcquiring = protocol?.status === 'acquiring' || (protocol?.paired?.active && protocol.paired.status === 'acquiring');
   const cameraAvailable = Boolean(state?.connected && state?.application_running)
     || Boolean(state?.state_deferred && sequenceAcquiring);
-  return ['acquisition', 'alignment'].includes(tab) && enabled && cameraAvailable
+  return hasVd2Preview(tab) && enabled && cameraAvailable
     && !protocolSaveActive(protocol)
     && (state?.remoteex_status === 'busy' || sequenceAcquiring);
 }
