@@ -295,7 +295,7 @@ def validate_saved_capture(api, request, machine_before, rate, machine_after=Non
     import numpy as np
     from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
     from vd2_his_timing import verify_frame_rate
-    from vd2_spectral_calibration import verified_wavelengths
+    from vd2_spectral_calibration import wavelength_calibration
 
     try:
         if rate is not None and request.frames_per_his > 1:
@@ -303,10 +303,11 @@ def validate_saved_capture(api, request, machine_before, rate, machine_after=Non
         if request.phase == "BRUIT" and not (machine_before or {}).get("devices", {}).get(api.KYMERA_DEVICE):
             return None
         info = HamamatsuFileOpener().read_critical_info(Path(request.his_path))
-        if str(info.scaling_xunit).strip('"').lower() != "nm":
+        camera_profile = (machine_before or {}).get("streak_spectral_calibration") or {}
+        if "profiles" in camera_profile or str(info.scaling_xunit).strip('"').lower() != "nm":
             try:
-                calibration = verified_wavelengths(info.header, machine_before, api.KYMERA_DEVICE)
-                if machine_after is not None and verified_wavelengths(info.header, machine_after, api.KYMERA_DEVICE) != calibration:
+                calibration = wavelength_calibration(info.header, machine_before, api.KYMERA_DEVICE)
+                if machine_after is not None and wavelength_calibration(info.header, machine_after, api.KYMERA_DEVICE) != calibration:
                     raise ValueError("Wavelength calibration changed during acquisition")
                 return calibration
             except (OSError, KeyError, ValueError):

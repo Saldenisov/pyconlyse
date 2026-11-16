@@ -11,13 +11,13 @@ from uuid import uuid4
 import numpy as np
 
 from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
-from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths
+from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths, relative_delays
 from vd2_measurement_protocol import Vd2MeasurementProtocol, _utc_now
 from vd2_paired_analysis import DetectorROI, ERROR_CONFIRMATIONS, PairedAnalysis
 from vd2_paired_kinetics import KineticAnalysis, METHODS, SpectralBand
 from vd2_paired_sequence import frames, native_capture, sequence_header
 from vd2_paired_storage import BruitRequired, PairedRecording, load_dark_reference
-from vd2_spectral_calibration import camera_geometry, verified_wavelengths
+from vd2_spectral_calibration import camera_geometry, wavelength_calibration
 from vd2_project_manifest import record_paired_project_run
 from vd2_tango_optics import paired_capture_clock
 
@@ -247,10 +247,18 @@ class PairedAcquisition:
                     camera.command_query(command)
                 except Exception as exc:
                     raise RuntimeError(f"Paired camera command unavailable before warm-up: {command}") from exc
+            dark = replace(dark, timedelays=relative_delays(dark.timedelays))
             if request.band or camera_only:
-                axis, calibration_id = verified_wavelengths(dark.description, machine, api.KYMERA_DEVICE)
+                axis, calibration_id, valid_columns = wavelength_calibration(dark.description, machine, api.KYMERA_DEVICE)
                 dark = replace(dark, wavelengths=np.asarray(axis))
                 machine["spectral_calibration_id"] = calibration_id
+                if valid_columns is not None:
+                    machine["spectral_valid_columns"] = valid_columns
+                    if request.band:
+                        low, high = (axis[column] for column in valid_columns)
+                        if (request.band.center_nm - request.band.half_width_nm < min(low, high)
+                                or request.band.center_nm + request.band.half_width_nm > max(low, high)):
+                            raise ValueError("Selected wavelength band is outside the measured wavelength span")
             if request.band:
                 kinetics = KineticAnalysis(dark.image, dark.wavelengths, dark.timedelays, request.band,
                                            request.method, request.sam_surface_percent, dark.roi_blocks)
@@ -271,6 +279,8 @@ class PairedAcquisition:
                 if completed:
                     if camera_only:
                         self._calibrate_sequence(api, camera, source, request, machine, dark)
+                    else:
+                        embed_his_wavelengths(source, zero_time=True)
                     self._archive_sequence(source, request, dark, recording, analysis, kinetics)
                     stop_reason = "pair_count_reached"
                 return
@@ -339,14 +349,15 @@ class PairedAcquisition:
         info = HamamatsuFileOpener().read_critical_info(path)
         if info.number_maps != 2 * request.pair_limit:
             raise ValueError("Incomplete paired sequence; original HIS retained")
-        axis, calibration_id = verified_wavelengths(info.header, machine, api.KYMERA_DEVICE)
+        axis, calibration_id, valid_columns = wavelength_calibration(info.header, machine, api.KYMERA_DEVICE)
         after = api._machine_snapshot(camera)
-        if (verified_wavelengths(info.header, after, api.KYMERA_DEVICE) != (axis, calibration_id)
+        if (wavelength_calibration(info.header, after, api.KYMERA_DEVICE) != (axis, calibration_id, valid_columns)
                 or not np.array_equal(axis, dark.wavelengths)):
             raise ValueError("Paired wavelength calibration changed during acquisition; original HIS retained")
-        if info.scaling_yunit != dark.time_scale or not np.array_equal(info.timedelays, dark.timedelays):
+        if info.scaling_yunit != dark.time_scale or not np.array_equal(relative_delays(info.timedelays), dark.timedelays):
             raise ValueError("Sequence time calibration differs from Bruit; record a new Bruit. Original HIS retained")
-        embed_his_wavelengths(path, axis)
+        embed_his_wavelengths(path, axis, calibration_id=calibration_id,
+                              valid_columns=valid_columns, replace_existing=valid_columns is not None, zero_time=True)
 
     def _archive_sequence(self, path, request, dark, recording, analysis, kinetics):
         expected = 2 * request.pair_limit

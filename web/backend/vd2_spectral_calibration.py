@@ -2,4 +2,5 @@
 from DeviceServers.cameras.hamamatsu_streak.spectral_calibration import (
     camera_geometry as camera_geometry,
     verified_wavelengths as verified_wavelengths,
+    wavelength_calibration as wavelength_calibration,
 )

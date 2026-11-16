@@ -1,4 +1,5 @@
 """Software-only checks of instrument ownership and managed Burst acquisition."""
+from pathlib import Path
 from types import SimpleNamespace
 
 from flask import Flask
@@ -196,7 +197,9 @@ def test_camera_profile_follows_recorded_detector_and_kymera():
         load_spectral_calibration, verified_wavelengths,
     )
 
-    profile = load_spectral_calibration()
+    profile = load_spectral_calibration(
+        Path(__file__).resolve().parents[2] / "web/pump_probe/config/vd2_spectral_calibration_550nm.json"
+    )
     header = '[Camera],' + ','.join(f'{key}="{value}"' for key, value in profile['camera'].items())
     values = dict(profile['kymera'])
     machine = {'streak_spectral_calibration': profile,
@@ -222,7 +225,9 @@ def test_scanned_profile_preserves_dispersion_and_anchors_between_measured_setti
         load_spectral_calibration, verified_wavelengths,
     )
 
-    profile = load_spectral_calibration()
+    profile = load_spectral_calibration(
+        Path(__file__).resolve().parents[2] / "web/pump_probe/config/vd2_spectral_calibration_550nm.json"
+    )
     profile["camera"]["HWidth"] = "4"
     profile["kymera"].pop("wavelength_nm")
     for key in ("wavelengths_nm", "center_pixel", "dispersion_nm_per_pixel"):

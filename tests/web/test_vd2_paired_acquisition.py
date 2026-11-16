@@ -238,12 +238,21 @@ def test_native_sequence_records_exact_pairs_and_saves_after_burst_off(rig):
             if command == "SaveCurrentSequence":
                 header = bytearray(64)
                 header[:2] = b"IM"
-                struct.pack_into("<HHH", header, 2, 0, 2, 1)
+                comment = (
+                    b'ScalingXType=1,ScalingXScale=1,ScalingXUnit="",ScalingXScalingFile="Other",'
+                    b'ScalingYType=2,ScalingYScale=1,ScalingYUnit="ns",'
+                    b'ScalingYScalingFile="#%07d,0001"'
+                )
+                comment = comment % (64 + len(comment % (0,))) + struct.pack("<f", 3.5)
+                struct.pack_into("<HHH", header, 2, len(comment), 2, 1)
                 struct.pack_into("<HH", header, 12, 2, int(self.loops))
                 with Path(arg).open("wb") as stream:
                     for i in range(int(self.loops)):
                         struct.pack_into("<d", header, 22, 100.0 * i)
+                        struct.pack_into("<H", header, 2, len(comment) if not i else 0)
                         stream.write(header)
+                        if not i:
+                            stream.write(comment)
                         stream.write(np.asarray([90, 95] if i % 2 == 0 else [110, 105], dtype="<u2").tobytes())
 
     camera = NativeCamera(events)
@@ -254,7 +263,7 @@ def test_native_sequence_records_exact_pairs_and_saves_after_burst_off(rig):
     run.start(control, replace(request, native_sequence=True))
     run.wait(5)
     result = run.status()
-    assert (result["status"], result["pairs_recorded"]) == ("completed", 3)
+    assert (result["status"], result["pairs_recorded"]) == ("completed", 3), result["error"]
     assert events == [("sequence_loops", "6"), ("warm", 1), "StartSequence",
                       "pulses-paused", "SaveCurrentSequence", ("sequence_loops", "10")]
     with h5py.File(result["h5_path"]) as file:

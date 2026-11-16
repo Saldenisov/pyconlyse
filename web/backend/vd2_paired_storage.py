@@ -91,6 +91,10 @@ class PairedRecording:
             if machine.get("spectral_calibration_id"):
                 self.file["wavelengths"].attrs["unit"] = "nm"
                 self.metadata.attrs["spectral_calibration_id"] = machine["spectral_calibration_id"]
+                if machine.get("spectral_valid_columns") is not None:
+                    axis = self.file["wavelengths"]
+                    axis.attrs["calibration_valid_columns"] = machine["spectral_valid_columns"]
+                    axis.attrs["calibration_outside_span"] = "model_extrapolation"
             self.metadata.attrs.update({
                 "phase": "PAIRED", "status": "recording", "frame_count": 0, "pair_count": 0,
                 "time_scale": dark.time_scale, "description": dark.description,

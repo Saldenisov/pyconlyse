@@ -1,4 +1,4 @@
-"""Add a native HPD-TA wavelength table without changing any frame bytes."""
+"""Write native HPD-TA calibration tables without changing any frame bytes."""
 import hashlib
 import os
 from pathlib import Path
@@ -28,7 +28,29 @@ def _copy_frames(source, target=None):
     return digest.digest()
 
 
-def embed_his_wavelengths(path, wavelengths):
+def spectral_calibration_metadata(header):
+    match = re.search(
+        r'(?m)^\[PyConlyseSpectral\],ID="([A-Za-z0-9_.-]+)",ValidColumns="(\d+),(\d+)"',
+        header,
+    )
+    return (match[1], (int(match[2]), int(match[3]))) if match else None
+
+
+def relative_delays(values):
+    """Translate the first recorded detector row to zero without flipping the axis."""
+    axis = np.asarray(values, dtype=float)
+    if not axis.size or axis[0] == 0:
+        return axis
+    return (axis - axis[0]).astype("<f4")
+
+
+def time_origin_metadata(header):
+    match = re.search(r'(?m)^\[PyConlyseTime\],OriginalFirst="([-+eE.0-9]+)"', header)
+    return float(match[1]) if match else None
+
+
+def embed_his_wavelengths(path, wavelengths=None, *, calibration_id=None, valid_columns=None,
+                          replace_existing=False, zero_time=False):
     """Publish a verified replacement only for the known camera-only HIS layout."""
     path = Path(path)
     if path.suffix.lower() != '.his' or path.is_symlink():
@@ -36,17 +58,44 @@ def embed_his_wavelengths(path, wavelengths):
 
     original = path.stat()
     info = HamamatsuFileOpener().read_critical_info(path)
-    axis = np.asarray(wavelengths, dtype='<f4')
-    if (axis.shape != (info.wavelengths_length,) or len(axis) < 2
+    axis = None if wavelengths is None else np.asarray(wavelengths, dtype='<f4')
+    if axis is not None and (axis.shape != (info.wavelengths_length,) or len(axis) < 2
             or not np.isfinite(axis).all()
             or not (np.all(np.diff(axis) > 0) or np.all(np.diff(axis) < 0))):
         raise ValueError("Invalid wavelength table for HIS detector width")
-    if info.scaling_xunit == 'nm':
-        if not np.array_equal(info.wavelengths, axis):
+    metadata = b""
+    if valid_columns is not None:
+        low, high = valid_columns
+        if (not isinstance(calibration_id, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", calibration_id)
+                or any(type(column) is not int for column in (low, high))
+                or axis is None or not 0 <= low < high < len(axis)):
+            raise ValueError("Invalid HIS calibration identity or measured columns")
+        metadata = (f'\r\n[PyConlyseSpectral],ID="{calibration_id}",ValidColumns="{low},{high}"\r\n'
+                    .encode("ascii"))
+    parsed_metadata = spectral_calibration_metadata(info.header)
+    if axis is not None and parsed_metadata and parsed_metadata != (calibration_id, valid_columns):
+        raise ValueError("HIS already bears different PyConlyse calibration metadata")
+    update_x = axis is not None
+    if axis is not None and info.scaling_xunit == 'nm':
+        matches_axis = np.array_equal(info.wavelengths, axis)
+        if not matches_axis and not replace_existing:
             raise ValueError("HIS already has a different wavelength calibration")
-        return axis
-    if info.file_type != 'Other':
+        update_x = not matches_axis or bool(metadata and not parsed_metadata)
+    elif axis is not None and info.file_type != 'Other':
         raise ValueError("Unsupported HIS spectral header; original retained")
+
+    if not update_x:
+        metadata = b""
+    old_delays = np.asarray(info.timedelays)
+    delays = relative_delays(old_delays) if zero_time else old_delays
+    update_y = bool(zero_time and old_delays.size and old_delays[0] != 0)
+    if update_y:
+        if (not np.isfinite(delays).all()
+                or not (np.all(np.diff(delays) > 0) or np.all(np.diff(delays) < 0))):
+            raise ValueError("Invalid native time calibration; original retained")
+        metadata += f'\r\n[PyConlyseTime],OriginalFirst="{float(old_delays[0]):.17g}"\r\n'.encode("ascii")
+    if not update_x and not update_y:
+        return axis
 
     # A sibling inherits the experiment folder's permissions on Windows.
     staged = path.with_name(f'.his-calibration-{uuid4().hex}.his')
@@ -66,24 +115,39 @@ def embed_his_wavelengths(path, wavelengths):
             starts = [int(ref[2]) for ref in refs if ref.start() + 64 < int(ref[2]) < info.data_pos]
             boundary = min(starts, default=info.data_pos) - 64
             text, tables = comment[:boundary], comment[boundary:]
-            matches = list(_PIXEL_X.finditer(text))
-            if len(matches) != 1:
-                raise ValueError("Expected one uncalibrated X field; original HIS retained")
-            x_field = matches[0]
+            if update_y:
+                y_ref = re.search(rb'ScalingYScalingFile="#(\d{7})(?:,\d{4})?"', text)
+                if y_ref is None or not 64 + boundary <= int(y_ref[1]) <= info.data_pos - delays.nbytes:
+                    raise ValueError("No supported native Y table; original HIS retained")
+                at = int(y_ref[1]) - 64 - boundary
+                tables = tables[:at] + delays.tobytes() + tables[at + delays.nbytes:]
+            x_table = b""
+            shift = len(metadata)
             template = b'ScalingXType=2,ScalingXScale=1,ScalingXUnit="nm",ScalingXScalingFile="#%07d,%04d"'
-            placeholder = template % (0, len(axis))
-            shift = len(placeholder) - len(x_field[0])
-            x_offset = 64 + boundary + shift
+            if update_x:
+                calibrated_x = re.compile(
+                    rb'ScalingXType=2,ScalingXScale=[^,]+,ScalingXUnit="nm",ScalingXScalingFile="#\d{7},\d{4}"'
+                )
+                field_pattern = calibrated_x if info.scaling_xunit == "nm" else _PIXEL_X
+                matches = list(field_pattern.finditer(text))
+                if len(matches) != 1:
+                    raise ValueError("Expected one supported X field; original HIS retained")
+                shift += len(template % (0, len(axis))) - len(matches[0][0])
+                x_table = axis.tobytes()
             for ref in _TABLE_REFERENCE.finditer(text):
                 offset = int(ref[2])
                 if not 64 + boundary <= offset < info.data_pos:
                     raise ValueError("Invalid calibration offset in native HIS comment")
+            if update_x:
+                # Omit the original X reference while shifting all other table pointers.
+                text = field_pattern.sub(b"__PYCONLYSE_X_TABLE__", text, count=1)
             text = _TABLE_REFERENCE.sub(
-                lambda ref: ref[1] + (b'%07d' % (int(ref[2]) + shift + axis.nbytes)) + ref[3], text
+                lambda ref: ref[1] + (b'%07d' % (int(ref[2]) + shift + len(x_table))) + ref[3], text
             )
-            text = _PIXEL_X.sub(template % (x_offset, len(axis)), text, count=1)
-            updated = text + axis.tobytes() + tables
-            if len(updated) > 65535 or len(axis) > 9999:
+            if update_x:
+                text = text.replace(b"__PYCONLYSE_X_TABLE__", template % (64 + boundary + shift, len(axis)), 1)
+            updated = text + metadata + x_table + tables
+            if len(updated) > 65535 or (axis is not None and len(axis) > 9999):
                 raise ValueError("Calibration exceeds the native HIS header limits")
             struct.pack_into('<H', fixed, 2, len(updated))
             target.write(fixed)
@@ -93,9 +157,13 @@ def embed_his_wavelengths(path, wavelengths):
             os.fsync(target.fileno())
 
         readback = HamamatsuFileOpener().read_critical_info(staged)
-        if (readback.scaling_xunit != 'nm' or not np.array_equal(readback.wavelengths, axis)
+        if ((axis is not None and (readback.scaling_xunit != 'nm' or not np.array_equal(readback.wavelengths, axis)))
+                or (axis is None and (readback.scaling_xunit != info.scaling_xunit
+                                      or not np.array_equal(readback.wavelengths, info.wavelengths)))
                 or readback.number_maps != count or readback.scaling_yunit != info.scaling_yunit
-                or not np.array_equal(readback.timedelays, info.timedelays)):
+                or not np.array_equal(readback.timedelays, delays)
+                or (update_y and time_origin_metadata(readback.header) != float(old_delays[0]))
+                or (valid_columns is not None and spectral_calibration_metadata(readback.header) != (calibration_id, valid_columns))):
             raise ValueError("Staged HIS calibration did not verify; original retained")
         with staged.open('rb') as stream:
             stream.seek(readback.data_pos)

@@ -51,24 +51,34 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
     import numpy as np
     from treatment_service import TreatmentDataService
     from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
-    from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths
+    from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths, time_origin_metadata
 
     source = Path(request.his_path)
     output = source.with_suffix(".h5")
     report = progress or (lambda _: None)
     opener = HamamatsuFileOpener()
+    original = opener.read_critical_info(source)
+    if original.number_maps != request.frames_per_his:
+        raise Vd2ProtocolError("HIS frame count does not match the request; original retained")
     if request.spectral_axis_nm is not None:
-        original = opener.read_critical_info(source)
-        if original.number_maps != request.frames_per_his:
-            raise Vd2ProtocolError("HIS frame count does not match the request; original retained")
-        if output.exists() and original.scaling_xunit != 'nm':
+        if output.exists() and (original.scaling_xunit != 'nm'
+                                or not np.array_equal(original.wavelengths, request.spectral_axis_nm)):
             raise Vd2ProtocolError("Existing H5 prevents recalibrating the source HIS; both files retained")
-        embed_his_wavelengths(source, request.spectral_axis_nm)
-        opener = HamamatsuFileOpener()
+        embed_his_wavelengths(source, request.spectral_axis_nm,
+                              calibration_id=request.spectral_calibration_id,
+                              valid_columns=request.spectral_valid_columns,
+                              replace_existing=request.spectral_valid_columns is not None and not output.exists(),
+                              zero_time=not output.exists())
+    elif not output.exists():
+        embed_his_wavelengths(source, zero_time=True)
+    opener = HamamatsuFileOpener()
     source_identity = fingerprint(source)
     info = opener.read_critical_info(source)
     count = int(info.number_maps)
     wavelengths = info.wavelengths
+    origin = time_origin_metadata(info.header)
+    if np.asarray(info.timedelays)[0] != 0:
+        raise Vd2ProtocolError("Saved HIS time axis does not start at zero; original retained")
     if wavelengths.shape != (info.wavelengths_length,):
         raise Vd2ProtocolError("Spectral calibration width does not match HIS; HIS retained")
     if count != request.frames_per_his:
@@ -100,6 +110,10 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
                 or handle["metadata"].attrs.get("spectral_calibration_id") != request.spectral_calibration_id
             ):
                 raise Vd2ProtocolError("Converted calibration metadata differs from HIS; HIS retained")
+            if request.spectral_valid_columns is not None:
+                attrs = handle["wavelengths"].attrs
+                if tuple(attrs.get("calibration_valid_columns", ())) != request.spectral_valid_columns:
+                    raise Vd2ProtocolError("Measured wavelength span differs from HIS; HIS retained")
             for index in range(count):
                 measurement, error = opener.read_map(source, index)
                 if measurement is False or not np.array_equal(
@@ -131,6 +145,13 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
                     handle["wavelengths"].attrs["unit"] = "nm"
                     handle["timedelays"].attrs["unit"] = info.scaling_yunit
                     handle["metadata"].attrs["spectral_calibration_id"] = request.spectral_calibration_id
+                    if request.spectral_valid_columns is not None:
+                        handle["wavelengths"].attrs["calibration_valid_columns"] = request.spectral_valid_columns
+                        handle["wavelengths"].attrs["calibration_outside_span"] = "model_extrapolation"
+            if origin is not None:
+                with h5py.File(staged, "r+") as handle:
+                    handle["timedelays"].attrs["unit"] = info.scaling_yunit
+                    handle["timedelays"].attrs["original_first_value"] = origin
             verify(staged, 50)
             with h5py.File(staged, "r+") as handle:
                 metadata = handle["metadata"].attrs

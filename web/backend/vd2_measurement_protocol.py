@@ -42,6 +42,7 @@ class PhaseRequest:
     reserve_directory: bool = False
     spectral_axis_nm: tuple[float, ...] | None = None
     spectral_calibration_id: str | None = None
+    spectral_valid_columns: tuple[int, int] | None = None
 
 
 class Vd2MeasurementProtocol:
@@ -250,8 +251,11 @@ class Vd2MeasurementProtocol:
             if self._capture_validator is not None:
                 calibration = self._capture_validator(request, machine_before, configured_rate, machine_after)
                 if calibration is not None:
-                    axis, calibration_id = calibration
-                    request = replace(request, spectral_axis_nm=axis, spectral_calibration_id=calibration_id)
+                    axis, calibration_id, *coverage = calibration
+                    request = replace(
+                        request, spectral_axis_nm=axis, spectral_calibration_id=calibration_id,
+                        spectral_valid_columns=coverage[0] if coverage else None,
+                    )
             record("saved", machine_after=machine_after)
             with self._changed:
                 self._jobs[job_id].update(status="queued", postprocessing=True)
