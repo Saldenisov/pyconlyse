@@ -19,7 +19,8 @@ const STOP_LABELS = {
 export default function VD2PairedCapture({
   available, run, settings, disabled, roi, preview, protocol, onUpdate, onStop, onBruit,
   cameraIdle, live, liveBlocked, onLive, correction, correctionRange, correctionFixed,
-  canFixCorrection, onChangeCorrection, onFixCorrection,
+  referenceConfirmed, canFixCorrection, canConfirmReference,
+  onChangeCorrection, onFixCorrection, onConfirmReference,
 }) {
   const [mode, setMode] = useState('fixed');
   const [first, setFirst] = useState(true);
@@ -36,7 +37,8 @@ export default function VD2PairedCapture({
   const currentMode = active ? run.mode : mode;
   const pairLimit = Number(mode === 'fixed' ? pairs : limit);
   const validTarget = Number(target) > 0 && Number(target) <= 1000;
-  const band = active ? run.band : correctionFixed ? correction.fixed.band : correctionRange.band;
+  const band = active ? run.band : correctionRange.band;
+  const spectralBand = active ? band : correctionRange.spectralBand;
   const needsBruit = run?.status === 'bruit_required' && run.sample_name === settings.runName;
   const bruitReady = bruitAttempt && protocol?.job_id !== bruitAttempt.prior
     && protocol?.phase === 'BRUIT' && protocol?.sample_name === settings.runName && protocol?.status === 'completed';
@@ -111,7 +113,7 @@ export default function VD2PairedCapture({
   const displayedCenter = active ? band?.center_nm : correctionRange.center ?? correction.center;
   const displayedBandwidth = active && band ? 2 * band.half_width_nm : correctionRange.bandwidth ?? correction.bandwidth;
   const cannotStart = locked || !cameraIdle || !settings.runName?.trim() || !Number.isInteger(pairLimit)
-    || pairLimit < 1 || pairLimit > 10000 || !correctionFixed
+    || pairLimit < 1 || pairLimit > 10000 || !band || !correctionFixed || !referenceConfirmed
     || (method.startsWith('sam_') && !(Number(samSurface) > 0 && Number(samSurface) <= 100))
     || (mode === 'precision' && !validTarget);
   return (
@@ -154,24 +156,30 @@ export default function VD2PairedCapture({
             disabled={locked || correctionFixed} onChange={event => onChangeCorrection('center', event.target.value)} /></label>
           <label><span>Bandwidth (nm)</span><input type="number" min="0.1" step="any" value={displayedBandwidth ?? ''}
             disabled={locked || correctionFixed} onChange={event => onChangeCorrection('bandwidth', event.target.value)} /></label>
-          <label><span>Lamp reference rows</span><input type="number" min="1" step="1"
-            value={active ? band?.monitor_rows ?? correction.monitorRows : correction.monitorRows}
-            disabled={locked || correctionFixed} onChange={event => onChangeCorrection('monitorRows', event.target.value)} /></label>
           <button type="button" disabled={locked || (!correctionFixed && !canFixCorrection)}
             onClick={onFixCorrection}>{correctionFixed ? 'Unfix' : 'Fix'}</button>
         </div>
-        {band && <small>
-          {(band.center_nm - band.half_width_nm).toFixed(1)}–{(band.center_nm + band.half_width_nm).toFixed(1)} nm
-          {' · '}{band.monitor_rows} lamp reference rows
+        {spectralBand && <small>
+          {(spectralBand.center_nm - spectralBand.half_width_nm).toFixed(1)}–{(spectralBand.center_nm + spectralBand.half_width_nm).toFixed(1)} nm
         </small>}
         {!active && !correctionFixed && <small role="status">
           {correctionRange.span
             ? `Calibrated span ${correctionRange.min.toFixed(1)}–${correctionRange.max.toFixed(1)} nm${correctionRange.span < 100 ? ' (less than 100 nm)' : ''}`
             : 'Start Live to see the calibrated span.'}
-          {correctionRange.span && !correctionRange.band && ' · Adjust range or reference rows to fit the calibrated image.'}
+          {correctionRange.span && !correctionRange.bounds && ' · Adjust the range to fit the calibrated image.'}
         </small>}
-        {correctionFixed && live && <small>Stop Live before starting Measurement.</small>}
       </fieldset>
+      <fieldset className={`vd2-spectral-correction ${referenceConfirmed || active ? 'is-fixed' : ''}`}>
+        <legend>Lamp reference</legend>
+        <div className="vd2-protocol-settings">
+          <label><span>Lamp reference rows</span><input type="number" min="1" step="1"
+            value={active ? band?.monitor_rows ?? correction.monitorRows : correction.monitorRows}
+            disabled={locked || referenceConfirmed} onChange={event => onChangeCorrection('monitorRows', event.target.value)} /></label>
+          <button type="button" disabled={locked || (!referenceConfirmed && !canConfirmReference)}
+            onClick={onConfirmReference}>{referenceConfirmed ? 'Edit' : 'Confirm'}</button>
+        </div>
+      </fieldset>
+      {correctionFixed && referenceConfirmed && live && <small>Stop Live before starting Measurement.</small>}
       <div className="vd2-phase-buttons">
         {!needsBruit && <button type="button" className="vd2-measure-button" disabled={cannotStart} onClick={start}>Measurement</button>}
         {needsBruit && !bruitReady && <button type="button" disabled={locked || !cameraIdle || !onBruit} onClick={recordBruit}>Record Bruit</button>}

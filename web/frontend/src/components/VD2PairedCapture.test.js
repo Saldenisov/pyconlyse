@@ -9,8 +9,9 @@ jest.mock('../PumpProbeVD2.API_BASE', () => ({
 
 const band = { center_nm: 510, half_width_nm: 60, monitor_rows: 5 };
 const props = {
-  cameraIdle: true, live: false, correctionFixed: true, correctionRange: { band },
-  correction: { ...DEFAULT_PAIRED_CORRECTION, monitorRows: '5', fixed: { band } },
+  cameraIdle: true, live: false, correctionFixed: true, referenceConfirmed: true,
+  correctionRange: { band, spectralBand: band },
+  correction: { ...DEFAULT_PAIRED_CORRECTION, monitorRows: '5' },
   available: true,
   settings: { outputRoot: 'E:/DATA_VD2/test', runName: 'sample', reuseBruit: 'latest' },
   preview: { width: 10, height: 20 },
@@ -62,31 +63,17 @@ test('missing Bruit closes the streak shutter and resumes after the new referenc
 });
 
 
-test('Live and the Fix/Unfix action stay available before recording', () => {
-  const onLive = jest.fn();
-  const onFixCorrection = jest.fn();
-  const view = render(<VD2PairedCapture {...props} correctionFixed={false} onLive={onLive}
-    onFixCorrection={onFixCorrection} />);
-  const live = screen.getByRole('button', { name: 'Live' });
-  expect(live).toHaveAttribute('aria-pressed', 'false');
-  expect(screen.getByRole('button', { name: 'Fix' })).toBeDisabled();
+test('both selections are required to start a measurement', () => {
+  const view = render(<VD2PairedCapture {...props} referenceConfirmed={false} />);
   expect(screen.getByRole('button', { name: 'Measurement' })).toBeDisabled();
-  fireEvent.click(live);
-  expect(onLive).toHaveBeenCalledTimes(1);
-
-  view.rerender(<VD2PairedCapture {...props} cameraIdle={false} live canFixCorrection
-    correctionFixed={false} onLive={onLive} onFixCorrection={onFixCorrection} />);
-  expect(live).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: 'Fix' }));
-  expect(onFixCorrection).toHaveBeenCalledTimes(1);
-
-  view.rerender(<VD2PairedCapture {...props} cameraIdle={false} live onLive={onLive}
-    onFixCorrection={onFixCorrection} />);
+  expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
   expect(screen.getByLabelText('Bandwidth (nm)')).toBeDisabled();
-  expect(screen.getByLabelText('Lamp reference rows')).toBeDisabled();
+  expect(screen.getByLabelText('Lamp reference rows')).toBeEnabled();
+
+  view.rerender(<VD2PairedCapture {...props} correctionFixed={false} />);
   expect(screen.getByRole('button', { name: 'Measurement' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Unfix' }));
-  expect(onFixCorrection).toHaveBeenCalledTimes(2);
+  expect(screen.getByLabelText('Bandwidth (nm)')).toBeEnabled();
+  expect(screen.getByLabelText('Lamp reference rows')).toBeDisabled();
 });
 
 test('correction defaults to 120 nm within the measured columns on a descending axis', () => {
@@ -98,5 +85,8 @@ test('correction defaults to 120 nm within the measured columns on a descending 
   expect(result.band).toEqual({ center_nm: 520, half_width_nm: 60, monitor_rows: 30 });
   expect(result.bounds).toMatchObject({ x0: 2, x1: 3 });
   expect(pairedSpectralRegion(calibration, { ...DEFAULT_PAIRED_CORRECTION, bandwidth: '150' }).band).toBeUndefined();
-  expect(pairedSpectralRegion(calibration, { ...DEFAULT_PAIRED_CORRECTION, monitorRows: '40' }).band).toBeUndefined();
+  const invalidRows = pairedSpectralRegion(calibration, { ...DEFAULT_PAIRED_CORRECTION, monitorRows: '40' });
+  expect(invalidRows.band).toBeUndefined();
+  expect(invalidRows.bounds).toEqual(result.bounds);
+  expect(invalidRows.referenceRows).toBeNull();
 });

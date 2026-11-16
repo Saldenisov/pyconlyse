@@ -47,19 +47,30 @@ export function renderVd2Acquisition({
   const pairedMode = pairedActive || (protocol?.paired_available && measurementRate === '10');
   const live = state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live';
   const pairedRange = pairedMode ? pairedSpectralRegion(calibration, pairedCorrection) : {};
-  const fixedCorrection = pairedCorrection.fixed;
-  const correctionFixed = Boolean(fixedCorrection && preview?.calibration_key
-    && fixedCorrection.key === preview.calibration_key && pairedRange.band);
-  const displayedCorrection = pairedActive ? fixedCorrection : pairedRange;
-  const correctionBounds = displayedCorrection?.bounds;
-  const showCorrection = pairedMode && activeTab === 'acquisition' && correctionBounds
-    && correctionBounds.width === preview?.width && correctionBounds.height === preview?.height;
+  const { fixed, confirmedReference } = pairedCorrection;
+  const calibrationKey = preview?.calibration_key;
+  const correctionFixed = Boolean(calibrationKey && fixed?.key === calibrationKey && pairedRange.bounds);
+  const referenceConfirmed = Boolean(calibrationKey && confirmedReference?.key === calibrationKey
+    && confirmedReference.rows === pairedRange.referenceRows);
+  const canReview = Boolean(live && previewFresh && calibrationKey && calibration?.calibration_key === calibrationKey);
+  const canFixCorrection = canReview && Boolean(pairedRange.bounds);
+  const canConfirmReference = canReview && Boolean(pairedRange.referenceRows);
+  const correctionBounds = pairedActive ? fixed?.bounds : pairedRange.bounds;
+  const displayedRows = pairedActive ? protocol.paired.band?.monitor_rows : pairedRange.referenceRows;
+  const showCorrection = pairedMode && activeTab === 'acquisition' && preview;
+  const showSpectralBounds = correctionBounds?.width === preview?.width && correctionBounds?.height === preview?.height;
   const fixCorrection = () => {
-    if (correctionFixed) {
-      setPairedCorrection(current => ({ ...current, fixed: null }));
-    } else if (live && previewFresh && preview?.calibration_key && pairedRange.band) {
-      setPairedCorrection(current => ({ ...current, center: pairedRange.center, bandwidth: pairedRange.bandwidth,
-        fixed: { key: preview.calibration_key, band: pairedRange.band, bounds: pairedRange.bounds } }));
+    if (correctionFixed || canFixCorrection) {
+      setPairedCorrection(current => correctionFixed ? { ...current, fixed: null } : ({
+        ...current, center: pairedRange.center, bandwidth: pairedRange.bandwidth,
+        fixed: { key: calibrationKey, bounds: pairedRange.bounds },
+      }));
+    }
+  };
+  const confirmReference = () => {
+    if (referenceConfirmed || canConfirmReference) {
+      setPairedCorrection(current => ({ ...current, confirmedReference: referenceConfirmed ? null
+        : { key: calibrationKey, rows: pairedRange.referenceRows } }));
     }
   };
   return (
@@ -174,9 +185,12 @@ export function renderVd2Acquisition({
               cameraIdle={acquisitionIdle} live={live} liveBlocked={alignmentControlsBlocked}
               onLive={() => runCommand(live ? 'StopAcquisition' : 'StartLive')}
               correction={pairedCorrection} correctionRange={pairedRange} correctionFixed={correctionFixed}
-              canFixCorrection={live && previewFresh && Boolean(preview?.calibration_key && pairedRange.band)}
-              onChangeCorrection={(key, value) => setPairedCorrection(current => ({ ...current, [key]: value, fixed: null }))}
-              onFixCorrection={fixCorrection}
+              referenceConfirmed={referenceConfirmed}
+              canFixCorrection={canFixCorrection} canConfirmReference={canConfirmReference}
+              onChangeCorrection={(key, value) => setPairedCorrection(current => ({
+                ...current, [key]: value, [key === 'monitorRows' ? 'confirmedReference' : 'fixed']: null,
+              }))}
+              onFixCorrection={fixCorrection} onConfirmReference={confirmReference}
               roi={rois.find(roi => roi.id === selectedRoiId)} preview={preview} onUpdate={updatePairedCapture}
               onStop={() => runCommand('StopAcquisition')} />}
             {projectError && <p role="alert" className="vd2-stage-error">{projectError}</p>}
@@ -264,15 +278,18 @@ export function renderVd2Acquisition({
                   onPointerUp={activeTab === 'acquisition' ? completeRoi : undefined}
                   onPointerCancel={() => setDrawingRoi(null)}
                 >
-                  {showCorrection && <g className={`vd2-correction-overlay ${correctionFixed || pairedActive ? 'is-fixed' : ''}`}>
-                    <rect x={0} y={0} width={preview.width} height={displayedCorrection.band.monitor_rows}>
-                      <title>Lamp reference rows</title>
-                    </rect>
-                    <rect x={correctionBounds.x0} y={displayedCorrection.band.monitor_rows}
+                  {showCorrection && <g className="vd2-correction-overlay">
+                    {displayedRows > 0 && displayedRows < preview.height &&
+                      <rect className={referenceConfirmed || pairedActive ? 'is-fixed' : ''}
+                        x={0} y={0} width={preview.width} height={displayedRows}>
+                        <title>Lamp reference rows</title>
+                      </rect>}
+                    {showSpectralBounds && <rect className={correctionFixed || pairedActive ? 'is-fixed' : ''}
+                      x={correctionBounds.x0} y={displayedRows || 0}
                       width={correctionBounds.x1 - correctionBounds.x0 + 1}
-                      height={preview.height - displayedCorrection.band.monitor_rows}>
+                      height={preview.height - (displayedRows || 0)}>
                       <title>Spectral Correction Range</title>
-                    </rect>
+                    </rect>}
                   </g>}
                   {activeTab === 'alignment' && alignment.bounds && <VD2RoiEditor bounds={alignment.bounds}
                     width={preview.width} height={preview.height} pointFromEvent={previewPoint} label="Alignment ROI"

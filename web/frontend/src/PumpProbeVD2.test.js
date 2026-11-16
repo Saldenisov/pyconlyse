@@ -554,6 +554,69 @@ test('confirmed two-frame averaging paces the Alignment canvas to 2.5 Hz with a 
   }
 });
 
+test('paired Acquisition Live previews and confirms the two regions independently', async () => {
+  const canvas = jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+    createImageData: (width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }),
+    putImageData: jest.fn(),
+  });
+  let live = false;
+  let calibrationKey = 'first-optics';
+  const width = 4;
+  const height = 40;
+  const cameraState = () => ({ success: true, state: 'ON', connected: true, application_running: true,
+    acquisition_status: live ? 'busy' : 'idle', acquisition_mode: live ? 'Live' : null,
+    remoteex_status: live ? 'busy' : 'idle', values: {} });
+  global.fetch = jest.fn(async (url, options) => {
+    let payload = { success: true };
+    if (url.endsWith('/protocol/state')) payload = { success: true, status: 'idle', paired_available: true };
+    else if (url.endsWith('/state')) payload = cameraState();
+    else if (url.endsWith('/command/StartLive')) { live = true; payload = cameraState(); }
+    else if (url.endsWith('/preview')) payload = live ? {
+      success: true, frame_available: true, stream_state: 'acquiring',
+      width, height, pixels_b64: window.btoa(String.fromCharCode(0).repeat(width * height)),
+      calibration_key: calibrationKey,
+      calibration: { width, height, calibration_key: calibrationKey, wavelengths: [450, 490, 540, 590] },
+      received_at: new Date().toISOString(),
+    } : { success: true, frame_available: false, stream_state: 'no_valid_image' };
+    return { ok: true, headers: { get: () => new Date().toUTCString() }, json: async () => payload };
+  });
+
+  const view = render(<PumpProbeVD2 />);
+  try {
+    fireEvent.change(await screen.findByLabelText('Measurement rate'), { target: { value: '10' } });
+    const liveButton = screen.getByRole('button', { name: 'Live' });
+    await waitFor(() => expect(liveButton).toBeEnabled());
+    expect(liveButton).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
+    fireEvent.click(liveButton);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Fix' })).toBeEnabled());
+    expect(liveButton).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Bandwidth (nm)')).toHaveValue(120);
+
+    const rectangles = () => Array.from(view.container.querySelectorAll('.vd2-correction-overlay rect'));
+    fireEvent.click(screen.getByRole('button', { name: 'Fix' }));
+    expect(rectangles().map(rectangle => rectangle.classList.contains('is-fixed'))).toEqual([false, true]);
+    fireEvent.change(screen.getByLabelText('Lamp reference rows'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(rectangles().map(rectangle => rectangle.classList.contains('is-fixed'))).toEqual([true, true]);
+    expect(rectangles()[0]).toHaveAttribute('height', '20');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unfix' }));
+    expect(screen.getByLabelText('Bandwidth (nm)')).toBeEnabled();
+    expect(screen.getByLabelText('Lamp reference rows')).toBeDisabled();
+    expect(rectangles().map(rectangle => rectangle.classList.contains('is-fixed'))).toEqual([true, false]);
+
+    calibrationKey = 'new-optics';
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh frame' }));
+    await waitFor(() => expect(screen.getByLabelText('Lamp reference rows')).toBeEnabled());
+    expect(rectangles().map(rectangle => rectangle.classList.contains('is-fixed'))).toEqual([false, false]);
+  } finally {
+    view.unmount();
+    canvas.mockRestore();
+    global.fetch = originalFetch;
+  }
+});
+
 test('Alignment calibrates and refreshes kinetics during Live without stopping it', async () => {
   const canvasContext = jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     createImageData: (width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }),

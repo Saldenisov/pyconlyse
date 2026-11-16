@@ -144,4 +144,4 @@
 .vd2-spectral-correction small { display: block; padding-inline: 4px; }
 .vd2-roi-overlay .vd2-correction-overlay { pointer-events: none; }
 .vd2-roi-overlay .vd2-correction-overlay rect { stroke: #ffcf61; fill: #ffcf6122; }
-.vd2-roi-overlay .vd2-correction-overlay.is-fixed rect { stroke: #63cb90; fill: #63cb9022; }
+.vd2-roi-overlay .vd2-correction-overlay rect.is-fixed { stroke: #63cb90; fill: #63cb9022; }
