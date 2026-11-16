@@ -61,10 +61,11 @@ def timing_for_range(value):
         raise ValueError(f"No VD2 DG645 timing calibration for {value}; no interpolation permitted") from None
 
 
-def verify_timing(dg645, profile):
-    # A remains operator-controlled. Verify its readback and reference, while
-    # the calibrated streak-camera trigger on E still needs an exact setpoint.
-    for channel, expected_ms in ((2, None), (6, profile.delay_e_ms)):
+def verify_timing(dg645, profile, *, live=False):
+    # Live uses the operator's timings. A remains manual for recordings,
+    # which still require the calibrated E setpoint.
+    expected_e = None if live else profile.delay_e_ms
+    for channel, expected_ms in ((2, None), (6, expected_e)):
         raw = str(dg645.command_inout("scpi_query", f"DLAY? {channel}")).strip()
         try:
             reference, seconds = raw.split(",")

@@ -83,7 +83,7 @@ def rig(monkeypatch):
     monkeypatch.setattr(api, "DeviceProxy", lambda device: {
         api.STREAK_DEVICE: camera, api.DG645_DEVICE: dg645, api.ZABER_PDU_DEVICE: lamp,
     }[device])
-    monkeypatch.setattr(api, "verify_timing", lambda proxy, profile: None)
+    monkeypatch.setattr(api, "verify_timing", lambda proxy, profile, **kwargs: None)
 
     return camera, dg645, events
 
@@ -164,15 +164,17 @@ def test_standard_capture_checks_intervals_only_when_two_frames_exist(rig, monke
 
 
 @pytest.mark.parametrize(
-    ("a", "e", "blocked_channel"),
+    ("command", "a", "e", "blocked_channel"),
     [
-        ("0,+0.002185000000", "0,+0.002206500000", None),
-        ("0,+0.002185000000", "0,+0.002206000000", 6),
-        ("1,+0.002185000000", "0,+0.002206500000", 2),
-        ("0,NaN", "0,+0.002206500000", 2),
+        ("StartLive", "0,+0.002185000000", "0,+0.002206500000", None),
+        ("StartLive", "0,+0.002185000000", "0,+0.002206000000", None),
+        ("AcquireSingle", "0,+0.002185000000", "0,+0.002206000000", 6),
+        ("StartLive", "1,+0.002185000000", "0,+0.002206500000", 2),
+        ("StartLive", "0,NaN", "0,+0.002206500000", 2),
+        ("StartLive", "0,+0.002185000000", "0,NaN", 6),
     ],
 )
-def test_live_accepts_manual_delay_a_and_still_checks_calibrated_e(rig, monkeypatch, a, e, blocked_channel):
+def test_live_accepts_manual_delays_and_recording_still_checks_e(rig, monkeypatch, command, a, e, blocked_channel):
     camera, dg645, events = rig
     dg645.values.update({"DLAY? 2": a, "DLAY? 6": e})
     monkeypatch.setattr(api, "verify_timing", verify_timing)
@@ -182,7 +184,7 @@ def test_live_accepts_manual_delay_a_and_still_checks_calibrated_e(rig, monkeypa
     app = Flask(__name__)
     app.register_blueprint(api.pump_probe_vd2_api)
 
-    reply = app.test_client().post("/api/pump-probe-vd2/command/StartLive", json={})
+    reply = app.test_client().post(f"/api/pump-probe-vd2/command/{command}", json={})
 
     if blocked_channel is None:
         assert reply.status_code == 200, reply.get_json()
@@ -192,6 +194,34 @@ def test_live_accepts_manual_delay_a_and_still_checks_calibrated_e(rig, monkeypa
         assert f"channel {blocked_channel} timing unverified" in reply.get_json()["error"]
         assert not events
     assert dg645.values["DLAY? 2"] == a
+    assert dg645.values["DLAY? 6"] == e
+
+
+def test_alignment_start_leaves_both_delays_in_place(rig, monkeypatch):
+    camera, dg645, events = rig
+    dg645.values.update({"DLAY? 2": "0,+0.002185000000", "DLAY? 6": "0,+0.002206000000"})
+    original_read = camera.read_attribute
+    monkeypatch.setattr(camera, "read_attribute",
+                        lambda name: SimpleNamespace(value="Open") if name == "streak_shutter" else original_read(name))
+    kymera = SimpleNamespace(state=lambda: "ON", set_timeout_millis=lambda _: None,
+                             read_attribute=lambda _: SimpleNamespace(value="Open"),
+                             write_attribute=lambda name, value: events.append((name, value)))
+    original_proxy = api.DeviceProxy
+    monkeypatch.setattr(api, "DeviceProxy", lambda name: kymera if name == api.KYMERA_DEVICE else original_proxy(name))
+    monkeypatch.setattr(api, "verify_timing", verify_timing)
+    monkeypatch.setattr(api, "_proxy", lambda: camera)
+    monkeypatch.setattr(api, "_snapshot", lambda _: {})
+    monkeypatch.setattr(api, "_approval_or_response", lambda *args: None)
+    app = Flask(__name__)
+    app.register_blueprint(api.pump_probe_vd2_api)
+
+    reply = app.test_client().post("/api/pump-probe-vd2/alignment/start", json={})
+
+    assert reply.status_code == 200, reply.get_json()
+    assert events == [("streak_mode", "Operate"), ("time_range", "1 us"), ("streak_shutter", "Open"),
+                      ("shutter", "Open"), "TSRC 0", "StartLive"]
+    assert dg645.values["DLAY? 2"] == "0,+0.002185000000"
+    assert dg645.values["DLAY? 6"] == "0,+0.002206000000"
 
 
 def test_applying_sweep_timing_leaves_manual_delay_a_in_place(rig, monkeypatch):

@@ -184,7 +184,7 @@ def test_command_readback_failure_is_distinguished_from_unknown_command_outcome(
             raise RuntimeError("API_DeviceTimedOut: StartLive outcome unknown")
     from types import SimpleNamespace
     monkeypatch.setattr(vd2_api_module, "_proxy", lambda: SimpleNamespace(command_inout=command))
-    monkeypatch.setattr(vd2_api_module, "_verify_vd2_timing_ready", lambda _: None)
+    monkeypatch.setattr(vd2_api_module, "_verify_vd2_timing_ready", lambda _, **kwargs: None)
     monkeypatch.setattr(vd2_api_module, "_snapshot", lambda _: (_ for _ in ()).throw(RuntimeError("API_CommunicationFailed: state unavailable")))
     app = Flask(__name__)
     app.register_blueprint(vd2_api_module.pump_probe_vd2_api)

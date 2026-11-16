@@ -675,7 +675,7 @@ def alignment_start():
     blocked = _approval_or_response(
         "alignment.start", targets,
         {"time_range": "1 us", "streak_mode": "Operate", "streak_shutter": "Open",
-         "spectrograph_shutter": "Open", "dg645_timing": profile.as_dict()},
+         "spectrograph_shutter": "Open"},
         "vd2.alignment.start", set(),
     )
     if blocked is not None:
@@ -693,14 +693,13 @@ def alignment_start():
         proxy.write_attribute("time_range", "1 us")
         if timing_for_range(_remoteex_readback(proxy, "DevParamGet(TD,Time Range)")) != profile:
             raise RuntimeError("Alignment time-range readback mismatch; Live not started")
-        _apply_vd2_timing(profile, [])
+        _verify_vd2_timing_ready(proxy, live=True)
         for attribute in ("streak_shutter", "spectrograph_shutter"):
             tango_optics.write_parameter(_refactor_modules[__name__], proxy, attribute, "Open")
             shutter = (tango_optics.read_external(_refactor_modules[__name__], attribute)
                        if VD2_CAMERA_ONLY and attribute == "spectrograph_shutter" else _value(proxy, attribute))
             if str(shutter).lower() != "open":
                 raise RuntimeError(f"Cannot verify {attribute} Open; Live not started")
-        _verify_vd2_timing_ready(proxy)
         if VD2_CAMERA_ONLY:
             tango_optics.run_camera_acquisition(_refactor_modules[__name__], proxy, "StartLive")
         else:
@@ -748,7 +747,7 @@ def command(name: str):
         if name in start_commands:
             if clock_managed:
                 _assert_preparation_idle(proxy)
-            _verify_vd2_timing_ready(proxy)
+            _verify_vd2_timing_ready(proxy, live=name == "StartLive")
         if clock_managed:
             tango_optics.run_camera_acquisition(_refactor_modules[__name__], proxy, actual_command)
         else:

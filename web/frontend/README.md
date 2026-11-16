@@ -98,7 +98,8 @@ Repeating an already completed shutdown does not restart software to set Focus.
 The operator's 20-entry calibration is stored in
 `web/pump_probe/config/vd2_streak_dg645_recall9.json`. The sweep range writes
 and verifies E (`DLAY 6,0,...`, seconds) with decimal precision. It reads
-A relative to T0 and leaves its value under operator control. A cold Prepare
+A relative to T0 and leaves its value under operator control. Live accepts
+manual A and E; recording still verifies calibrated E. A cold Prepare
 recalls slot 9, where the saved A is 2.0417 ms. There is no interpolation,
 gate-channel write, or persistent `*SAV`. The command format and channel
 mapping follow the [DG645 manual, page 56](https://www.thinksrs.com/downloads/pdfs/manuals/DG645m.pdf).

@@ -254,8 +254,8 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
     _apply_vd2_timing.__module__ = api.__name__
     _apply_vd2_timing.__qualname__ = "_apply_vd2_timing"
 
-    def _verify_vd2_timing_ready(streak):
-        """A partial timing write cannot silently become an Operate acquisition."""
+    def _verify_vd2_timing_ready(streak, *, live=False):
+        """Verify trigger readiness and require calibrated E for recording."""
         if api.VD2_CAMERA_ONLY and not bool(api._value(streak, "camera_only_application")):
             raise RuntimeError("VD2 requires the camera-only HPD-TA profile")
         mode = api._remoteex_readback(streak, "DevParamGet(TD,Mode)").lower()
@@ -275,7 +275,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
         dg645.set_timeout_millis(5000)
         if not api.VD2_CAMERA_ONLY and float(dg645.command_inout("scpi_query", "BURM?")) != 0.0:
             raise RuntimeError("DG645 burst mode is not verified OFF; acquisition blocked")
-        api.verify_timing(dg645, profile)
+        api.verify_timing(dg645, profile, live=live)
 
     _verify_vd2_timing_ready.__module__ = api.__name__
     _verify_vd2_timing_ready.__qualname__ = "_verify_vd2_timing_ready"
