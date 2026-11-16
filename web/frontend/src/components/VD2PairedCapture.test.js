@@ -1,12 +1,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VD2PairedCapture from './VD2PairedCapture';
 import { fetchVd2 } from '../PumpProbeVD2.API_BASE';
+import { DEFAULT_PAIRED_CORRECTION, pairedSpectralRegion } from '../vd2RoiMath';
 
 jest.mock('../PumpProbeVD2.API_BASE', () => ({
   ...jest.requireActual('../PumpProbeVD2.API_BASE'), fetchVd2: jest.fn(),
 }));
 
+const band = { center_nm: 510, half_width_nm: 60, monitor_rows: 5 };
 const props = {
+  cameraIdle: true, live: false, correctionFixed: true, correctionRange: { band },
+  correction: { ...DEFAULT_PAIRED_CORRECTION, monitorRows: '5', fixed: { band } },
   available: true,
   settings: { outputRoot: 'E:/DATA_VD2/test', runName: 'sample', reuseBruit: 'latest' },
   preview: { width: 10, height: 20 },
@@ -26,7 +30,7 @@ test('precision mode sends the wavelength band and operator phase', async () => 
   expect(url).toBe('/api/pump-probe-vd2/paired/start');
   expect(JSON.parse(options.body)).toMatchObject({
     first_map_with_electrons: false, mode: 'precision', target_mod: 2, method: 'lamp_matched',
-    band: { center_nm: 600, half_width_nm: 10, monitor_rows: 30 },
+    band,
     roi: { x0: 2, x1: 8, y0: 4, y1: 8, width: 10, height: 20 },
   });
 });
@@ -55,4 +59,44 @@ test('missing Bruit closes the streak shutter and resumes after the new referenc
   fireEvent.click(screen.getByRole('button', { name: 'Open shutters and continue' }));
   await waitFor(() => expect(fetchVd2.mock.calls.at(-1)[0]).toMatch(/paired\/start$/));
   expect(fetchVd2.mock.calls.at(-2)[0]).toMatch(/alignment\/open-shutters$/);
+});
+
+
+test('Live and the Fix/Unfix action stay available before recording', () => {
+  const onLive = jest.fn();
+  const onFixCorrection = jest.fn();
+  const view = render(<VD2PairedCapture {...props} correctionFixed={false} onLive={onLive}
+    onFixCorrection={onFixCorrection} />);
+  const live = screen.getByRole('button', { name: 'Live' });
+  expect(live).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.getByRole('button', { name: 'Fix' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Measurement' })).toBeDisabled();
+  fireEvent.click(live);
+  expect(onLive).toHaveBeenCalledTimes(1);
+
+  view.rerender(<VD2PairedCapture {...props} cameraIdle={false} live canFixCorrection
+    correctionFixed={false} onLive={onLive} onFixCorrection={onFixCorrection} />);
+  expect(live).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Fix' }));
+  expect(onFixCorrection).toHaveBeenCalledTimes(1);
+
+  view.rerender(<VD2PairedCapture {...props} cameraIdle={false} live onLive={onLive}
+    onFixCorrection={onFixCorrection} />);
+  expect(screen.getByLabelText('Bandwidth (nm)')).toBeDisabled();
+  expect(screen.getByLabelText('Lamp reference rows')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Measurement' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Unfix' }));
+  expect(onFixCorrection).toHaveBeenCalledTimes(2);
+});
+
+test('correction defaults to 120 nm within the measured columns on a descending axis', () => {
+  const calibration = {
+    wavelengths: [640, 590, 570, 490, 450, 420], height: 40,
+    spectral_calibration: ['hg-r2', [1, 4]],
+  };
+  const result = pairedSpectralRegion(calibration, DEFAULT_PAIRED_CORRECTION);
+  expect(result.band).toEqual({ center_nm: 520, half_width_nm: 60, monitor_rows: 30 });
+  expect(result.bounds).toMatchObject({ x0: 2, x1: 3 });
+  expect(pairedSpectralRegion(calibration, { ...DEFAULT_PAIRED_CORRECTION, bandwidth: '150' }).band).toBeUndefined();
+  expect(pairedSpectralRegion(calibration, { ...DEFAULT_PAIRED_CORRECTION, monitorRows: '40' }).band).toBeUndefined();
 });

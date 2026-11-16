@@ -5,7 +5,7 @@ import VD2LiveAverage from './components/VD2LiveAverage';
 import VD2PairedCapture from './components/VD2PairedCapture';
 import VD2ReadDiagnostics from './components/VD2ReadDiagnostics';
 import FrameDisplayRate from './components/FrameDisplayRate';
-import { alignmentRegionFromBounds } from './vd2RoiMath';
+import { alignmentRegionFromBounds, pairedSpectralRegion } from './vd2RoiMath';
 import { AlignmentKinetics, AlignmentRegion, VD2AlignmentMagnets } from './components/VD2Alignment';
 import { CARDS } from "./PumpProbeVD2.API_BASE";
 import { ParameterCard } from "./PumpProbeVD2.API_BASE";
@@ -22,7 +22,7 @@ import { Vd2RepeatDialog } from "./PumpProbeVD2.API_BASE";
 import { Vd2ErrorTray } from "./PumpProbeVD2.Vd2ErrorTray";
 
 export function renderVd2Acquisition({
-  measurementRate, setMeasurementRate,
+  measurementRate, setMeasurementRate, pairedCorrection, setPairedCorrection,
   state, preview, previewAvailable, errors, activeErrorId, previewError,
   setAlignmentAverage, setLiveAverageReadError, setPreviewEnabled, busy, activeTab,
   setActiveTab, calibration, calibrationUpdating, calibrationError, previewStream,
@@ -43,7 +43,25 @@ export function renderVd2Acquisition({
   acquisitionReadDeferred, awaitingCameraState, readIssues, statusClass,
   showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
 }) {
-  const pairedMode = Boolean(protocol?.paired?.active) || (protocol?.paired_available && measurementRate === '10');
+  const pairedActive = Boolean(protocol?.paired?.active);
+  const pairedMode = pairedActive || (protocol?.paired_available && measurementRate === '10');
+  const live = state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live';
+  const pairedRange = pairedMode ? pairedSpectralRegion(calibration, pairedCorrection) : {};
+  const fixedCorrection = pairedCorrection.fixed;
+  const correctionFixed = Boolean(fixedCorrection && preview?.calibration_key
+    && fixedCorrection.key === preview.calibration_key && pairedRange.band);
+  const displayedCorrection = pairedActive ? fixedCorrection : pairedRange;
+  const correctionBounds = displayedCorrection?.bounds;
+  const showCorrection = pairedMode && activeTab === 'acquisition' && correctionBounds
+    && correctionBounds.width === preview?.width && correctionBounds.height === preview?.height;
+  const fixCorrection = () => {
+    if (correctionFixed) {
+      setPairedCorrection(current => ({ ...current, fixed: null }));
+    } else if (live && previewFresh && preview?.calibration_key && pairedRange.band) {
+      setPairedCorrection(current => ({ ...current, center: pairedRange.center, bandwidth: pairedRange.bandwidth,
+        fixed: { key: preview.calibration_key, band: pairedRange.band, bounds: pairedRange.bounds } }));
+    }
+  };
   return (
     <main className="vd2-page">
       <header className="vd2-header" aria-label="VD2 header">
@@ -152,7 +170,13 @@ export function renderVd2Acquisition({
             {pairedMode && <VD2PairedCapture available={protocol?.paired_available} run={protocol?.paired} settings={protocolSettings}
               protocol={protocol} onBruit={() => prepareProtocolPhase('BRUIT')}
               disabled={!serverWorkspace.ready || busy || protocolStarting || protocolHardwareActive
-                || Boolean(preparedPhase || guidedRun || guidedChoice) || !acquisitionIdle}
+                || Boolean(preparedPhase || guidedRun || guidedChoice)}
+              cameraIdle={acquisitionIdle} live={live} liveBlocked={alignmentControlsBlocked}
+              onLive={() => runCommand(live ? 'StopAcquisition' : 'StartLive')}
+              correction={pairedCorrection} correctionRange={pairedRange} correctionFixed={correctionFixed}
+              canFixCorrection={live && previewFresh && Boolean(preview?.calibration_key && pairedRange.band)}
+              onChangeCorrection={(key, value) => setPairedCorrection(current => ({ ...current, [key]: value, fixed: null }))}
+              onFixCorrection={fixCorrection}
               roi={rois.find(roi => roi.id === selectedRoiId)} preview={preview} onUpdate={updatePairedCapture}
               onStop={() => runCommand('StopAcquisition')} />}
             {projectError && <p role="alert" className="vd2-stage-error">{projectError}</p>}
@@ -240,6 +264,16 @@ export function renderVd2Acquisition({
                   onPointerUp={activeTab === 'acquisition' ? completeRoi : undefined}
                   onPointerCancel={() => setDrawingRoi(null)}
                 >
+                  {showCorrection && <g className={`vd2-correction-overlay ${correctionFixed || pairedActive ? 'is-fixed' : ''}`}>
+                    <rect x={0} y={0} width={preview.width} height={displayedCorrection.band.monitor_rows}>
+                      <title>Lamp reference rows</title>
+                    </rect>
+                    <rect x={correctionBounds.x0} y={displayedCorrection.band.monitor_rows}
+                      width={correctionBounds.x1 - correctionBounds.x0 + 1}
+                      height={preview.height - displayedCorrection.band.monitor_rows}>
+                      <title>Spectral Correction Range</title>
+                    </rect>
+                  </g>}
                   {activeTab === 'alignment' && alignment.bounds && <VD2RoiEditor bounds={alignment.bounds}
                     width={preview.width} height={preview.height} pointFromEvent={previewPoint} label="Alignment ROI"
                     onChange={bounds => setAlignmentRegion(alignmentRegionFromBounds(bounds, calibration))} />}

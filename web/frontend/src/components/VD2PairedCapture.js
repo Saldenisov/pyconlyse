@@ -16,7 +16,11 @@ const STOP_LABELS = {
   operator_stop: 'Stopped by operator',
 };
 
-export default function VD2PairedCapture({ available, run, settings, disabled, roi, preview, protocol, onUpdate, onStop, onBruit }) {
+export default function VD2PairedCapture({
+  available, run, settings, disabled, roi, preview, protocol, onUpdate, onStop, onBruit,
+  cameraIdle, live, liveBlocked, onLive, correction, correctionRange, correctionFixed,
+  canFixCorrection, onChangeCorrection, onFixCorrection,
+}) {
   const [mode, setMode] = useState('fixed');
   const [first, setFirst] = useState(true);
   const [pairs, setPairs] = useState('200');
@@ -24,9 +28,6 @@ export default function VD2PairedCapture({ available, run, settings, disabled, r
   const [target, setTarget] = useState('2');
   const [trigger, setTrigger] = useState('external_rising');
   const [method, setMethod] = useState('lamp_matched');
-  const [center, setCenter] = useState('600');
-  const [halfWidth, setHalfWidth] = useState('10');
-  const [monitorRows, setMonitorRows] = useState('30');
   const [samSurface, setSamSurface] = useState('3');
   const [bruitAttempt, setBruitAttempt] = useState(null);
   const [pending, setPending] = useState(false);
@@ -35,9 +36,7 @@ export default function VD2PairedCapture({ available, run, settings, disabled, r
   const currentMode = active ? run.mode : mode;
   const pairLimit = Number(mode === 'fixed' ? pairs : limit);
   const validTarget = Number(target) > 0 && Number(target) <= 1000;
-  const band = { center_nm: Number(center), half_width_nm: Number(halfWidth), monitor_rows: Number(monitorRows) };
-  const bandValid = band.center_nm <= 3000 && band.half_width_nm > 0 && band.half_width_nm < band.center_nm
-    && Number.isInteger(band.monitor_rows) && band.monitor_rows >= 1 && band.monitor_rows <= 4096;
+  const band = active ? run.band : correctionFixed ? correction.fixed.band : correctionRange.band;
   const needsBruit = run?.status === 'bruit_required' && run.sample_name === settings.runName;
   const bruitReady = bruitAttempt && protocol?.job_id !== bruitAttempt.prior
     && protocol?.phase === 'BRUIT' && protocol?.sample_name === settings.runName && protocol?.status === 'completed';
@@ -109,8 +108,10 @@ export default function VD2PairedCapture({ available, run, settings, disabled, r
     await start();
   });
   const locked = active || disabled || pending;
-  const cannotStart = locked || !settings.runName?.trim() || !Number.isInteger(pairLimit)
-    || pairLimit < 1 || pairLimit > 10000 || !bandValid
+  const displayedCenter = active ? band?.center_nm : correctionRange.center ?? correction.center;
+  const displayedBandwidth = active && band ? 2 * band.half_width_nm : correctionRange.bandwidth ?? correction.bandwidth;
+  const cannotStart = locked || !cameraIdle || !settings.runName?.trim() || !Number.isInteger(pairLimit)
+    || pairLimit < 1 || pairLimit > 10000 || !correctionFixed
     || (method.startsWith('sam_') && !(Number(samSurface) > 0 && Number(samSurface) <= 100))
     || (mode === 'precision' && !validTarget);
   return (
@@ -129,17 +130,15 @@ export default function VD2PairedCapture({ available, run, settings, disabled, r
           <option value="external_falling">External falling</option>
           <option value="internal">Internal</option>
         </select></label>
-        <label><input type="checkbox" checked={active ? run.first_map_with_electrons : first}
-          disabled={locked} onChange={event => setFirst(event.target.checked)} /> First frame with electrons</label>
+        <div className="vd2-paired-live">
+          <label><input type="checkbox" checked={active ? run.first_map_with_electrons : first}
+            disabled={locked} onChange={event => setFirst(event.target.checked)} /> First frame with electrons</label>
+          <button type="button" aria-pressed={live} disabled={locked || liveBlocked || (!live && !cameraIdle)}
+            onClick={onLive}>Live</button>
+        </div>
         <label><span>OD method</span><select value={active ? run.method : method} disabled={locked} onChange={event => setMethod(event.target.value)}>
           {METHODS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>
-        <label><span>Center (nm)</span><input type="number" min="1" step="any" value={active ? run.band?.center_nm ?? center : center}
-          disabled={locked} onChange={event => setCenter(event.target.value)} /></label>
-        <label><span>± bandwidth (nm)</span><input type="number" min="0.1" step="any" value={active ? run.band?.half_width_nm ?? halfWidth : halfWidth}
-          disabled={locked} onChange={event => setHalfWidth(event.target.value)} /></label>
-        <label><span>Lamp reference rows</span><input type="number" min="1" step="1" value={active ? run.band?.monitor_rows ?? monitorRows : monitorRows}
-          disabled={locked} onChange={event => setMonitorRows(event.target.value)} /></label>
         {method.startsWith('sam_') && <label><span>SAM intensity tolerance (%)</span>
           <input type="number" min="0.1" max="100" step="any" value={samSurface} disabled={locked}
             onChange={event => setSamSurface(event.target.value)} /></label>}
@@ -148,9 +147,34 @@ export default function VD2PairedCapture({ available, run, settings, disabled, r
             disabled={pending || (active ? run.status === 'saving' : disabled)} onChange={event => setTarget(event.target.value)} />
         </label>}
       </div>
+      <fieldset className={`vd2-spectral-correction ${correctionFixed || active ? 'is-fixed' : ''}`}>
+        <legend>Spectral Correction Range</legend>
+        <div className="vd2-protocol-settings">
+          <label><span>Center (nm)</span><input type="number" min="1" step="any" value={displayedCenter ?? ''}
+            disabled={locked || correctionFixed} onChange={event => onChangeCorrection('center', event.target.value)} /></label>
+          <label><span>Bandwidth (nm)</span><input type="number" min="0.1" step="any" value={displayedBandwidth ?? ''}
+            disabled={locked || correctionFixed} onChange={event => onChangeCorrection('bandwidth', event.target.value)} /></label>
+          <label><span>Lamp reference rows</span><input type="number" min="1" step="1"
+            value={active ? band?.monitor_rows ?? correction.monitorRows : correction.monitorRows}
+            disabled={locked || correctionFixed} onChange={event => onChangeCorrection('monitorRows', event.target.value)} /></label>
+          <button type="button" disabled={locked || (!correctionFixed && !canFixCorrection)}
+            onClick={onFixCorrection}>{correctionFixed ? 'Unfix' : 'Fix'}</button>
+        </div>
+        {band && <small>
+          {(band.center_nm - band.half_width_nm).toFixed(1)}–{(band.center_nm + band.half_width_nm).toFixed(1)} nm
+          {' · '}{band.monitor_rows} lamp reference rows
+        </small>}
+        {!active && !correctionFixed && <small role="status">
+          {correctionRange.span
+            ? `Calibrated span ${correctionRange.min.toFixed(1)}–${correctionRange.max.toFixed(1)} nm${correctionRange.span < 100 ? ' (less than 100 nm)' : ''}`
+            : 'Start Live to see the calibrated span.'}
+          {correctionRange.span && !correctionRange.band && ' · Adjust range or reference rows to fit the calibrated image.'}
+        </small>}
+        {correctionFixed && live && <small>Stop Live before starting Measurement.</small>}
+      </fieldset>
       <div className="vd2-phase-buttons">
         {!needsBruit && <button type="button" className="vd2-measure-button" disabled={cannotStart} onClick={start}>Measurement</button>}
-        {needsBruit && !bruitReady && <button type="button" disabled={locked || !onBruit} onClick={recordBruit}>Record Bruit</button>}
+        {needsBruit && !bruitReady && <button type="button" disabled={locked || !cameraIdle || !onBruit} onClick={recordBruit}>Record Bruit</button>}
         {needsBruit && bruitReady && <button type="button" disabled={cannotStart} onClick={resume}>Open shutters and continue</button>}
         {active && <button type="button" className="vd2-stop" disabled={pending || run.status === 'saving'} onClick={onStop}>Stop pairs</button>}
         {active && currentMode === 'precision' && <button type="button"

@@ -1,5 +1,33 @@
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
 
+export const DEFAULT_PAIRED_CORRECTION = { center: null, bandwidth: null, monitorRows: '30', fixed: null };
+
+export function pairedSpectralRegion(calibration, settings) {
+  const axis = calibration?.wavelengths;
+  if (!axis || axis.length < 2) return {};
+  const [first, last] = calibration.spectral_calibration?.[1] || [0, axis.length - 1];
+  const min = Math.min(axis[first], axis[last]);
+  const max = Math.max(axis[first], axis[last]);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) return {};
+
+  const span = max - min;
+  const center = settings.center ?? ((min + max) / 2).toFixed(2);
+  const bandwidth = settings.bandwidth ?? String(Math.min(120, Math.floor(span * 10) / 10));
+  const band = { center_nm: Number(center), half_width_nm: Number(bandwidth) / 2,
+    monitor_rows: Number(settings.monitorRows) };
+  const low = band.center_nm - band.half_width_nm;
+  const high = band.center_nm + band.half_width_nm;
+  const available = { min, max, span, center, bandwidth };
+  if (!(low >= min && high <= max && band.half_width_nm > 0)
+    || !Number.isInteger(band.monitor_rows) || band.monitor_rows < 1 || band.monitor_rows >= calibration.height) return available;
+
+  const columns = axis.flatMap((wavelength, index) =>
+    index >= first && index <= last && wavelength >= low && wavelength <= high ? [index] : []);
+  if (!columns.length) return available;
+  return { ...available, band, bounds: { x0: columns[0], x1: columns.at(-1),
+    width: axis.length, height: calibration.height } };
+}
+
 // Bounds are inclusive camera-pixel indices, independent of screen scaling.
 export function editRoiBounds(bounds, dx, dy, handle, width, height) {
   const next = { ...bounds };

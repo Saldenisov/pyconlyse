@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DEFAULT_PAIRED_CORRECTION } from './vd2RoiMath';
 import { useVd2AcquisitionState } from "./PumpProbeVD2.useVd2AcquisitionState";
 import { useVd2AcquisitionActions } from "./PumpProbeVD2.useVd2AcquisitionActions";
 import { renderVd2Acquisition } from "./PumpProbeVD2.renderVd2Acquisition";
@@ -8,6 +9,7 @@ import './css/PumpProbeVD2.css';
 
 function PumpProbeVD2() {
   const [measurementRate, setMeasurementRate] = useState('5');
+  const [pairedCorrection, setPairedCorrection] = useState(DEFAULT_PAIRED_CORRECTION);
   const {
     state, setState, preview, previewAvailable, errors, setErrors, readFailures,
     activeErrorId, setActiveErrorId, previewError, setPreviewError, setAlignmentAverage,
@@ -28,7 +30,7 @@ function PumpProbeVD2() {
     nextRoiId, phaseClickTimer, lastPollError, reportError, resolveReadErrors, loadPreview,
     previewTiming, previewFresh, previewStride, previewHz, alignment, alignmentContext,
     resizeImage,
-  } = useVd2AcquisitionState();
+  } = useVd2AcquisitionState(measurementRate);
 
   const {
     writeParameter, runCommand, refreshAll, updateProtocolSetting, startProtocolPhase,
@@ -53,7 +55,7 @@ function PumpProbeVD2() {
   });
 
   return renderVd2Acquisition({
-    measurementRate, setMeasurementRate,
+    measurementRate, setMeasurementRate, pairedCorrection, setPairedCorrection,
     state, preview, previewAvailable, errors, activeErrorId, previewError,
     setAlignmentAverage, setLiveAverageReadError, setPreviewEnabled, busy, activeTab,
     setActiveTab, calibration, calibrationUpdating, calibrationError, previewStream,

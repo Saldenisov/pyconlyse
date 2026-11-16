@@ -134,3 +134,14 @@
 .vd2-conversion-queue .is-processing { color: #ffe176; }
 .vd2-conversion-queue .is-completed { color: #9ee480; }
 .vd2-conversion-queue .is-failed, .vd2-conversion-queue p { color: #ffadad; }
+
+.vd2-paired-live { display: flex; align-items: center; gap: 6px; }
+.vd2-paired-live button[aria-pressed="true"], .vd2-spectral-correction.is-fixed {
+  border-color: #63cb90;
+  background: #183b2a;
+}
+.vd2-spectral-correction { margin: 4px 8px; padding: 4px; min-width: 0; border: 1px solid #48515b; }
+.vd2-spectral-correction small { display: block; padding-inline: 4px; }
+.vd2-roi-overlay .vd2-correction-overlay { pointer-events: none; }
+.vd2-roi-overlay .vd2-correction-overlay rect { stroke: #ffcf61; fill: #ffcf6122; }
+.vd2-roi-overlay .vd2-correction-overlay.is-fixed rect { stroke: #63cb90; fill: #63cb9022; }

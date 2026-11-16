@@ -14,7 +14,7 @@ import { defaultVd2RunName } from "./PumpProbeVD2.API_BASE";
 import { clamp } from "./PumpProbeVD2.API_BASE";
 import { drawPreview } from "./PumpProbeVD2.API_BASE";
 
-export function useVd2AcquisitionState() {
+export function useVd2AcquisitionState(measurementRate) {
   const [state, setState] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewClock, setPreviewClock] = useState(() => performance.now());
@@ -351,8 +351,11 @@ export function useVd2AcquisitionState() {
 
   const calibrationKey = previewAvailable ? preview?.calibration_key : null;
   const calibrationAvailable = Boolean(previewAvailable && preview?.calibration);
+  const needsCalibration = activeTab === 'alignment' || (activeTab === 'acquisition'
+    && measurementRate === '10' && protocol?.paired_available
+    && state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live');
   useEffect(() => {
-    if (activeTab !== 'alignment' || !calibrationKey || calibrationAvailable
+    if (!needsCalibration || !calibrationKey || calibrationAvailable
         || !state?.connected || !state?.application_running
         || protocolHardwareActive) return undefined;
     let disposed = false;
@@ -394,7 +397,7 @@ export function useVd2AcquisitionState() {
       window.clearTimeout(timer);
       setCalibrationUpdating(false);
     };
-  }, [activeTab, calibrationKey, calibrationAvailable, calibrationAttempt, loadPreview,
+  }, [needsCalibration, calibrationKey, calibrationAvailable, calibrationAttempt, loadPreview,
     state?.connected, state?.application_running, protocolHardwareActive]);
   const alignment = useMemo(() => alignmentRegionGeometry(calibration, alignmentRegion), [calibration, alignmentRegion]);
   const alignmentContext = !alignment.error && preview?.calibration &&
