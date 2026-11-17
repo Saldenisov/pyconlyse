@@ -296,193 +296,145 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         self.statusBar().showMessage("Live preview stopped")
 
     def stop_measurement(self):
-        """Stop current reference or background measurement."""
-        if self.measuring_reference:
-            self.logger.info(
-                f"REFERENCE: Measurement aborted by user "
-                f"({len(self.reference_measurements)} of {self.reference_target_blocks} blocks collected)"
-            )
-            self.measuring_reference = False
-            self.reference_measurements = []
-            self.statusBar().showMessage("Reference measurement aborted")
-
-        if self.measuring_background:
-            self.logger.info(
-                f"BACKGROUND: Measurement aborted by user "
-                f"({len(self.background_measurements)} of {self.background_target_blocks} blocks collected)"
-            )
-            self.measuring_background = False
-            self.background_measurements = []
-            self.statusBar().showMessage("Background measurement aborted")
-
-        # Re-enable buttons
-        self.measure_ref_btn.setEnabled(True)
-        self.measure_bg_btn.setEnabled(True)
+        """Stop after the current readout, keeping the raw capture on disk."""
+        if self.calibration_capture is not None:
+            self.calibration_capture["aborted"] = True
+        self.pending_ref_bg_role = None
         self.stop_measure_btn.setEnabled(False)
-        self.pending_ref_bg_role = None
+        self.statusBar().showMessage("Capture stopped. Recorded blocks remain in HDF5.")
 
-    def measure_reference(self):
-        """Measure reference spectra by averaging N measurements (with lamp ON)."""
-        if not self.may_open_collection():
-            return
-        if not self.spec1_widget.spec or not self.spec2_widget.spec:
-            api.QMessageBox.warning(self, "Error", "Both spectrometers must be connected")
-            return
-        if self.continuous_mode:
-            self.stop_live_preview()
-
-        # Ensure lamp is ON and wait for thermalization
-        self.statusBar().showMessage("Preparing lamp...")
-        if not self.set_lamp_and_avantes(wait_for_thermalization=True):
-            api.QMessageBox.warning(self, "Error", "Failed to enable lamp")
-            return
-
-        n_avg = self.get_detector_average_count()
-        n_blocks = self.ref_blocks_spin.value()
-        self.reference_target_blocks = n_blocks
-        self.pending_ref_bg_role = None
-        self.measuring_reference = True
-        self.reference_measurements = []
-        self.measure_ref_btn.setEnabled(False)
-        self.measure_bg_btn.setEnabled(False)
-        self.stop_measure_btn.setEnabled(True)  # Enable stop button
-
-        self.logger.info(
-            f"REFERENCE: Starting measurement (lamp ON, hardware avg={n_avg} pulses, "
-            f"blocks={n_blocks}, total pulses={n_avg * n_blocks})"
+    def open_preparation_run(self):
+        name = self.save_name_input.text().strip()
+        if not name or name.endswith(".") or any(c in name for c in '<>:"/\\|?*') or any(ord(c) < 32 for c in name):
+            raise ValueError("Enter a valid run filename before measuring Background")
+        folder = api.Path(self.save_folder_input.text()).expanduser()
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / (name + ".h5")
+        wavelengths, serials = self.current_hardware()
+        settings = self.get_settings_dict()
+        settings.update(
+            sample_name=name, sample_comment=self.sample_comment_input.text().strip(),
+            exposure=dict(self.exposure_setup),
+            emulator=dict(enabled=self.emulate_hardware, demo_kinetics=self.demo_kinetics_enabled,
+                          duration_s=self.demo_kinetics_duration_s, max_od=self.demo_kinetics_max_od),
         )
-        self.statusBar().showMessage(f"Measuring reference block 1/{n_blocks} (Avantes avg={n_avg})...")
-
-        if not self.single_measurement(measurement_role="reference"):
-            self.stop_measurement()
+        try:
+            self.preparation_run = api.AvantesRun.create(path, wavelengths, serials, api.time.time(), settings, {})
+        except FileExistsError as exc:
+            raise ValueError("That HDF5 file already exists. Enter a new name or open the existing file.") from exc
+        self.update_loaded_collection_label(path)
+        return self.preparation_run
 
     def measure_background(self):
-        """Measure background spectra by averaging N measurements (with lamp OFF)."""
-        if not self.may_open_collection():
+        self.measure_calibration("background")
+
+    def measure_reference(self):
+        self.measure_calibration("reference")
+
+    def measure_calibration(self, role):
+        if not self.may_open_collection() or self.collection_run is not None or not self.save_name_input.text().strip():
             return
         if not self.spec1_widget.spec or not self.spec2_widget.spec:
-            api.QMessageBox.warning(self, "Error", "Both spectrometers must be connected")
+            self.statusBar().showMessage("Connect both spectrometers before measuring")
             return
+        if (role == "empty" and not self.has_background or role == "reference" and not self.empty_zero_selected
+                or role in self.calibration_blocks):
+            return
+        try:
+            run = self.preparation_run or self.open_preparation_run()
+            if not self.same_detector_setup(self.current_detector_setup(), run.detector_setup()):
+                raise ValueError("Restore the detector settings used for Background")
+            self.start_spectral_capture(run, role)
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
+            api.QMessageBox.critical(self, "Calibration capture", str(exc))
+        self.update_analysis_buttons()
+
+    def start_spectral_capture(self, run, role):
         if self.continuous_mode:
             self.stop_live_preview()
-
-        # Ensure lamp is OFF
-        if not self.set_avantes_only():
-            self.statusBar().showMessage("Could not switch off the probe lamp")
-            return
-
-        n_avg = self.get_detector_average_count()
-        n_blocks = self.ref_blocks_spin.value()
-        self.background_target_blocks = n_blocks
-        self.pending_ref_bg_role = None
-        self.measuring_background = True
-        self.background_measurements = []
-        self.measure_ref_btn.setEnabled(False)
-        self.measure_bg_btn.setEnabled(False)
-        self.stop_measure_btn.setEnabled(True)  # Enable stop button
-
-        self.logger.info(
-            f"BACKGROUND: Starting measurement (lamp OFF, hardware avg={n_avg} pulses, "
-            f"blocks={n_blocks}, total pulses={n_avg * n_blocks})"
-        )
-        self.statusBar().showMessage(f"Measuring background block 1/{n_blocks} (Avantes avg={n_avg})...")
-
-        if not self.single_measurement(measurement_role="background"):
-            self.stop_measurement()
-
-    def measure_reference_complete(self):
-        """Called when reference measurement is complete."""
-        if self.reference_measurements:
-            self.reference_ch1, self.reference_ch2 = api.mean_counts(self.reference_measurements)
-            self.reference_wavelengths = self.spec1_widget.wavelengths
-            self.calibration_blocks["reference"] = self.reference_measurements
-            self.clear_zero_baseline()
-            self.last_sample_pair = None
-            self.has_reference = True
-
-            # Display reference lines on plots (magenta/purple)
-            if self.reference_wavelengths is not None:
-                self.ref_curve1.setData(self.reference_wavelengths, self.reference_ch1)
-                self.ref_curve2.setData(self.spec2_widget.wavelengths, self.reference_ch2)
-
-            n_blocks = len(self.reference_measurements)
-            n_avg = self.get_detector_average_count()
-            self.logger.info(
-                f"REFERENCE: Measurement complete (lamp ON, blocks={n_blocks}, "
-                f"hardware avg={n_avg}, total pulses={n_blocks * n_avg})"
+        repeats = self.ref_repeats_spin.value()
+        blocks = self.ref_blocks_spin.value()
+        name = run.begin_capture(role, repeats, blocks)
+        self.calibration_capture = dict(run=run, name=name, target=repeats * blocks, aborted=False)
+        self.update_analysis_buttons()
+        self.stop_measure_btn.setEnabled(True)
+        self.statusBar().showMessage("Preparing " + ("dark acquisition" if role == "background" else "lamp") + "…")
+        try:
+            lamp_ready = self.set_avantes_only() if role == "background" else self.set_lamp_and_avantes(
+                wait_for_thermalization=role != "blank"
             )
-            self.statusBar().showMessage(f"Reference measured ({n_blocks} blocks x {n_avg} pulses)")
-
-            # Enable data collection and tracking after reference and background exist.
+            if not lamp_ready:
+                raise RuntimeError("Could not set the lamp and spectrometer triggers")
+            if not self.calibration_capture["aborted"] and not self.closing_requested:
+                if self.single_measurement(measurement_role=role):
+                    return
+        except Exception:
+            self.stop_measurement()
+            self.calibration_capture = None
             self.update_analysis_buttons()
-
-        else:
-            self.logger.error("REFERENCE: Failed - no measurement")
-            self.statusBar().showMessage("Reference measurement failed")
-
-        self.measuring_reference = False
-        self.reference_measurements = []
-        self.measure_ref_btn.setEnabled(True)
-        self.measure_bg_btn.setEnabled(True)
-        self.stop_measure_btn.setEnabled(False)  # Disable stop button
+            if self.closing_requested:
+                api.QTimer.singleShot(0, self.close)
+            raise
+        self.stop_measurement()
+        self.calibration_capture = None
         self.update_analysis_buttons()
+        if self.closing_requested:
+            api.QTimer.singleShot(0, self.close)
 
-    def set_zero_baseline_from_current(self):
-        """Use the latest paired sample measurement as the kinetic zero."""
-        block = self.last_sample_pair
-        if block is None or self.data_collection_active or self.collection_paused:
+    def complete_spectral_capture(self, role, blocks):
+        if role == "blank":
+            self.save_blank(blocks)
             return
-        od = self.calculate_optical_density(*api.valid_counts(block), apply_zero_baseline=False)
-        if od is None or not api.np.any(api.np.isfinite(od)):
-            api.QMessageBox.warning(self, "Set Zero", "Sample OD is unavailable")
-            return
-        self.calibration_blocks["sample_t0"] = [block]
-        self.zero_baseline_wavelengths = api.np.array(self.spec1_widget.wavelengths, dtype=float, copy=True)
-        self.zero_baseline_od = od
-        self.curve_od.setData(self.zero_baseline_wavelengths, od - od)
-        self.update_analysis_buttons()
-        self.statusBar().showMessage("Kinetic zero saved from current sample spectrum")
-
-    def measure_background_complete(self):
-        """Called when background measurement is complete."""
-        if self.background_measurements:
-            self.background_ch1, self.background_ch2 = api.mean_counts(self.background_measurements)
-            self.calibration_blocks["background"] = self.background_measurements
-            self.clear_zero_baseline()
-            self.last_sample_pair = None
+        ch1, ch2 = api.mean_counts(blocks)
+        self.calibration_blocks[role] = blocks
+        w1, w2 = self.current_hardware()[0]
+        if role == "background":
+            self.background_ch1, self.background_ch2 = ch1, ch2
             self.has_background = True
+            self.bg_curve1.setData(w1, ch1)
+            self.bg_curve2.setData(w2, ch2)
+        elif role == "reference":
+            od = self.calculate_calibration_od((ch1, ch2), api.mean_counts(self.calibration_blocks["empty"]))
+            self.curve_od.setData(w1, od)
+            self.plot_od.setTitle("Reference OD vs Empty")
+            self.ref_curve1.setData(w1, ch1)
+            self.ref_curve2.setData(w2, ch2)
+        self.statusBar().showMessage(f"{role.title()} saved to HDF5 ({len(blocks)} blocks)")
 
-            # Display background lines on plots (blue)
-            # Use wavelengths from spectrometer (always available after connection)
-            wavelengths = self.spec1_widget.wavelengths
-            if wavelengths is not None:
-                self.bg_curve1.setData(wavelengths, self.background_ch1)
-                self.bg_curve2.setData(self.spec2_widget.wavelengths, self.background_ch2)
-                n_blocks = len(self.background_measurements)
-                n_avg = self.get_detector_average_count()
-                self.logger.info(
-                    f"BACKGROUND: Measurement complete (lamp OFF, blocks={n_blocks}, "
-                    f"hardware avg={n_avg}, total pulses={n_blocks * n_avg})"
-                )
-            else:
-                self.logger.warning("BACKGROUND: Wavelengths not available for plotting")
+    def calculate_calibration_od(self, counts, baseline):
+        return api.optical_density(
+            *counts, baseline, (self.background_ch1, self.background_ch2), self.current_hardware()[0]
+        )
 
-            self.statusBar().showMessage(f"Background measured ({len(self.background_measurements)} blocks)")
-            self.update_analysis_buttons()
-
+    def set_calibration_zero(self, role):
+        if not self.may_open_collection() or self.preparation_run is None or role not in self.calibration_blocks:
+            return
+        if not self.calibration_matches_detector_setup():
+            self.statusBar().showMessage("Restore the detector settings used for calibration.")
+            return
+        blocks = self.calibration_blocks[role]
+        counts = api.mean_counts(blocks)
+        od = self.calculate_calibration_od(counts, counts)
+        if not api.np.any(api.np.isfinite(od)):
+            self.statusBar().showMessage("No valid optical density. Check the lamp, dark counts and saturation.")
+            return
+        try:
+            self.preparation_run.set_preparation_zero(role, od)
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
+            api.QMessageBox.critical(self, "Save calibration zero", str(exc))
+            return
+        if role == "empty":
+            self.empty_zero_selected = True
         else:
-            self.logger.error("BACKGROUND: Failed - no measurement")
-            self.statusBar().showMessage("Background measurement failed")
-
-        # Reset measuring flag FIRST before any other updates
-        self.measuring_background = False
-        self.background_measurements = []
-        self.measure_ref_btn.setEnabled(True)
-        self.measure_bg_btn.setEnabled(True)
-        self.stop_measure_btn.setEnabled(False)  # Disable stop button
-
-        # Log the state explicitly
-        self.logger.info(f"BACKGROUND: Flags reset - measuring_background={self.measuring_background}, has_background={self.has_background}")
+            self.reference_ch1, self.reference_ch2 = counts
+            self.reference_wavelengths = self.current_hardware()[0][0]
+            self.calibration_blocks["initial_blank"] = blocks
+            self.has_reference = True
+        self.plot_od.setTitle(f"Optical Density vs {role.title()} Zero")
+        self.curve_od.setData(self.current_hardware()[0][0], od)
+        self.blank_status.setText("Insert the reference." if role == "empty" else "Insert the sample, then Start DC.")
+        self.statusBar().showMessage(f"{role.title()} zero saved to HDF5")
+        self.update_analysis_buttons()
 
     return {
         "get_settings_dict": get_settings_dict,
@@ -504,9 +456,12 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         "toggle_continuous_readout": toggle_continuous_readout,
         "stop_live_preview": stop_live_preview,
         "stop_measurement": stop_measurement,
+        "open_preparation_run": open_preparation_run,
+        "measure_calibration": measure_calibration,
+        "start_spectral_capture": start_spectral_capture,
+        "complete_spectral_capture": complete_spectral_capture,
+        "calculate_calibration_od": calculate_calibration_od,
+        "set_calibration_zero": set_calibration_zero,
         "measure_reference": measure_reference,
         "measure_background": measure_background,
-        "measure_reference_complete": measure_reference_complete,
-        "set_zero_baseline_from_current": set_zero_baseline_from_current,
-        "measure_background_complete": measure_background_complete,
     }

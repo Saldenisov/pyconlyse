@@ -6,7 +6,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
 
     def may_open_collection(self):
         return not (self.data_collection_active or self.collection_paused
-                    or self.blank_schedule is not None or self.current_measurement_role is not None
+                    or self.calibration_capture is not None or self.current_measurement_role is not None
                     or self.analysis_worker is not None)
 
     def load_collection_hdf5(self):
@@ -20,15 +20,34 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         try:
             self.load_collection_hdf5_file(api.Path(filename))
         except (OSError, ValueError, KeyError, RuntimeError) as exc:
-            api.QMessageBox.critical(self, "Open HDF5", str(api.exc))
+            api.QMessageBox.critical(self, "Open HDF5", str(exc))
 
     def load_collection_hdf5_file(self, path):
         run = api.AvantesRun(path)
-        _, _, epoch, count = run.info()
+        wavelengths, serials, epoch, count = run.info()
+        pending, comment = run.preparation_info()
+        if pending:
+            if not self.match_run_hardware(wavelengths, serials):
+                raise ValueError("Connect the spectrometers used for calibration to continue this run")
+            self.new_named_run()
+            self.preparation_run = run
+            self.set_open_collection_path(run.path)
+            self.sample_comment_input.setText(comment)
+            blocks = run.calibration_blocks()
+            for role in ("background", "empty", "reference"):
+                if role in blocks:
+                    self.complete_spectral_capture(role, blocks[role])
+            for role in ("empty", "reference"):
+                if run.has_preparation_zero(role):
+                    self.set_calibration_zero(role)
+            self.update_analysis_buttons()
+            return
+        self.new_named_run()
         self.collection_run = run
         self.collection_start_time = epoch
         self.collection_point_index = count
         self.set_open_collection_path(run.path)
+        self.sample_comment_input.setText(comment)
         self.reset_od_heatmap()
         self.show_od_heatmap_window()
 
@@ -98,9 +117,9 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         if self.collection_run is not None:
             rate, irradiating = self.exposure_state
             optical, filled = self.run_volumes
-            labels = []
+            labels = [f"Irradiation marked {'on' if irradiating else 'off'}"]
             if api.np.isfinite(rate):
-                labels.append(f"{rate:g} Gy/h · irradiation marked {'on' if irradiating else 'off'}")
+                labels.append(f"{rate:g} Gy/h")
         else:
             config = self.exposure_setup
             optical = api.optical_volume_ml(config["window_diameter_mm"], config["path_length_mm"])
@@ -121,7 +140,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
             run.mark_irradiation(not enabled, api.time.time())
             self.exposure_state = (rate, not enabled)
         except (KeyError, ValueError, RuntimeError, OSError) as exc:
-            api.QMessageBox.warning(self, "Irradiation marker", str(api.exc))
+            api.QMessageBox.warning(self, "Irradiation marker", str(exc))
             return
         self.update_analysis_buttons()
 
@@ -169,7 +188,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
 
     def can_analyze_run(self):
         return (self.collection_run is not None and not self.data_collection_active
-                and self.blank_schedule is None and self.current_measurement_role is None
+                and self.current_measurement_role is None
                 and self.analysis_worker is None)
 
     def on_run_analysis_finished(self):

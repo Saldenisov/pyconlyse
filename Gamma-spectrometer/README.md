@@ -90,7 +90,7 @@ or:
 AVANTES_EMULATOR=1 AVANTES_DEMO_KINETICS=1 AVANTES_DEMO_DURATION_S=40 python avantes_dual_viewer.py
 ```
 
-Demo kinetics injects a synthetic growing UV-visible species into the sample-channel intensity before OD is calculated. Measure reference and background, click **Start DC**, then **Show DC**. With `Rate = 1 s`, the OD map fills over about 40 seconds.
+Demo kinetics adds a synthetic growing UV-visible species to sample acquisitions and a separate UV fiber-loss band to both sample and repeat reference acquisitions. The simulated signal grows while irradiation is marked on. Follow the workflow below with `Rate = 1 s`, then use **Show DC** to compare measured and corrected OD.
 
 On Windows with real hardware:
 
@@ -99,18 +99,18 @@ set AVANTES_EMULATOR=0
 python avantes_dual_viewer.py
 ```
 
-## Recording a run and measuring blanks
+## Recording a run and measuring references
 
-1. Measure **Background** with the probe lamp off, then **Reference** with the lamp on. Insert the blank and click **Initial Blank**. Insert the sample and use live preview to check its spectrum. Stop the preview and click **Set Zero** to use that sample spectrum as the kinetic zero.
-2. Choose the folder, file name, and collection interval (default 15 s), then click **Start DC**. Every acquisition appends to the run's `.h5` file. Existing names get a numbered sibling unless you choose **Resume** for the current or opened run.
-3. Use **Stop DC** at the end, insert the blank, then choose **Add Blank…**. Enter a delay in minutes. Zero starts the capture immediately. With DC already paused or stopped, confirm only once the blank is installed. The capture starts automatically when the timer expires.
-4. During DC, **Add Blank…** schedules a reminder. At the due time the series continues. When the experiment permits an interruption, use **Pause DC**, handle irradiation and the sample exchange on the apparatus, then click **Capture Blank**. Restore the sample before **Resume DC**. Pauses retain the same file and elapsed time.
+1. Enter the required **Name** and optional sample description in **Sample**. Choose **Repeats** and **Blocks / repeat**. **Background** switches off the probe lamp and starts writing both channels to the named HDF5 file. Existing files are protected against replacement. Use **New Run** to enter another name or **Data → Open HDF5…** to reopen a saved run.
+2. Measure **Empty** with the probe lamp on and the optical path empty, then select **Set Empty Zero**. Insert the water reference and measure **Reference**. Inspect its OD against Empty, then select **Set Reference Zero**. The reference becomes the zero for sample OD and the first drift anchor. Insert the sample, select the collection interval and click **Start DC**.
+3. When the apparatus permits a reference measurement, select **Pause DC**, record the external source state with **Mark irradiation off**, and insert the reference. **Add Reference** starts capture immediately. It displays the reference OD against the initial reference and archives its acquisition times. Restore the sample and record the external source state before **Resume DC**. The same file stays open. A final reference can also be taken after **Stop DC**.
+4. After resuming, the live spectrum subtracts the most recent measured reference drift. In **Show DC → OD corrected for blank drift**, the archived correction interpolates between measured reference times and only fills covered intervals. **Estimated blank drift** shows the contribution being subtracted.
 
-The HDF5 file stores both channels in detector counts, the wavelength grids, dark and reference blocks, the kinetic zero, and the blank acquisitions. Measurement metadata include UTC acquisition times, integration times, hardware averaging counts, and trigger settings. Blank metadata include the requested delay, scheduled time, and capture time. Counts are the spectra returned by the SDK after its hardware averaging. Capturing repeated blocks is needed to estimate their repeatability.
+The HDF5 file stores every block on both native wavelength grids, with a UTC timestamp, repeat index, index within the repeat, and detector settings. With 50 repeats of three blocks, each channel has a 150-row counts matrix for that capture. Counts are the spectra returned by the SDK after its configured hardware averaging. A stopped capture retains its recorded blocks and can be repeated. Calibration can be reopened before sample acquisition.
 
 In **Show DC**, select **OD corrected for blank drift** to see the correction. It subtracts wavelength by wavelength the drift interpolated between measured blanks. The initial blank defines zero drift at series start and retains its actual capture time in the file. Samples outside a bracket have no corrected OD. With only two blanks the interpolation assumes linear drift. **OD vs initial blank** displays the measured sample OD relative to the initial blank. The map loads up to 500 rows for display. Zoom on the time axis and use **Load Zoomed Time Range** for detail.
 
-Use **Data → Open HDF5…** to reopen a run. Legacy **Load DAT…** still opens older measurements. If you resume a DAT run, its OD history is copied into a new HDF5 file and only the new acquisitions contain raw detector counts.
+Legacy **Load DAT…** opens older OD measurements. To continue a DAT run, complete the calibration in a new HDF5 file and choose **Resume** at **Start DC** to import the earlier OD rows. Only new acquisitions include raw counts.
 
 ## HDF5 schema v2
 
@@ -122,14 +122,16 @@ Gamma v2 uses NeXus base classes. The file has `format = avantes-gamma`, `versio
 | `acquisition` | `NXcollection` | Elapsed `time[scan]` and POSIX `time_utc[scan]` in s, estimated `dose[scan]` in Gy when specified, `metadata_json[scan]` for diagnostics and settings, and `committed_rows` as a group attribute. |
 | `raw_ch1`, `raw_ch2` | `NXdata` | Hard links to the detector signal and its native grid and to elapsed time. Each detector can have a different pixel count. |
 | `lamp_monitor` | `NXdata` | Alias of raw Ch2, captured on every paired acquisition. This represents the lamp spectrum if Ch2 follows an independent reference path. |
-| `sample` | `NXsample` | Window diameter and optical path in mm. Geometric probe and operator-entered filled volumes in mL. |
+| `sample` | `NXsample` | Run name and operator-entered sample description, window diameter and optical path in mm, and geometric probe and filled volumes in mL. |
 | `irradiation` | `NXcollection` | Nominal `dose_rate_set` in Gy/h and timed `state` markers as `NXlog`. |
-| `od_live` | `NXdata` | Append-only `od[scan, wavelength]` against the lamp reference and `delta_od[scan, wavelength]` as displayed during acquisition. Both are dimensionless and use the Ch1 grid. `delta_od` includes **Set Zero** when configured. |
-| `calibration/{background,reference,initial_blank,sample_t0}` | `NXcollection` | Available calibration blocks, both channels in counts, timestamps and acquisition metadata. |
-| `blanks/<id>` | `NXcollection` | Counts, a plottable `spectrum`, and `anchor_time`, `capture_time_utc`, plus `requested_delay`, `request_time_utc` and `scheduled_time_utc` for scheduled captures. All times are in s. |
+| `od_live` | `NXdata` | Append-only sample OD against the original reference, before drift correction, on the Ch1 grid. For older runs, `delta_od` retains the stored kinetic-zero subtraction. |
+| `calibration_captures/<id>` | `NXcollection` | Both channels in `chN_counts[block, pixel]`, time and repeat indices per block, and acquisition metadata. `committed_blocks` counts written rows and `complete` marks completed captures. |
+| `calibration/{background,empty,reference,initial_blank}` | `NXcollection` | Completed calibration blocks. The older `sample_t0` role can still be read. |
+| `calibration_zeros/{empty,reference}` | `NXdata` | Zero OD spectrum, selected UTC time and a link to the blocks used. |
+| `blanks/<id>` | `NXcollection` | Reference counts, plottable `spectrum`, `capture_time_utc` from the first block, and `anchor_time` at the mean acquisition time for a repeat reference. Times are in s. |
 | `processing/<revision>_blank_correction` | `NXprocess` | Blank IDs, measured anchor spectra, source live-OD path, method and processing date. `data/od` is corrected OD and `data/blank_drift` is the subtracted contribution. |
 | `processing/<revision>_mcr_als` | `NXprocess` | Correction path, fitted row and wavelength indices, settings, objective history and fit diagnostics. `spectra/loadings`, `kinetics/amplitudes`, `data/fitted_od` and `data/residual_od` are plottable results. |
-| `events/metadata_json` | Event list | Acquisition starts, stops, pauses and blank scheduling events with UTC timestamps. |
+| `events/metadata_json` | Event list | Acquisition starts, stops, pauses and resumes with UTC timestamps. |
 
 Missing counts or OD are `NaN`. Detector status codes are `1` for a successful readout, `0` for a failed readout and `-1` for missing status. An unknown integer setting is `-1`. Live OD uses the ratio of dark-subtracted detector signals, with the Ch2 intensities interpolated onto the Ch1 wavelength grid. Detector counts retain both native grids and do not include that interpolation or dark subtraction.
 

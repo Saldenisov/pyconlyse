@@ -10,87 +10,90 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         if self.data_collection_active or self.collection_paused:
             self.set_collection_state(active=False, paused=False)
             self.log_run_event("stop")
-            self.statusBar().showMessage(f"Collection stopped ({self.collection_point_index} points). Add Blank is available.")
+            self.statusBar().showMessage(f"Collection stopped ({self.collection_point_index} points). Add Reference is available.")
             return
-        if self.blank_schedule is not None or not self.validate_collection_rate(show_warning=True):
+        if not self.save_name_input.text().strip() or not self.validate_collection_rate(show_warning=True):
             return
         if not self.spec1_widget.spec or not self.spec2_widget.spec:
             api.QMessageBox.warning(self, "Start DC", "Connect both spectrometers first")
             return
 
-        path = api.Path(self.save_folder_input.text()).expanduser() / (
-            (self.save_name_input.text().strip() or "avantes_measurement") + ".h5"
-        )
-        old_path = self.collection_file_path
-        resume = False
-        if old_path and path.with_suffix("") == old_path.with_suffix("") and old_path.exists():
-            mode = self.ask_collection_start_mode(old_path, self.collection_point_index)
-            if mode is None:
-                return
-            resume = mode == "resume"
-
+        prepared = self.preparation_run is not None
+        run = self.preparation_run if prepared else self.collection_run
+        if run is None:
+            self.statusBar().showMessage("Create a named run and complete calibration before Start DC.")
+            return
         try:
-            if resume and old_path.suffix.lower() in {".h5", ".hdf5"}:
-                run = api.AvantesRun(old_path)
-                wavelengths, serials, epoch, count = run.info()
-                if not self.match_run_hardware(wavelengths, serials):
-                    raise ValueError("Connected spectrometers differ from the saved run")
-                if not self.same_detector_setup(self.current_detector_setup(), run.detector_setup()):
-                    raise ValueError("Restore the integration times and trigger modes used in the saved run")
-                run = self.standard_run(run)
-            else:
-                if not self.has_reference or not self.has_background:
-                    raise ValueError("Measure Background and Reference before starting a new run")
-                wavelengths, serials = self.current_hardware()
-                if not self.calibration_matches_detector_setup():
-                    raise ValueError("Remeasure Background and Reference with the current detector settings")
+            wavelengths, serials, epoch, count = run.info()
+            if not self.match_run_hardware(wavelengths, serials):
+                raise ValueError("Connect the same spectrometers used for calibration")
+            if not self.same_detector_setup(self.current_detector_setup(), run.detector_setup()):
+                raise ValueError("Restore the integration times and trigger modes used in the run")
+            if prepared:
+                if not self.has_reference or not self.calibration_matches_detector_setup():
+                    raise ValueError("Complete Background, Empty Zero and Reference Zero first")
+                setup = dict(self.exposure_setup)
+                setup.setdefault("irradiating_at_start", self.demo_kinetics_enabled)
                 offset = 0.0
-                if resume:
-                    loaded_grid = self.od_heatmap_wavelengths
-                    if wavelengths[0].shape != loaded_grid.shape or not api.np.allclose(wavelengths[0], loaded_grid, atol=1e-3, rtol=0):
-                        raise ValueError("Ch1 wavelength calibration differs from the DAT file")
-                    offset = self.get_resume_collection_time_offset(self.od_heatmap_times)
-                epoch = api.time.time() - offset
-                path.parent.mkdir(parents=True, exist_ok=True)
-                if path.exists():
-                    path = self.suggest_new_collection_file_path(path)
-                settings = self.get_settings_dict()
-                settings["exposure"] = dict(self.exposure_setup, start_offset_s=offset)
-                settings["emulator"] = dict(enabled=self.emulate_hardware, demo_kinetics=self.demo_kinetics_enabled,
-                                            duration_s=self.demo_kinetics_duration_s, max_od=self.demo_kinetics_max_od)
-                run = api.AvantesRun.create(path, wavelengths, serials, epoch, settings, self.calibration_blocks)
-                count = 0
-                if resume:
-                    for t, row in zip(self.od_heatmap_times, self.od_heatmap_rows):
-                        count = run.append(t, api.np.nan, None, None, None, row, {"source": "legacy_dat"})
-                    run.append_event("import_dat", api.time.time(), path=str(old_path), rows=count)
-                initial = self.calibration_blocks.get("initial_blank")
-                if initial:
-                    block = initial[0]
-                    od = self.calculate_optical_density(*api.valid_counts(block), apply_zero_baseline=False)
-                    run.add_blank(offset, initial, od, initial=True)
+                dat = self.collection_file_path
+                if dat is not None and dat.suffix.lower() == ".dat":
+                    mode = self.ask_collection_start_mode(dat, len(self.od_heatmap_rows))
+                    if mode is None:
+                        return
+                    if mode == "resume":
+                        grid = self.od_heatmap_wavelengths
+                        if wavelengths[0].shape != grid.shape or not api.np.allclose(wavelengths[0], grid, atol=1e-3, rtol=0):
+                            raise ValueError("Channel 1 wavelength calibration differs from the DAT file")
+                        offset = self.get_resume_collection_time_offset(self.od_heatmap_times)
+                        for t, row in list(zip(self.od_heatmap_times, self.od_heatmap_rows))[count:]:
+                            count = run.append(t, api.np.nan, None, None, None, row, {"source": "legacy_dat"})
+                        run.append_event("import_dat", api.time.time(), path=str(dat), rows=count)
+                epoch = run.start_prepared_collection(api.time.time() - offset, setup, offset=offset)
+            else:
+                run = self.standard_run(run)
             self.restore_run_calibration(run)
-            run.append_event("resume" if resume else "start", api.time.time())
+            correction = run.latest_reference_drift()
+            run.append_event("start" if prepared else "resume", api.time.time())
         except (OSError, ValueError, KeyError, RuntimeError) as exc:
             self.logger.exception("Cannot start data collection")
-            api.QMessageBox.critical(self, "Start DC", str(api.exc))
+            api.QMessageBox.critical(self, "Start DC", str(exc))
             return
 
         if self.continuous_mode:
             self.stop_live_preview()
+        self.preparation_run = None
         self.collection_run = run
-        self.exposure_state = run.irradiation_state()
-        self.run_volumes = run.sample_volumes()
-        self.collection_file_path = run.path
+        self.latest_reference_correction = correction
         self.collection_start_time = epoch
         self.collection_point_index = count
-        self.save_folder_input.setText(str(run.path.parent))
-        self.save_name_input.setText(run.path.stem)
-        self.update_loaded_collection_label(run.path)
+        self.set_open_collection_path(run.path)
         self.reset_od_heatmap()
         self.collection_point_start_time = None
         self.set_collection_state(active=True, paused=False)
         self.collect_data_point()
+
+    def new_named_run(self):
+        if not self.may_open_collection():
+            return
+        if self.continuous_mode:
+            self.stop_live_preview()
+        self.preparation_run = None
+        self.collection_run = None
+        self.collection_file_path = None
+        self.collection_start_time = None
+        self.collection_point_index = 0
+        self.latest_reference_correction = None
+        self.empty_zero_selected = False
+        self.exposure_state = (api.np.nan, False)
+        self.run_volumes = (api.np.nan, api.np.nan)
+        self.clear_plots()
+        self.save_name_input.clear()
+        self.sample_comment_input.clear()
+        self.blank_status.clear()
+        self.update_loaded_collection_label(None)
+        self.update_collection_countdown_label()
+        self.update_analysis_buttons()
+        self.save_name_input.setFocus()
 
     def collect_data_point(self):
         """Collect a data point during active data collection."""
@@ -252,7 +255,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
             self.loaded_collection_label.setToolTip("")
             return
         text = str(path)
-        self.loaded_collection_label.setText(text)
+        self.loaded_collection_label.setText(path.name)
         self.loaded_collection_label.setToolTip(text)
 
     def ask_collection_start_mode(self, path: api.Path, n_points: int) -> api.Optional[str]:
@@ -338,6 +341,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
 
         times = api.np.asarray(data[:, 0], dtype=float)
         rows = api.np.asarray(data[:, 1:], dtype=float)
+        self.new_named_run()
         self.od_heatmap_wavelengths = wavelengths
         self.od_heatmap_times = [float(value) for value in times]
         self.od_heatmap_rows = [api.np.array(row, dtype=float) for row in rows]
@@ -359,24 +363,30 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.logger.info(f"DATA LOAD: Loaded {path} ({len(rows)} points, {len(wavelengths)} wavelengths)")
 
     def update_analysis_buttons(self):
-        busy = self.current_measurement_role is not None or self.analysis_worker is not None
+        busy = self.current_measurement_role is not None or self.calibration_capture is not None or self.analysis_worker is not None
         running = self.data_collection_active or self.collection_paused
         calibrated = self.has_reference and self.has_background
-        can_append_blank = self.collection_run is not None and not busy
-        self.start_collection_btn.setEnabled(
-            not busy and (running or self.blank_schedule is None and (calibrated or self.collection_run is not None))
-        )
-        self.pause_collection_btn.setEnabled(
-            not busy and running and (not self.collection_paused or self.blank_schedule is None)
-        )
+        named = bool(self.save_name_input.text().strip())
+        open_run = self.preparation_run is not None or self.collection_run is not None
+        self.start_collection_btn.setEnabled(not busy and (running or named and (calibrated or self.collection_run is not None)))
+        self.pause_collection_btn.setEnabled(not busy and running)
         self.track_wl_btn.setEnabled(calibrated)
-        preparing = not running and not busy and self.blank_schedule is None
-        self.measure_ref_btn.setEnabled(preparing)
-        self.measure_bg_btn.setEnabled(preparing)
-        self.initial_blank_btn.setEnabled(preparing and calibrated)
-        self.zero_reference_btn.setEnabled(preparing and calibrated and self.last_sample_pair is not None)
-        self.clear_btn.setEnabled(preparing)
-        self.continuous_btn.setEnabled(not running and self.blank_schedule is None and self.analysis_worker is None)
+        idle = not running and not busy
+        preparing = idle and named and self.collection_run is None
+        self.measure_bg_btn.setEnabled(preparing and not self.has_background)
+        self.measure_empty_btn.setEnabled(preparing and self.has_background and "empty" not in self.calibration_blocks)
+        self.zero_empty_btn.setEnabled(preparing and "empty" in self.calibration_blocks and not self.empty_zero_selected)
+        self.measure_ref_btn.setEnabled(preparing and self.empty_zero_selected and "reference" not in self.calibration_blocks)
+        self.zero_reference_btn.setEnabled(preparing and "reference" in self.calibration_blocks and not self.has_reference)
+        self.clear_btn.setEnabled(idle and not open_run)
+        self.new_run_btn.setEnabled(idle)
+        self.save_name_input.setReadOnly(open_run)
+        self.save_folder_input.setReadOnly(open_run)
+        self.sample_comment_input.setReadOnly(open_run)
+        self.browse_save_btn.setEnabled(idle and not open_run)
+        self.ref_blocks_spin.setEnabled(not busy and not self.data_collection_active)
+        self.ref_repeats_spin.setEnabled(not busy and not self.data_collection_active)
+        self.continuous_btn.setEnabled(calibrated and not running and self.analysis_worker is None)
         for action in (self.recalculate_action, self.mcr_action):
             action.setEnabled(self.can_analyze_run())
         can_show_mcr = self.collection_run is not None and self.analysis_worker is None
@@ -386,19 +396,14 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         rate, irradiating = self.exposure_state
         self.irradiation_action.setEnabled(can_show_mcr)
         self.irradiation_action.setText("Mark irradiation off" if irradiating else "Mark irradiation on")
+        self.irradiation_btn.setEnabled(can_show_mcr and not busy)
+        self.irradiation_btn.setText(self.irradiation_action.text())
         if api.np.isfinite(rate):
             self.irradiation_action.setToolTip(f"Recording state for {rate:g} Gy/h")
         else:
             self.irradiation_action.setToolTip("Record the state of the external irradiation source")
         self.update_exposure_label()
-        self.add_blank_btn.setText("Capture Blank" if self.blank_due else "Add Blank…")
-        if self.blank_due:
-            can_append_blank = can_append_blank and not self.data_collection_active
-        else:
-            can_append_blank = self.collection_run is not None and self.blank_schedule is None and (not busy or running)
-        self.add_blank_btn.setEnabled(can_append_blank and self.analysis_worker is None)
-        self.cancel_blank_btn.setVisible(self.blank_schedule is not None)
-        self.cancel_blank_btn.setEnabled(self.current_measurement_role != "blank")
+        self.add_blank_btn.setEnabled(self.collection_run is not None and not busy and not self.data_collection_active)
         for widget in (self.spec1_widget, self.spec2_widget):
             widget.connect_btn.setEnabled(not running and not busy)
             widget.integration_spin.setEnabled(not running and not busy)
@@ -429,7 +434,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
                     window.od_source.currentData(), window.detail_range
                 )
             except (OSError, ValueError, KeyError, RuntimeError) as exc:
-                self.logger.error("Unable to read OD map: %s", api.exc)
+                self.logger.error("Unable to read OD map: %s", exc)
                 return
         else:
             stride = max(1, (len(self.od_heatmap_rows) + 499) // 500)
@@ -485,6 +490,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
 
     return {
         "toggle_data_collection": toggle_data_collection,
+        "new_named_run": new_named_run,
         "collect_data_point": collect_data_point,
         "schedule_next_collection_point": schedule_next_collection_point,
         "on_collection_rate_changed": on_collection_rate_changed,

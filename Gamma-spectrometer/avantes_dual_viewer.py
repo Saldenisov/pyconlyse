@@ -444,12 +444,10 @@ class AvantesDualViewer(QMainWindow):
         self.measurement_thread = None
         self.continuous_mode = False
         self.data_collection_active = False
-        self.measuring_reference = False
-        self.measuring_background = False
-        self.reference_measurements = []
-        self.background_measurements = []
-        self.reference_target_blocks = 1
-        self.background_target_blocks = 1
+        self.calibration_capture = None
+        self.preparation_run = None
+        self.empty_zero_selected = False
+        self.latest_reference_correction = None
         self.pending_ref_bg_role = None
         self.collection_run = None
         self.analysis_worker = None
@@ -459,10 +457,7 @@ class AvantesDualViewer(QMainWindow):
         self.run_volumes = (np.nan, np.nan)
         self.collection_paused = False
         self.calibration_blocks = {}
-        self.last_sample_pair = None
         self.measurement_metadata = None
-        self.blank_schedule = None
-        self.blank_due = False
         self.closing_requested = False
         self.collection_point_index = 0
         self.collection_start_time = None
@@ -505,10 +500,6 @@ class AvantesDualViewer(QMainWindow):
         self.collection_countdown_timer = QTimer()
         self.collection_countdown_timer.setInterval(1000)
         self.collection_countdown_timer.timeout.connect(self.update_collection_countdown_label)
-        self.blank_timer = QTimer(self)
-        self.blank_timer.setSingleShot(True)
-        self.blank_timer.setTimerType(Qt.PreciseTimer)
-        self.blank_timer.timeout.connect(self.on_blank_due)
         self.map_refresh_timer = QTimer(self)
         self.map_refresh_timer.setSingleShot(True)
         self.map_refresh_timer.setInterval(500)
@@ -518,6 +509,7 @@ class AvantesDualViewer(QMainWindow):
         self.setup_logging()
 
         self.init_ui()
+        self.update_analysis_buttons()
 
         # Auto-connect both spectrometers after UI is ready
         QTimer.singleShot(500, self.auto_connect_spectrometers)
@@ -549,9 +541,12 @@ class AvantesDualViewer(QMainWindow):
     stop_measurement = _avantes_dual_viewer_methods_get_settings_dict["stop_measurement"]
     measure_reference = _avantes_dual_viewer_methods_get_settings_dict["measure_reference"]
     measure_background = _avantes_dual_viewer_methods_get_settings_dict["measure_background"]
-    measure_reference_complete = _avantes_dual_viewer_methods_get_settings_dict["measure_reference_complete"]
-    set_zero_baseline_from_current = _avantes_dual_viewer_methods_get_settings_dict["set_zero_baseline_from_current"]
-    measure_background_complete = _avantes_dual_viewer_methods_get_settings_dict["measure_background_complete"]
+    open_preparation_run = _avantes_dual_viewer_methods_get_settings_dict["open_preparation_run"]
+    measure_calibration = _avantes_dual_viewer_methods_get_settings_dict["measure_calibration"]
+    start_spectral_capture = _avantes_dual_viewer_methods_get_settings_dict["start_spectral_capture"]
+    complete_spectral_capture = _avantes_dual_viewer_methods_get_settings_dict["complete_spectral_capture"]
+    calculate_calibration_od = _avantes_dual_viewer_methods_get_settings_dict["calculate_calibration_od"]
+    set_calibration_zero = _avantes_dual_viewer_methods_get_settings_dict["set_calibration_zero"]
     del _avantes_dual_viewer_methods_get_settings_dict
 
     _avantes_dual_viewer_methods_init_ui = _bind_avantes_dual_viewer_methods_init_ui(_refactor_modules[__name__])
@@ -592,6 +587,7 @@ class AvantesDualViewer(QMainWindow):
 
     _avantes_dual_viewer_methods_toggle_data_collection = _bind_avantes_dual_viewer_methods_toggle_data_collection(_refactor_modules[__name__])
     toggle_data_collection = _avantes_dual_viewer_methods_toggle_data_collection["toggle_data_collection"]
+    new_named_run = _avantes_dual_viewer_methods_toggle_data_collection["new_named_run"]
     collect_data_point = _avantes_dual_viewer_methods_toggle_data_collection["collect_data_point"]
     schedule_next_collection_point = _avantes_dual_viewer_methods_toggle_data_collection["schedule_next_collection_point"]
     on_collection_rate_changed = _avantes_dual_viewer_methods_toggle_data_collection["on_collection_rate_changed"]
@@ -627,11 +623,7 @@ class AvantesDualViewer(QMainWindow):
     log_run_event = _avantes_dual_viewer_methods_blanks["log_run_event"]
     fail_run_write = _avantes_dual_viewer_methods_blanks["fail_run_write"]
     toggle_collection_pause = _avantes_dual_viewer_methods_blanks["toggle_collection_pause"]
-    measure_initial_blank = _avantes_dual_viewer_methods_blanks["measure_initial_blank"]
-    schedule_blank = _avantes_dual_viewer_methods_blanks["schedule_blank"]
-    on_blank_due = _avantes_dual_viewer_methods_blanks["on_blank_due"]
-    cancel_blank = _avantes_dual_viewer_methods_blanks["cancel_blank"]
-    start_blank_measurement = _avantes_dual_viewer_methods_blanks["start_blank_measurement"]
+    add_reference = _avantes_dual_viewer_methods_blanks["add_reference"]
     save_blank = _avantes_dual_viewer_methods_blanks["save_blank"]
     del _avantes_dual_viewer_methods_blanks
 

@@ -26,37 +26,29 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         block = dict(ch1=ch1, ch2=ch2, metadata=metadata)
         self._measurement_count += 1
 
-        if role in {"reference", "background"}:
-            measuring = self.measuring_reference if role == "reference" else self.measuring_background
-            if not measuring:
+        if role in {"reference", "empty", "background", "blank"}:
+            capture = self.calibration_capture
+            if capture is None:
                 return
-            if not paired:
-                self.stop_measurement()
-                self.statusBar().showMessage(f"{role.title()} failed: incomplete readout")
-                return
-            blocks = self.reference_measurements if role == "reference" else self.background_measurements
-            target = self.reference_target_blocks if role == "reference" else self.background_target_blocks
-            blocks.append(block)
-            if len(blocks) < target:
-                self.pending_ref_bg_role = role
-                self.statusBar().showMessage(f"Measuring {role} block {len(blocks) + 1}/{target}…")
-            elif role == "reference":
-                self.measure_reference_complete()
-            else:
-                self.measure_background_complete()
+            try:
+                count = capture["run"].append_capture_block(capture["name"], block)
+                if capture["aborted"] or not paired:
+                    self.calibration_capture = None
+                    if not paired:
+                        self.statusBar().showMessage("Incomplete readout retained in HDF5. Retry the capture.")
+                elif count == capture["target"]:
+                    blocks = capture["run"].finish_capture(capture["name"])
+                    self.calibration_capture = None
+                    self.complete_spectral_capture(role, blocks)
+                else:
+                    self.pending_ref_bg_role = role
+                    self.statusBar().showMessage(f"{role.title()} block {count}/{capture['target']} saved")
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                self.calibration_capture = None
+                api.QMessageBox.critical(self, "Save spectral capture", str(exc))
+            if self.calibration_capture is None:
+                self.stop_measure_btn.setEnabled(False)
             return
-
-        if role in {"blank", "initial_blank"}:
-            if paired:
-                self.save_blank(role, block)
-            else:
-                self.blank_status.setText("Blank readout incomplete. Retry the capture.")
-                if role == "blank":
-                    self.log_run_event("blank_failed", metadata=metadata)
-            return
-
-        if role in {"preview", "manual", "collection"}:
-            self.last_sample_pair = block if paired and metadata["lamp_on"] else None
 
         elapsed = None
         if role == "collection":
@@ -65,9 +57,16 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
                                                apply_zero_baseline=False) if paired else None
         od = self.apply_kinetic_zero(od_raw)
         if od is not None:
-            self.curve_od.setData(widgets[0].wavelengths, od)
+            plotted = od
+            if role == "collection" and self.latest_reference_correction is not None:
+                plotted = od - self.latest_reference_correction
+            self.curve_od.setData(widgets[0].wavelengths, plotted)
+            self.plot_od.setTitle(
+                "Optical Density (latest reference correction)"
+                if plotted is not od else "Optical Density (OD) Spectrum"
+            )
             if self.wavelength_tracker_window:
-                self.wavelength_tracker_window.update_od_value(od, widgets[0].wavelengths)
+                self.wavelength_tracker_window.update_od_value(plotted, widgets[0].wavelengths)
 
         if role == "collection":
             try:
@@ -75,7 +74,7 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
                     elapsed, metadata["utc_s"], ch1, ch2, od_raw, od, metadata
                 )
             except (OSError, ValueError, RuntimeError) as exc:
-                self.fail_run_write(api.exc)
+                self.fail_run_write(exc)
                 return
             if self.od_heatmap_window is not None and not self.map_refresh_timer.isActive():
                 self.map_refresh_timer.start()
@@ -91,7 +90,7 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
     def on_measurement_error(self, error_msg):
         self.logger.error("Measurement error: %s", error_msg)
         role = self.current_measurement_role
-        if role in {"collection", "blank", "initial_blank", "reference", "background"}:
+        if role in {"collection", "blank", "reference", "empty", "background"}:
             self.measurement_metadata["error"] = error_msg
             self.on_measurement_complete({})
         elif "INVALID_MEAS_DATA" not in error_msg and self.continuous_mode:
@@ -105,10 +104,12 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         self.pending_ref_bg_role = None
         self.current_measurement_role = None
         if self.closing_requested:
+            self.calibration_capture = None
             api.QTimer.singleShot(0, self.close)
             return
         if pending_role is not None and not self.single_measurement(measurement_role=pending_role):
             self.stop_measurement()
+            self.calibration_capture = None
         self.update_collection_countdown_label()
         self.update_analysis_buttons()
 
@@ -208,6 +209,7 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         self.curve1.setData([], [])
         self.curve2.setData([], [])
         self.curve_od.setData([], [])
+        self.plot_od.setTitle("Optical Density (OD) Spectrum")
         self.ref_curve1.setData([], [])
         self.ref_curve2.setData([], [])
         self.bg_curve1.setData([], [])
@@ -231,7 +233,6 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         self.has_reference = False
         self.has_background = False
         self.calibration_blocks.clear()
-        self.last_sample_pair = None
         self.update_analysis_buttons()
 
         self.statusBar().showMessage("Plots cleared")
@@ -340,13 +341,12 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
 
     def closeEvent(self, event):
         """Handle window close event."""
-        self.blank_timer.stop()
         self.map_refresh_timer.stop()
         self.continuous_timer.stop()
         self.collection_timer.stop()
         self.lamp_warmup_timer.stop()
         self.collection_countdown_timer.stop()
-        if self.current_measurement_role is not None or self.analysis_worker is not None:
+        if self.current_measurement_role is not None or self.calibration_capture is not None or self.analysis_worker is not None:
             self.closing_requested = True
             self.statusBar().showMessage("Finishing the current operation before closing…")
             event.ignore()
@@ -354,13 +354,10 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
 
         if self.collection_run is not None:
             try:
-                if self.blank_schedule is not None:
-                    self.collection_run.append_event("blank_cancelled", api.time.time(), reason="application closed",
-                                                     due_utc_s=self.blank_schedule["due_utc_s"])
                 if self.data_collection_active or self.collection_paused:
                     self.collection_run.append_event("stop", api.time.time(), reason="application closed")
             except (OSError, ValueError, RuntimeError) as exc:
-                self.logger.error("Failed to save shutdown event: %s", api.exc)
+                self.logger.error("Failed to save shutdown event: %s", exc)
 
         count = self._measurement_count if hasattr(self, '_measurement_count') else 0
         self.logger.info("="*60)
