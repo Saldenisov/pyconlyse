@@ -6,6 +6,8 @@
 
 PYCONLYSE is a comprehensive client-server-service application written in pure Python for controlling and managing scientific instruments in the ELYSE experiment. The system provides a distributed architecture using PyTango framework for device communication, data acquisition, and real-time experiment control.
 
+[VD2 Tango device servers](DeviceServers/VD2_DEVICE_SERVERS.md) covers the Hamamatsu streak head and DCAM sensor, DG645 and Kymera 328i.
+
 ## 🌐 Web Component
 
 PYCONLYSE includes a modern web-based control interface that provides remote access to scientific instruments through a browser. The web component consists of:
