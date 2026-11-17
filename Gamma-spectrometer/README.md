@@ -6,13 +6,16 @@ This subproject does not use Tango.
 
 ## Windows на экспериментальном ноутбуке
 
-Скачайте ветку [Avantes](https://github.com/Saldenisov/pyconlyse/tree/Avantes). Если Git уже есть, скопируйте в PowerShell:
+Скачайте папку `Gamma-spectrometer` из ветки [Avantes](https://github.com/Saldenisov/pyconlyse/tree/Avantes). Если Git уже есть, скопируйте в PowerShell:
 
 ```powershell
-git clone --branch Avantes --single-branch https://github.com/Saldenisov/pyconlyse.git pyconlyse-avantes
-cd .\pyconlyse-avantes\Gamma-spectrometer
+git clone --branch Avantes --single-branch --filter=blob:none --sparse https://github.com/Saldenisov/pyconlyse.git pyconlyse-avantes-gamma
+git -C .\pyconlyse-avantes-gamma sparse-checkout set Gamma-spectrometer
+cd .\pyconlyse-avantes-gamma\Gamma-spectrometer
 .\run_avantes_dual_viewer.bat
 ```
+
+Если предыдущий клон остановился на ошибке Git LFS в `utilities/IRpy-server`, выполните команды выше в папке, где ещё нет `pyconlyse-avantes-gamma`. Выборочная выгрузка берёт программу и её драйверы из `Gamma-spectrometer`.
 
 Если Git ещё нет, [скачайте ZIP ветки Avantes](https://github.com/Saldenisov/pyconlyse/archive/refs/heads/Avantes.zip), распакуйте его, откройте папку `Gamma-spectrometer` и дважды щёлкните `run_avantes_dual_viewer.bat`.
 
