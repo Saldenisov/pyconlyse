@@ -843,6 +843,46 @@ test.each(['acquiring', 'saving', 'processing'])('Alignment controls cannot inte
   }
 });
 
+test.each([true, false])('direct Tango displays no RemoteEx or HPD-TA controls (%s connected)', async (connected) => {
+  const camera = {
+    success: true, readout_backend: 'tango', state: connected ? 'ON' : 'FAULT',
+    connected, application_running: connected, acquisition_status: 'idle', values: {},
+  };
+  global.fetch = jest.fn(async url => ({
+    ok: true,
+    json: async () => url === '/api/pump-probe-vd2/state' || url === '/api/pump-probe-vd2/refresh'
+      ? camera
+      : { success: true, status: 'idle', frame_available: false, stream_state: 'no_valid_image' },
+  }));
+  const view = render(<PumpProbeVD2 />);
+  try {
+    await screen.findByText(connected ? 'Tango ON' : 'Tango FAULT');
+    expect(screen.queryByText(/RemoteEx|HPD-TA/)).not.toBeInTheDocument();
+    if (!connected) expect(screen.getByRole('alert')).toHaveTextContent('VD2 Tango coordinator is unavailable');
+    expect(screen.getByRole('spinbutton', { name: 'Frames / HIS' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Live', exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop', exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Live rolling average' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Live' }));
+    expect(screen.queryByRole('form', { name: 'Live rolling average' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Live On' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Alignment' }));
+    expect(screen.queryByRole('form', { name: 'Live rolling average' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Live', exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop', exact: true })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Hardware setup' }));
+    expect(screen.getByText('Hamamatsu C13410 / DCAM')).toBeInTheDocument();
+    expect(screen.queryByText(/RemoteEx|HPD-TA/)).not.toBeInTheDocument();
+    expect(global.fetch.mock.calls.some(([url]) => url.endsWith('/live/rolling-average'))).toBe(false);
+  } finally {
+    view.unmount();
+    global.fetch = originalFetch;
+  }
+});
+
 test.each([false, true])('HPD-TA stopped is reported only with a connected control link (%s)', async (connected) => {
   global.fetch = jest.fn(async url => {
     let payload = { success: true };

@@ -252,7 +252,7 @@ export function useVd2AcquisitionState(measurementRate) {
       if (expired) throw new Error('Live preview read timed out.');
       if (controller.signal.aborted || previewPaused.current) return;
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to read live frame');
-      if (!payload.frame_available && payload.stream_state === 'waiting_for_frame') return;
+      if (!payload.frame_available && payload.stream_state === 'waiting_for_frame') return payload.stream_state;
       const identity = payload.received_at;
       const previous = previewIdentity.current;
       if (identity && previous) {
@@ -292,15 +292,18 @@ export function useVd2AcquisitionState(measurementRate) {
   }, [previewFreshness]);
 
   const previewPolling = previewShouldPoll(activeTab, state, protocol, previewEnabled);
-  const previewPeriod = state?.readout_backend === 'tango' && state.values?.trigger_rate_hz === 10 ? 95 : 190;
+  const directPreview = state?.readout_backend === 'tango';
+  // The preview endpoint returns the latest frame, so leave time for a busy
+  // reader or stale response before the camera overwrites that frame.
+  const previewPeriod = directPreview ? (state.values?.trigger_rate_hz === 10 ? 70 : 140) : 190;
   const previewAllowed = hasVd2Preview(activeTab) && previewEnabled && !protocolSaving
     && (previewPolling || Boolean(state?.connected && state?.application_running));
   useEffect(() => {
     if (!previewAllowed) return undefined;
     if (!previewPolling) { loadPreview(); return undefined; }
-    const stop = startPreviewPolling(loadPreview, previewPeriod);
+    const stop = startPreviewPolling(loadPreview, previewPeriod, directPreview);
     return () => { stop(); previewController.current?.abort(); };
-  }, [activeTab, loadPreview, previewAllowed, previewPolling, previewPeriod]);
+  }, [activeTab, directPreview, loadPreview, previewAllowed, previewPolling, previewPeriod]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setPreviewClock(performance.now()), 500);

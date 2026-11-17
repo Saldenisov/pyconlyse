@@ -81,3 +81,40 @@ test('repeated cached responses cannot create an unbounded fast retry loop', asy
   expect(time.pending.map(item => item.delay)).toEqual([20, 40, 60, 70]);
   stop();
 });
+
+test.each([false, true])('a busy preview reader only retries early for direct Tango (%s)', async (direct) => {
+  const time = clock();
+  const stop = startPreviewPolling(async () => 'waiting_for_frame', 140, direct);
+  await Promise.resolve();
+  expect(time.pending[0].delay).toBe(direct ? 20 : 140);
+  stop();
+});
+
+test.each([[200, 140], [100, 70]])('direct polling retains frames at a %d ms camera interval', async (interval, period) => {
+  const time = clock();
+  const frames = [];
+  const missedOnce = new Set();
+  let now = 0;
+  const stop = startPreviewPolling(async () => {
+    const stamp = Math.floor(now / interval);
+    const transfer = 25 + (stamp % 3) * 5;
+    now += transfer;
+    time.set(now);
+    if (stamp === frames.at(-1)) return true;
+    // A second client briefly owns Web's preview lock.
+    if (stamp % 5 === 2 && !missedOnce.has(stamp)) {
+      missedOnce.add(stamp);
+      return 'waiting_for_frame';
+    }
+    frames.push(stamp);
+    return undefined;
+  }, period, true);
+  await Promise.resolve();
+  for (let index = 0; now < interval * 20; index += 1) {
+    now += time.pending[index].delay;
+    time.set(now);
+    await time.pending[index].callback();
+  }
+  expect(frames.filter(stamp => stamp < 20)).toEqual(Array.from({ length: 20 }, (_, stamp) => stamp));
+  stop();
+});

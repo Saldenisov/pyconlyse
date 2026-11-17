@@ -17,7 +17,7 @@ const liveCards = CARDS.map(card => ({
   )),
 }));
 
-export default function VD2LiveSettings({ values, onApply, disabled, live, onAverageReadError }) {
+export default function VD2LiveSettings({ values, onApply, disabled, live, legacyAverage, onAverageReadError }) {
   const liveValues = { ...values };
   for (const key of delays) {
     const seconds = values[key];
@@ -42,7 +42,7 @@ export default function VD2LiveSettings({ values, onApply, disabled, live, onAve
         <ParameterCard key={card.tone} card={card} values={liveValues} onApply={apply}
           compact busy={disabled} disabledFields={live ? ['time_range'] : undefined} />
       ))}
-      <VD2LiveAverage disabled={disabled} onReadError={onAverageReadError} />
+      {legacyAverage && <VD2LiveAverage disabled={disabled} onReadError={onAverageReadError} />}
     </aside>
   );
 }

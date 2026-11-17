@@ -77,6 +77,16 @@ export function renderVd2Acquisition({
         : { key: calibrationKey, rows: pairedRange.referenceRows } }));
     }
   };
+  const alignmentLiveControls = <>
+    <button type="button" onClick={() => runCommand('StartLive')} disabled={alignmentControlsBlocked || !acquisitionIdle}>Live</button>
+    <button type="button" className="vd2-stop" onClick={() => runCommand('StopAcquisition')} disabled={alignmentControlsBlocked || acquisitionIdle}>Stop</button>
+  </>;
+  const framesPerHisControl = (
+    <label><span>Frames / HIS</span><input aria-label="Frames / HIS" type="number" min="1" max="100000" step="1"
+      value={protocolSettings.framesPerHis}
+      disabled={!serverWorkspace.ready || busy || protocolStarting || Boolean(repeatConflict) || protocolHardwareActive}
+      onChange={event => updateProtocolSetting('framesPerHis', event.target.value)} /></label>
+  );
   return (
     <main className="vd2-page">
       <header className="vd2-header" aria-label="VD2 header">
@@ -87,8 +97,10 @@ export function renderVd2Acquisition({
         <div className="vd2-statuses" aria-live="polite">
           {awaitingCameraState ? <span className="vd2-status">Camera status deferred</span> : <>
             <span className={`vd2-status ${statusClass}`}>Tango {state?.state || 'OFFLINE'}</span>
-            <span className={`vd2-status ${state?.connected ? 'online' : 'offline'}`}>RemoteEx {state?.connected ? 'connected' : 'disconnected'}</span>
-            <span className={`vd2-status ${state?.connected && state?.application_running ? 'online' : 'offline'}`}>HPD-TA {!state?.connected ? 'status unknown' : state?.application_running ? 'running' : 'stopped'}</span>
+            {state && !directTango && <>
+              <span className={`vd2-status ${state.connected ? 'online' : 'offline'}`}>RemoteEx {state.connected ? 'connected' : 'disconnected'}</span>
+              <span className={`vd2-status ${state.connected && state.application_running ? 'online' : 'offline'}`}>HPD-TA {!state.connected ? 'status unknown' : state.application_running ? 'running' : 'stopped'}</span>
+            </>}
           </>}
         </div>
         <div className="vd2-header-actions">
@@ -110,7 +122,10 @@ export function renderVd2Acquisition({
       {acquisitionReadError && (acquisitionReadDeferred
         ? <div className="vd2-read-deferred" role="status">Acquisition status check deferred: another VD2 operation is in progress.</div>
         : <div className="vd2-startup-error" role="alert">Acquisition status unavailable: {acquisitionReadError}</div>)}
-      {state && !awaitingCameraState && !state.connected && <div className="vd2-startup-error" role="alert">RemoteEx control link is disconnected. HPD-TA may still be running; its acquisition state is unknown. Reconnect before sending camera commands.</div>}
+      {state && !awaitingCameraState && !state.connected && (!directTango || !state.status) &&
+        <div className="vd2-startup-error" role="alert">{directTango
+          ? 'VD2 Tango coordinator is unavailable. Refresh to check the camera state.'
+          : 'RemoteEx control link is disconnected. HPD-TA may still be running; its acquisition state is unknown. Reconnect before sending camera commands.'}</div>}
       <VD2ReadDiagnostics issues={readIssues} />
       {(alignmentMemoryError||roiMemoryError)&&<small role="alert">{alignmentMemoryError||roiMemoryError}</small>}
 
@@ -136,6 +151,7 @@ export function renderVd2Acquisition({
           onDragOver={event => { if (dragPanel) event.preventDefault(); }}
           onDrop={event => { if (dragPanel) { event.preventDefault(); const box = event.currentTarget.getBoundingClientRect(); setImageRight(event.clientX > box.left + box.width / 2); setDragPanel(false); } }}>
           {liveTab ? <VD2LiveSettings values={values} onApply={writeParameter} live={live}
+            legacyAverage={Boolean(state && !directTango)}
             disabled={alignmentControlsBlocked || (!acquisitionIdle && !live)}
             onAverageReadError={setLiveAverageReadError} />
             : <div className="vd2-acquisition-sidebar">
@@ -143,10 +159,11 @@ export function renderVd2Acquisition({
               <AlignmentRegion region={alignmentRegion} onChange={(key, value) => setAlignmentRegion(current => ({ ...current, [key]: value }))}
                 calibrationUpdating={calibrationUpdating} calibrated={Boolean(calibration) && previewAvailable}
                 calibrationError={previewStream === 'no_valid_image' ? '' : calibrationError || preview?.calibration_error || ''} />
-              <VD2LiveAverage onReadError={setLiveAverageReadError} onReadback={setAlignmentAverage} disabled={alignmentControlsBlocked}>
-                <button type="button" onClick={() => runCommand('StartLive')} disabled={alignmentControlsBlocked || !acquisitionIdle}>Live</button>
-                <button type="button" className="vd2-stop" onClick={() => runCommand('StopAcquisition')} disabled={alignmentControlsBlocked || acquisitionIdle}>Stop</button>
-              </VD2LiveAverage>
+              {state && !directTango
+                ? <VD2LiveAverage onReadError={setLiveAverageReadError} onReadback={setAlignmentAverage} disabled={alignmentControlsBlocked}>
+                  {alignmentLiveControls}
+                </VD2LiveAverage>
+                : <div className="vd2-live-average">{alignmentLiveControls}</div>}
               <VD2AlignmentMagnets measurements={alignmentMeasurements} live={state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live'} />
             </> : <>
             {protocol?.paired_available && <label className="vd2-control-strip">
@@ -171,10 +188,11 @@ export function renderVd2Acquisition({
                 <button type="button" onClick={() => runCommand('StartSequence')} disabled={busy || protocolHardwareActive}>Sequence</button>
                 <button type="button" className="vd2-stop" onClick={() => runCommand('StopAcquisition')} disabled={busy}>Stop</button>
               </div>
-              <VD2LiveAverage onReadError={setLiveAverageReadError} liveActive={state?.remoteex_status === 'busy'} disabled={busy || !state?.connected || !state?.application_running || protocolHardwareActive}>
-                <label><span>Frames / HIS</span><input aria-label="Frames / HIS" type="number" min="1" max="100000" step="1" value={protocolSettings.framesPerHis}
-                  disabled={!serverWorkspace.ready || busy || protocolStarting || Boolean(repeatConflict) || protocolHardwareActive} onChange={event => updateProtocolSetting('framesPerHis', event.target.value)} /></label>
-              </VD2LiveAverage>
+              {state && !directTango
+                ? <VD2LiveAverage onReadError={setLiveAverageReadError} disabled={busy || !state.connected || !state.application_running || protocolHardwareActive}>
+                  {framesPerHisControl}
+                </VD2LiveAverage>
+                : <div className="vd2-live-average">{framesPerHisControl}</div>}
             </section>}
             <Vd2PhaseProtocol
               pairedMode={pairedMode}
@@ -360,7 +378,7 @@ export function renderVd2Acquisition({
           <div className="vd2-hardware-actions">
             <button
               type="button"
-              onClick={() => runCommand('RefreshStatus')}
+              onClick={directTango ? refreshAll : () => runCommand('RefreshStatus')}
               disabled={busy || !state?.application_running || state?.remoteex_status === 'busy'}
             >
               Read hardware
@@ -368,7 +386,8 @@ export function renderVd2Acquisition({
           </div>
           <section className="vd2-grid" aria-label="Hardware setup">
             {CARDS.map((card) => (
-              <ParameterCard card={card} values={values} onApply={writeParameter} busy={busy || protocolHardwareActive} key={card.title} />
+              <ParameterCard card={directTango && card.tone === 'camera' ? { ...card, subtitle: 'Hamamatsu C13410 / DCAM' } : card}
+                values={values} onApply={writeParameter} busy={busy || protocolHardwareActive} key={card.title} />
             ))}
           </section>
         </>
