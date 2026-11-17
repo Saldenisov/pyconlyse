@@ -134,7 +134,8 @@ def _machine(configuration, axes):
     return {"captured_at": datetime.now(timezone.utc).isoformat(), "readout_backend": "tango",
             "streak_control": {"connected": True, "application_running": True, "values": values},
             "direct_tango": configuration,
-            "vd2_clock": {"trigger_source": 0, "base_rate_hz": configuration["rate_hz"],
+            "vd2_clock": {"trigger_source": configuration["dg_trigger_source"],
+                          "ccd_trigger": configuration["ccd_trigger"], "base_rate_hz": configuration["rate_hz"],
                           "nominal_capture_rate_hz": configuration["rate_hz"]},
             "time_calibration": {"id": axes[3]["id"], "source_sha256": axes[3]["source_sha256"]},
             "spectral_calibration": {"id": axes[1][1], "valid_columns": list(axes[1][2])}}
@@ -170,12 +171,12 @@ def record_direct_phase(request, coordinator, ccd, update, record, verify_bruit)
             update(status="acquiring", capture_rate=rate, capture_started_at=datetime.now(timezone.utc).isoformat())
             ccd.BufferSequence(request.frames_per_his)
             _write_sequence(staged, request.frames_per_his, axes, _sequence_frames(ccd, axes), rate)
+            update(status="saving")
             final_configuration = json.loads(coordinator.PhaseConfiguration())
             if final_configuration != configuration:
                 raise Vd2ProtocolError("Optical, time or trigger settings changed during VD2 recording")
         finally:
             coordinator.StopLive()
-        update(status="saving")
         if os.name == "nt":
             staged.rename(destination)
         else:

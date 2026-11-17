@@ -17,8 +17,11 @@ const liveCards = CARDS.map(card => ({
   )),
 }));
 
-export default function VD2LiveSettings({ values, onApply, disabled, live, legacyAverage, onAverageReadError }) {
+const directEditable = new Set(['time_range', 'wavelength_nm', 'grating', 'streak_shutter', 'spectrograph_shutter']);
+
+export default function VD2LiveSettings({ values, onApply, disabled, live, legacyAverage, directTango, onAverageReadError }) {
   const liveValues = { ...values };
+  if (directTango && liveValues.slit_width_um == null) liveValues.slit_width_um = 'Readback unavailable';
   for (const key of delays) {
     const seconds = values[key];
     if (seconds != null && seconds !== '' && Number.isFinite(Number(seconds))) {
@@ -38,10 +41,12 @@ export default function VD2LiveSettings({ values, onApply, disabled, live, legac
 
   return (
     <aside className="vd2-live-settings" aria-label="Live instrument settings">
-      {liveCards.map(card => (
-        <ParameterCard key={card.tone} card={card} values={liveValues} onApply={apply}
+      {liveCards.map(card => {
+        const directFields = card.fields.map(field => directEditable.has(field.key) ? field : {...field, readOnly: true});
+        if (card.tone === 'timing') directFields.unshift({key: 'dg_output', label: 'Output', readOnly: true});
+        return <ParameterCard key={card.tone} card={directTango ? {...card, fields: directFields} : card} values={liveValues} onApply={apply}
           compact busy={disabled} disabledFields={live ? ['time_range'] : undefined} />
-      ))}
+      })}
       {legacyAverage && <VD2LiveAverage disabled={disabled} onReadError={onAverageReadError} />}
     </aside>
   );

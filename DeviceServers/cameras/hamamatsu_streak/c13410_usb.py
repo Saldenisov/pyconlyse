@@ -67,11 +67,14 @@ class C13410Usb:
         self.write("VRT")
 
 
-def configure_synchronized_sweep(head, time_range):
-    """Set an explicitly calibrated sweep while the streak shutter is closed."""
+def configure_synchronized_sweep(head, time_range, *, accept_open=False):
+    """Changes to the sweep still require a closed shutter."""
     profile = timing_for_range(time_range)
     head.read("ALL")
-    safe = {"SHT": "SHT C", "MCP": "MCP 0", "GMD": "GMD N",
+    shutter = head.read("SHT")
+    if shutter != "SHT C" and not (accept_open and shutter == "SHT O"):
+        raise RuntimeError("C13410 requires a closed shutter to configure the sweep")
+    safe = {"MCP": "MCP 0", "GMD": "GMD N",
             "VTM": "VTM S", "VTS": "VTS P", "VTL": "VTL 1.0V"}
     for register, desired in safe.items():
         actual = head.read(register)
@@ -80,6 +83,8 @@ def configure_synchronized_sweep(head, time_range):
     sweep = profile.time_range.replace(" ", "").upper()
     for register, desired in (("OPE", "OPE"), ("VSR", f"VSR {sweep}")):
         if head.read(register) != desired:
+            if shutter != "SHT C":
+                raise RuntimeError("Close the streak shutter before changing the sweep")
             head.write(desired)
             if head.read(register) != desired:
                 raise RuntimeError(f"C13410 did not verify {desired}")

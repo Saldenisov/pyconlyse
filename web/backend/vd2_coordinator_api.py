@@ -2,7 +2,10 @@
 
 from base64 import b64encode
 from datetime import datetime, timezone
+from gzip import compress
 import json
+import struct
+from time import monotonic
 
 from flask import jsonify, request
 import numpy as np
@@ -19,12 +22,18 @@ PARAMETERS = {
     "/parameter/time_range": ("SetTimeRange", str),
     "/parameter/wavelength_nm": ("SetWavelength", float),
     "/parameter/grating_index": ("SetGrating", int),
+    "/parameter/streak_shutter": ("SetStreakShutter", str),
+    "/parameter/spectrograph_shutter": ("SetSpectrographShutter", str),
 }
+PREVIEW_HEADER = struct.Struct("<qqHH")
 
 
 def install_vd2_coordinator_routes(api):
     routes = api.pump_probe_vd2_api
     cached_preview = None
+    cached_preview_response = None
+    preview_status = None
+    preview_axes = None
 
     def status(coordinator):
         state = json.loads(coordinator.command_inout("GetState"))
@@ -47,6 +56,7 @@ def install_vd2_coordinator_routes(api):
                 "streak_mode": "Operate" if active else None,
                 "live_exposure_time": "10 ms" if active else None,
                 **state.get("optics", {}),
+                **state.get("values", {}),
                 "grating_options": [
                     {"value": index, "label": f"{index} · Blaze {blaze} nm"}
                     for index, blaze in api.tango_optics.VD2_GRATING_BLAZE_NM.items()
@@ -59,27 +69,61 @@ def install_vd2_coordinator_routes(api):
         device.set_timeout_millis(timeout)
         return device
 
+    def operation_in_progress():
+        return api._preparation_lock.locked() or api._protocol_hardware_phase() in {"preparing", "saving"}
+
+    def deferred(coordinator_route):
+        if coordinator_route == "/preview":
+            return jsonify(success=True, frame_available=False, stream_state="waiting_for_frame")
+        response = {"success": True, "readout_backend": "tango", "state_deferred": True}
+        if coordinator_route == "/runtime/state":
+            return jsonify(success=True, readout_backend="tango", device=response)
+        return jsonify(response)
+
+    def preview_response(payload):
+        nonlocal cached_preview_response
+        if cached_preview_response is None or cached_preview_response[0] is not payload:
+            raw = jsonify(payload).get_data()
+            cached_preview_response = (payload, raw, compress(raw, compresslevel=1))
+        _, raw, zipped = cached_preview_response
+        from flask import Response
+        response = Response(zipped if request.accept_encodings["gzip"] > 0 else raw,
+                            mimetype="application/json")
+        if request.accept_encodings["gzip"] > 0:
+            response.headers["Content-Encoding"] = "gzip"
+        response.vary.add("Accept-Encoding")
+        return response
+
     def preview(coordinator):
-        nonlocal cached_preview
+        nonlocal cached_preview, preview_status, preview_axes
+        now = monotonic()
         if not api._preview_lock.acquire(blocking=False):
+            cached = cached_preview
+            if cached and now - cached[2] < .4:
+                return preview_response(cached[1])
             return jsonify(success=True, frame_available=False, stream_state="waiting_for_frame")
         try:
-            state = status(coordinator)["coordinator"]
+            if preview_status is None or now - preview_status[0] >= .3:
+                preview_status = (now, status(coordinator)["coordinator"])
+            state = preview_status[1]
             if state["state"] == "FAULT":
                 return jsonify(success=False, error=state["error"]), 503
             if state["state"] != "RUNNING":
+                api._alignment_readout.unavailable()
                 return jsonify(success=True, frame_available=False, stream_state="no_valid_image")
-            if not state["frames"]:
-                return jsonify(success=True, frame_available=False, stream_state="waiting_for_frame")
             ccd = proxy(api.VD2_COORDINATOR_CCD, 5000)
-            image = np.asarray(ccd.RawFrame)
-            stamp = int(ccd.FrameStamp)
-            timestamp = int(ccd.FrameTimestampUs)
-            if image.ndim != 2 or image.dtype != np.uint16 or stamp < 0 or timestamp < 0:
+            encoding, data = ccd.ReadPreviewFrame()
+            if encoding == "vd2-idle-v1":
+                return jsonify(success=True, frame_available=False, stream_state="no_valid_image")
+            if not data:
+                return jsonify(success=True, frame_available=False, stream_state="waiting_for_frame")
+            timestamp, stamp, width, height = PREVIEW_HEADER.unpack_from(data)
+            if encoding != "vd2-preview-v1" or stamp < 0 or timestamp < 0 or not width or not height:
                 raise RuntimeError("Invalid synchronized DCAM frame or metadata")
+            image = np.frombuffer(data, dtype="<u2", offset=PREVIEW_HEADER.size).reshape(height, width)
             identity = (stamp, timestamp)
             if cached_preview is not None and cached_preview[0] == identity:
-                return jsonify(cached_preview[1])
+                return preview_response(cached_preview[1])
             low, high = int(image.min()), int(image.max())
             if low == high:
                 display = bytes(image.size)
@@ -92,14 +136,35 @@ def install_vd2_coordinator_routes(api):
                 "minimum": 0, "maximum": 255 if high > low else 0, "frame_stamp": stamp,
                 "received_at": datetime.now(timezone.utc).isoformat(),
             }
-            cached_preview = (identity, payload)
-            return jsonify(payload)
+            configuration = state.get("preview_configuration")
+            if configuration and (preview_axes is None or preview_axes[0] != configuration):
+                try:
+                    from vd2_direct_recording import recording_axes
+                    _, (wavelengths, spectral_id, columns), delays, time_profile = recording_axes(configuration)
+                    key = api.alignment_calibration_key(configuration, width, height)
+                    preview_axes = (configuration, {
+                        "calibration_key": key, "intensity_key": key, "measurement_key": key,
+                        "calibration": {"width": width, "height": height, "wavelengths": wavelengths,
+                                        "timedelays": delays.tolist(), "time_unit": time_profile["unit"],
+                                        "wavelength_unit": "nm", "source": "direct_tango",
+                                        "spectral_calibration": [spectral_id, columns], "calibration_key": key},
+                    })
+                except (KeyError, ValueError, RuntimeError) as exc:
+                    preview_axes = (configuration, {"calibration_error": str(exc)})
+            if configuration and preview_axes:
+                payload.update(preview_axes[1])
+                if "calibration" in payload:
+                    api._alignment_readout.observe(payload, now, image)
+                else:
+                    api._alignment_readout.unavailable()
+            cached_preview = (identity, payload, now)
+            return preview_response(payload)
         finally:
             api._preview_lock.release()
 
     @api._serialized_vd2_mutation
     def mutate(command, converter=None):
-        nonlocal cached_preview
+        nonlocal cached_preview, preview_status
         if api._protocol_hardware_phase() in {"preparing", "acquiring", "saving"}:
             return jsonify(success=False, error="A VD2 measurement owns the optics and trigger"), 409
         fields = set() if converter is None else {"value"}
@@ -128,6 +193,7 @@ def install_vd2_coordinator_routes(api):
         coordinator = proxy(api.VD2_COORDINATOR_DEVICE, 85000)
         actual = coordinator.command_inout(command, *args)
         cached_preview = None
+        preview_status = None
         result = status(coordinator)
         if converter is not None:
             result["value"] = actual
@@ -218,13 +284,22 @@ def install_vd2_coordinator_routes(api):
             if (request.method, path) in {
                 ("GET", "/state"), ("POST", "/refresh"), ("GET", "/runtime/state"), ("GET", "/preview")
             }:
+                if operation_in_progress():
+                    return deferred(path)
                 coordinator = proxy(api.VD2_COORDINATOR_DEVICE, 5000)
-                if path == "/runtime/state":
-                    return jsonify(success=True, readout_backend="tango", hpdta_running=False,
-                                   remoteex_running=False, device=status(coordinator))
-                if path == "/preview":
-                    return preview(coordinator)
-                return jsonify(status(coordinator))
+                try:
+                    if path == "/runtime/state":
+                        return jsonify(success=True, readout_backend="tango", hpdta_running=False,
+                                       remoteex_running=False, device=status(coordinator))
+                    if path == "/preview":
+                        return preview(coordinator)
+                    if path == "/refresh":
+                        coordinator.command_inout("RefreshInstrumentValues")
+                    return jsonify(status(coordinator))
+                except Exception as exc:
+                    if api.camera_serialization_timeout(exc):
+                        return deferred(path)
+                    raise
         except Exception as exc:
             return jsonify(success=False, error=api._control_error(exc)), 503
         return None

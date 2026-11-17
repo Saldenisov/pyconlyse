@@ -166,9 +166,12 @@ class _Frame:
     captured: float
     generation: int
     context: tuple
+    raw_pixels: np.ndarray | None = None
 
     @cached_property
     def pixels(self):
+        if self.raw_pixels is not None:
+            return self.raw_pixels.ravel()
         return np.frombuffer(base64.b64decode(self.payload["pixels_b64"], validate=True), dtype=np.uint8)
 
 
@@ -185,7 +188,7 @@ class AlignmentReadout:
                 self._generation += 1
                 self._available = False
 
-    def observe(self, payload, captured):
+    def observe(self, payload, captured, raw_pixels=None):
         # Payload bytes/axes are shared by reference with preview; never copied
         # or decoded under the native camera lock.
         encoded = payload.get("pixels_b64")
@@ -200,7 +203,7 @@ class AlignmentReadout:
                 return
             if last and (last.context != context or captured - last.captured >= FRESH_SECONDS):
                 self._generation += 1
-            self._frames.append(_Frame(payload, captured, self._generation, context))
+            self._frames.append(_Frame(payload, captured, self._generation, context, raw_pixels))
             self._available = True
 
     def read(self, frame_id, region, windows):

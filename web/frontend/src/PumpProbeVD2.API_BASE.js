@@ -493,7 +493,7 @@ function phaseProgress(job) {
   return { label: `ACQ ≈${percent}%`, percent };
 }
 
-export function Vd2PhaseProtocol({ pairedMode = false, protocol, settings, disabled, settingsDisabled=disabled, onChange, onPhaseClick, onPhaseDoubleClick, project, sampleHolder, serverWorkspace, onMeasure, measurementUnavailable, measuring, measurementMessage }) {
+export function Vd2PhaseProtocol({ pairedMode = false, triggerRate = 5, protocol, settings, disabled, settingsDisabled=disabled, onChange, onPhaseClick, onPhaseDoubleClick, project, sampleHolder, serverWorkspace, onMeasure, measurementUnavailable, measuring, measurementMessage }) {
   const active = protocolHardwareBusy(protocol);
   const [folderMenu, setFolderMenu] = useState(null);
   const actualFolder = protocol?.sample_folder || protocol?.his_path?.replace(/[\\/][^\\/]+$/, '') || plannedRunFolder(settings);
@@ -519,7 +519,7 @@ export function Vd2PhaseProtocol({ pairedMode = false, protocol, settings, disab
     <section className="vd2-phase-protocol" aria-label="VD2 Bruit Base Absorption protocol">
       <header>
         <div>
-          <h2>{pairedMode ? 'Project and sample' : 'Standard measurement · 5 Hz'}</h2>
+          <h2>{pairedMode ? 'Project and sample' : `Standard measurement · ${triggerRate} Hz`}</h2>
         </div>
         <div className={`vd2-protocol-state is-${protocol?.status || 'idle'}`}>
           {active ? `${protocol.phase_label || protocol.phase} ${protocol.status}` : (protocol?.status || 'idle')}

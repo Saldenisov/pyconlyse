@@ -151,6 +151,7 @@ export function renderVd2Acquisition({
           onDragOver={event => { if (dragPanel) event.preventDefault(); }}
           onDrop={event => { if (dragPanel) { event.preventDefault(); const box = event.currentTarget.getBoundingClientRect(); setImageRight(event.clientX > box.left + box.width / 2); setDragPanel(false); } }}>
           {liveTab ? <VD2LiveSettings values={values} onApply={writeParameter} live={live}
+            directTango={directTango}
             legacyAverage={Boolean(state && !directTango)}
             disabled={alignmentControlsBlocked || (!acquisitionIdle && !live)}
             onAverageReadError={setLiveAverageReadError} />
@@ -196,6 +197,7 @@ export function renderVd2Acquisition({
             </section>}
             <Vd2PhaseProtocol
               pairedMode={pairedMode}
+              triggerRate={directTango ? state.values?.trigger_rate_hz : 5}
               protocol={protocol}
               project={project}
               settings={protocolSettings}

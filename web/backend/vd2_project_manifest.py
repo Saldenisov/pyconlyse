@@ -108,9 +108,13 @@ class Vd2ProjectManifest:
                 raise ValueError(f"Bruit reuse cannot be verified ({key}); record a new Bruit")
         if (machine or {}).get("readout_backend") == "tango":
             previous = artifact.get("machine_before") or {}
-            for key in ("readout_backend", "time_calibration", "spectral_calibration", "vd2_clock"):
+            for key in ("readout_backend", "time_calibration", "spectral_calibration"):
                 if previous.get(key) != machine.get(key):
                     raise ValueError(f"Bruit reuse cannot be verified ({key}); record a new Bruit")
+            old_clock = previous.get("vd2_clock") or {}
+            new_clock = machine.get("vd2_clock") or {}
+            if old_clock.get("nominal_capture_rate_hz") != new_clock.get("nominal_capture_rate_hz"):
+                raise ValueError("Bruit trigger rate differs; record a new Bruit")
 
     @staticmethod
     def _noise_candidate(data, request):

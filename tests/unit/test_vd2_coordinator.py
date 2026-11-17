@@ -26,23 +26,27 @@ def rig(monkeypatch):
         def state(self):
             return self.current_state
 
+        def ReadoutConfiguration(self):
+            return '{"exposure_ms": 10.0075}'
+
         def command_inout(self, command, value=None):
             events.append((command, value))
             if command == "OpenReadout":
                 self.current_state = tango.DevState.ON
             elif command == "SetROI":
                 return (*value, value[-1])
-            elif command == "StartSynchronizedLiveAt":
+            elif command in {"StartSynchronizedLiveWithOpenShutterAt", "StartSynchronizedDark"}:
                 if self.reject_start:
                     raise RuntimeError("Test CCD refused Live")
                 self.current_state = tango.DevState.RUNNING
                 self.AcquisitionActive = True
-            elif command == "CloseReadout":
+            elif command in {"CloseReadout", "CloseReadoutKeepShutter"}:
                 self.current_state = tango.DevState.OFF
                 self.AcquisitionActive = False
 
     class Generator:
-        settings = {"TSRC?": "5", "TRAT?": "5", "BURM?": "0", "DLAY? 2": "0,+0.0020417",
+        settings = {**{f"DLAY? {i}": "0,+0.0" for i in range(3,10)},
+                    "TSRC?": "5", "TRAT?": "5", "BURM?": "0", "DLAY? 2": "0,+0.0020417",
                     "DLAY? 6": "0,+0.0022065", "*OPC?": "1"}
 
         def state(self):
@@ -64,9 +68,15 @@ def rig(monkeypatch):
         return value
 
     ccd, generator = Camera(), Generator()
-    lamp = SimpleNamespace(ids=[1, 2], states=[1, 1])
+    lamp = SimpleNamespace(ids=[1, 2, 3, 4], names=["Flash Lamp", "Xe-lamp-CW", "Zaber", "NO plug"], states=[1, 1, 1, 0])
+    def write_lamp(command, actions):
+        assert command == "set_channels_states"
+        events.append(tuple(actions))
+        lamp.states[0] = actions[0]
+    lamp.command_inout = write_lamp
     kymera = SimpleNamespace(state=lambda: tango.DevState.ON, shutter="Closed", wavelength_nm=550.,
                              grating=3, blaze_wavelength_nm=500.)
+    kymera.read_attributes = lambda names: [SimpleNamespace(name=name, value=getattr(kymera, name, 0)) for name in names]
     devices = {device.ccd_device: ccd, device.dg645_device: generator,
                device.kymera_device: kymera, device.lamp_pdu_device: lamp,
                device.camera_pdu_device: SimpleNamespace(ids=[1, 2], states=[1, 1]),
@@ -83,14 +93,14 @@ def test_range_updates_head_and_e_then_starts_clock_only_after_arming_camera(rig
     assert events == [("ConfigureSweep", "2 us"), "DLAY 6,0,0.0022054"]
     assert generator.settings["DLAY? 2"] == "0,+0.0020417"
     vd2.StartLive()
-    assert events[-2:] == [("StartSynchronizedLiveAt", "2 us"), "TSRC 0"]
+    assert events[-2:] == [("StartSynchronizedLiveWithOpenShutterAt", "2 us"), "TSRC 0"]
     assert ccd.ExposureMs == 10.0
     assert kymera.shutter == "Open"
     with pytest.raises(RuntimeError, match="Stop the current"):
         vd2.SetTimeRange("1 us")
     vd2.StopLive()
-    assert events[-2:] == ["TSRC 5", ("CloseReadout", None)]
-    assert kymera.shutter == "Closed"
+    assert events[-2:] == ["TSRC 5", ("CloseReadoutKeepShutter", None)]
+    assert kymera.shutter == "Open"
     assert json.loads(vd2.GetState())["phase"] == "idle"
 
 
@@ -115,7 +125,7 @@ def test_internal_trigger_and_warmup_follow_selected_rate(rig, rate):
     vd2.Unprepare()
     assert generator.settings["TSRC?"] == "5"
     assert int(generator.settings["TRAT?"]) == rate
-    assert events[-3:] == ["TSRC 5", ("CloseReadout", None), ("Park", None)]
+    assert events[-3:] == ["TSRC 5", ("CloseReadoutKeepShutter", None), ("Park", None)]
     assert not json.loads(vd2.GetState())["prepared"]
 
 
@@ -129,3 +139,15 @@ def test_ccd_start_failure_releases_handles_without_emitting_pulses(rig):
     assert "TSRC 0" not in events
     assert kymera.shutter == "Closed"
     assert json.loads(vd2.GetState())["phase"] == "fault"
+
+
+def test_bruit_keeps_dg_in_standby_and_leaves_shutters_and_power_alone(rig):
+    vd2, events, _, generator, kymera, lamp, _ = rig
+    vd2.Prepare()
+    config = json.loads(vd2.StartPhase("BRUIT"))
+    assert config["dg_trigger_source"] == 5 and config["ccd_trigger"] == "software"
+    assert lamp.states == [1, 1, 1, 0] and kymera.shutter == "Open"
+    assert ("StartSynchronizedDark", 5) in events and "TSRC 0" not in events
+    vd2.StopLive()
+    assert lamp.states[0] == 1 and kymera.shutter == "Open" and generator.settings["TSRC?"] == "5"
+    assert json.loads(vd2.StartPhase("BASE"))["dg_trigger_source"] == 0

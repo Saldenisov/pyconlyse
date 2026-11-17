@@ -50,6 +50,8 @@ class DS_HAMAMATSU_DCAM(Device):
         self._sweep_vrt_count = 0
         self._capture_buffer = None
         self._capture_remaining = 0
+        self._software_period = None
+        self._next_software_trigger = None
         self._detector_size = ()
         self._sensor_roi = ()
         self._exposure_ms = None
@@ -118,14 +120,21 @@ class DS_HAMAMATSU_DCAM(Device):
 
     @command
     def CloseReadout(self):
+        self._close_readout()
+
+    @command
+    def CloseReadoutKeepShutter(self):
+        self._close_readout(keep_shutter=self.get_state() != DevState.FAULT)
+
+    def _close_readout(self, keep_shutter=False):
         self._sweep_token = None
-        self._sdk(self._close)
+        self._sdk(self._close, keep_shutter)
         self.set_state(DevState.OFF)
         self.set_status("DCAM closed.")
 
-    def _close(self):
+    def _close(self, keep_shutter=False):
         try:
-            self._stop()
+            self._stop(keep_shutter)
         finally:
             if self._camera is not None:
                 self._camera.close()
@@ -170,30 +179,42 @@ class DS_HAMAMATSU_DCAM(Device):
         """Acquire a synchronized Live stream at an explicitly calibrated range."""
         self._start_synchronized_live(timing_for_range(time_range).time_range)
 
-    def _start_synchronized_live(self, time_range):
+    @command(dtype_in=str)
+    def StartSynchronizedLiveWithOpenShutterAt(self, time_range):
+        self._start_synchronized_live(timing_for_range(time_range).time_range, True)
+
+    @command(dtype_in=int)
+    def StartSynchronizedDark(self, rate):
+        if rate not in {5, 10}:
+            raise ValueError("Choose the qualified 5 or 10 Hz dark frame rate")
+        self._start_synchronized_live("1 us", True, software_rate=rate)
+
+    def _start_synchronized_live(self, time_range, accept_open=False, software_rate=None):
         self._require_idle()
         if not math.isclose(self._exposure_ms, 10.0, abs_tol=0.05):
             raise RuntimeError("Set ExposureMs to 10 before starting the synchronized sweep")
-        self._sdk(self._start_synchronized, time_range)
+        self._sdk(self._start_synchronized, time_range, accept_open, software_rate)
         self.set_state(DevState.RUNNING)
-        self.set_status(f"External CCD trigger, C13410 {time_range} Operate, VRT after each acquired frame.")
+        trigger = "Software CCD trigger" if software_rate else "External CCD trigger"
+        self.set_status(f"{trigger}, C13410 {time_range} Operate, VRT after each acquired frame.")
         token = object()
         self._sweep_token = token
         self._worker.submit(self._poll_synchronized_frame, token)
 
-    def _start_synchronized(self, time_range):
+    def _start_synchronized(self, time_range, accept_open=False, software_rate=None):
         self._clear_frame_metadata()
         self._sweep_frame = None
         self._sweep_frame_count = 0
         self._sweep_vrt_count = 0
         self._sweep_head = head = C13410Usb()
         try:
-            configure_synchronized_sweep(head, time_range)
+            configure_synchronized_sweep(head, time_range, accept_open=accept_open)
             camera = self._camera
             camera.clear_acquisition()
             self._prior_trigger = camera.get_trigger_mode()
-            if camera.set_trigger_mode("ext") != "ext":
-                raise RuntimeError("DCAM external trigger did not verify")
+            trigger = "software" if software_rate else "ext"
+            if camera.set_trigger_mode(trigger) != trigger:
+                raise RuntimeError("DCAM trigger mode did not verify")
             for name, value in SWEEP_SENSOR_PROPERTIES.items():
                 current = camera.get_attribute_value(name)
                 if current != value:
@@ -203,11 +224,15 @@ class DS_HAMAMATSU_DCAM(Device):
                     raise RuntimeError(f"DCAM {name} did not verify")
             camera.start_acquisition(mode="sequence", nframes=8)
             self._sweep_shutter_requested = True
-            head.write("SHT O")
+            if not accept_open or head.read("SHT") != "SHT O":
+                head.write("SHT O")
             if head.read("SHT") != "SHT O":
                 raise RuntimeError("C13410 shutter did not verify Open")
             head.rearm()
             self._sweep_vrt_count = 1
+            if software_rate:
+                self._software_period = 1 / software_rate
+                self._next_software_trigger = time.perf_counter()
         except Exception:
             self._stop()
             raise
@@ -216,11 +241,16 @@ class DS_HAMAMATSU_DCAM(Device):
         if self._sweep_token is not token:
             return
         try:
+            if self._next_software_trigger is not None:
+                now = time.perf_counter()
+                if now >= self._next_software_trigger:
+                    self._camera.send_software_trigger()
+                    self._next_software_trigger += self._software_period
             newest = self._camera.read_oldest_image(peek=False, return_info=True)
             if self._sweep_token is not token:
                 return
             if newest is None:
-                time.sleep(0.005)
+                time.sleep(0.001 if self._software_period else 0.005)
             else:
                 pixels, info = newest
                 self._validate_frame(pixels, info)
@@ -280,6 +310,17 @@ class DS_HAMAMATSU_DCAM(Device):
         timestamp, stamp, pixels = frame
         return "vd2-frame-v1", struct.pack("<qq", timestamp, stamp) + pixels.astype("<u2", copy=False).tobytes()
 
+    @command(dtype_out="DevEncoded")
+    def ReadPreviewFrame(self):
+        if self.get_state() != DevState.RUNNING:
+            return "vd2-idle-v1", b""
+        frame = self._sweep_frame
+        if frame is None:
+            return "vd2-frame-v1", b""
+        timestamp, stamp, pixels = frame
+        height, width = pixels.shape
+        return "vd2-preview-v1", struct.pack("<qqHH", timestamp, stamp, width, height) + pixels.astype("<u2", copy=False).tobytes()
+
     def _take_sequence_frame(self):
         if self._capture_buffer is None:
             raise RuntimeError("DCAM sequence has not started")
@@ -294,24 +335,27 @@ class DS_HAMAMATSU_DCAM(Device):
                 self.set_state(DevState.ON)
                 self.set_status("DCAM connected. Sensor acquisition idle.")
 
-    def _stop(self):
+    def _stop(self, keep_shutter=False):
         errors = []
         self._capture_buffer = None
         self._capture_remaining = 0
+        self._software_period = None
+        self._next_software_trigger = None
         synchronized = self._sweep_head is not None
         if synchronized:
             try:
-                if self._sweep_shutter_requested:
+                if self._sweep_shutter_requested and not keep_shutter:
                     self._sweep_head.write("SHT C")
                     if self._sweep_head.read("SHT") != "SHT C":
                         raise RuntimeError("C13410 shutter close did not verify")
                     self._sweep_shutter_requested = False
             except Exception as exc:
                 errors.append(exc)
-            if not self._sweep_shutter_requested:
+            if keep_shutter or not self._sweep_shutter_requested:
                 try:
                     self._sweep_head.close()
                     self._sweep_head = None
+                    self._sweep_shutter_requested = False
                 except Exception as exc:
                     errors.append(exc)
         if self._prior_trigger is not None:

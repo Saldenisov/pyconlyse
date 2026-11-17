@@ -18,7 +18,24 @@ class DS_HAMAMATSU_C13410(Device):
         """Set and verify Operate and the requested calibrated time range."""
         head = C13410Usb()
         try:
-            return configure_synchronized_sweep(head, time_range)
+            return configure_synchronized_sweep(head, time_range, accept_open=True)
+        finally:
+            head.close()
+
+    @command(dtype_in=str, dtype_out=str)
+    def SetShutter(self, value):
+        if value not in {"Open", "Closed"}:
+            raise ValueError("Choose Open or Closed")
+        head = C13410Usb()
+        try:
+            if value == "Open" and (head.read("OPE") != "OPE" or head.read("MCP") != "MCP 0"):
+                raise RuntimeError("Opening the streak shutter requires Operate and gain zero")
+            command_text = "SHT O" if value == "Open" else "SHT C"
+            if head.read("SHT") != command_text:
+                head.write(command_text)
+            if head.read("SHT") != command_text:
+                raise RuntimeError("Streak shutter did not verify")
+            return value
         finally:
             head.close()
 

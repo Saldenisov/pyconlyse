@@ -39,6 +39,9 @@ class DS_VD2(Device):
         self._warmup_until = None
         self._warmup_frame = None
         self._recording_phase = None
+        self._preview_configuration = None
+        self._timing_values = {}
+        self._camera_values = {}
         self._fault = ""
         self.set_state(DevState.ON)
         self.set_status("VD2 idle")
@@ -94,6 +97,7 @@ class DS_VD2(Device):
         if self._prepared:
             self._write_rate(self._proxy(self.dg645_device), value)
         self._rate_hz = value
+        self._timing_values["delay_repetition_rate"] = value
         return value
 
     @command
@@ -101,8 +105,8 @@ class DS_VD2(Device):
         self._require_idle()
         dg = self._proxy(self.dg645_device)
         ky = self._proxy(self.kymera_device)
-        if ky.state() != DevState.ON or ky.shutter != "Closed":
-            raise RuntimeError("Verify Kymera is ON and the shutter is closed")
+        if ky.state() != DevState.ON or ky.shutter not in {"Closed", "Open"}:
+            raise RuntimeError("Verify Kymera is ON and its shutter state is known")
         if dg.state() != DevState.ON or self._query(dg, "BURM?") != 0:
             raise RuntimeError("DG645 must be ON with Burst off")
         if not self._prepared and self._query(dg, "TSRC?") != 5:
@@ -113,6 +117,8 @@ class DS_VD2(Device):
         else:
             self._set_time_range(self._time_range)
         self._read_optics(ky)
+        self._read_timing_values(dg)
+        self._camera_values.update(streak_mode="Operate", gate_mode="Normal", mcp_gain=0, streak_trigger_mode="Single")
         self._prepared = True
         self._fault = ""
         self.set_state(DevState.ON)
@@ -127,7 +133,15 @@ class DS_VD2(Device):
             raise RuntimeError("Cannot verify DG645 standby; power retained")
         if self._outlet_power(self.camera_pdu_device):
             self._proxy(self.head_device).command_inout("Park")
+            self._optics["streak_shutter"] = "Closed"
+        kymera = self._proxy(self.kymera_device)
+        state = kymera.state()
+        if state == DevState.ON:
+            self._set_kymera_shutter(kymera, "Closed")
+        elif state != DevState.OFF:
+            raise RuntimeError("Kymera shutter state unverified; power retained")
         self._prepared = False
+        self._camera_values.update(streak_mode="Focus", streak_trigger_status="Idle")
         self.set_status("VD2 unprepared")
 
     @command(dtype_in=str, dtype_out=str)
@@ -145,6 +159,7 @@ class DS_VD2(Device):
         if actual != profile.time_range:
             raise RuntimeError(f"C13410 did not verify {profile.time_range}")
         apply_timing(dg, profile)
+        self._timing_values["delay_e"] = float(profile.delay_e_ms) / 1000
         self._time_range = actual
         return actual
 
@@ -188,12 +203,64 @@ class DS_VD2(Device):
     def StartAlignment(self):
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before starting Live")
-        self._set_time_range("1 us")
+        if self._time_range != "1 us":
+            self._set_time_range("1 us")
         self._start_live()
 
     def _read_optics(self, ky):
-        self._optics = {"grating_index": int(ky.grating), "blaze": float(ky.blaze_wavelength_nm),
-                        "wavelength_nm": float(ky.wavelength_nm)}
+        values = self._read_kymera(ky)
+        self._optics.update(grating_index=int(values["grating"]), blaze=float(values["blaze_wavelength_nm"]),
+                            wavelength_nm=float(values["wavelength_nm"]), exit_mirror=values["exit_mirror"],
+                            focus_mirror=values["focus_mirror"], slit_width_um=values["active_input_slit_um"],
+                            spectrograph_shutter=values["shutter"], ruling=values["lines_per_mm"])
+        return values
+
+    @staticmethod
+    def _read_kymera(ky):
+        names = ["grating", "wavelength_nm", "lines_per_mm", "blaze_wavelength_nm", "exit_mirror",
+                 "focus_mirror", "turret", "side_entry_iris", "shutter", "active_input_slit_um"]
+        return {item.name.lower(): item.value for item in ky.read_attributes(names)}
+
+    def _read_timing_values(self, dg):
+        delays = {f"delay_{name}": float(dg.command_inout("scpi_query", f"DLAY? {channel}").split(",")[1])
+                  for channel, name in enumerate("abcdefgh", 2)}
+        source = int(self._query(dg, "TSRC?"))
+        mode = {0: "Internal", 1: "Ext. rising", 2: "Ext. falling", 5: "Standby"}.get(source, f"Source {source}")
+        self._timing_values.update(delays, delay_repetition_rate=self._query(dg, "TRAT?"),
+                                   delay_trigger_mode=mode, dg_output="Standby" if source == 5 else "On",
+                                   delay_burst_mode="On" if self._query(dg, "BURM?") else "Off")
+
+    @command(dtype_out=str)
+    def RefreshInstrumentValues(self):
+        ky = self._proxy(self.kymera_device)
+        dg = self._proxy(self.dg645_device)
+        if ky.state() == DevState.ON:
+            self._read_optics(ky)
+        if dg.state() == DevState.ON:
+            self._read_timing_values(dg)
+        return self.GetState()
+
+    def _set_kymera_shutter(self, kymera, value):
+        if value not in {"Open", "Closed"}:
+            raise ValueError("Choose Open or Closed")
+        if kymera.shutter != value:
+            kymera.shutter = value
+        if kymera.shutter != value:
+            raise RuntimeError("Kymera shutter did not verify")
+        self._optics["spectrograph_shutter"] = value
+        return value
+
+    @command(dtype_in=str, dtype_out=str)
+    def SetSpectrographShutter(self, value):
+        self._require_idle()
+        return self._set_kymera_shutter(self._proxy(self.kymera_device), value)
+
+    @command(dtype_in=str, dtype_out=str)
+    def SetStreakShutter(self, value):
+        self._require_idle()
+        result = self._proxy(self.head_device).command_inout("SetShutter", value)
+        self._optics["streak_shutter"] = result
+        return result
 
     def _start_live(self, *, dark=False):
         self._require_idle()
@@ -206,8 +273,6 @@ class DS_VD2(Device):
         verify_timing(dg, timing_for_range(self._time_range), live=True)
         camera = self._proxy(self.ccd_device, 30000)
         ky = self._proxy(self.kymera_device)
-        if ky.shutter != "Closed":
-            raise RuntimeError("Start VD2 with the Kymera shutter closed")
         self._read_optics(ky)
         self._camera = camera
         self._kymera = ky
@@ -217,15 +282,26 @@ class DS_VD2(Device):
             if roi != (*SENSOR_ROI, SENSOR_ROI[-1]):
                 raise RuntimeError("CCD ROI did not verify")
             camera.ExposureMs = 10.0
-            camera.command_inout("StartSynchronizedLiveAt", self._time_range)
+            if dark:
+                camera.command_inout("StartSynchronizedDark", self._rate_hz)
+            else:
+                camera.command_inout("StartSynchronizedLiveWithOpenShutterAt", self._time_range)
             if camera.state() != DevState.RUNNING or not camera.AcquisitionActive:
                 raise RuntimeError("CCD did not confirm synchronized Live")
-            if not dark:
-                ky.shutter = "Open"
-            if ky.shutter != ("Closed" if dark else "Open"):
-                raise RuntimeError("Kymera shutter did not verify for acquisition")
+            self._optics["streak_shutter"] = "Open"
+            self._set_kymera_shutter(ky, "Open")
+            self._preview_configuration = self._read_calibration_configuration()
+            self._read_timing_values(dg)
+            self._camera_values.update(
+                streak_mode="Operate", gate_mode="Normal", mcp_gain=0, streak_trigger_mode="Single",
+                live_exposure_time=f'{self._preview_configuration["camera"]["exposure_ms"]:.9g} ms',
+                acquire_exposure_time=f'{self._preview_configuration["camera"]["exposure_ms"]:.9g} ms',
+                streak_trigger_status="Software" if dark else "External")
             self._clock = dg
-            self._set_clock(dg, 0)
+            if not dark:
+                self._set_clock(dg, 0)
+            self._timing_values.update(delay_trigger_mode="Standby" if dark else "Internal",
+                                       dg_output="Standby" if dark else "On")
         except Exception as exc:
             self._fail_live(exc)
         self._fault = ""
@@ -268,10 +344,13 @@ class DS_VD2(Device):
             raise RuntimeError("A VD2 sequence is already running")
         if self._time_range != "1 us":
             raise RuntimeError("Direct recording currently requires the calibrated 1 us time axis")
-        if phase != "BRUIT" and not self._outlet_power(self.lamp_pdu_device):
-            raise RuntimeError("Verify the VD2 flashlamp supply is ON")
         if self._camera is not None:
             self.StopLive()
+        self._require_idle()
+        if not self._prepared:
+            raise RuntimeError("Prepare VD2 before recording")
+        if phase != "BRUIT" and not self._outlet_power(self.lamp_pdu_device):
+            raise RuntimeError("Verify the VD2 flashlamp supply is ON")
         self._start_live(dark=phase == "BRUIT")
         self._recording_phase = phase
         try:
@@ -285,20 +364,24 @@ class DS_VD2(Device):
     def PhaseConfiguration(self):
         if self._recording_phase is None or self.get_state() != DevState.RUNNING:
             raise RuntimeError("VD2 has no active sequence")
-        if not self._camera.AcquisitionActive or self._query(self._clock, "TSRC?") != 0:
+        dark = self._recording_phase == "BRUIT"
+        trigger_source = 5 if dark else 0
+        if not self._camera.AcquisitionActive or self._query(self._clock, "TSRC?") != trigger_source:
             raise RuntimeError("VD2 synchronized sequence is no longer active")
         if self._query(self._clock, "TRAT?") != self._rate_hz or self._query(self._clock, "BURM?") != 0:
             raise RuntimeError("DG645 rate or burst changed during recording")
-        optics = self._kymera.read_attributes(["grating", "wavelength_nm", "lines_per_mm", "blaze_wavelength_nm",
-                                               "exit_mirror", "focus_mirror", "turret", "side_entry_iris", "shutter"])
-        values = {item.name.lower(): item.value for item in optics}
-        if values["shutter"] != ("Closed" if self._recording_phase == "BRUIT" else "Open"):
+        configuration = self._read_calibration_configuration()
+        if configuration["optics"]["shutter"] != "Open":
             raise RuntimeError("Kymera shutter changed during recording")
         delays = {name: self._clock.command_inout("scpi_query", f"DLAY? {channel}").strip()
                   for channel, name in enumerate("abcdefgh", 2)}
-        return json.dumps({"phase": self._recording_phase, "time_range": self._time_range,
-                           "rate_hz": self._rate_hz, "camera": json.loads(self._camera.ReadoutConfiguration()),
-                           "kymera_device": self.kymera_device, "optics": values, "delays": delays})
+        return json.dumps({**configuration, "phase": self._recording_phase,
+                           "rate_hz": self._rate_hz, "dg_trigger_source": trigger_source,
+                           "ccd_trigger": "software" if dark else "external", "delays": delays})
+
+    def _read_calibration_configuration(self):
+        return {"time_range": self._time_range, "camera": json.loads(self._camera.ReadoutConfiguration()),
+                "kymera_device": self.kymera_device, "optics": self._read_kymera(self._kymera)}
 
     def _outlet_power(self, device):
         pdu = self._proxy(device)
@@ -311,7 +394,7 @@ class DS_VD2(Device):
     @command
     def StopLive(self):
         try:
-            self._release()
+            self._release(keep_shutters=True)
         except RuntimeError as exc:
             self._fault = str(exc)
             self.set_state(DevState.FAULT)
@@ -321,27 +404,26 @@ class DS_VD2(Device):
         self.set_state(DevState.ON)
         self.set_status("VD2 idle")
 
-    def _release(self):
+    def _release(self, *, keep_shutters=False):
         errors = []
         if self._clock is not None:
             try:
                 if self._query(self._clock, "TSRC?") != 5:
                     self._set_clock(self._clock, 5)
+                self._timing_values.update(delay_trigger_mode="Standby", dg_output="Standby")
                 self._clock = None
             except Exception as exc:
                 errors.append(f"DG645: {exc}")
         if self._kymera is not None:
             try:
-                if self._kymera.shutter != "Closed":
-                    self._kymera.shutter = "Closed"
-                if self._kymera.shutter != "Closed":
-                    raise RuntimeError("shutter did not verify closed")
+                if not keep_shutters:
+                    self._set_kymera_shutter(self._kymera, "Closed")
                 self._kymera = None
             except Exception as exc:
                 errors.append(f"Kymera: {exc}")
         if self._camera is not None:
             try:
-                self._camera.command_inout("CloseReadout")
+                self._camera.command_inout("CloseReadoutKeepShutter" if keep_shutters else "CloseReadout")
                 if self._camera.state() != DevState.OFF:
                     raise RuntimeError("CCD did not verify OFF")
                 self._camera = None
@@ -349,6 +431,8 @@ class DS_VD2(Device):
                 errors.append(f"DCAM: {exc}")
         self._warmup_until = None
         self._warmup_frame = None
+        self._preview_configuration = None
+        self._camera_values["streak_trigger_status"] = "Idle"
         if not errors:
             self._recording_phase = None
         if errors:
@@ -373,7 +457,8 @@ class DS_VD2(Device):
         return json.dumps({"state": state, "phase": phase, "time_range": self._time_range,
                            "frames": acquired_frames, "remaining_warmup_s": remaining,
                            "prepared": self._prepared, "trigger_rate_hz": self._rate_hz,
-                           "optics": self._optics, "error": self._fault})
+                           "optics": self._optics, "values": {**self._camera_values, **self._timing_values},
+                           "preview_configuration": self._preview_configuration, "error": self._fault})
 
 
 if __name__ == "__main__":

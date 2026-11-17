@@ -1,4 +1,6 @@
 import json
+import struct
+from gzip import decompress
 from threading import Lock
 from types import SimpleNamespace
 
@@ -30,11 +32,13 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
             return args[0] if args else None
 
     coordinator = TestCoordinator()
-    ccd = SimpleNamespace(set_timeout_millis=lambda timeout: None,
-                          RawFrame=np.zeros((2, 4), dtype=np.uint16), FrameStamp=5, FrameTimestampUs=1_000_000)
+    encoded = ("vd2-preview-v1", struct.pack("<qqHH", 1_000_000, 5, 4, 2) + np.zeros((2, 4), dtype="<u2").tobytes())
+    ccd = SimpleNamespace(set_timeout_millis=lambda timeout: None, ReadPreviewFrame=lambda: encoded)
     api = SimpleNamespace(
         pump_probe_vd2_api=blueprint, VD2_COORDINATOR_DEVICE=name, VD2_COORDINATOR_CCD=ccd_name,
         _preview_lock=Lock(), _serialized_vd2_mutation=lambda fn: fn,
+        _preparation_lock=Lock(),
+        camera_serialization_timeout=lambda error: False,
         _protocol_hardware_phase=lambda: "idle",
         _mutation_payload=lambda fields: (request.get_json() or {}, None),
         _approval_or_response=lambda action, targets, args, route, fields: None,
@@ -44,7 +48,7 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
         tango_optics=SimpleNamespace(VD2_GRATING_BLAZE_NM={3: 500}),
     )
     for path, method in (
-        ("/parameter/time_range", "POST"), ("/command/StartLive", "POST"),
+        ("/state", "GET"), ("/parameter/time_range", "POST"), ("/command/StartLive", "POST"),
         ("/preview", "GET"), ("/protocol/start", "POST"), ("/command/StopAcquisition", "POST"),
     ):
         blueprint.add_url_rule(path, endpoint=path, view_func=lambda: "Legacy handler", methods=[method])
@@ -61,6 +65,14 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
     assert preview["frame_available"] and preview["frame_stamp"] == 5
     assert preview["width"] == 4 and preview["height"] == 2
     assert client.get(root + "/preview").json["received_at"] == preview["received_at"]
+    compressed = client.get(root + "/preview", headers={"Accept-Encoding": "gzip"})
+    assert compressed.headers["Content-Encoding"] == "gzip"
+    assert json.loads(decompress(compressed.data)) == preview
+    with api._preparation_lock:
+        assert client.get(root + "/state").json == {
+            "success": True, "readout_backend": "tango", "state_deferred": True,
+        }
+        assert client.get(root + "/preview").json["stream_state"] == "waiting_for_frame"
     assert client.post(root + "/protocol/start", json={}).get_data(as_text=True) == "Legacy handler"
     assert client.post(root + "/coordinator/prepare-measurement", json={}).json["success"]
     assert client.post(root + "/command/StopAcquisition", json={}).json["acquisition_status"] == "idle"
