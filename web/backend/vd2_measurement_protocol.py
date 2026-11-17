@@ -43,6 +43,7 @@ class PhaseRequest:
     spectral_axis_nm: tuple[float, ...] | None = None
     spectral_calibration_id: str | None = None
     spectral_valid_columns: tuple[int, int] | None = None
+    direct_rate_hz: int | None = None
 
 
 class Vd2MeasurementProtocol:
@@ -62,6 +63,7 @@ class Vd2MeasurementProtocol:
         point_recorder=None,
         capture_clock=None,
         capture_validator=None,
+        direct_recording=None,
         max_pending_processing=8,
     ):
         if type(max_pending_processing) is not int or max_pending_processing < 1:
@@ -77,6 +79,7 @@ class Vd2MeasurementProtocol:
         self._point_recorder = point_recorder
         self._capture_clock = capture_clock
         self._capture_validator = capture_validator
+        self._direct_recording = direct_recording
         self._lock = threading.Lock()
         self._changed = threading.Condition(self._lock)
         self._start_lock = threading.Lock()
@@ -151,7 +154,7 @@ class Vd2MeasurementProtocol:
             provenance = self._artifact_journal.prepare(request) if self._artifact_journal else {}
             state = {
                 "job_id": job_id,
-                "status": "preparing" if self._capture_clock else "acquiring",
+                "status": "preparing" if self._capture_clock or self._direct_recording else "acquiring",
                 "phase": request.phase,
                 "phase_label": PHASES[request.phase]["label"],
                 "frames_per_his": request.frames_per_his,
@@ -199,63 +202,19 @@ class Vd2MeasurementProtocol:
             if self._artifact_journal:
                 self._artifact_journal.record(request, identity, status, **details)
         try:
-            proxy = self._proxy_factory()
-            proxy.set_timeout_millis(300_000)
-            if not bool(proxy.read_attribute("connected").value):
-                raise Vd2ProtocolError("Hamamatsu Tango device is not connected")
-            if not bool(proxy.read_attribute("application_running").value):
-                raise Vd2ProtocolError("HPD-TA is not running")
+            def verify_bruit(machine_before):
+                trusted_request = request
+                if self._direct_recording and provenance.get("bruit_reference"):
+                    trusted_request = replace(request, reuse_bruit=provenance["bruit_reference"])
+                if self._artifact_journal:
+                    self._artifact_journal.verify_bruit_settings(trusted_request, machine_before)
 
-            proxy.write_attribute("sequence_loops", str(request.frames_per_his))
-            machine_before = self._snapshot_reader(proxy) if self._snapshot_reader else None
-            if self._artifact_journal and request.reuse_bruit not in {"latest", "none", ""}:
-                self._artifact_journal.verify_bruit_settings(request, machine_before)
-
-            capture_complete = False
-            timing_error = None
-            try:
-                clock = self._capture_clock(proxy, request) if self._capture_clock else nullcontext()
-                with clock as configured_clock:
-                    self._update(job_id, status="acquiring")
-                    configured_rate = None
-                    if configured_clock is not None:
-                        configured_rate, trigger_source = configured_clock
-                        if machine_before is not None:
-                            machine_before["vd2_clock"] = {
-                                "trigger_source": trigger_source, "base_rate_hz": configured_rate,
-                                "nominal_capture_rate_hz": configured_rate, "warmup_s": 0,
-                            }
-                    record("acquiring", machine_before=machine_before)
-                    proxy.command_inout("StartSequence")
-                    dg645 = (machine_before or {}).get("devices", {}).get("manip/sync/DG645", {}).get("values", {})
-                    rate = configured_rate
-                    if rate is None and dg645.get("trigger_source") == 0 and dg645.get("burst_enabled") == 0:
-                        rate = dg645.get("trigger_rate_hz")
-                    self._update(job_id, capture_started_at=_utc_now(), capture_rate=rate)
-                    if self._wait_for_idle is None:
-                        proxy.command_inout("WaitForIdle")
-                    else:
-                        self._wait_for_idle(proxy)
-                    capture_complete = True
-            except Exception as exc:
-                if not capture_complete:
-                    raise
-                timing_error = exc
-            self._update(job_id, status="saving")
-            proxy.command_inout("SaveCurrentSequence", request.his_path)
-            if timing_error is not None:
-                raise timing_error
-            # Capture the readback while this job still owns the camera.
-            # The file worker receives plain data, never a Tango proxy.
-            machine_after = self._snapshot_reader(proxy) if self._snapshot_reader else None
-            if self._capture_validator is not None:
-                calibration = self._capture_validator(request, machine_before, configured_rate, machine_after)
-                if calibration is not None:
-                    axis, calibration_id, *coverage = calibration
-                    request = replace(
-                        request, spectral_axis_nm=axis, spectral_calibration_id=calibration_id,
-                        spectral_valid_columns=coverage[0] if coverage else None,
-                    )
+            if self._direct_recording:
+                request, machine_after = self._direct_recording(
+                    request, lambda **fields: self._update(job_id, **fields), record, verify_bruit
+                )
+            else:
+                request, machine_after = self._capture_legacy(request, job_id, record, verify_bruit)
             record("saved", machine_after=machine_after)
             with self._changed:
                 self._jobs[job_id].update(status="queued", postprocessing=True)
@@ -267,6 +226,65 @@ class Vd2MeasurementProtocol:
                 self._changed.notify_all()
         except Exception as exc:
             self._fail(request, provenance, job_id, exc)
+
+    def _capture_legacy(self, request, job_id, record, verify_bruit):
+        proxy = self._proxy_factory()
+        proxy.set_timeout_millis(300_000)
+        if not bool(proxy.read_attribute("connected").value):
+            raise Vd2ProtocolError("Hamamatsu Tango device is not connected")
+        if not bool(proxy.read_attribute("application_running").value):
+            raise Vd2ProtocolError("HPD-TA is not running")
+
+        proxy.write_attribute("sequence_loops", str(request.frames_per_his))
+        machine_before = self._snapshot_reader(proxy) if self._snapshot_reader else None
+        verify_bruit(machine_before)
+
+        capture_complete = False
+        timing_error = None
+        try:
+            clock = self._capture_clock(proxy, request) if self._capture_clock else nullcontext()
+            with clock as configured_clock:
+                self._update(job_id, status="acquiring")
+                configured_rate = None
+                if configured_clock is not None:
+                    configured_rate, trigger_source = configured_clock
+                    if machine_before is not None:
+                        machine_before["vd2_clock"] = {
+                            "trigger_source": trigger_source, "base_rate_hz": configured_rate,
+                            "nominal_capture_rate_hz": configured_rate, "warmup_s": 0,
+                        }
+                record("acquiring", machine_before=machine_before)
+                proxy.command_inout("StartSequence")
+                dg645 = (machine_before or {}).get("devices", {}).get("manip/sync/DG645", {}).get("values", {})
+                rate = configured_rate
+                if rate is None and dg645.get("trigger_source") == 0 and dg645.get("burst_enabled") == 0:
+                    rate = dg645.get("trigger_rate_hz")
+                self._update(job_id, capture_started_at=_utc_now(), capture_rate=rate)
+                if self._wait_for_idle is None:
+                    proxy.command_inout("WaitForIdle")
+                else:
+                    self._wait_for_idle(proxy)
+                capture_complete = True
+        except Exception as exc:
+            if not capture_complete:
+                raise
+            timing_error = exc
+        self._update(job_id, status="saving")
+        proxy.command_inout("SaveCurrentSequence", request.his_path)
+        if timing_error is not None:
+            raise timing_error
+        # Capture the readback while this job still owns the camera.
+        # The file worker receives plain data, never a Tango proxy.
+        machine_after = self._snapshot_reader(proxy) if self._snapshot_reader else None
+        if self._capture_validator is not None:
+            calibration = self._capture_validator(request, machine_before, configured_rate, machine_after)
+            if calibration is not None:
+                axis, calibration_id, *coverage = calibration
+                request = replace(
+                    request, spectral_axis_nm=axis, spectral_calibration_id=calibration_id,
+                    spectral_valid_columns=coverage[0] if coverage else None,
+                )
+        return request, machine_after
 
     def _drain_processing(self):
         while True:

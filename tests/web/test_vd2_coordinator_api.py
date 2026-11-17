@@ -35,6 +35,7 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
     api = SimpleNamespace(
         pump_probe_vd2_api=blueprint, VD2_COORDINATOR_DEVICE=name, VD2_COORDINATOR_CCD=ccd_name,
         _preview_lock=Lock(), _serialized_vd2_mutation=lambda fn: fn,
+        _protocol_hardware_phase=lambda: "idle",
         _mutation_payload=lambda fields: (request.get_json() or {}, None),
         _approval_or_response=lambda action, targets, args, route, fields: None,
         _target=lambda device, command: {"device": device, "command": command},
@@ -60,7 +61,7 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
     assert preview["frame_available"] and preview["frame_stamp"] == 5
     assert preview["width"] == 4 and preview["height"] == 2
     assert client.get(root + "/preview").json["received_at"] == preview["received_at"]
-    assert client.post(root + "/protocol/start", json={}).status_code == 409
+    assert client.post(root + "/protocol/start", json={}).get_data(as_text=True) == "Legacy handler"
     assert client.post(root + "/coordinator/prepare-measurement", json={}).json["success"]
     assert client.post(root + "/command/StopAcquisition", json={}).json["acquisition_status"] == "idle"
     assert events == [("SetTimeRange", ("2 us",)), ("StartLive", ()), ("PrepareMeasurement", ()), ("StopLive", ())]
@@ -76,7 +77,7 @@ def test_web_checks_approval_before_opening_a_coordinator_proxy():
     routes.add_url_rule("/command/StartLive", view_func=lambda: "Legacy handler", methods=["POST"])
     install_vd2_coordinator_routes(SimpleNamespace(
         pump_probe_vd2_api=routes, VD2_COORDINATOR_DEVICE="vd2/experiment/controller",
-        _serialized_vd2_mutation=lambda fn: fn,
+        _serialized_vd2_mutation=lambda fn: fn, _protocol_hardware_phase=lambda: "idle",
         _mutation_payload=lambda fields: ({}, None),
         _approval_or_response=lambda action, targets, args, route, fields: (jsonify(success=False), 403),
         _target=lambda device, command: {"device": device, "command": command},

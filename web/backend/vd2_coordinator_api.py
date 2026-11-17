@@ -100,6 +100,8 @@ def install_vd2_coordinator_routes(api):
     @api._serialized_vd2_mutation
     def mutate(command, converter=None):
         nonlocal cached_preview
+        if api._protocol_hardware_phase() in {"preparing", "acquiring", "saving"}:
+            return jsonify(success=False, error="A VD2 measurement owns the optics and trigger"), 409
         fields = set() if converter is None else {"value"}
         payload, rejected = api._mutation_payload(fields)
         if rejected is not None:
@@ -206,7 +208,7 @@ def install_vd2_coordinator_routes(api):
                     return mutate(LIVE_COMMANDS[path])
                 if path in PARAMETERS:
                     return mutate(*PARAMETERS[path])
-                if path in {"/protocol/start", "/alignment/calibration",
+                if path in {"/alignment/calibration",
                             "/alignment/open-shutters", "/alignment/flash-lamp", "/live/rolling-average"} or path.startswith(
                     ("/command/", "/parameter/", "/runtime/remoteex/", "/dcam/", "/paired/")
                 ):

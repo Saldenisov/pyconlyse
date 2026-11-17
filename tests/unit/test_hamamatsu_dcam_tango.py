@@ -109,7 +109,7 @@ def session(monkeypatch):
     def open_camera():
         camera.record_thread()
         opened.append(True)
-        return camera, SimpleNamespace(model="C13440-20CU")
+        return camera, SimpleNamespace(model="C13440-20CU", serial_number="S/N: 303256")
 
     monkeypatch.setattr(dcam, "open_readout", open_camera)
     device = dcam.DS_HAMAMATSU_DCAM()
@@ -247,7 +247,7 @@ def test_close_refuses_to_race_a_timed_out_call(session, monkeypatch):
     def slow_open():
         try:
             assert release.wait(2)
-            return camera, SimpleNamespace(model="C13440-20CU")
+            return camera, SimpleNamespace(model="C13440-20CU", serial_number="S/N: 303256")
         finally:
             returned.set()
 

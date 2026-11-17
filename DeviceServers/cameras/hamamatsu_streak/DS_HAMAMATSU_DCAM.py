@@ -1,7 +1,10 @@
 """Standalone Tango device for the C13440 USB sensor in a streak system."""
 
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+import json
 import math
+import struct
 import time
 
 import numpy as np
@@ -45,6 +48,8 @@ class DS_HAMAMATSU_DCAM(Device):
         self._sweep_frame = None
         self._sweep_frame_count = 0
         self._sweep_vrt_count = 0
+        self._capture_buffer = None
+        self._capture_remaining = 0
         self._detector_size = ()
         self._sensor_roi = ()
         self._exposure_ms = None
@@ -102,6 +107,14 @@ class DS_HAMAMATSU_DCAM(Device):
         self._sensor_roi = tuple(camera.get_roi())
         self._exposure_ms = self._read_exposure_ms()
         self._model = info.model
+        self._serial = info.serial_number
+
+    @command(dtype_out=str)
+    def ReadoutConfiguration(self):
+        if self._camera is None:
+            raise RuntimeError("DCAM is closed")
+        return json.dumps({"model": self._model, "serial": self._serial,
+                           "roi": self._sensor_roi, "exposure_ms": self._exposure_ms})
 
     @command
     def CloseReadout(self):
@@ -120,6 +133,7 @@ class DS_HAMAMATSU_DCAM(Device):
                 self._prior_trigger = None
                 self._prior_sweep_properties.clear()
                 self._model = ""
+                self._serial = ""
                 self._detector_size = ()
                 self._sensor_roi = ()
                 self._exposure_ms = None
@@ -217,6 +231,11 @@ class DS_HAMAMATSU_DCAM(Device):
                 self._sweep_vrt_count += 1
                 self._sweep_frame_count += 1
                 self._sweep_frame = (int(info.timestamp_us), stamp, pixels.copy(order="C"))
+                if self._capture_remaining:
+                    if len(self._capture_buffer) == self._capture_buffer.maxlen:
+                        raise RuntimeError("DCAM recording buffer overflowed; sequence incomplete")
+                    self._capture_buffer.append(self._sweep_frame)
+                    self._capture_remaining -= 1
         except Exception as error:
             self._sweep_token = None
             detail = str(error)
@@ -239,6 +258,33 @@ class DS_HAMAMATSU_DCAM(Device):
         """Acknowledged VRT commands, including the initial rearm."""
         return self._sweep_vrt_count
 
+    @command(dtype_in=int)
+    def BufferSequence(self, count):
+        if self.get_state() != DevState.RUNNING or not 1 <= count <= 65535:
+            raise RuntimeError("A synchronized sweep and 1–65535 frames are required")
+        self._sdk(self._begin_sequence, count)
+
+    def _begin_sequence(self, count):
+        if self._sweep_head is None or self._capture_buffer is not None:
+            raise RuntimeError("DCAM synchronized sequence is unavailable or already started")
+        self._capture_buffer = deque(maxlen=32)
+        self._capture_remaining = count
+
+    @command(dtype_out="DevEncoded")
+    def ReadSequenceFrame(self):
+        if self.get_state() != DevState.RUNNING:
+            raise RuntimeError("DCAM synchronized sequence is not running")
+        frame = self._sdk(self._take_sequence_frame)
+        if frame is None:
+            return "vd2-frame-v1", b""
+        timestamp, stamp, pixels = frame
+        return "vd2-frame-v1", struct.pack("<qq", timestamp, stamp) + pixels.astype("<u2", copy=False).tobytes()
+
+    def _take_sequence_frame(self):
+        if self._capture_buffer is None:
+            raise RuntimeError("DCAM sequence has not started")
+        return self._capture_buffer.popleft() if self._capture_buffer else None
+
     @command
     def StopLive(self):
         self._sweep_token = None
@@ -250,6 +296,8 @@ class DS_HAMAMATSU_DCAM(Device):
 
     def _stop(self):
         errors = []
+        self._capture_buffer = None
+        self._capture_remaining = 0
         synchronized = self._sweep_head is not None
         if synchronized:
             try:

@@ -259,7 +259,7 @@ export function renderVd2Acquisition({
                     : state?.acquisition_status === 'busy' || previewStream === 'acquiring' ? 'Acquiring' : 'Last frame'}</span>
               {preview && <span>{preview.minimum} - {preview.maximum}</span>}
               {directTango && <label>Trigger rate{' '}
-                <select aria-label="Live trigger rate" value={state.values?.trigger_rate_hz ?? 5}
+                <select aria-label="VD2 trigger rate" value={state.values?.trigger_rate_hz ?? 5}
                   disabled={alignmentControlsBlocked || !acquisitionIdle || live}
                   onChange={event => writeParameter('trigger_rate_hz', Number(event.target.value))}>
                   <option value={5}>5 Hz</option>

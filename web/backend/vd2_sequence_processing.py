@@ -52,6 +52,7 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
     from treatment_service import TreatmentDataService
     from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
     from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths, time_origin_metadata
+    from vd2_his_timing import read_frame_timestamps_ms, verify_frame_rate
 
     source = Path(request.his_path)
     output = source.with_suffix(".h5")
@@ -86,6 +87,11 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
             f"HIS contains {count} frames; expected {request.frames_per_his}; "
             "HIS retained"
         )
+    clock_timestamps = None
+    if request.direct_rate_hz is not None:
+        if count > 1:
+            verify_frame_rate(source, count, request.direct_rate_hz)
+        clock_timestamps = read_frame_timestamps_ms(source, count)
 
     def verify(path, start_percent):
         with h5py.File(path, "r") as handle:
@@ -114,6 +120,12 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
                 attrs = handle["wavelengths"].attrs
                 if tuple(attrs.get("calibration_valid_columns", ())) != request.spectral_valid_columns:
                     raise Vd2ProtocolError("Measured wavelength span differs from HIS; HIS retained")
+            if clock_timestamps is not None and (
+                "camera_timestamp_ms" not in handle
+                or not np.array_equal(handle["camera_timestamp_ms"][:], clock_timestamps)
+                or handle["metadata"].attrs.get("trigger_rate_hz") != request.direct_rate_hz
+            ):
+                raise Vd2ProtocolError("Converted frame timestamps differ from HIS; HIS retained")
             for index in range(count):
                 measurement, error = opener.read_map(source, index)
                 if measurement is False or not np.array_equal(
@@ -152,6 +164,12 @@ def process_saved_sequence(request: PhaseRequest, progress=None) -> dict:
                 with h5py.File(staged, "r+") as handle:
                     handle["timedelays"].attrs["unit"] = info.scaling_yunit
                     handle["timedelays"].attrs["original_first_value"] = origin
+            if clock_timestamps is not None:
+                with h5py.File(staged, "r+") as handle:
+                    timestamps = handle.create_dataset("camera_timestamp_ms", data=clock_timestamps)
+                    timestamps.attrs["unit"] = "ms"
+                    timestamps.attrs["source"] = "DCAM"
+                    handle["metadata"].attrs["trigger_rate_hz"] = request.direct_rate_hz
             verify(staged, 50)
             with h5py.File(staged, "r+") as handle:
                 metadata = handle["metadata"].attrs

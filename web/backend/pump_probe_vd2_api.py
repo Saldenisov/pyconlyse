@@ -43,6 +43,7 @@ from vd2_paired_acquisition import PairedAcquisition
 from vd2_paired_api import install_paired_routes
 from vd2_dcam_api import install_dcam_routes
 from vd2_coordinator_api import install_vd2_coordinator_routes
+from vd2_direct_recording import record_direct_phase
 from vd2_live_acquisition import SEQUENCE_TIMEOUT_S, SEQUENCE_WAIT_QUERY, camera_serialization_timeout, wait_for_sequence
 from vd2_alignment import read_alignment_axes, image_alignment_settings, image_intensity_settings, alignment_calibration_key, alignment_measurement_key
 from vd2_alignment_readout import AlignmentReadout, READOUT_VERSION, parse_selection
@@ -258,6 +259,14 @@ ALLOWED_COMMANDS = {
 _proxy = _pump_probe_vd2_api_parts_recovery_snapshots["_proxy"]
 
 
+def _record_vd2_direct(request, update, record, verify_bruit):
+    coordinator = DeviceProxy(VD2_COORDINATOR_DEVICE)
+    coordinator.set_timeout_millis(85000)
+    ccd = DeviceProxy(VD2_COORDINATOR_CCD)
+    ccd.set_timeout_millis(10000)
+    return record_direct_phase(request, coordinator, ccd, update, record, verify_bruit)
+
+
 _measurement_protocol = Vd2MeasurementProtocol(
     _proxy, processing_worker=process_saved_sequence_in_worker, artifact_preflight=check_new_sequence,
     wait_for_idle=wait_for_sequence,
@@ -269,6 +278,7 @@ _measurement_protocol = Vd2MeasurementProtocol(
     capture_validator=lambda request, before, rate, after: tango_optics.validate_saved_capture(
         _refactor_modules[__name__], request, before, rate, after
     ),
+    direct_recording=_record_vd2_direct if VD2_COORDINATOR_DEVICE else None,
 )
 _phase_destinations = PhaseDestinations()
 _paired_acquisition = PairedAcquisition()
@@ -516,7 +526,8 @@ def protocol_state():
     status = _measurement_protocol.status()
     if paired["active"]:
         status.update(acquisition_active=True, acquisition_phase=paired["status"])
-    return jsonify({"success": True, **status, "paired_available": VD2_CAMERA_ONLY, "paired": paired})
+    return jsonify({"success": True, **status, "paired_available": VD2_CAMERA_ONLY and not VD2_COORDINATOR_DEVICE,
+                    "paired": paired})
 
 
 protocol_plan = (pump_probe_vd2_api.route("/protocol/plan", methods=["POST"]))(_pump_probe_vd2_api_parts_preview["protocol_plan"])

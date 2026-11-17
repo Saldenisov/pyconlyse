@@ -258,6 +258,9 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
         if rejected is not None:
             return rejected
         try:
+            direct = bool(api.VD2_COORDINATOR_DEVICE)
+            if direct and api.authorization_required():
+                return api._exact_plan_required()
             request_data = api._measurement_protocol._build_request(
                 payload.get("phase"),
                 payload.get("frames_per_his"),
@@ -270,7 +273,14 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
             destination_token = payload.get("destination_token")
             if "destination_token" in payload:
                 request_data = api._phase_destinations.resolve(destination_token, original_request)
-            targets, args = api._protocol_authorization(request_data)
+            if direct:
+                if request_data.frames_per_his > 65535:
+                    raise api.Vd2ProtocolError("Direct recording accepts 1–65535 HIS frames")
+                targets = [api._target(api.VD2_COORDINATOR_DEVICE, command) for command in ("StartPhase", "StopLive")]
+                targets.append(api._target(api.VD2_COORDINATOR_CCD, "BufferSequence"))
+                args = dict(vars(request_data))
+            else:
+                targets, args = api._protocol_authorization(request_data)
             if "destination_token" in payload:
                 args["destination_token"] = destination_token
             blocked = api._approval_or_response(
@@ -284,10 +294,11 @@ def _bind_pump_probe_vd2_api_parts_preview(api):
                 return blocked
             if "destination_token" in payload:
                 request_data = api._phase_destinations.consume(destination_token, original_request)
-            proxy = api._proxy()
-            if api.VD2_CAMERA_ONLY:
-                api._assert_preparation_idle(proxy)
-            api._verify_vd2_timing_ready(proxy)
+            if not direct:
+                proxy = api._proxy()
+                if api.VD2_CAMERA_ONLY:
+                    api._assert_preparation_idle(proxy)
+                api._verify_vd2_timing_ready(proxy)
             state = api._measurement_protocol.start_request(request_data) if "destination_token" in payload else api._measurement_protocol.start(
                 phase=request_data.phase,
                 frames_per_his=request_data.frames_per_his,

@@ -14,6 +14,7 @@ SENSOR_ROI = (352, 1632, 516, 1532, 2)
 GRATING_BLAZE_NM = {1: 300, 2: 800, 3: 500}
 LAMP_WARMUP_S = 10
 TRIGGER_RATES_HZ = (5, 10)
+RECORDING_PHASES = {"BRUIT", "BASE", "ABSORPTION"}
 
 
 class DS_VD2(Device):
@@ -37,6 +38,7 @@ class DS_VD2(Device):
         self._optics = {}
         self._warmup_until = None
         self._warmup_frame = None
+        self._recording_phase = None
         self._fault = ""
         self.set_state(DevState.ON)
         self.set_status("VD2 idle")
@@ -193,7 +195,7 @@ class DS_VD2(Device):
         self._optics = {"grating_index": int(ky.grating), "blaze": float(ky.blaze_wavelength_nm),
                         "wavelength_nm": float(ky.wavelength_nm)}
 
-    def _start_live(self):
+    def _start_live(self, *, dark=False):
         self._require_idle()
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before starting Live")
@@ -218,9 +220,10 @@ class DS_VD2(Device):
             camera.command_inout("StartSynchronizedLiveAt", self._time_range)
             if camera.state() != DevState.RUNNING or not camera.AcquisitionActive:
                 raise RuntimeError("CCD did not confirm synchronized Live")
-            ky.shutter = "Open"
-            if ky.shutter != "Open":
-                raise RuntimeError("Kymera shutter did not verify open")
+            if not dark:
+                ky.shutter = "Open"
+            if ky.shutter != ("Closed" if dark else "Open"):
+                raise RuntimeError("Kymera shutter did not verify for acquisition")
             self._clock = dg
             self._set_clock(dg, 0)
         except Exception as exc:
@@ -248,11 +251,54 @@ class DS_VD2(Device):
             self._start_live()
         elif self.get_state() != DevState.RUNNING or not self._camera.AcquisitionActive:
             raise RuntimeError("Stop the current VD2 operation first")
+        self._start_warmup()
+
+    def _start_warmup(self):
         if self._warmup_until is not None:
             return
         self._warmup_frame = int(self._camera.SweepFrameCount)
         self._warmup_until = monotonic() + LAMP_WARMUP_S
         self.set_status("VD2 warming the flash lamp")
+
+    @command(dtype_in=str, dtype_out=str)
+    def StartPhase(self, phase):
+        if phase not in RECORDING_PHASES:
+            raise ValueError("Unknown VD2 recording phase")
+        if self._recording_phase is not None:
+            raise RuntimeError("A VD2 sequence is already running")
+        if self._time_range != "1 us":
+            raise RuntimeError("Direct recording currently requires the calibrated 1 us time axis")
+        if phase != "BRUIT" and not self._outlet_power(self.lamp_pdu_device):
+            raise RuntimeError("Verify the VD2 flashlamp supply is ON")
+        if self._camera is not None:
+            self.StopLive()
+        self._start_live(dark=phase == "BRUIT")
+        self._recording_phase = phase
+        try:
+            if phase != "BRUIT":
+                self._start_warmup()
+            return self.PhaseConfiguration()
+        except Exception as exc:
+            self._fail_live(exc)
+
+    @command(dtype_out=str)
+    def PhaseConfiguration(self):
+        if self._recording_phase is None or self.get_state() != DevState.RUNNING:
+            raise RuntimeError("VD2 has no active sequence")
+        if not self._camera.AcquisitionActive or self._query(self._clock, "TSRC?") != 0:
+            raise RuntimeError("VD2 synchronized sequence is no longer active")
+        if self._query(self._clock, "TRAT?") != self._rate_hz or self._query(self._clock, "BURM?") != 0:
+            raise RuntimeError("DG645 rate or burst changed during recording")
+        optics = self._kymera.read_attributes(["grating", "wavelength_nm", "lines_per_mm", "blaze_wavelength_nm",
+                                               "exit_mirror", "focus_mirror", "turret", "side_entry_iris", "shutter"])
+        values = {item.name.lower(): item.value for item in optics}
+        if values["shutter"] != ("Closed" if self._recording_phase == "BRUIT" else "Open"):
+            raise RuntimeError("Kymera shutter changed during recording")
+        delays = {name: self._clock.command_inout("scpi_query", f"DLAY? {channel}").strip()
+                  for channel, name in enumerate("abcdefgh", 2)}
+        return json.dumps({"phase": self._recording_phase, "time_range": self._time_range,
+                           "rate_hz": self._rate_hz, "camera": json.loads(self._camera.ReadoutConfiguration()),
+                           "kymera_device": self.kymera_device, "optics": values, "delays": delays})
 
     def _outlet_power(self, device):
         pdu = self._proxy(device)
@@ -303,6 +349,8 @@ class DS_VD2(Device):
                 errors.append(f"DCAM: {exc}")
         self._warmup_until = None
         self._warmup_frame = None
+        if not errors:
+            self._recording_phase = None
         if errors:
             raise RuntimeError("Could not stop VD2. " + " | ".join(errors))
 

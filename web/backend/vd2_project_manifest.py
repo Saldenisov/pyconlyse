@@ -106,6 +106,11 @@ class Vd2ProjectManifest:
         for key in BRUIT_SETTINGS:
             if old.get(key) is None or old.get(key) == "" or old[key] != current.get(key):
                 raise ValueError(f"Bruit reuse cannot be verified ({key}); record a new Bruit")
+        if (machine or {}).get("readout_backend") == "tango":
+            previous = artifact.get("machine_before") or {}
+            for key in ("readout_backend", "time_calibration", "spectral_calibration", "vd2_clock"):
+                if previous.get(key) != machine.get(key):
+                    raise ValueError(f"Bruit reuse cannot be verified ({key}); record a new Bruit")
 
     @staticmethod
     def _noise_candidate(data, request):

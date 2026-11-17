@@ -4,10 +4,10 @@ from pathlib import Path
 import struct
 
 
-def read_frame_intervals_ms(path, frame_count):
-    """Read the 64-byte ITEX sequence headers and return successive timestamps."""
-    if frame_count < 2:
-        raise ValueError("At least two HIS frames are required to verify cadence")
+def read_frame_timestamps_ms(path, frame_count):
+    """Read timestamps from the 64-byte ITEX sequence headers."""
+    if frame_count < 1:
+        raise ValueError("At least one HIS frame is required")
     path = Path(path)
     size = path.stat().st_size
     timestamps = []
@@ -27,10 +27,17 @@ def read_frame_intervals_ms(path, frame_count):
             offset += 64 + comments + width * height * pixel_bytes
             if offset > size:
                 raise ValueError("Truncated HIS frame data")
-    intervals = [end - start for start, end in zip(timestamps, timestamps[1:])]
-    if any(not math.isfinite(interval) or interval <= 0 for interval in intervals):
+    if (any(not math.isfinite(timestamp) for timestamp in timestamps)
+            or any(end <= start for start, end in zip(timestamps, timestamps[1:]))):
         raise ValueError("HIS frame timestamps do not increase")
-    return intervals
+    return timestamps
+
+
+def read_frame_intervals_ms(path, frame_count):
+    if frame_count < 2:
+        raise ValueError("At least two HIS frames are required to verify cadence")
+    timestamps = read_frame_timestamps_ms(path, frame_count)
+    return [end - start for start, end in zip(timestamps, timestamps[1:])]
 
 
 def verify_frame_rate(path, frame_count, rate_hz):
