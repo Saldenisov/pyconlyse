@@ -2,6 +2,7 @@
 
 import json
 import math
+from contextlib import contextmanager
 from time import monotonic
 
 from tango import DevState, DeviceProxy
@@ -40,6 +41,7 @@ class DS_VD2(Device):
         self._warmup_frame = None
         self._recording_phase = None
         self._preview_configuration = None
+        self._preview_first_frame = 0
         self._timing_values = {}
         self._camera_values = {}
         self._fault = ""
@@ -165,35 +167,77 @@ class DS_VD2(Device):
 
     @command(dtype_in=float, dtype_out=float)
     def SetWavelength(self, value):
-        self._require_idle()
         if not math.isfinite(value) or value <= 0:
             raise ValueError("Choose a positive, finite wavelength")
-        ky = self._proxy(self.kymera_device, 30000)
-        if ky.shutter != "Closed":
-            raise RuntimeError("Close the Kymera shutter before changing wavelength")
-        ky.wavelength_nm = value
-        actual = float(ky.wavelength_nm)
-        if not math.isclose(value, actual, abs_tol=.1):
-            raise RuntimeError("Kymera wavelength did not verify")
-        self._optics["wavelength_nm"] = actual
+        with self._move_kymera(30000) as ky:
+            ky.wavelength_nm = value
+            actual = float(ky.wavelength_nm)
+            if not math.isclose(value, actual, rel_tol=0, abs_tol=.1):
+                raise RuntimeError("Kymera wavelength did not verify")
         return actual
 
     @command(dtype_in=int, dtype_out=int)
     def SetGrating(self, value):
-        self._require_idle()
         if value not in GRATING_BLAZE_NM:
             raise ValueError("Choose an installed Kymera grating (1, 2, or 3)")
-        ky = self._proxy(self.kymera_device, 65000)
-        if ky.shutter != "Closed":
-            raise RuntimeError("Close the Kymera shutter before changing grating")
-        ky.grating = value
-        if int(ky.grating) != value or not math.isclose(
-            float(ky.blaze_wavelength_nm), GRATING_BLAZE_NM[value], abs_tol=.01
-        ):
-            raise RuntimeError("Kymera's grating and blaze did not verify")
-        self._optics.update(grating_index=value, blaze=GRATING_BLAZE_NM[value],
-                            wavelength_nm=float(ky.wavelength_nm))
+        with self._move_kymera(65000) as ky:
+            ky.grating = value
+            if int(ky.grating) != value or not math.isclose(
+                float(ky.blaze_wavelength_nm), GRATING_BLAZE_NM[value], rel_tol=0, abs_tol=.01
+            ):
+                raise RuntimeError("Kymera's grating and blaze did not verify")
         return value
+
+    @contextmanager
+    def _move_kymera(self, timeout):
+        ky = self._kymera_for_adjustment(timeout)
+        try:
+            initial_shutter = ky.shutter
+        except Exception as exc:
+            self._optics.pop("spectrograph_shutter", None)
+            raise RuntimeError("Cannot read the Kymera shutter. Refresh the instrument status and retry.") from exc
+        if initial_shutter not in {"Open", "Closed"}:
+            raise RuntimeError("Select Open or Closed on the Kymera shutter before changing the optics")
+        self._preview_configuration = None
+        try:
+            self._set_kymera_shutter(ky, "Closed")
+        except Exception as exc:
+            self._optics.pop("spectrograph_shutter", None)
+            raise RuntimeError("Could not confirm the Kymera shutter closed. Check the shutter and retry.") from exc
+        try:
+            yield ky
+            optics = self._read_optics(ky)
+        except Exception as exc:
+            for name in ("wavelength_nm", "grating_index", "blaze"):
+                self._optics.pop(name, None)
+            raise RuntimeError("Kymera did not confirm the new setting. Its shutter was left closed.") from exc
+        if initial_shutter == "Open":
+            try:
+                optics["shutter"] = self._set_kymera_shutter(ky, "Open")
+            except Exception as exc:
+                self._optics.pop("spectrograph_shutter", None)
+                raise RuntimeError("Kymera moved, but shutter reopening is unverified. Check the shutter.") from exc
+        try:
+            self._refresh_preview_configuration(optics)
+        except Exception as exc:
+            raise RuntimeError("Kymera settings changed. Live calibration is unavailable. Restart Live to retry.") from exc
+
+    def _kymera_for_adjustment(self, timeout=6000):
+        if self._recording_phase is not None or self._warmup_until is not None:
+            raise RuntimeError("Finish the VD2 measurement before adjusting Kymera")
+        if self.get_state() != DevState.RUNNING:
+            self._require_idle()
+        ky = self._proxy(self.kymera_device, timeout)
+        if ky.state() != DevState.ON:
+            raise RuntimeError("Kymera must be ON before adjusting its controls")
+        return ky
+
+    def _refresh_preview_configuration(self, optics):
+        if self._camera is not None:
+            configuration = self._read_calibration_configuration(optics)
+            # Skip an in-flight exposure and allow for frame publication after the counter advances.
+            self._preview_first_frame = int(self._camera.SweepFrameCount) + 3
+            self._preview_configuration = configuration
 
     @command
     def StartLive(self):
@@ -252,8 +296,15 @@ class DS_VD2(Device):
 
     @command(dtype_in=str, dtype_out=str)
     def SetSpectrographShutter(self, value):
-        self._require_idle()
-        return self._set_kymera_shutter(self._proxy(self.kymera_device), value)
+        if value not in {"Open", "Closed"}:
+            raise ValueError("Choose Open or Closed")
+        ky = self._kymera_for_adjustment()
+        if self._preview_configuration is None:
+            return self._set_kymera_shutter(ky, value)
+        self._preview_configuration = None
+        actual = self._set_kymera_shutter(ky, value)
+        self._refresh_preview_configuration(self._read_optics(ky))
+        return actual
 
     @command(dtype_in=str, dtype_out=str)
     def SetStreakShutter(self, value):
@@ -379,9 +430,10 @@ class DS_VD2(Device):
                            "rate_hz": self._rate_hz, "dg_trigger_source": trigger_source,
                            "ccd_trigger": "software" if dark else "external", "delays": delays})
 
-    def _read_calibration_configuration(self):
+    def _read_calibration_configuration(self, optics=None):
         return {"time_range": self._time_range, "camera": json.loads(self._camera.ReadoutConfiguration()),
-                "kymera_device": self.kymera_device, "optics": self._read_kymera(self._kymera)}
+                "kymera_device": self.kymera_device,
+                "optics": self._read_kymera(self._kymera) if optics is None else optics}
 
     def _outlet_power(self, device):
         pdu = self._proxy(device)
@@ -432,6 +484,7 @@ class DS_VD2(Device):
         self._warmup_until = None
         self._warmup_frame = None
         self._preview_configuration = None
+        self._preview_first_frame = 0
         self._camera_values["streak_trigger_status"] = "Idle"
         if not errors:
             self._recording_phase = None
@@ -454,11 +507,15 @@ class DS_VD2(Device):
             phase = "warming" if remaining else ("measurement_ready" if sufficient_frames else "waiting_for_trigger")
         elif phase == "live" and not acquired_frames:
             phase = "waiting_for_trigger"
+        preview_pending = state == "RUNNING" and (
+            self._preview_configuration is None or acquired_frames < self._preview_first_frame
+        )
         return json.dumps({"state": state, "phase": phase, "time_range": self._time_range,
                            "frames": acquired_frames, "remaining_warmup_s": remaining,
                            "prepared": self._prepared, "trigger_rate_hz": self._rate_hz,
                            "optics": self._optics, "values": {**self._camera_values, **self._timing_values},
-                           "preview_configuration": self._preview_configuration, "error": self._fault})
+                           "preview_configuration": None if preview_pending else self._preview_configuration,
+                           "preview_configuration_pending": preview_pending, "error": self._fault})
 
 
 if __name__ == "__main__":

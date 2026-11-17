@@ -37,7 +37,7 @@ const CARDS = [
       { key: 'streak_trigger_mode', label: 'Trig. mode', options: ['Cont', 'Ext. rising', 'Ext. falling'] },
       { key: 'streak_trigger_status', label: 'Trigger status', readOnly: true },
       { key: 'focus_time_over', label: 'Focus TimeOver', type: 'number', step: 1 },
-      { key: 'live_exposure_time', label: 'Live exposure', type: 'number', min: 1, step: 1, unit: 'ms', duration: true },
+      { key: 'live_exposure_time', label: 'Live exposure', type: 'number', min: 1, step: 1, unit: 'ms', duration: true, decimals: 2 },
       { key: 'acquire_exposure_time', label: 'Acquire exposure', type: 'number', min: 1, step: 1, unit: 'ms', duration: true },
       { key: 'analog_integration_count', label: 'Integrations', type: 'number', min: 1, step: 1 },
       { key: 'sequence_loops', label: 'Sequence loops', type: 'number', min: 1, step: 1 },
@@ -68,7 +68,7 @@ const CARDS = [
     subtitle: 'Spectrograph coupled to the streak camera',
     tone: 'spectrograph',
     fields: [
-      { key: 'wavelength_nm', label: 'Wavelength', type: 'number', min: 0, max: 2000, step: 0.1, unit: 'nm' },
+      { key: 'wavelength_nm', label: 'Wavelength', type: 'number', min: 0, max: 2000, step: 0.1, unit: 'nm', decimals: 2 },
       { key: 'grating', label: 'Grating', options: ['50 g/mm', '150 g/mm', '300 g/mm', '600 g/mm', '1200 g/mm'] },
       { key: 'blaze', label: 'Blaze', readOnly: true },
       { key: 'ruling', label: 'Ruling', readOnly: true },
@@ -118,7 +118,10 @@ function defaultVd2RunName() {
 }
 
 export function EditableField({ field, value, onApply, busy }) {
-  const displayValue = field.duration ? exposureMilliseconds(value) : valueText(value);
+  const normalizedValue = field.duration ? exposureMilliseconds(value) : valueText(value);
+  const numericValue = Number(normalizedValue);
+  const showDecimals = field.decimals != null && normalizedValue !== '' && Number.isFinite(numericValue);
+  const displayValue = showDecimals ? numericValue.toFixed(field.decimals) : normalizedValue;
   const [draft, setDraft] = useState(displayValue);
   const [editing, setEditing] = useState(false);
 
@@ -129,7 +132,8 @@ export function EditableField({ field, value, onApply, busy }) {
   }, [editing, displayValue]);
 
   if (field.readOnly) {
-    return <output id={`vd2-${field.key}`} className="vd2-readonly">{valueText(value)}</output>;
+    const readback = showDecimals ? [displayValue, field.unit].filter(Boolean).join(' ') : valueText(value);
+    return <output id={`vd2-${field.key}`} className="vd2-readonly">{readback}</output>;
   }
 
   const apply = () => {

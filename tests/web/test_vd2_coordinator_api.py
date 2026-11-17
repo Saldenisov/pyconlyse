@@ -19,6 +19,8 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
 
     class TestCoordinator:
         running = False
+        preview_pending = False
+        fail_wavelength = False
 
         def set_timeout_millis(self, timeout):
             pass
@@ -26,9 +28,18 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
         def command_inout(self, command, *args):
             if command == "GetState":
                 return json.dumps({"state": "RUNNING" if self.running else "ON",
+                                   "preview_configuration_pending": self.preview_pending,
                                    "time_range": "2 us", "error": "", "frames": 5 if self.running else 0})
             events.append((command, args))
-            self.running = command == "StartLive"
+            if command == "SetWavelength" and self.fail_wavelength:
+                raise RuntimeError(SimpleNamespace(desc=(
+                    "Traceback (most recent call last):\n"
+                    "RuntimeError: Kymera did not confirm the new setting. Its shutter was left closed."
+                )))
+            if command == "SetGrating":
+                self.preview_pending = True
+            if command in {"StartLive", "StopLive"}:
+                self.running = command == "StartLive"
             return args[0] if args else None
 
     coordinator = TestCoordinator()
@@ -46,10 +57,12 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
         _control_error=str,
         DeviceProxy=lambda device: {name: coordinator, ccd_name: ccd}[device],
         tango_optics=SimpleNamespace(VD2_GRATING_BLAZE_NM={3: 500}),
+        _alignment_readout=SimpleNamespace(unavailable=lambda: None),
     )
     for path, method in (
         ("/state", "GET"), ("/parameter/time_range", "POST"), ("/command/StartLive", "POST"),
         ("/preview", "GET"), ("/protocol/start", "POST"), ("/command/StopAcquisition", "POST"),
+        ("/parameter/grating_index", "POST"), ("/parameter/wavelength_nm", "POST"),
     ):
         blueprint.add_url_rule(path, endpoint=path, view_func=lambda: "Legacy handler", methods=[method])
     install_vd2_coordinator_routes(api)
@@ -68,6 +81,14 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
     compressed = client.get(root + "/preview", headers={"Accept-Encoding": "gzip"})
     assert compressed.headers["Content-Encoding"] == "gzip"
     assert json.loads(decompress(compressed.data)) == preview
+    response = client.post(root + "/parameter/grating_index", json={"value": 2})
+    assert response.json["value"] == 2 and response.json["acquisition_mode"] == "Live"
+    pending = client.get(root + "/preview").json
+    assert not pending["frame_available"] and pending["stream_state"] == "waiting_for_frame"
+    coordinator.fail_wavelength = True
+    response = client.post(root + "/parameter/wavelength_nm", json={"value": 600})
+    assert response.status_code == 409
+    assert response.json["error"] == "Kymera did not confirm the new setting. Its shutter was left closed."
     with api._preparation_lock:
         assert client.get(root + "/state").json == {
             "success": True, "readout_backend": "tango", "state_deferred": True,
@@ -76,7 +97,8 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
     assert client.post(root + "/protocol/start", json={}).get_data(as_text=True) == "Legacy handler"
     assert client.post(root + "/coordinator/prepare-measurement", json={}).json["success"]
     assert client.post(root + "/command/StopAcquisition", json={}).json["acquisition_status"] == "idle"
-    assert events == [("SetTimeRange", ("2 us",)), ("StartLive", ()), ("PrepareMeasurement", ()), ("StopLive", ())]
+    assert events == [("SetTimeRange", ("2 us",)), ("StartLive", ()), ("SetGrating", (2,)),
+                      ("SetWavelength", (600.,)), ("PrepareMeasurement", ()), ("StopLive", ())]
 
 
 def test_web_checks_approval_before_opening_a_coordinator_proxy():

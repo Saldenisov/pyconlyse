@@ -74,8 +74,24 @@ def rig(monkeypatch):
         events.append(tuple(actions))
         lamp.states[0] = actions[0]
     lamp.command_inout = write_lamp
-    kymera = SimpleNamespace(state=lambda: tango.DevState.ON, shutter="Closed", wavelength_nm=550.,
-                             grating=3, blaze_wavelength_nm=500.)
+    class Kymera(SimpleNamespace):
+        def __setattr__(self, name, value):
+            if name in {"shutter", "wavelength_nm", "grating"}:
+                self.writes.append((name, value))
+            if name == "grating":
+                assert self.shutter == "Closed"
+                self.blaze_wavelength_nm = module.GRATING_BLAZE_NM[value]
+            if name == "wavelength_nm":
+                assert self.shutter == "Closed"
+                if self.reject_wavelength:
+                    raise RuntimeError("Kymera motion timed out")
+            if name == "shutter" and value == "Open" and self.reject_reopen:
+                raise RuntimeError("Kymera shutter write timed out")
+            super().__setattr__(name, value)
+
+    kymera = Kymera(state=lambda: tango.DevState.ON, shutter="Closed", wavelength_nm=550.,
+                    grating=3, blaze_wavelength_nm=500., writes=[],
+                    reject_wavelength=False, reject_reopen=False)
     kymera.read_attributes = lambda names: [SimpleNamespace(name=name, value=getattr(kymera, name, 0)) for name in names]
     devices = {device.ccd_device: ccd, device.dg645_device: generator,
                device.kymera_device: kymera, device.lamp_pdu_device: lamp,
@@ -151,3 +167,80 @@ def test_bruit_keeps_dg_in_standby_and_leaves_shutters_and_power_alone(rig):
     vd2.StopLive()
     assert lamp.states[0] == 1 and kymera.shutter == "Open" and generator.settings["TSRC?"] == "5"
     assert json.loads(vd2.StartPhase("BASE"))["dg_trigger_source"] == 0
+
+
+def test_live_kymera_changes_restore_open_shutter_and_wait_for_new_calibrated_frames(rig):
+    vd2, events, ccd, generator, kymera, _, _ = rig
+    vd2.Prepare()
+    vd2.StartLive()
+    ccd.SweepFrameCount = 20
+    events.clear()
+    kymera.writes.clear()
+
+    assert vd2.SetGrating(2) == 2
+    assert vd2.SetWavelength(600.) == 600.
+
+    assert kymera.writes == [
+        ("shutter", "Closed"), ("grating", 2), ("shutter", "Open"),
+        ("shutter", "Closed"), ("wavelength_nm", 600.), ("shutter", "Open"),
+    ]
+    assert events == []
+    assert generator.settings["TSRC?"] == "0"
+    assert json.loads(vd2.GetState())["optics"]["blaze"] == 800.
+    ccd.SweepFrameCount = 22
+    state = json.loads(vd2.GetState())
+    assert state["preview_configuration_pending"] and state["preview_configuration"] is None
+    ccd.SweepFrameCount = 23
+    state = json.loads(vd2.GetState())
+    assert not state["preview_configuration_pending"]
+    assert state["preview_configuration"]["optics"]["wavelength_nm"] == 600.
+    assert state["preview_configuration"]["optics"]["shutter"] == "Open"
+
+
+def test_idle_kymera_keeps_an_initially_closed_shutter_closed(rig):
+    vd2, _, _, _, kymera, _, _ = rig
+    vd2.Prepare()
+    assert vd2.SetWavelength(600.) == 600.
+    assert kymera.writes == [("wavelength_nm", 600.)]
+
+
+def test_unconfirmed_kymera_motion_leaves_shutter_closed_and_invalidates_preview(rig):
+    vd2, _, ccd, _, kymera, _, _ = rig
+    vd2.Prepare()
+    vd2.StartLive()
+    kymera.reject_wavelength = True
+    with pytest.raises(RuntimeError, match="shutter was left closed"):
+        vd2.SetWavelength(600.)
+    assert kymera.shutter == "Closed"
+    ccd.SweepFrameCount = 100
+    state = json.loads(vd2.GetState())
+    assert state["preview_configuration_pending"] and state["preview_configuration"] is None
+    assert "wavelength_nm" not in state["optics"]
+
+
+def test_unconfirmed_shutter_reopening_preserves_verified_spectral_position(rig):
+    vd2, _, _, _, kymera, _, _ = rig
+    vd2.Prepare()
+    vd2.StartLive()
+    kymera.reject_reopen = True
+    with pytest.raises(RuntimeError, match="shutter reopening is unverified"):
+        vd2.SetGrating(2)
+    state = json.loads(vd2.GetState())
+    assert state["optics"]["grating_index"] == 2
+    assert "spectrograph_shutter" not in state["optics"]
+    assert state["preview_configuration_pending"]
+
+
+@pytest.mark.parametrize("command", ["PrepareMeasurement", "StartPhase"])
+def test_measurement_blocks_all_kymera_adjustments_before_shutter_changes(rig, command):
+    vd2, _, _, _, kymera, _, _ = rig
+    vd2.Prepare()
+    if command == "StartPhase":
+        vd2.StartPhase("BRUIT")
+    else:
+        vd2.PrepareMeasurement()
+    kymera.writes.clear()
+    for change, value in ((vd2.SetGrating, 2), (vd2.SetWavelength, 600.), (vd2.SetSpectrographShutter, "Closed")):
+        with pytest.raises(RuntimeError, match="Finish the VD2 measurement"):
+            change(value)
+    assert kymera.writes == []

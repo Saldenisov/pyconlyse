@@ -1,6 +1,7 @@
 """Opt-in Web lifecycle and Live routes backed by the VD2 Tango coordinator."""
 
 from base64 import b64encode
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from gzip import compress
 import json
@@ -26,6 +27,27 @@ PARAMETERS = {
     "/parameter/spectrograph_shutter": ("SetSpectrographShutter", str),
 }
 PREVIEW_HEADER = struct.Struct("<qqHH")
+KYMERA_COMMANDS = {"SetWavelength", "SetGrating", "SetSpectrographShutter"}
+KYMERA_CONFLICTS = {
+    "Finish the VD2 measurement before adjusting Kymera",
+    "Kymera must be ON before adjusting its controls",
+    "Cannot read the Kymera shutter. Refresh the instrument status and retry.",
+    "Select Open or Closed on the Kymera shutter before changing the optics",
+    "Could not confirm the Kymera shutter closed. Check the shutter and retry.",
+    "Kymera did not confirm the new setting. Its shutter was left closed.",
+    "Kymera moved, but shutter reopening is unverified. Check the shutter.",
+    "Kymera settings changed. Live calibration is unavailable. Restart Live to retry.",
+}
+
+
+def kymera_conflict(exc):
+    descriptions = [str(error.desc) for error in exc.args if hasattr(error, "desc")]
+    for description in descriptions or [str(exc)]:
+        for line in description.splitlines():
+            message = line.strip().removeprefix("RuntimeError: ")
+            if message in KYMERA_CONFLICTS:
+                return message
+    return None
 
 
 def install_vd2_coordinator_routes(api):
@@ -111,6 +133,9 @@ def install_vd2_coordinator_routes(api):
             if state["state"] != "RUNNING":
                 api._alignment_readout.unavailable()
                 return jsonify(success=True, frame_available=False, stream_state="no_valid_image")
+            if state.get("preview_configuration_pending"):
+                api._alignment_readout.unavailable()
+                return jsonify(success=True, frame_available=False, stream_state="waiting_for_frame")
             ccd = proxy(api.VD2_COORDINATOR_CCD, 5000)
             encoding, data = ccd.ReadPreviewFrame()
             if encoding == "vd2-idle-v1":
@@ -191,9 +216,18 @@ def install_vd2_coordinator_routes(api):
         if blocked is not None:
             return blocked
         coordinator = proxy(api.VD2_COORDINATOR_DEVICE, 85000)
-        actual = coordinator.command_inout(command, *args)
-        cached_preview = None
-        preview_status = None
+        adjusts_kymera = command in KYMERA_COMMANDS
+        with api._preview_lock if adjusts_kymera else nullcontext():
+            try:
+                actual = coordinator.command_inout(command, *args)
+            except Exception as exc:
+                conflict = kymera_conflict(exc) if adjusts_kymera else None
+                if conflict:
+                    return jsonify(success=False, error=conflict), 409
+                raise
+            finally:
+                cached_preview = None
+                preview_status = None
         result = status(coordinator)
         if converter is not None:
             result["value"] = actual

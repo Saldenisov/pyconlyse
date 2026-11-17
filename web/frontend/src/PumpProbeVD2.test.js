@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import PumpProbeVD2, { EditableField, fetchVd2, refreshVd2Passive, TIME_RANGES, Vd2PhaseProtocol } from './PumpProbeVD2';
 
 import { CARDS, ParameterCard } from './PumpProbeVD2.API_BASE';
+import VD2LiveSettings from './components/VD2LiveSettings';
 
 test('Kymera shows three installed gratings and switches to blaze 500 by index', () => {
   const apply = jest.fn();
@@ -21,6 +22,31 @@ test('Kymera shows three installed gratings and switches to blaze 500 by index',
     .toEqual(['1 · Blaze 300 nm', '2 · Blaze 800 nm', '3 · Blaze 500 nm']);
   fireEvent.change(select, { target: { value: '3' } });
   expect(apply).toHaveBeenCalledWith('grating_index', 3);
+});
+
+test('VD2 Live shows wavelength and exposure to two decimal places without writing rounded readbacks', () => {
+  const apply = jest.fn();
+  const liveSettings = (values) => (
+    <VD2LiveSettings values={values} onApply={apply} directTango live />
+  );
+  const { rerender } = render(liveSettings({
+    wavelength_nm: 600.0000000001,
+    live_exposure_time: '10.0074856 ms',
+  }));
+  const wavelength = screen.getByRole('spinbutton', { name: 'Wavelength' });
+  expect(wavelength.value).toBe('600.00');
+  const exposure = within(screen.getByRole('table', { name: 'Streak camera parameters' }));
+  expect(exposure.getByText('10.01 ms')).toBeInTheDocument();
+  fireEvent.blur(wavelength);
+  expect(apply).not.toHaveBeenCalled();
+
+  fireEvent.focus(wavelength);
+  fireEvent.change(wavelength, { target: { value: '601.123' } });
+  fireEvent.blur(wavelength);
+  expect(apply).toHaveBeenCalledWith('wavelength_nm', '601.123');
+  rerender(liveSettings({ wavelength_nm: 601.123, live_exposure_time: '10 ms' }));
+  expect(wavelength.value).toBe('601.12');
+  expect(exposure.getByText('10.00 ms')).toBeInTheDocument();
 });
 
 jest.mock('./useVd2ServerWorkspace',()=>({...jest.requireActual('./useVd2ServerWorkspace'),__esModule:true,
@@ -976,15 +1002,16 @@ test('completed conversion shows only H5 after HIS retirement', () => {
 
 test('exposure displays actual milliseconds and writes explicit units only after edit', () => {
   const apply = jest.fn();
-  render(<EditableField field={{ key: 'live_exposure_time', label: 'Live exposure', type: 'number', duration: true, unit: 'ms' }} value="10 ms" onApply={apply} />);
+  const field = CARDS.find(({ tone }) => tone === 'camera').fields.find(({ key }) => key === 'live_exposure_time');
+  render(<EditableField field={field} value="10.0074856 ms" onApply={apply} />);
   const input = screen.getByLabelText('Live exposure');
-  expect(input).toHaveValue(10);
+  expect(input.value).toBe('10.01');
   fireEvent.blur(input);
   expect(apply).not.toHaveBeenCalled();
   fireEvent.focus(input);
-  fireEvent.change(input, { target: { value: '20' } });
+  fireEvent.change(input, { target: { value: '20.125' } });
   fireEvent.blur(input);
-  expect(apply).toHaveBeenCalledWith('live_exposure_time', '20 ms');
+  expect(apply).toHaveBeenCalledWith('live_exposure_time', '20.125 ms');
 });
 
 test('folder context menu carries selected run into Data Treatment', () => {
