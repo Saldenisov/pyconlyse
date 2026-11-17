@@ -1,6 +1,7 @@
 import importlib
 import sys
 import threading
+import time
 from types import SimpleNamespace
 
 import numpy as np
@@ -13,6 +14,10 @@ class FakeCamera:
         self.running = False
         self.closed = False
         self.frame = None
+        self.pending_frames = []
+        self.properties = {}
+        self.geometry = (0, 2, 0, 2, 1, 1)
+        self.exposure = 0.025
         self.threads = set()
 
     def record_thread(self):
@@ -21,6 +26,45 @@ class FakeCamera:
     def close(self):
         self.record_thread()
         self.closed = True
+
+    def get_detector_size(self):
+        self.record_thread()
+        return (2048, 2048)
+
+    def get_roi(self):
+        self.record_thread()
+        return self.geometry
+
+    def set_roi(self, *geometry):
+        self.record_thread()
+        self.geometry = geometry
+
+    def get_exposure(self):
+        self.record_thread()
+        return self.exposure
+
+    def set_exposure(self, seconds):
+        self.record_thread()
+        self.exposure = seconds + 0.000004
+
+    def acquisition_in_progress(self):
+        self.record_thread()
+        return self.running
+
+    def get_attribute_value(self, name):
+        self.record_thread()
+        return self.properties.get(name, 0)
+
+    def set_attribute_value(self, name, value):
+        self.record_thread()
+        if name == "TRIGGER GLOBAL EXPOSURE" and getattr(self, "buffer_allocated", False):
+            raise RuntimeError("Release buffers before changing global exposure")
+        self.properties[name] = value
+
+    def read_oldest_image(self, *, peek, return_info):
+        self.record_thread()
+        assert self.running and not peek and return_info
+        return self.pending_frames.pop(0) if self.pending_frames else None
 
     def get_trigger_mode(self):
         self.record_thread()
@@ -35,10 +79,15 @@ class FakeCamera:
         self.record_thread()
         assert mode == "sequence" and nframes == 8
         self.running = True
+        self.buffer_allocated = True
 
     def stop_acquisition(self):
         self.record_thread()
         self.running = False
+
+    def clear_acquisition(self):
+        self.stop_acquisition()
+        self.buffer_allocated = False
 
     def read_newest_image(self, *, peek, return_info):
         self.record_thread()
@@ -82,8 +131,10 @@ def test_explicit_lifecycle_and_full_resolution_unsigned_readback(session):
     assert opened == [True]
     assert proxy.model() == "C13440-20CU"
     assert proxy.get_state() == dcam.DevState.ON
+    assert not proxy.acquisition_active()
     proxy.StartLive()
     assert proxy.get_state() == dcam.DevState.RUNNING
+    assert proxy.acquisition_active()
     assert camera.trigger == "int"
     with pytest.raises(RuntimeError, match="Waiting for a DCAM frame"):
         _ = proxy.raw_frame()
@@ -106,6 +157,29 @@ def test_explicit_lifecycle_and_full_resolution_unsigned_readback(session):
     assert len(camera.threads) == 1
 
 
+def test_roi_and_exposure_are_read_back_and_match_frame_geometry(session):
+    _, proxy, camera, _ = session
+    proxy.OpenReadout()
+    assert proxy.detector_size() == (2048, 2048)
+    with pytest.raises(ValueError, match="within"):
+        proxy.SetROI([0, 2049, 0, 2048, 1])
+    assert camera.geometry == (0, 2, 0, 2, 1, 1)
+    expected_roi = (352, 1632, 516, 1532, 2, 2)
+    assert proxy.SetROI(expected_roi[:5]) == expected_roi
+    assert proxy.sensor_roi() == expected_roi
+    proxy.write_exposure_ms(10)
+    assert proxy.exposure_ms() == pytest.approx(10.004)
+    proxy.StartLive()
+    with pytest.raises(RuntimeError, match="StopLive"):
+        proxy.SetROI([0, 2048, 0, 2048, 1])
+    with pytest.raises(RuntimeError, match="StopLive"):
+        proxy.write_exposure_ms(25)
+    camera.frame = (np.zeros((508, 640), dtype=np.uint16), SimpleNamespace(timestamp_us=123, framestamp=7))
+    assert proxy.raw_frame().shape == (508, 640)
+    proxy.StopLive()
+    assert len(camera.threads) == 1
+
+
 def test_rejects_other_model_and_closes_it(session, monkeypatch):
     dcam, proxy, camera, _ = session
     monkeypatch.setattr(dcam, "open_readout", lambda: (camera, SimpleNamespace(model="C11440-36U")))
@@ -115,6 +189,54 @@ def test_rejects_other_model_and_closes_it(session, monkeypatch):
     assert proxy.get_state() == dcam.DevState.FAULT
     proxy.CloseReadout()
     assert proxy.get_state() == dcam.DevState.OFF
+
+
+def test_synchronized_sweep_rearms_once_per_camera_frame_without_client_reads(session, monkeypatch):
+    dcam, proxy, camera, _ = session
+    camera.properties = dict.fromkeys(dcam.SWEEP_SENSOR_PROPERTIES, 0)
+    head_values = {"ALL": "verified", "OPE": "OPE", "VSR": "VSR 1US", "SHT": "SHT C", "MCP": "MCP 0",
+                   "GMD": "GMD N", "VTM": "VTM S", "VTS": "VTS P", "VTL": "VTL 1.0V"}
+    commands = []
+    received = threading.Event()
+
+    class Head:
+        def read(self, key):
+            return head_values[key]
+
+        def write(self, value):
+            commands.append(value)
+            head_values["SHT"] = value
+
+        def rearm(self):
+            commands.append("VRT")
+            if commands.count("VRT") == 3:
+                received.set()
+
+        def close(self):
+            commands.append("closed")
+
+    monkeypatch.setattr(dcam, "C13410Usb", Head)
+    proxy.OpenReadout()
+    proxy.write_exposure_ms(10)
+    proxy.StartSynchronizedLive()
+    assert camera.trigger == "ext"
+    assert camera.properties == dcam.SWEEP_SENSOR_PROPERTIES
+    for stamp in (7, 8):
+        frame = np.ones((2, 2), dtype=np.uint16)
+        camera.pending_frames.append((frame, SimpleNamespace(timestamp_us=stamp * 200_000, framestamp=stamp)))
+    assert received.wait(1)
+    deadline = time.monotonic() + 1
+    while proxy.sweep_frame_count() != 2 and time.monotonic() < deadline:
+        time.sleep(.001)
+    assert proxy.sweep_frame_count() == 2
+    for _ in range(2):
+        np.testing.assert_array_equal(proxy.raw_frame(), frame)
+    assert proxy.frame_stamp() == 8
+    assert proxy.sweep_vrt_count() == 3
+    proxy.StopLive()
+    assert commands == ["SHT O", "VRT", "VRT", "VRT", "SHT C", "closed"]
+    assert camera.properties == dict.fromkeys(dcam.SWEEP_SENSOR_PROPERTIES, 0)
+    assert len(camera.threads) == 1
 
 
 def test_close_refuses_to_race_a_timed_out_call(session, monkeypatch):
@@ -129,7 +251,7 @@ def test_close_refuses_to_race_a_timed_out_call(session, monkeypatch):
         finally:
             returned.set()
 
-    monkeypatch.setattr(dcam, "SDK_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(dcam, "OPEN_TIMEOUT_S", 0.05)
     monkeypatch.setattr(dcam, "open_readout", slow_open)
     try:
         with pytest.raises(RuntimeError, match="timed out"):
@@ -142,7 +264,6 @@ def test_close_refuses_to_race_a_timed_out_call(session, monkeypatch):
         release.set()
     assert returned.wait(1)
     proxy._pending.result(timeout=1)
-    monkeypatch.setattr(dcam, "SDK_TIMEOUT_S", 5.0)
     proxy.CloseReadout()
     assert camera.closed
     assert proxy.get_state() == dcam.DevState.OFF
