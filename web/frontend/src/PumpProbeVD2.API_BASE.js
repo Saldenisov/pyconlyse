@@ -82,6 +82,42 @@ const CARDS = [
   },
 ];
 
+const directParameters = new Set([
+  'time_range', 'streak_mode', 'mcp_gain', 'streak_shutter', 'live_exposure_time',
+  'delay_trigger_mode', 'delay_repetition_rate', ...Array.from('abcdefgh', channel => `delay_${channel}`),
+  'wavelength_nm', 'grating', 'spectrograph_shutter',
+]);
+
+export function directVd2Card(card, values, live) {
+  return {
+    ...card,
+    subtitle: card.tone === 'camera' ? 'Hamamatsu C13410 / DCAM' : card.subtitle,
+    fields: card.fields.map(field => {
+      const readOnly = field.readOnly || !directParameters.has(field.key);
+      switch (field.key) {
+        case 'streak_mode':
+          return { ...field, readOnly: live };
+        case 'mcp_gain':
+          return { ...field, max: values.live_mcp_gain_max || 0,
+            readOnly: !live || !(values.live_mcp_gain_max > 0),
+            reason: values.live_mcp_gain_max > 0 ? 'Adjust during Live' : 'Only gain 0 is enabled for VD2 Live' };
+        case 'time_range':
+          return { ...field, options: field.options.filter(value => value !== '0.5 ns') };
+        case 'live_exposure_time':
+          return { ...field, max: 25, step: 0.01 };
+        case 'delay_repetition_rate':
+          return { ...field, options: [5, 10].map(value => ({ value, label: String(value) })), fixedOptions: true };
+        case 'delay_trigger_mode':
+          return { ...field, options: [...field.options, 'Standby'], fixedOptions: true };
+        case 'spectrograph_shutter':
+          return { ...field, options: ['Closed', 'Open'] };
+        default:
+          return { ...field, readOnly };
+      }
+    }),
+  };
+}
+
 const PHASE_PROTOCOLS = {
   BRUIT: {
     label: 'Bruit',
@@ -133,7 +169,7 @@ export function EditableField({ field, value, onApply, busy }) {
 
   if (field.readOnly) {
     const readback = showDecimals ? [displayValue, field.unit].filter(Boolean).join(' ') : valueText(value);
-    return <output id={`vd2-${field.key}`} className="vd2-readonly">{readback}</output>;
+    return <output id={`vd2-${field.key}`} className="vd2-readonly" title={field.reason}>{readback}</output>;
   }
 
   const apply = () => {

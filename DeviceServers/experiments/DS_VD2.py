@@ -3,6 +3,7 @@
 import json
 import math
 from contextlib import contextmanager
+from decimal import Decimal, InvalidOperation
 from time import monotonic
 
 from tango import DevState, DeviceProxy
@@ -15,6 +16,8 @@ SENSOR_ROI = (352, 1632, 516, 1532, 2)
 GRATING_BLAZE_NM = {1: 300, 2: 800, 3: 500}
 LAMP_WARMUP_S = 10
 TRIGGER_RATES_HZ = (5, 10)
+LIVE_TRIGGER_SOURCES = {"Internal": 0, "Ext. rising": 1, "Ext. falling": 2, "Standby": 5}
+DG_CHANNELS = dict(zip("abcdefgh", range(2, 10)))
 RECORDING_PHASES = {"BRUIT", "BASE", "ABSORPTION"}
 
 
@@ -35,6 +38,8 @@ class DS_VD2(Device):
         self._kymera = None
         self._time_range = "1 us"
         self._rate_hz = 5
+        self._live_trigger_source = 0
+        self._live_exposure_ms = 10.0
         self._prepared = False
         self._optics = {}
         self._warmup_until = None
@@ -85,7 +90,6 @@ class DS_VD2(Device):
 
     @classmethod
     def _write_rate(cls, generator, rate):
-        cls._verify_standby(generator)
         if cls._query(generator, "TRAT?") != rate:
             generator.command_inout("scpi_write", f"TRAT {rate}")
             if cls._query(generator, "TRAT?") != rate:
@@ -95,12 +99,87 @@ class DS_VD2(Device):
     def SetRate(self, value):
         if value not in TRIGGER_RATES_HZ:
             raise ValueError("Choose 5 or 10 Hz")
-        self._require_idle()
-        if self._prepared:
-            self._write_rate(self._proxy(self.dg645_device), value)
+        live = self._adjusting_live()
+        if live or self._prepared:
+            generator = self._clock if live else self._proxy(self.dg645_device)
+            if not live:
+                self._verify_standby(generator)
+            self._write_rate(generator, value)
         self._rate_hz = value
         self._timing_values["delay_repetition_rate"] = value
         return value
+
+    def _adjusting_live(self):
+        if self._recording_phase is not None or self._warmup_until is not None:
+            raise RuntimeError("Finish the VD2 measurement before changing Live settings")
+        if self.get_state() == DevState.RUNNING:
+            if self._camera is None or self._clock is None or not self._camera.AcquisitionActive:
+                raise RuntimeError("VD2 Live is no longer active. Stop Live and retry.")
+            return True
+        self._require_idle()
+        return False
+
+    @command(dtype_in=(str,), dtype_out=float)
+    def SetDelay(self, selection):
+        if len(selection) != 2:
+            raise ValueError("Supply a DG645 channel and a delay in seconds")
+        name, requested = selection
+        if name not in DG_CHANNELS:
+            raise ValueError("Select DG645 channel A–H")
+        try:
+            seconds = Decimal(requested)
+        except InvalidOperation:
+            raise ValueError("Enter a numerical DG645 delay in seconds") from None
+        if not seconds.is_finite() or seconds < 0 or seconds > 2000:
+            raise ValueError("DG645 delay must be between 0 and 2000 seconds")
+        live = self._adjusting_live()
+        dg = self._clock if live else self._proxy(self.dg645_device)
+        channel = DG_CHANNELS[name]
+        reference, before = dg.command_inout("scpi_query", f"DLAY? {channel}").split(",")
+        ref = int(reference)
+        if Decimal(before) != seconds:
+            dg.command_inout("scpi_write", f"DLAY {channel},{ref},{seconds:f}")
+        actual_reference, actual = dg.command_inout("scpi_query", f"DLAY? {channel}").split(",")
+        if int(actual_reference) != ref or abs(Decimal(actual) - seconds) > Decimal("5e-12"):
+            raise RuntimeError(f"DG645 delay {name.upper()} did not verify. Check the delay readback.")
+        self._timing_values[f"delay_{name}"] = float(actual)
+        if live:
+            if self._preview_configuration is not None:
+                self._preview_configuration["dg_delay_seconds"] = {
+                    key: self._timing_values[f"delay_{key}"] for key in DG_CHANNELS
+                }
+            self._mark_preview_changed()
+        return float(actual)
+
+    @command(dtype_in=str, dtype_out=str)
+    def SetLiveTriggerSource(self, value):
+        if value not in LIVE_TRIGGER_SOURCES:
+            raise ValueError("Choose Internal, Ext. rising, Ext. falling or Standby")
+        source = LIVE_TRIGGER_SOURCES[value]
+        if self._adjusting_live():
+            self._set_clock(self._clock, source)
+            self._timing_values.update(delay_trigger_mode=value, dg_output="Standby" if source == 5 else "On")
+            self._mark_preview_changed()
+        self._live_trigger_source = source
+        self._timing_values["live_trigger_selection"] = value
+        return value
+
+    def _mark_preview_changed(self):
+        self._preview_first_frame = int(self._camera.SweepFrameCount) + 3
+
+    @contextmanager
+    def _reconfigure_preview(self):
+        live = self._adjusting_live()
+        if live:
+            streak_open = self._optics["streak_shutter"] == "Open"
+            kymera_open = self._optics["spectrograph_shutter"] == "Open"
+            gain = self._camera_values.get("mcp_gain", 0)
+            self.StopLive()
+        yield
+        if live:
+            self._start_live(streak_open=streak_open, kymera_open=kymera_open)
+            if streak_open and gain:
+                self.SetMcpGain(gain)
 
     @command
     def Prepare(self):
@@ -113,6 +192,7 @@ class DS_VD2(Device):
             raise RuntimeError("DG645 must be ON with Burst off")
         if not self._prepared and self._query(dg, "TSRC?") != 5:
             self._set_clock(dg, 5)
+        self._verify_standby(dg)
         self._write_rate(dg, self._rate_hz)
         if self._prepared:
             verify_timing(dg, timing_for_range(self._time_range), live=True)
@@ -120,6 +200,10 @@ class DS_VD2(Device):
             self._set_time_range(self._time_range)
         self._read_optics(ky)
         self._read_timing_values(dg)
+        self._timing_values["live_trigger_selection"] = next(
+            name for name, source in LIVE_TRIGGER_SOURCES.items() if source == self._live_trigger_source
+        )
+        self._camera_values.setdefault("live_exposure_time", f"{self._live_exposure_ms:.9g} ms")
         self._camera_values.update(streak_mode="Operate", gate_mode="Normal", mcp_gain=0, streak_trigger_mode="Single")
         self._prepared = True
         self._fault = ""
@@ -128,27 +212,65 @@ class DS_VD2(Device):
 
     @command
     def Unprepare(self):
-        self.StopLive()
-        self._require_idle()
-        dg = self._proxy(self.dg645_device)
-        if self._query(dg, "TSRC?") != 5:
-            raise RuntimeError("Cannot verify DG645 standby; power retained")
+        self._prepared = False
+        self._stop_live(keep_shutters=False)
+        camera = self._proxy(self.ccd_device, 30000)
+        try:
+            if self._outlet_power(self.camera_pdu_device, outlet=2):
+                dg = self._proxy(self.dg645_device)
+                if self._query(dg, "TSRC?") != 5:
+                    self._set_clock(dg, 5)
+        finally:
+            if camera.state() != DevState.OFF:
+                camera.command_inout("CloseReadout")
+            if camera.state() != DevState.OFF:
+                raise RuntimeError("Cannot verify DCAM handle released. Retry Unprepare before opening HPD-TA.")
         if self._outlet_power(self.camera_pdu_device):
             self._proxy(self.head_device).command_inout("Park")
             self._optics["streak_shutter"] = "Closed"
+            self._camera_values.update(streak_mode="Focus", mcp_gain=0, streak_trigger_status="Idle")
         kymera = self._proxy(self.kymera_device)
         state = kymera.state()
         if state == DevState.ON:
             self._set_kymera_shutter(kymera, "Closed")
         elif state != DevState.OFF:
             raise RuntimeError("Kymera shutter state unverified; power retained")
-        self._prepared = False
-        self._camera_values.update(streak_mode="Focus", streak_trigger_status="Idle")
         self.set_status("VD2 unprepared")
 
     @command(dtype_in=str, dtype_out=str)
     def SetTimeRange(self, value):
-        return self._set_time_range(value)
+        profile = timing_for_range(value)
+        if profile.time_range == self._time_range:
+            return self._time_range
+        with self._reconfigure_preview():
+            self._proxy(self.head_device).command_inout("SetShutter", "Closed")
+            self._optics["streak_shutter"] = "Closed"
+            actual = self._set_time_range(value)
+        return actual
+
+    @command(dtype_in=str, dtype_out=str)
+    def SetStreakMode(self, value):
+        if self._adjusting_live():
+            raise RuntimeError("Stop Live before changing the streak camera mode")
+        if value == "Focus":
+            self._proxy(self.head_device).command_inout("Park")
+            self._optics["streak_shutter"] = "Closed"
+            self._camera_values["mcp_gain"] = 0
+        elif value == "Operate":
+            self._set_time_range(self._time_range)
+        else:
+            raise ValueError("Choose Focus or Operate")
+        self._camera_values["streak_mode"] = value
+        return value
+
+    @command(dtype_in=float, dtype_out=str)
+    def SetLiveExposure(self, value):
+        if not math.isfinite(value) or not 1 <= value <= 25:
+            raise ValueError("VD2 Live exposure must be between 1 and 25 ms")
+        with self._reconfigure_preview():
+            self._live_exposure_ms = value
+            self._camera_values["live_exposure_time"] = f"{value:.9g} ms"
+        return self._camera_values["live_exposure_time"]
 
     def _set_time_range(self, value):
         self._require_idle()
@@ -236,7 +358,7 @@ class DS_VD2(Device):
         if self._camera is not None:
             configuration = self._read_calibration_configuration(optics)
             # Skip an in-flight exposure and allow for frame publication after the counter advances.
-            self._preview_first_frame = int(self._camera.SweepFrameCount) + 3
+            self._mark_preview_changed()
             self._preview_configuration = configuration
 
     @command
@@ -248,7 +370,7 @@ class DS_VD2(Device):
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before starting Live")
         if self._time_range != "1 us":
-            self._set_time_range("1 us")
+            self.SetTimeRange("1 us")
         self._start_live()
 
     def _read_optics(self, ky):
@@ -306,14 +428,47 @@ class DS_VD2(Device):
         self._refresh_preview_configuration(self._read_optics(ky))
         return actual
 
+    @command(dtype_in=int, dtype_out=int)
+    def SetMcpGain(self, value):
+        if self._recording_phase is not None or self._warmup_until is not None:
+            raise RuntimeError("Finish the VD2 measurement before adjusting II-Gain")
+        if self.get_state() != DevState.RUNNING or self._camera is None:
+            raise RuntimeError("Start VD2 Live before adjusting II-Gain")
+        if self._preview_configuration is None:
+            raise RuntimeError("Wait for verified Live settings before adjusting II-Gain")
+        limit = int(self._camera.LiveMcpGainMax)
+        if value < 0 or value > limit:
+            raise ValueError("II-Gain is outside the configured VD2 Live range")
+        optics = self._preview_configuration["optics"]
+        self._preview_configuration = None
+        try:
+            actual = int(self._camera.command_inout("SetLiveMcpGain", value))
+            if actual != value:
+                raise RuntimeError("DCAM returned a different II-Gain")
+            self._refresh_preview_configuration(optics)
+        except Exception as exc:
+            self._fail_live(RuntimeError(f"Could not confirm II-Gain. VD2 Live stopped. {exc}"))
+        self._camera_values["mcp_gain"] = actual
+        return actual
+
     @command(dtype_in=str, dtype_out=str)
     def SetStreakShutter(self, value):
-        self._require_idle()
-        result = self._proxy(self.head_device).command_inout("SetShutter", value)
+        if value not in {"Open", "Closed"}:
+            raise ValueError("Choose Open or Closed")
+        if self._adjusting_live():
+            if value == "Open" and self._camera_values.get("mcp_gain") != 0:
+                raise RuntimeError("Set II-Gain to zero before opening the streak shutter")
+            try:
+                result = self._camera.command_inout("SetLiveStreakShutter", value)
+                self._mark_preview_changed()
+            except Exception as exc:
+                self._fail_live(exc)
+        else:
+            result = self._proxy(self.head_device).command_inout("SetShutter", value)
         self._optics["streak_shutter"] = result
         return result
 
-    def _start_live(self, *, dark=False):
+    def _start_live(self, *, dark=False, recording=False, streak_open=True, kymera_open=True):
         self._require_idle()
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before starting Live")
@@ -332,27 +487,33 @@ class DS_VD2(Device):
             roi = tuple(camera.command_inout("SetROI", SENSOR_ROI))
             if roi != (*SENSOR_ROI, SENSOR_ROI[-1]):
                 raise RuntimeError("CCD ROI did not verify")
-            camera.ExposureMs = 10.0
+            camera.ExposureMs = 10.0 if recording else self._live_exposure_ms
             if dark:
                 camera.command_inout("StartSynchronizedDark", self._rate_hz)
             else:
-                camera.command_inout("StartSynchronizedLiveWithOpenShutterAt", self._time_range)
+                command_name = ("StartSynchronizedLiveWithOpenShutterAt" if streak_open
+                                else "StartSynchronizedLiveWithClosedShutterAt")
+                camera.command_inout(command_name, self._time_range)
             if camera.state() != DevState.RUNNING or not camera.AcquisitionActive:
                 raise RuntimeError("CCD did not confirm synchronized Live")
-            self._optics["streak_shutter"] = "Open"
-            self._set_kymera_shutter(ky, "Open")
-            self._preview_configuration = self._read_calibration_configuration()
+            self._optics["streak_shutter"] = "Open" if streak_open else "Closed"
+            self._set_kymera_shutter(ky, "Open" if kymera_open else "Closed")
             self._read_timing_values(dg)
+            self._preview_configuration = self._read_calibration_configuration()
             self._camera_values.update(
-                streak_mode="Operate", gate_mode="Normal", mcp_gain=0, streak_trigger_mode="Single",
-                live_exposure_time=f'{self._preview_configuration["camera"]["exposure_ms"]:.9g} ms',
+                streak_mode="Operate", gate_mode="Normal", streak_trigger_mode="Single",
+                mcp_gain=self._preview_configuration["camera"].get("mcp_gain", 0),
+                live_mcp_gain_max=int(camera.LiveMcpGainMax),
                 acquire_exposure_time=f'{self._preview_configuration["camera"]["exposure_ms"]:.9g} ms',
                 streak_trigger_status="Software" if dark else "External")
+            if not recording:
+                self._camera_values["live_exposure_time"] = f'{self._preview_configuration["camera"]["exposure_ms"]:.9g} ms'
             self._clock = dg
-            if not dark:
-                self._set_clock(dg, 0)
-            self._timing_values.update(delay_trigger_mode="Standby" if dark else "Internal",
-                                       dg_output="Standby" if dark else "On")
+            source = 5 if dark else (0 if recording else self._live_trigger_source)
+            if source != 5:
+                self._set_clock(dg, source)
+            mode = next(name for name, code in LIVE_TRIGGER_SOURCES.items() if code == source)
+            self._timing_values.update(delay_trigger_mode=mode, dg_output="Standby" if source == 5 else "On")
         except Exception as exc:
             self._fail_live(exc)
         self._fault = ""
@@ -375,9 +536,11 @@ class DS_VD2(Device):
         if not self._outlet_power(self.lamp_pdu_device):
             raise RuntimeError("Verify the VD2 flashlamp supply is ON")
         if self._camera is None:
-            self._start_live()
+            self._start_live(recording=True)
         elif self.get_state() != DevState.RUNNING or not self._camera.AcquisitionActive:
             raise RuntimeError("Stop the current VD2 operation first")
+        elif self._query(self._clock, "TSRC?") != 0:
+            raise RuntimeError("Select Internal on the DG645 before warming the flash lamp")
         self._start_warmup()
 
     def _start_warmup(self):
@@ -402,7 +565,7 @@ class DS_VD2(Device):
             raise RuntimeError("Prepare VD2 before recording")
         if phase != "BRUIT" and not self._outlet_power(self.lamp_pdu_device):
             raise RuntimeError("Verify the VD2 flashlamp supply is ON")
-        self._start_live(dark=phase == "BRUIT")
+        self._start_live(dark=phase == "BRUIT", recording=True)
         self._recording_phase = phase
         try:
             if phase != "BRUIT":
@@ -433,20 +596,24 @@ class DS_VD2(Device):
     def _read_calibration_configuration(self, optics=None):
         return {"time_range": self._time_range, "camera": json.loads(self._camera.ReadoutConfiguration()),
                 "kymera_device": self.kymera_device,
-                "optics": self._read_kymera(self._kymera) if optics is None else optics}
+                "optics": self._read_kymera(self._kymera) if optics is None else optics,
+                "dg_delay_seconds": {name: self._timing_values[f"delay_{name}"] for name in DG_CHANNELS}}
 
-    def _outlet_power(self, device):
+    def _outlet_power(self, device, *, outlet=1):
         pdu = self._proxy(device)
         outlets = tuple(map(int, pdu.ids))
         states = tuple(map(int, pdu.states))
-        if len(states) != len(outlets) or outlets.count(1) != 1 or states[outlets.index(1)] not in {0, 1}:
-            raise RuntimeError(f"Invalid power readback from {device} outlet 1")
-        return states[outlets.index(1)] == 1
+        if len(states) != len(outlets) or outlets.count(outlet) != 1 or states[outlets.index(outlet)] not in {0, 1}:
+            raise RuntimeError(f"Invalid power readback from {device} outlet {outlet}")
+        return states[outlets.index(outlet)] == 1
 
     @command
     def StopLive(self):
+        self._stop_live(keep_shutters=True)
+
+    def _stop_live(self, *, keep_shutters):
         try:
-            self._release(keep_shutters=True)
+            self._release(keep_shutters=keep_shutters)
         except RuntimeError as exc:
             self._fault = str(exc)
             self.set_state(DevState.FAULT)
@@ -479,6 +646,7 @@ class DS_VD2(Device):
                 if self._camera.state() != DevState.OFF:
                     raise RuntimeError("CCD did not verify OFF")
                 self._camera = None
+                self._camera_values.update(mcp_gain=0, live_mcp_gain_max=0)
             except Exception as exc:
                 errors.append(f"DCAM: {exc}")
         self._warmup_until = None

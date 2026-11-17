@@ -18,17 +18,32 @@ LIVE_COMMANDS = {
     "/alignment/start": "StartAlignment",
     "/coordinator/prepare-measurement": "PrepareMeasurement",
 }
+
+
+def exposure_ms(value):
+    return float(str(value).strip().removesuffix(" ms"))
+
+
 PARAMETERS = {
     "/parameter/trigger_rate_hz": ("SetRate", int),
     "/parameter/time_range": ("SetTimeRange", str),
+    "/parameter/streak_mode": ("SetStreakMode", str),
+    "/parameter/live_exposure_time": ("SetLiveExposure", exposure_ms),
+    "/parameter/delay_trigger_mode": ("SetLiveTriggerSource", str),
+    "/parameter/delay_repetition_rate": ("SetRate", int),
     "/parameter/wavelength_nm": ("SetWavelength", float),
     "/parameter/grating_index": ("SetGrating", int),
+    "/parameter/mcp_gain": ("SetMcpGain", int),
     "/parameter/streak_shutter": ("SetStreakShutter", str),
     "/parameter/spectrograph_shutter": ("SetSpectrographShutter", str),
+    **{f"/parameter/delay_{channel}": ("SetDelay", str, channel) for channel in "abcdefgh"},
 }
 PREVIEW_HEADER = struct.Struct("<qqHH")
-KYMERA_COMMANDS = {"SetWavelength", "SetGrating", "SetSpectrographShutter"}
-KYMERA_CONFLICTS = {
+PREVIEW_ADJUSTMENTS = {
+    "SetWavelength", "SetGrating", "SetSpectrographShutter", "SetMcpGain", "SetDelay", "SetRate",
+    "SetLiveTriggerSource", "SetStreakShutter", "SetLiveExposure", "SetTimeRange", "SetStreakMode",
+}
+ADJUSTMENT_CONFLICTS = {
     "Finish the VD2 measurement before adjusting Kymera",
     "Kymera must be ON before adjusting its controls",
     "Cannot read the Kymera shutter. Refresh the instrument status and retry.",
@@ -37,15 +52,27 @@ KYMERA_CONFLICTS = {
     "Kymera did not confirm the new setting. Its shutter was left closed.",
     "Kymera moved, but shutter reopening is unverified. Check the shutter.",
     "Kymera settings changed. Live calibration is unavailable. Restart Live to retry.",
+    "Finish the VD2 measurement before adjusting II-Gain",
+    "Start VD2 Live before adjusting II-Gain",
+    "Wait for verified Live settings before adjusting II-Gain",
+    "II-Gain is outside the configured VD2 Live range",
+    "Finish the VD2 measurement before changing Live settings",
+    "VD2 Live is no longer active. Stop Live and retry.",
+    "DG645 delay must be between 0 and 2000 seconds",
+    "Enter a numerical DG645 delay in seconds",
+    "VD2 Live exposure must be between 1 and 25 ms",
+    "Set II-Gain to zero before opening the streak shutter",
+    "Stop Live before changing the streak camera mode",
+    "Choose 5 or 10 Hz",
 }
 
 
-def kymera_conflict(exc):
+def adjustment_conflict(exc):
     descriptions = [str(error.desc) for error in exc.args if hasattr(error, "desc")]
     for description in descriptions or [str(exc)]:
         for line in description.splitlines():
-            message = line.strip().removeprefix("RuntimeError: ")
-            if message in KYMERA_CONFLICTS:
+            message = line.strip().removeprefix("RuntimeError: ").removeprefix("ValueError: ")
+            if message in ADJUSTMENT_CONFLICTS:
                 return message
     return None
 
@@ -159,6 +186,7 @@ def install_vd2_coordinator_routes(api):
                 "width": image.shape[1], "height": image.shape[0], "data_type": "DCAM",
                 "pixels_b64": b64encode(display).decode("ascii"), "display_rescaled": True,
                 "minimum": 0, "maximum": 255 if high > low else 0, "frame_stamp": stamp,
+                "peak_counts": high,
                 "received_at": datetime.now(timezone.utc).isoformat(),
             }
             configuration = state.get("preview_configuration")
@@ -188,7 +216,7 @@ def install_vd2_coordinator_routes(api):
             api._preview_lock.release()
 
     @api._serialized_vd2_mutation
-    def mutate(command, converter=None):
+    def mutate(command, converter=None, channel=None):
         nonlocal cached_preview, preview_status
         if api._protocol_hardware_phase() in {"preparing", "acquiring", "saving"}:
             return jsonify(success=False, error="A VD2 measurement owns the optics and trigger"), 409
@@ -207,21 +235,24 @@ def install_vd2_coordinator_routes(api):
                                              isinstance(raw_value, str) and raw_value.isdecimal()):
                     raise ValueError("An integer parameter value is required")
                 args = [converter(raw_value)]
+                if channel is not None:
+                    args = [[channel, args[0]]]
         except (ValueError, TypeError) as exc:
             return jsonify(success=False, error=str(exc)), 400
         blocked = api._approval_or_response(
-            f"coordinator.{command}", [api._target(api.VD2_COORDINATOR_DEVICE, command)],
+            f"coordinator.{command}" if channel is None else f"coordinator.{command}.{channel.upper()}",
+            [api._target(api.VD2_COORDINATOR_DEVICE, command)],
             payload, "vd2.coordinator", fields,
         )
         if blocked is not None:
             return blocked
         coordinator = proxy(api.VD2_COORDINATOR_DEVICE, 85000)
-        adjusts_kymera = command in KYMERA_COMMANDS
-        with api._preview_lock if adjusts_kymera else nullcontext():
+        adjusts_preview = command in PREVIEW_ADJUSTMENTS
+        with api._preview_lock if adjusts_preview else nullcontext():
             try:
                 actual = coordinator.command_inout(command, *args)
             except Exception as exc:
-                conflict = kymera_conflict(exc) if adjusts_kymera else None
+                conflict = adjustment_conflict(exc) if adjusts_preview else None
                 if conflict:
                     return jsonify(success=False, error=conflict), 409
                 raise

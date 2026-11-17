@@ -35,8 +35,8 @@ test('VD2 Live shows wavelength and exposure to two decimal places without writi
   }));
   const wavelength = screen.getByRole('spinbutton', { name: 'Wavelength' });
   expect(wavelength.value).toBe('600.00');
-  const exposure = within(screen.getByRole('table', { name: 'Streak camera parameters' }));
-  expect(exposure.getByText('10.01 ms')).toBeInTheDocument();
+  const exposure = screen.getByRole('spinbutton', { name: 'Live exposure' });
+  expect(exposure.value).toBe('10.01');
   fireEvent.blur(wavelength);
   expect(apply).not.toHaveBeenCalled();
 
@@ -46,7 +46,25 @@ test('VD2 Live shows wavelength and exposure to two decimal places without writi
   expect(apply).toHaveBeenCalledWith('wavelength_nm', '601.123');
   rerender(liveSettings({ wavelength_nm: 601.123, live_exposure_time: '10 ms' }));
   expect(wavelength.value).toBe('601.12');
-  expect(exposure.getByText('10.00 ms')).toBeInTheDocument();
+  expect(exposure.value).toBe('10.00');
+});
+
+test('direct Live sends DG645 delays in seconds, enables exposure and keeps mode read-only', () => {
+  const apply = jest.fn();
+  render(<VD2LiveSettings directTango live onApply={apply} values={{
+    delay_e: 0.0022065, delay_repetition_rate: 5, live_exposure_time: '10 ms', streak_mode: 'Operate',
+    delay_trigger_mode: 'Internal',
+  }} />);
+  const delay = screen.getByRole('spinbutton', { name: 'Delay E' });
+  expect(delay.value).toBe('2206.5');
+  fireEvent.focus(delay);
+  fireEvent.change(delay, { target: { value: '2207' } });
+  fireEvent.blur(delay);
+  expect(apply).toHaveBeenCalledWith('delay_e', '0.002207');
+  fireEvent.change(screen.getByRole('combobox', { name: 'Repetition rate' }), { target: { value: '10' } });
+  expect(apply).toHaveBeenCalledWith('delay_repetition_rate', 10);
+  expect(screen.queryByRole('combobox', { name: 'Mode' })).not.toBeInTheDocument();
+  expect(screen.getByRole('spinbutton', { name: 'Live exposure' })).toBeEnabled();
 });
 
 jest.mock('./useVd2ServerWorkspace',()=>({...jest.requireActual('./useVd2ServerWorkspace'),__esModule:true,

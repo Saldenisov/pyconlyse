@@ -10,7 +10,7 @@ import FrameDisplayRate from './components/FrameDisplayRate';
 import { alignmentRegionFromBounds, pairedSpectralRegion } from './vd2RoiMath';
 import { AlignmentKinetics, AlignmentRegion, VD2AlignmentMagnets } from './components/VD2Alignment';
 import { CARDS } from "./PumpProbeVD2.API_BASE";
-import { ParameterCard } from "./PumpProbeVD2.API_BASE";
+import { ParameterCard, directVd2Card } from "./PumpProbeVD2.API_BASE";
 import { ROI_TOOLS } from "./PumpProbeVD2.API_BASE";
 import { clamp } from "./PumpProbeVD2.API_BASE";
 import { LutControl } from "./PumpProbeVD2.API_BASE";
@@ -277,7 +277,9 @@ export function renderVd2Acquisition({
                 : protocolSaving ? protocol.status
                   : preview && previewStream === 'acquiring' && !previewFresh ? 'Waiting for a new frame'
                     : state?.acquisition_status === 'busy' || previewStream === 'acquiring' ? 'Acquiring' : 'Last frame'}</span>
-              {preview && <span>{preview.minimum} - {preview.maximum}</span>}
+              {preview && (directTango && Number.isInteger(preview.peak_counts)
+                ? <span>Peak {preview.peak_counts} counts</span>
+                : <span>{preview.minimum} - {preview.maximum}</span>)}
               {directTango && <label>Trigger rate{' '}
                 <select aria-label="VD2 trigger rate" value={state.values?.trigger_rate_hz ?? 5}
                   disabled={alignmentControlsBlocked || !acquisitionIdle || live}
@@ -388,8 +390,10 @@ export function renderVd2Acquisition({
           </div>
           <section className="vd2-grid" aria-label="Hardware setup">
             {CARDS.map((card) => (
-              <ParameterCard card={directTango && card.tone === 'camera' ? { ...card, subtitle: 'Hamamatsu C13410 / DCAM' } : card}
-                values={values} onApply={writeParameter} busy={busy || protocolHardwareActive} key={card.title} />
+              <ParameterCard card={directTango ? directVd2Card(card, values, live) : card}
+                values={directTango && !live && values.live_trigger_selection
+                  ? { ...values, delay_trigger_mode: values.live_trigger_selection } : values}
+                onApply={writeParameter} busy={busy || protocolHardwareActive} key={card.title} />
             ))}
           </section>
         </>

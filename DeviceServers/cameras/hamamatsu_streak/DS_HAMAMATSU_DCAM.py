@@ -9,13 +9,19 @@ import time
 
 import numpy as np
 from tango import AttrWriteType, DevLong64, DevState, DevUShort
-from tango.server import Device, attribute, command
+from tango.server import Device, attribute, command, device_property
 
 from DeviceServers.cameras.hamamatsu_streak.dcam_readout_probe import (
     READOUT_MODEL,
     open_readout,
 )
-from DeviceServers.cameras.hamamatsu_streak.c13410_usb import C13410Usb, configure_synchronized_sweep
+from DeviceServers.cameras.hamamatsu_streak.c13410_usb import (
+    C13410Usb,
+    MCP_GAIN_MAX,
+    configure_synchronized_sweep,
+    set_mcp_gain,
+    set_streak_shutter,
+)
 from DeviceServers.instruments.dg645.vd2_timing import timing_for_range
 
 
@@ -34,6 +40,8 @@ SWEEP_SENSOR_PROPERTIES = {
 class DS_HAMAMATSU_DCAM(Device):
     """Explicitly open, run and close a direct DCAM readout session."""
 
+    live_mcp_gain_max = device_property(dtype=int, default_value=0)
+
     def init_device(self):
         super().init_device()
         self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dcam-tango")
@@ -44,6 +52,8 @@ class DS_HAMAMATSU_DCAM(Device):
         self._prior_sweep_properties = {}
         self._sweep_head = None
         self._sweep_shutter_requested = False
+        self._sweep_mcp_gain = None
+        self._mcp_reset_required = False
         self._sweep_token = None
         self._sweep_frame = None
         self._sweep_frame_count = 0
@@ -69,7 +79,7 @@ class DS_HAMAMATSU_DCAM(Device):
             self._worker.shutdown(wait=True)
             super().delete_device()
 
-    def _sdk(self, operation, *args, timeout=None):
+    def _sdk(self, operation, *args, timeout=None, stop_after_timeout=False):
         # Never enqueue a request behind a native call with an unresolved outcome.
         if self._pending is not None and not self._pending.done():
             raise RuntimeError("Previous DCAM call is still running")
@@ -82,6 +92,9 @@ class DS_HAMAMATSU_DCAM(Device):
             self.set_state(DevState.FAULT)
             message = f"DCAM {operation.__name__} timed out after {timeout:g} s"
             self.set_status(message)
+            if stop_after_timeout:
+                # Stop serially after the native call, including a success at the timeout boundary.
+                self._pending = self._worker.submit(self._stop)
             raise RuntimeError(message) from exc
         except Exception as exc:
             self._sweep_token = None
@@ -115,8 +128,77 @@ class DS_HAMAMATSU_DCAM(Device):
     def ReadoutConfiguration(self):
         if self._camera is None:
             raise RuntimeError("DCAM is closed")
-        return json.dumps({"model": self._model, "serial": self._serial,
-                           "roi": self._sensor_roi, "exposure_ms": self._exposure_ms})
+        configuration = {"model": self._model, "serial": self._serial,
+                         "roi": self._sensor_roi, "exposure_ms": self._exposure_ms}
+        if self._sweep_head is not None:
+            configuration["mcp_gain"] = self._sweep_mcp_gain
+        return json.dumps(configuration)
+
+    @attribute(name="LiveMcpGainMax", dtype=int)
+    def live_mcp_gain_limit(self):
+        """Administrative ceiling for the qualified optical setup."""
+        return self._configured_mcp_gain_limit()
+
+    def _configured_mcp_gain_limit(self):
+        limit = self.live_mcp_gain_max
+        return limit if 0 <= limit <= MCP_GAIN_MAX else 0
+
+    @command(dtype_in=int, dtype_out=int)
+    def SetLiveMcpGain(self, value):
+        limit = self._configured_mcp_gain_limit()
+        if type(value) is not int or not 0 <= value <= limit:
+            if limit == 0:
+                raise ValueError("Only gain 0 is enabled for VD2 Live")
+            raise ValueError(f"Choose an integer MCP gain between 0 and {limit}")
+        if (self.get_state() != DevState.RUNNING or self._sweep_token is None
+                or self._software_period is not None):
+            raise RuntimeError("MCP gain adjustment requires synchronized Live")
+        if self._capture_buffer is not None:
+            raise RuntimeError("Finish the VD2 recording before changing MCP gain")
+        return self._sdk(self._set_live_mcp_gain, value, stop_after_timeout=True)
+
+    def _set_live_mcp_gain(self, value):
+        token = self._sweep_token
+        head = self._sweep_head
+        if token is None or head is None:
+            raise RuntimeError("Synchronized Live ended before the MCP gain change")
+        try:
+            if head.read("OPE") != "OPE" or (value and head.read("SHT") != "SHT O"):
+                raise RuntimeError("Verify Operate and the streak shutter before changing MCP gain")
+            self._sweep_mcp_gain = None
+            self._mcp_reset_required = True
+            actual = set_mcp_gain(head, value)
+            if self._sweep_token is not token:
+                raise RuntimeError("Live ended before the MCP gain change was confirmed")
+            self._sweep_mcp_gain = actual
+            self._mcp_reset_required = actual != 0
+            return actual
+        except Exception as error:
+            if self._sweep_token is token:
+                self._sweep_token = None
+                try:
+                    self._stop()
+                except Exception as cleanup:
+                    raise RuntimeError(f"{error}. Acquisition cleanup failed: {cleanup}") from error
+            raise
+
+    @command(dtype_in=str, dtype_out=str)
+    def SetLiveStreakShutter(self, value):
+        if value not in {"Open", "Closed"}:
+            raise ValueError("Choose Open or Closed")
+        if self.get_state() != DevState.RUNNING or self._sweep_token is None or self._capture_buffer is not None:
+            raise RuntimeError("Streak shutter adjustment requires Live preview")
+        if value == "Open" and self._sweep_mcp_gain != 0:
+            raise RuntimeError("Set II-Gain to zero before opening the streak shutter")
+        return self._sdk(self._set_live_shutter, value, stop_after_timeout=True)
+
+    def _set_live_shutter(self, value):
+        if self._sweep_head is None or self._sweep_token is None:
+            raise RuntimeError("Live ended before the shutter change")
+        self._sweep_shutter_requested = True
+        actual = set_streak_shutter(self._sweep_head, value)
+        self._sweep_shutter_requested = actual == "Open"
+        return actual
 
     @command
     def CloseReadout(self):
@@ -183,17 +265,21 @@ class DS_HAMAMATSU_DCAM(Device):
     def StartSynchronizedLiveWithOpenShutterAt(self, time_range):
         self._start_synchronized_live(timing_for_range(time_range).time_range, True)
 
+    @command(dtype_in=str)
+    def StartSynchronizedLiveWithClosedShutterAt(self, time_range):
+        self._start_synchronized_live(timing_for_range(time_range).time_range, open_shutter=False)
+
     @command(dtype_in=int)
     def StartSynchronizedDark(self, rate):
         if rate not in {5, 10}:
             raise ValueError("Choose the qualified 5 or 10 Hz dark frame rate")
         self._start_synchronized_live("1 us", True, software_rate=rate)
 
-    def _start_synchronized_live(self, time_range, accept_open=False, software_rate=None):
+    def _start_synchronized_live(self, time_range, accept_open=False, software_rate=None, open_shutter=True):
         self._require_idle()
-        if not math.isclose(self._exposure_ms, 10.0, abs_tol=0.05):
-            raise RuntimeError("Set ExposureMs to 10 before starting the synchronized sweep")
-        self._sdk(self._start_synchronized, time_range, accept_open, software_rate)
+        if not .95 <= self._exposure_ms <= 25.05:
+            raise RuntimeError("Set ExposureMs between 1 and 25 before starting the synchronized sweep")
+        self._sdk(self._start_synchronized, time_range, accept_open, software_rate, open_shutter)
         self.set_state(DevState.RUNNING)
         trigger = "Software CCD trigger" if software_rate else "External CCD trigger"
         self.set_status(f"{trigger}, C13410 {time_range} Operate, VRT after each acquired frame.")
@@ -201,7 +287,7 @@ class DS_HAMAMATSU_DCAM(Device):
         self._sweep_token = token
         self._worker.submit(self._poll_synchronized_frame, token)
 
-    def _start_synchronized(self, time_range, accept_open=False, software_rate=None):
+    def _start_synchronized(self, time_range, accept_open=False, software_rate=None, open_shutter=True):
         self._clear_frame_metadata()
         self._sweep_frame = None
         self._sweep_frame_count = 0
@@ -209,6 +295,7 @@ class DS_HAMAMATSU_DCAM(Device):
         self._sweep_head = head = C13410Usb()
         try:
             configure_synchronized_sweep(head, time_range, accept_open=accept_open)
+            self._sweep_mcp_gain = 0
             camera = self._camera
             camera.clear_acquisition()
             self._prior_trigger = camera.get_trigger_mode()
@@ -223,11 +310,9 @@ class DS_HAMAMATSU_DCAM(Device):
                 if camera.get_attribute_value(name) != value:
                     raise RuntimeError(f"DCAM {name} did not verify")
             camera.start_acquisition(mode="sequence", nframes=8)
-            self._sweep_shutter_requested = True
-            if not accept_open or head.read("SHT") != "SHT O":
-                head.write("SHT O")
-            if head.read("SHT") != "SHT O":
-                raise RuntimeError("C13410 shutter did not verify Open")
+            if open_shutter:
+                self._sweep_shutter_requested = True
+                set_streak_shutter(head, "Open")
             head.rearm()
             self._sweep_vrt_count = 1
             if software_rate:
@@ -345,17 +430,26 @@ class DS_HAMAMATSU_DCAM(Device):
         if synchronized:
             try:
                 if self._sweep_shutter_requested and not keep_shutter:
-                    self._sweep_head.write("SHT C")
-                    if self._sweep_head.read("SHT") != "SHT C":
-                        raise RuntimeError("C13410 shutter close did not verify")
-                    self._sweep_shutter_requested = False
+                    self._close_streak_shutter()
             except Exception as exc:
                 errors.append(exc)
-            if keep_shutter or not self._sweep_shutter_requested:
+            try:
+                if self._mcp_reset_required:
+                    self._sweep_mcp_gain = set_mcp_gain(self._sweep_head, 0)
+                    self._mcp_reset_required = False
+            except Exception as exc:
+                errors.append(exc)
+                if keep_shutter and self._sweep_shutter_requested:
+                    try:
+                        self._close_streak_shutter()
+                    except Exception as shutter_error:
+                        errors.append(shutter_error)
+            if not self._mcp_reset_required and (keep_shutter or not self._sweep_shutter_requested):
                 try:
                     self._sweep_head.close()
                     self._sweep_head = None
                     self._sweep_shutter_requested = False
+                    self._sweep_mcp_gain = None
                 except Exception as exc:
                     errors.append(exc)
         if self._prior_trigger is not None:
@@ -379,6 +473,12 @@ class DS_HAMAMATSU_DCAM(Device):
         self._clear_frame_metadata()
         if errors:
             raise RuntimeError(". ".join(str(error) for error in errors))
+
+    def _close_streak_shutter(self):
+        self._sweep_head.write("SHT C")
+        if self._sweep_head.read("SHT") != "SHT C":
+            raise RuntimeError("C13410 shutter close did not verify")
+        self._sweep_shutter_requested = False
 
     def _require_idle(self):
         if self.get_state() != DevState.ON:

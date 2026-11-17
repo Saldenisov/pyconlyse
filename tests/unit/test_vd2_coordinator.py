@@ -22,12 +22,15 @@ def rig(monkeypatch):
         SweepFrameCount = 0
         AcquisitionActive = False
         reject_start = False
+        LiveMcpGainMax = 0
+        gain = 0
+        ExposureMs = 10.0
 
         def state(self):
             return self.current_state
 
         def ReadoutConfiguration(self):
-            return '{"exposure_ms": 10.0075}'
+            return json.dumps({"exposure_ms": self.ExposureMs, "mcp_gain": self.gain})
 
         def command_inout(self, command, value=None):
             events.append((command, value))
@@ -35,7 +38,8 @@ def rig(monkeypatch):
                 self.current_state = tango.DevState.ON
             elif command == "SetROI":
                 return (*value, value[-1])
-            elif command in {"StartSynchronizedLiveWithOpenShutterAt", "StartSynchronizedDark"}:
+            elif command in {"StartSynchronizedLiveWithOpenShutterAt", "StartSynchronizedLiveWithClosedShutterAt",
+                             "StartSynchronizedDark"}:
                 if self.reject_start:
                     raise RuntimeError("Test CCD refused Live")
                 self.current_state = tango.DevState.RUNNING
@@ -43,6 +47,12 @@ def rig(monkeypatch):
             elif command in {"CloseReadout", "CloseReadoutKeepShutter"}:
                 self.current_state = tango.DevState.OFF
                 self.AcquisitionActive = False
+                self.gain = 0
+            elif command == "SetLiveStreakShutter":
+                return value
+            elif command == "SetLiveMcpGain":
+                self.gain = value
+                return value
 
     class Generator:
         settings = {**{f"DLAY? {i}": "0,+0.0" for i in range(3,10)},
@@ -56,8 +66,9 @@ def rig(monkeypatch):
             if method == "scpi_query":
                 return self.settings[value]
             events.append(value)
-            if value.startswith("DLAY 6,"):
-                self.settings["DLAY? 6"] = value.removeprefix("DLAY 6,")
+            if value.startswith("DLAY "):
+                channel, settings = value.removeprefix("DLAY ").split(",", 1)
+                self.settings[f"DLAY? {channel}"] = settings
             elif value.startswith("TRAT "):
                 self.settings["TRAT?"] = value.removeprefix("TRAT ")
             else:
@@ -106,14 +117,17 @@ def test_range_updates_head_and_e_then_starts_clock_only_after_arming_camera(rig
     vd2.Prepare()
     events.clear()
     assert vd2.SetTimeRange("2 µs") == "2 us"
-    assert events == [("ConfigureSweep", "2 us"), "DLAY 6,0,0.0022054"]
+    assert events == [("SetShutter", "Closed"), ("ConfigureSweep", "2 us"), "DLAY 6,0,0.0022054"]
     assert generator.settings["DLAY? 2"] == "0,+0.0020417"
     vd2.StartLive()
     assert events[-2:] == [("StartSynchronizedLiveWithOpenShutterAt", "2 us"), "TSRC 0"]
     assert ccd.ExposureMs == 10.0
     assert kymera.shutter == "Open"
-    with pytest.raises(RuntimeError, match="Stop the current"):
-        vd2.SetTimeRange("1 us")
+    events.clear()
+    assert vd2.SetTimeRange("1 us") == "1 us"
+    assert events[:4] == ["TSRC 5", ("CloseReadoutKeepShutter", None),
+                          ("SetShutter", "Closed"), ("ConfigureSweep", "1 us")]
+    assert events[-2:] == [("StartSynchronizedLiveWithOpenShutterAt", "1 us"), "TSRC 0"]
     vd2.StopLive()
     assert events[-2:] == ["TSRC 5", ("CloseReadoutKeepShutter", None)]
     assert kymera.shutter == "Open"
@@ -141,7 +155,7 @@ def test_internal_trigger_and_warmup_follow_selected_rate(rig, rate):
     vd2.Unprepare()
     assert generator.settings["TSRC?"] == "5"
     assert int(generator.settings["TRAT?"]) == rate
-    assert events[-3:] == ["TSRC 5", ("CloseReadoutKeepShutter", None), ("Park", None)]
+    assert events[-3:] == ["TSRC 5", ("CloseReadout", None), ("Park", None)]
     assert not json.loads(vd2.GetState())["prepared"]
 
 
@@ -244,3 +258,71 @@ def test_measurement_blocks_all_kymera_adjustments_before_shutter_changes(rig, c
         with pytest.raises(RuntimeError, match="Finish the VD2 measurement"):
             change(value)
     assert kymera.writes == []
+
+
+def test_live_dg_delay_rate_and_source_use_readback_without_reopening_camera(rig):
+    vd2, events, camera, generator, _, _, _ = rig
+    vd2.Prepare()
+    vd2.StartLive()
+    events.clear()
+    generator.settings["DLAY? 3"] = "2,+0.000001"
+    assert vd2.SetDelay(["b", "0.000002"]) == 0.000002
+    assert vd2.SetRate(10) == 10
+    assert vd2.SetLiveTriggerSource("Ext. falling") == "Ext. falling"
+    assert events == ["DLAY 3,2,0.000002", "TRAT 10", "TSRC 2"]
+    assert camera.AcquisitionActive
+    assert generator.settings["DLAY? 3"] == "2,0.000002"
+    vd2.StopLive()
+    assert generator.settings["TSRC?"] == "5"
+
+
+def test_exposure_rearms_live_and_preserves_closed_shutter(rig):
+    vd2, events, camera, _, _, _, _ = rig
+    vd2.Prepare()
+    vd2.StartLive()
+    assert vd2.SetStreakShutter("Closed") == "Closed"
+    assert vd2.SetLiveExposure(18.25) == "18.25 ms"
+    assert camera.ExposureMs == 18.25
+    assert ("StartSynchronizedLiveWithClosedShutterAt", "1 us") in events
+    assert json.loads(vd2.GetState())["optics"]["streak_shutter"] == "Closed"
+
+
+def test_unprepare_releases_camera_opened_without_coordinator_reference(rig):
+    vd2, events, camera, generator, _, _, _ = rig
+    vd2.Prepare()
+    camera.command_inout("OpenReadout")
+    events.clear()
+    generator.settings["TSRC?"] = "0"
+    vd2.Unprepare()
+    assert not json.loads(vd2.GetState())["prepared"]
+    assert camera.state() == sys.modules["tango"].DevState.OFF
+    assert events == ["TSRC 5", ("CloseReadout", None), ("Park", None)]
+
+
+def test_unprepare_releases_dcam_even_if_powered_dg645_does_not_reply(rig, monkeypatch):
+    vd2, events, camera, generator, _, _, _ = rig
+    camera.command_inout("OpenReadout")
+    events.clear()
+
+    def unavailable(*args):
+        raise RuntimeError("DG645 timeout")
+
+    monkeypatch.setattr(generator, "command_inout", unavailable)
+    with pytest.raises(RuntimeError, match="DG645 timeout"):
+        vd2.Unprepare()
+    assert camera.state() == sys.modules["tango"].DevState.OFF
+    assert events == [("CloseReadout", None)]
+
+
+def test_mode_change_requires_idle_and_focus_parks_head(rig):
+    vd2, events, _, _, _, _, _ = rig
+    vd2.Prepare()
+    vd2.StartLive()
+    with pytest.raises(RuntimeError, match="Stop Live"):
+        vd2.SetStreakMode("Focus")
+    vd2.StopLive()
+    assert vd2.SetStreakMode("Focus") == "Focus"
+    assert events[-1] == ("Park", None)
+    state = json.loads(vd2.GetState())
+    assert state["values"]["streak_mode"] == "Focus"
+    assert state["optics"]["streak_shutter"] == "Closed"

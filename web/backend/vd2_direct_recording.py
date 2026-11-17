@@ -127,7 +127,7 @@ def _machine(configuration, axes):
     delays = configuration["delays"]
     exposure = f'{camera["exposure_ms"]:.9g} ms'
     values = {"time_range": configuration["time_range"], "streak_mode": "Operate",
-              "gate_mode": "Normal", "mcp_gain": 0, "acquire_exposure_time": exposure,
+              "gate_mode": "Normal", "mcp_gain": camera.get("mcp_gain", 0), "acquire_exposure_time": exposure,
               "analog_integration_count": 1, "delay_trigger_mode": "Internal",
               "delay_a": delays["a"], "delay_e": delays["e"],
               "wavelength_nm": optics["wavelength_nm"], "grating": optics["grating"]}

@@ -63,6 +63,7 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
         ("/state", "GET"), ("/parameter/time_range", "POST"), ("/command/StartLive", "POST"),
         ("/preview", "GET"), ("/protocol/start", "POST"), ("/command/StopAcquisition", "POST"),
         ("/parameter/grating_index", "POST"), ("/parameter/wavelength_nm", "POST"),
+        ("/parameter/delay_e", "POST"), ("/parameter/live_exposure_time", "POST"),
     ):
         blueprint.add_url_rule(path, endpoint=path, view_func=lambda: "Legacy handler", methods=[method])
     install_vd2_coordinator_routes(api)
@@ -89,6 +90,8 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
     response = client.post(root + "/parameter/wavelength_nm", json={"value": 600})
     assert response.status_code == 409
     assert response.json["error"] == "Kymera did not confirm the new setting. Its shutter was left closed."
+    assert client.post(root + "/parameter/delay_e", json={"value": "0.0022075"}).status_code == 200
+    assert client.post(root + "/parameter/live_exposure_time", json={"value": "12.50 ms"}).status_code == 200
     with api._preparation_lock:
         assert client.get(root + "/state").json == {
             "success": True, "readout_backend": "tango", "state_deferred": True,
@@ -98,7 +101,8 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
     assert client.post(root + "/coordinator/prepare-measurement", json={}).json["success"]
     assert client.post(root + "/command/StopAcquisition", json={}).json["acquisition_status"] == "idle"
     assert events == [("SetTimeRange", ("2 us",)), ("StartLive", ()), ("SetGrating", (2,)),
-                      ("SetWavelength", (600.,)), ("PrepareMeasurement", ()), ("StopLive", ())]
+                      ("SetWavelength", (600.,)), ("SetDelay", (["e", "0.0022075"],)),
+                      ("SetLiveExposure", (12.5,)), ("PrepareMeasurement", ()), ("StopLive", ())]
 
 
 def test_web_checks_approval_before_opening_a_coordinator_proxy():

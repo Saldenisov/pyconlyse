@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 import threading
 import time
@@ -237,6 +238,126 @@ def test_synchronized_sweep_rearms_once_per_camera_frame_without_client_reads(se
     assert commands == ["SHT O", "VRT", "VRT", "VRT", "SHT C", "closed"]
     assert camera.properties == dict.fromkeys(dcam.SWEEP_SENSOR_PROPERTIES, 0)
     assert len(camera.threads) == 1
+
+
+@pytest.fixture
+def gain_live(session, monkeypatch):
+    dcam, device, camera, _ = session
+
+    class Head:
+        values = {"ALL": "verified", "OPE": "OPE", "VSR": "VSR 1US", "SHT": "SHT C", "MCP": "MCP 0",
+                  "GMD": "GMD N", "VTM": "VTM S", "VTS": "VTS P", "VTL": "VTL 1.0V"}
+        events = []
+        unknown_gain = False
+        reject_reset = False
+
+        def read(self, key):
+            camera.record_thread()
+            if key == "MCP" and self.unknown_gain:
+                return "invalid"
+            return self.values[key]
+
+        def write(self, command):
+            camera.record_thread()
+            self.events.append(command)
+            if command == "MCP 2" and self.reject_reset:
+                self.unknown_gain = True
+            if command == "MCP 0" and not self.reject_reset:
+                self.unknown_gain = False
+            self.values[command.split()[0]] = command
+
+        def rearm(self):
+            camera.record_thread()
+            self.events.append("VRT")
+
+        def close(self):
+            camera.record_thread()
+            self.events.append("close")
+
+    head = Head()
+    monkeypatch.setattr(dcam, "C13410Usb", lambda: head)
+    device.OpenReadout()
+    device.write_exposure_ms(10)
+    device.StartSynchronizedLive()
+    return dcam, device, camera, head
+
+
+def test_live_mcp_gain_requires_a_configured_limit_and_uses_the_live_owner(gain_live):
+    dcam, device, camera, head = gain_live
+    assert device.live_mcp_gain_limit() == 0
+    with pytest.raises(ValueError, match="Only gain 0"):
+        device.SetLiveMcpGain(2)
+    device.live_mcp_gain_max = 64
+    with pytest.raises(ValueError, match="Only gain 0"):
+        device.SetLiveMcpGain(2)
+    assert head.events == ["SHT O", "VRT"]
+
+    device.live_mcp_gain_max = 4
+    with pytest.raises(ValueError, match="between 0 and 4"):
+        device.SetLiveMcpGain(5)
+    assert device.SetLiveMcpGain(2) == 2
+    assert json.loads(device.ReadoutConfiguration())["mcp_gain"] == 2
+    assert device.get_state() == dcam.DevState.RUNNING
+    assert camera.running
+
+    device.CloseReadoutKeepShutter()
+    assert head.events == ["SHT O", "VRT", "MCP 2", "MCP 0", "close"]
+    assert head.values["SHT"] == "SHT O"
+    assert len(camera.threads) == 1
+
+
+def test_live_mcp_gain_blocks_changes_during_sequence(gain_live):
+    dcam, device, _, head = gain_live
+    device.live_mcp_gain_max = 4
+    device.BufferSequence(2)
+    with pytest.raises(RuntimeError, match="Finish the VD2 recording"):
+        device.SetLiveMcpGain(2)
+    assert device.get_state() == dcam.DevState.RUNNING
+    assert head.events == ["SHT O", "VRT"]
+
+
+def test_unverified_gain_fault_closes_shutter_and_retains_head_until_zero(gain_live):
+    dcam, device, camera, head = gain_live
+    device.live_mcp_gain_max = 4
+    head.reject_reset = True
+    try:
+        with pytest.raises(RuntimeError, match="Acquisition cleanup failed.*did not verify MCP 0"):
+            device.SetLiveMcpGain(2)
+        assert device.get_state() == dcam.DevState.FAULT
+        assert head.events == ["SHT O", "VRT", "MCP 2", "SHT C", "MCP 0"]
+        assert head.values["SHT"] == "SHT C"
+        assert not camera.running
+        assert json.loads(device.ReadoutConfiguration())["mcp_gain"] is None
+    finally:
+        head.reject_reset = False
+    device.CloseReadout()
+    assert head.events[-2:] == ["MCP 0", "close"]
+    assert device.get_state() == dcam.DevState.OFF
+
+
+def test_timed_out_gain_turns_off_and_resets_after_the_native_write_returns(gain_live, monkeypatch):
+    dcam, device, camera, head = gain_live
+    device.live_mcp_gain_max = 4
+    release = threading.Event()
+    write = head.write
+
+    def slow_gain_write(command):
+        if command == "MCP 2":
+            assert release.wait(2)
+        write(command)
+
+    monkeypatch.setattr(dcam, "SDK_TIMEOUT_S", .05)
+    monkeypatch.setattr(head, "write", slow_gain_write)
+    try:
+        with pytest.raises(RuntimeError, match="timed out"):
+            device.SetLiveMcpGain(2)
+        with pytest.raises(RuntimeError, match="still running"):
+            device.CloseReadout()
+    finally:
+        release.set()
+    device._pending.result(timeout=1)
+    assert head.events[-4:] == ["MCP 2", "SHT C", "MCP 0", "close"]
+    assert not camera.running
 
 
 def test_close_refuses_to_race_a_timed_out_call(session, monkeypatch):

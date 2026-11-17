@@ -3,7 +3,12 @@
 from tango import DevState
 from tango.server import Device, command
 
-from DeviceServers.cameras.hamamatsu_streak.c13410_usb import C13410Usb, configure_synchronized_sweep
+from DeviceServers.cameras.hamamatsu_streak.c13410_usb import (
+    C13410Usb,
+    configure_synchronized_sweep,
+    set_mcp_gain,
+    set_streak_shutter,
+)
 
 
 class DS_HAMAMATSU_C13410(Device):
@@ -24,18 +29,10 @@ class DS_HAMAMATSU_C13410(Device):
 
     @command(dtype_in=str, dtype_out=str)
     def SetShutter(self, value):
-        if value not in {"Open", "Closed"}:
-            raise ValueError("Choose Open or Closed")
         head = C13410Usb()
         try:
-            if value == "Open" and (head.read("OPE") != "OPE" or head.read("MCP") != "MCP 0"):
-                raise RuntimeError("Opening the streak shutter requires Operate and gain zero")
-            command_text = "SHT O" if value == "Open" else "SHT C"
-            if head.read("SHT") != command_text:
-                head.write(command_text)
-            if head.read("SHT") != command_text:
-                raise RuntimeError("Streak shutter did not verify")
-            return value
+            head.read("ALL")
+            return set_streak_shutter(head, value)
         finally:
             head.close()
 
@@ -44,11 +41,13 @@ class DS_HAMAMATSU_C13410(Device):
         """Verify the shutter, gain and Focus before releasing the head."""
         head = C13410Usb()
         try:
-            for register, safe in (("SHT", "SHT C"), ("MCP", "MCP 0"), ("OPE", "FCS")):
-                if head.read(register) != safe:
-                    head.write(safe)
-                    if head.read(register) != safe:
-                        raise RuntimeError(f"C13410 did not verify {safe}; power retained")
+            head.read("ALL")
+            set_streak_shutter(head, "Closed")
+            set_mcp_gain(head, 0)
+            if head.read("OPE") != "FCS":
+                head.write("FCS")
+                if head.read("OPE") != "FCS":
+                    raise RuntimeError("C13410 did not verify Focus; power retained")
         finally:
             head.close()
 

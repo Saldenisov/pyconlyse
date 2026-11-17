@@ -9,6 +9,7 @@ from DeviceServers.instruments.dg645.vd2_timing import timing_for_range
 DEVICE_PATH = r"\\?\USB#VID_0661&PID_0812#1.000#{bb509ad0-6adc-4800-9f3f-7f0363102e38}"
 WRITE_COMMAND = 0x8000000C
 READ_RESPONSE = 0x80000010
+MCP_GAIN_MAX = 63  # C13410 has 64 setpoints, including zero.
 
 
 class C13410Usb:
@@ -65,6 +66,31 @@ class C13410Usb:
 
     def rearm(self):
         self.write("VRT")
+
+
+def set_mcp_gain(head, value):
+    """Set the C13410 MCP gain and require matching hardware readback."""
+    if type(value) is not int or not 0 <= value <= MCP_GAIN_MAX:
+        raise ValueError(f"C13410 MCP gain must be an integer from 0 to {MCP_GAIN_MAX}")
+    desired = f"MCP {value}"
+    if head.read("MCP") != desired:
+        head.write(desired)
+        if head.read("MCP") != desired:
+            raise RuntimeError(f"C13410 did not verify {desired}")
+    return value
+
+
+def set_streak_shutter(head, value):
+    if value not in {"Open", "Closed"}:
+        raise ValueError("Choose Open or Closed")
+    if value == "Open" and (head.read("OPE") != "OPE" or head.read("MCP") != "MCP 0"):
+        raise RuntimeError("Opening the streak shutter requires Operate and gain zero")
+    desired = "SHT O" if value == "Open" else "SHT C"
+    if head.read("SHT") != desired:
+        head.write(desired)
+        if head.read("SHT") != desired:
+            raise RuntimeError("Streak shutter did not verify")
+    return value
 
 
 def configure_synchronized_sweep(head, time_range, *, accept_open=False):
