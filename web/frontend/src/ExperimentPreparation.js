@@ -336,6 +336,7 @@ const ExperimentPreparation = () => {
             onClick={() => experiment === 'V0' ? setShutdownConfirmation(true) : run('shutdown')}>
             {running && operation === 'shutdown' ? `Unpreparing ${experiment}...` : `Unprepare ${experiment}`}
           </button>
+          {experiment === 'VD2' && <Link className="experiment-control-link" to="/pump-probe-vd2?readout=dcam">DCAM dark readout</Link>}
           <Link className="experiment-control-link" to={EXPERIMENTS[experiment].controlPath + (experiment === 'VD2' && job?.status === 'completed' && job.result?.restored
             ? `?tab=${job.result.restored.ui?.tab === 'alignment' ? 'alignment' : 'acquisition'}&restore_job=${encodeURIComponent(job.job_id)}` : '')}>Open {experiment} controls</Link>
         </div>

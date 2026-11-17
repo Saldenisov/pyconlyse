@@ -41,6 +41,7 @@ from vd2_project_manifest import MANIFEST_NAME, Vd2ProjectManifest, inspect_proj
 from vd2_phase_destination import PhaseDestinations
 from vd2_paired_acquisition import PairedAcquisition
 from vd2_paired_api import install_paired_routes
+from vd2_dcam_api import install_dcam_routes
 from vd2_live_acquisition import SEQUENCE_TIMEOUT_S, SEQUENCE_WAIT_QUERY, camera_serialization_timeout, wait_for_sequence
 from vd2_alignment import read_alignment_axes, image_alignment_settings, image_intensity_settings, alignment_calibration_key, alignment_measurement_key
 from vd2_alignment_readout import AlignmentReadout, READOUT_VERSION, parse_selection
@@ -759,3 +760,7 @@ def command(name: str):
         if command_acknowledged:
             payload.update(code="READBACK_UNAVAILABLE", command_acknowledged=True)
         return jsonify(payload), 503
+
+
+_dcam_output_root = r"E:\DATA_VD2"
+install_dcam_routes(_refactor_modules[__name__])

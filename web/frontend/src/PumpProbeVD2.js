@@ -4,6 +4,7 @@ import { useVd2AcquisitionState } from "./PumpProbeVD2.useVd2AcquisitionState";
 import { useVd2AcquisitionActions } from "./PumpProbeVD2.useVd2AcquisitionActions";
 import { renderVd2Acquisition } from "./PumpProbeVD2.renderVd2Acquisition";
 
+import VD2DcamReadout from './components/VD2DcamReadout';
 import './css/PumpProbeVD2.css';
 
 
@@ -78,7 +79,10 @@ function PumpProbeVD2() {
   });
 }
 
-export default PumpProbeVD2;
+export default function PumpProbeVD2Page() {
+  const readout = new URLSearchParams(window.location.search).get('readout');
+  return readout === 'dcam' ? <VD2DcamReadout /> : <PumpProbeVD2 />;
+}
 
 export { Vd2PhaseProtocol } from "./PumpProbeVD2.API_BASE";
 

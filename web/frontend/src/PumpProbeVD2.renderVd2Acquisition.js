@@ -125,6 +125,7 @@ export function renderVd2Acquisition({
         <button type="button" role="tab" aria-selected={activeTab === 'delay-lines'} className={activeTab === 'delay-lines' ? 'is-active' : ''} onClick={() => setActiveTab('delay-lines')}>Delay Lines</button>
         <button type="button" role="tab" aria-selected={activeTab === 'pdu'} className={activeTab === 'pdu' ? 'is-active' : ''} onClick={() => setActiveTab('pdu')}>PDU</button>
         <button type="button" role="tab" aria-selected={activeTab === 'alignment'} className={activeTab === 'alignment' ? 'is-active' : ''} onClick={() => setActiveTab('alignment')}>Alignment</button>
+        <a href="/pump-probe-vd2?readout=dcam">DCAM dark readout</a>
       </div>
 
       {hasVd2Preview(activeTab) && (
