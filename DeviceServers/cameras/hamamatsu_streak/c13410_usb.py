@@ -3,6 +3,8 @@
 import ctypes
 from ctypes import wintypes
 
+from DeviceServers.instruments.dg645.vd2_timing import timing_for_range
+
 
 DEVICE_PATH = r"\\?\USB#VID_0661&PID_0812#1.000#{bb509ad0-6adc-4800-9f3f-7f0363102e38}"
 WRITE_COMMAND = 0x8000000C
@@ -63,3 +65,22 @@ class C13410Usb:
 
     def rearm(self):
         self.write("VRT")
+
+
+def configure_synchronized_sweep(head, time_range):
+    """Set an explicitly calibrated sweep while the streak shutter is closed."""
+    profile = timing_for_range(time_range)
+    head.read("ALL")
+    safe = {"SHT": "SHT C", "MCP": "MCP 0", "GMD": "GMD N",
+            "VTM": "VTM S", "VTS": "VTS P", "VTL": "VTL 1.0V"}
+    for register, desired in safe.items():
+        actual = head.read(register)
+        if actual != desired:
+            raise RuntimeError(f"C13410 ?{register}: expected {desired}, read {actual}")
+    sweep = profile.time_range.replace(" ", "").upper()
+    for register, desired in (("OPE", "OPE"), ("VSR", f"VSR {sweep}")):
+        if head.read(register) != desired:
+            head.write(desired)
+            if head.read(register) != desired:
+                raise RuntimeError(f"C13410 did not verify {desired}")
+    return profile.time_range

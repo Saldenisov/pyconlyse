@@ -12,7 +12,8 @@ from DeviceServers.cameras.hamamatsu_streak.dcam_readout_probe import (
     READOUT_MODEL,
     open_readout,
 )
-from DeviceServers.cameras.hamamatsu_streak.c13410_usb import C13410Usb
+from DeviceServers.cameras.hamamatsu_streak.c13410_usb import C13410Usb, configure_synchronized_sweep
+from DeviceServers.instruments.dg645.vd2_timing import timing_for_range
 
 
 SDK_TIMEOUT_S = 5.0
@@ -147,37 +148,33 @@ class DS_HAMAMATSU_DCAM(Device):
 
     @command
     def StartSynchronizedLive(self):
-        """Acquire at the external CCD trigger and rearm the C13410 after each frame."""
+        """Acquire a synchronized Live stream at 1 us."""
+        self._start_synchronized_live("1 us")
+
+    @command(dtype_in=str)
+    def StartSynchronizedLiveAt(self, time_range):
+        """Acquire a synchronized Live stream at an explicitly calibrated range."""
+        self._start_synchronized_live(timing_for_range(time_range).time_range)
+
+    def _start_synchronized_live(self, time_range):
         self._require_idle()
         if not math.isclose(self._exposure_ms, 10.0, abs_tol=0.05):
-            raise RuntimeError("Set ExposureMs to 10 before starting the 1 us sweep")
-        self._sdk(self._start_synchronized)
+            raise RuntimeError("Set ExposureMs to 10 before starting the synchronized sweep")
+        self._sdk(self._start_synchronized, time_range)
         self.set_state(DevState.RUNNING)
-        self.set_status("External CCD trigger, C13410 1 us Operate, VRT after each acquired frame.")
+        self.set_status(f"External CCD trigger, C13410 {time_range} Operate, VRT after each acquired frame.")
         token = object()
         self._sweep_token = token
         self._worker.submit(self._poll_synchronized_frame, token)
 
-    def _start_synchronized(self):
+    def _start_synchronized(self, time_range):
         self._clear_frame_metadata()
         self._sweep_frame = None
         self._sweep_frame_count = 0
         self._sweep_vrt_count = 0
         self._sweep_head = head = C13410Usb()
         try:
-            head.read("ALL")
-            expected_head = {"SHT": "SHT C", "MCP": "MCP 0",
-                             "GMD": "GMD N", "VTM": "VTM S", "VTS": "VTS P", "VTL": "VTL 1.0V"}
-            for register, expected in expected_head.items():
-                actual = head.read(register)
-                if actual != expected:
-                    raise RuntimeError(f"C13410 ?{register}: expected {expected}, read {actual}")
-            for register, desired in (("OPE", "OPE"), ("VSR", "VSR 1US")):
-                if head.read(register) != desired:
-                    head.write(desired)
-                    if head.read(register) != desired:
-                        raise RuntimeError(f"C13410 did not verify {desired}")
-
+            configure_synchronized_sweep(head, time_range)
             camera = self._camera
             camera.clear_acquisition()
             self._prior_trigger = camera.get_trigger_mode()

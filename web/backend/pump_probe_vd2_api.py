@@ -42,6 +42,7 @@ from vd2_phase_destination import PhaseDestinations
 from vd2_paired_acquisition import PairedAcquisition
 from vd2_paired_api import install_paired_routes
 from vd2_dcam_api import install_dcam_routes
+from vd2_coordinator_api import install_vd2_coordinator_routes
 from vd2_live_acquisition import SEQUENCE_TIMEOUT_S, SEQUENCE_WAIT_QUERY, camera_serialization_timeout, wait_for_sequence
 from vd2_alignment import read_alignment_axes, image_alignment_settings, image_intensity_settings, alignment_calibration_key, alignment_measurement_key
 from vd2_alignment_readout import AlignmentReadout, READOUT_VERSION, parse_selection
@@ -96,6 +97,8 @@ _vd2_busy_message = _pump_probe_vd2_api_parts_recovery_snapshots["_vd2_busy_mess
 _serialized_vd2_mutation = _pump_probe_vd2_api_parts_recovery_snapshots["_serialized_vd2_mutation"]
 
 VD2_CAMERA_ONLY = os.environ.get("PYCONLYSE_VD2_CAMERA_ONLY") == "1"
+VD2_COORDINATOR_DEVICE = os.environ.get("PYCONLYSE_VD2_TANGO_COORDINATOR", "")
+VD2_COORDINATOR_CCD = "vd2/camera/dcam"
 STREAK_DEVICE = "manip/camera/hamamatsu_streak_main"
 DG645_DEVICE = "manip/sync/DG645"
 DG645_POWER_UP_TIMEOUT_S = 180.0
@@ -764,3 +767,4 @@ def command(name: str):
 
 _dcam_output_root = r"E:\DATA_VD2"
 install_dcam_routes(_refactor_modules[__name__])
+install_vd2_coordinator_routes(_refactor_modules[__name__])

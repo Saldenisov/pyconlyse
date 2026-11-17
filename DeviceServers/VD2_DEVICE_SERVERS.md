@@ -34,6 +34,14 @@ Native calls share one worker. The cold-open deadline is 25 s and other SDK call
 
 For DG645, Kymera and the C13410 head, reuse the existing Tango registrations and [server launcher setup](../bin/windows_startup/README_WINDOWS_STARTUP.md). Read the device state and identity before issuing instrument-specific commands. The standalone DCAM server uses a separate registration from the VD2 production setup.
 
+## Direct VD2 coordination
+
+Register `DS_HAMAMATSU_C13410/standalone` as `vd2/head/c13410` and `DS_VD2/standalone` as `vd2/experiment/controller` on Everest. `DS_VD2` uses that head device, `vd2/camera/dcam`, `manip/sync/DG645`, and `manip/CR/ANDOR_KYMERA1`. The devices can be configured through Tango properties. The C13410 server releases the USB handle after configuring the range. DCAM owns that handle during Live and rearms the streak head next to the frame read.
+
+`SetTimeRange` verifies the head range, then applies the calibrated DG645 delay E. `StartLive` checks the timing, prepares the CCD and shutters, and activates a DG645 internal clock that was in standby. An external source uses the operator's trigger settings. `StopLive` returns a clock activated by the coordinator to standby, closes optical shutters, and releases the CCD. `PrepareMeasurement` starts Live or uses the running session after verifying the flashlamp supply. The coordinator reports measurement readiness after ten seconds and fifty acquired frames.
+
+Set `PYCONLYSE_VD2_TANGO_COORDINATOR=vd2/experiment/controller` to select the coordinator for Web Live, preview, range, and optical settings. Web hardware authorization applies to the coordinator's device commands. `POST /api/pump-probe-vd2/coordinator/prepare-measurement` runs the warm-up phase. Recording through the standard Bruit/Base/Absorption and paired protocols requires migration to direct DCAM and hardware acceptance before this setting is used during a measurement.
+
 ## Software tests
 
 ```powershell
