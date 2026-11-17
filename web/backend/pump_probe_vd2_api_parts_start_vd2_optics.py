@@ -396,8 +396,10 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
     _shutdown_hpdta.__module__ = api.__name__
     _shutdown_hpdta.__qualname__ = "_shutdown_hpdta"
 
-    def _shutdown_equipment(steps):
+    def _shutdown_equipment(steps, *, shutdown_optics=None):
         api._progress(steps, "Confirming idle acquisition, closing shutters, verifying Focus and releasing SDK owners", stage=0)
+        direct_tango = shutdown_optics is not None
+        retain_trigger = direct_tango or api.VD2_CAMERA_ONLY
         deadline = api.time.monotonic() + 600.0
         previous_phase = None
         while (phase := api._protocol_hardware_phase()) in {"preparing", "acquiring", "saving", "processing"}:
@@ -407,17 +409,20 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
             if api.time.monotonic() >= deadline:
                 raise RuntimeError(f"HIS measurement/save did not finish ({phase}); power retained")
             api.time.sleep(0.5)
-        streak = api._wait_for_device(api.STREAK_DEVICE, timeout_s=5.0)
-        api._shutdown_hpdta(streak, steps)
+        if direct_tango:
+            shutdown_optics()
+        else:
+            streak = api._wait_for_device(api.STREAK_DEVICE, timeout_s=5.0)
+            api._shutdown_hpdta(streak, steps)
 
         # Deinitialize the SDK owner, not the Tango server process.
         starter = api._astor(api.KYMERA_DEVICE)
         if api.VD2_SERVERS[api.KYMERA_DEVICE] in set(starter.command_inout("DevGetRunningServers", True)):
             kymera = api._wait_for_device(api.KYMERA_DEVICE, timeout_s=2.0)
-            if not api.VD2_CAMERA_ONLY:
+            if not retain_trigger:
                 api._assert_kymera_passive_server(kymera)
             if str(kymera.state()).split(".")[-1].upper() != "OFF":
-                if api.VD2_CAMERA_ONLY:
+                if retain_trigger:
                     kymera.write_attribute("shutter", "Closed")
                     if str(api._value(kymera, "shutter")).lower() != "closed":
                         raise RuntimeError("Cannot confirm Kymera shutter closed; power retained")
@@ -486,9 +491,12 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
 
         try:
             sd2_pdu = api._ensure_server(api.VD2_PDU_DEVICE, steps)
-            api._progress(steps, "Switching off dedicated camera supply" if api.VD2_CAMERA_ONLY
+            api._progress(steps, "Switching off dedicated camera supply" if retain_trigger
                           else "Switching off verified dedicated trigger / camera supplies", stage=2)
-            api._disable_vd2_power(sd2_pdu, steps)
+            if direct_tango:
+                api._disable_vd2_power(sd2_pdu, steps, retain_trigger=True)
+            else:
+                api._disable_vd2_power(sd2_pdu, steps)
         except Exception as exc:
             detail = f"SD2 trigger/camera shutdown unverified: {exc}"
             errors.append(detail)
@@ -498,7 +506,7 @@ def _bind_pump_probe_vd2_api_parts_start_vd2_optics(api):
         if errors:
             raise RuntimeError("; ".join(errors))
         message = ("VD2 safely shut down. Flashlamp and camera supplies are OFF. DG645 power unchanged."
-                   if api.VD2_CAMERA_ONLY else "VD2 safely shut down. Flashlamp, camera and trigger supplies are OFF.")
+                   if retain_trigger else "VD2 safely shut down. Flashlamp, camera and trigger supplies are OFF.")
         return {"steps": steps, "warnings": warnings,
                 "message": message + " Xe lamp cooling power unchanged. Zaber power unchanged."}
 

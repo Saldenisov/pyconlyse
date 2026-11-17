@@ -70,14 +70,15 @@ export async function prepareVD2(updateStep) {
   }
   updateStep(1, 'complete', 'Required VD2 equipment has been prepared.');
 
-  updateStep(2, 'running', 'Checking RemoteEx and HPD-TA.');
+  const directTango = preparation.readout_backend === 'tango';
+  updateStep(2, 'running', directTango ? 'Checking the VD2 Tango coordinator.' : 'Checking RemoteEx and HPD-TA.');
   const runtimeResponse = await fetch('/api/pump-probe-vd2/runtime/state', { credentials: 'include' });
   const runtime = await readJson(runtimeResponse, 'VD2 final verification failed');
-  if (!runtime.remoteex_running || !runtime.hpdta_running) {
-    updateStep(2, 'error', 'RemoteEx or HPD-TA is not ready.');
+  if (directTango ? !runtime.device?.coordinator?.prepared : !runtime.remoteex_running || !runtime.hpdta_running) {
+    updateStep(2, 'error', directTango ? 'VD2 Tango is not prepared.' : 'RemoteEx or HPD-TA is not ready.');
     throw new Error('VD2 software did not reach the ready state');
   }
-  updateStep(2, 'complete', 'RemoteEx is connected and HPD-TA is running.');
+  updateStep(2, 'complete', directTango ? 'VD2 Tango is prepared.' : 'RemoteEx is connected and HPD-TA is running.');
   return { checks: preparation.steps || [] };
 }
 
@@ -87,11 +88,13 @@ export async function shutdownVD2(updateStep) {
     method: 'POST', credentials: 'include',
   });
   const result = await readJson(response, 'VD2 safe shutdown failed');
-  updateStep(0, 'complete', 'Acquisition stopped; Focus verified, HPD-TA / RemoteEx closed and SDK ownership released.');
+  updateStep(0, 'complete', result.readout_backend === 'tango' ? 'Acquisition stopped. Focus verified and DCAM released.'
+    : 'Acquisition stopped; Focus verified, HPD-TA / RemoteEx closed and SDK ownership released.');
   const warnings = result.warnings || [];
   updateStep(1, warnings.length ? 'warning' : 'complete',
     warnings.length ? warnings.join(' ') : 'VD2 stages stopped without homing; Zaber and shared OWIS supplies retained.');
-  updateStep(2, 'complete', 'Flashlamp / camera / trigger supplies verified OFF. Xe lamp cooling power, Zaber power, control supply and unrelated outputs unchanged.');
+  updateStep(2, 'complete', result.readout_backend === 'tango' ? result.message
+    : 'Flashlamp / camera / trigger supplies verified OFF. Xe lamp cooling power, Zaber power, control supply and unrelated outputs unchanged.');
   return { checks: result.steps || [], message: result.message, warnings };
 }
 

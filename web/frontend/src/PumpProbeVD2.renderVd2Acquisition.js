@@ -46,6 +46,7 @@ export function renderVd2Acquisition({
   showPreviousError, showNextError, dismissError, clearErrors, copyError, updatePairedCapture,
 }) {
   const liveTab = activeTab === 'live';
+  const directTango = state?.readout_backend === 'tango';
   const pairedActive = Boolean(protocol?.paired?.active);
   const pairedMode = pairedActive || (protocol?.paired_available && measurementRate === '10');
   const live = state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live';
@@ -257,6 +258,14 @@ export function renderVd2Acquisition({
                   : preview && previewStream === 'acquiring' && !previewFresh ? 'Waiting for a new frame'
                     : state?.acquisition_status === 'busy' || previewStream === 'acquiring' ? 'Acquiring' : 'Last frame'}</span>
               {preview && <span>{preview.minimum} - {preview.maximum}</span>}
+              {directTango && <label>Trigger rate{' '}
+                <select aria-label="Live trigger rate" value={state.values?.trigger_rate_hz ?? 5}
+                  disabled={alignmentControlsBlocked || !acquisitionIdle || live}
+                  onChange={event => writeParameter('trigger_rate_hz', Number(event.target.value))}>
+                  <option value={5}>5 Hz</option>
+                  <option value={10}>10 Hz</option>
+                </select>
+              </label>}
               <button type="button" onClick={() => { previewPaused.current = false; setPreviewEnabled(true); loadPreview(); }} disabled={busy}>Refresh frame</button>
               {liveTab ? <div className="vd2-live-actions" role="group" aria-label="Live controls">
                 <button type="button" className={live ? 'is-live' : ''} aria-pressed={live}

@@ -38,7 +38,7 @@ def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
         _mutation_payload=lambda fields: (request.get_json() or {}, None),
         _approval_or_response=lambda action, targets, args, route, fields: None,
         _target=lambda device, command: {"device": device, "command": command},
-        _control_error=str, _to_display_pixels=lambda data, bpp: bytes(len(data) // bpp),
+        _control_error=str,
         DeviceProxy=lambda device: {name: coordinator, ccd_name: ccd}[device],
         tango_optics=SimpleNamespace(VD2_GRATING_BLAZE_NM={3: 500}),
     )
@@ -84,3 +84,68 @@ def test_web_checks_approval_before_opening_a_coordinator_proxy():
     ))
     app.register_blueprint(routes)
     assert app.test_client().post("/vd2/command/StartLive", json={}).status_code == 403
+
+
+def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
+    app = Flask(__name__)
+    routes = Blueprint("vd2_lifecycle", __name__, url_prefix="/vd2")
+    name = "vd2/experiment/controller"
+    events = []
+    authorization_required = False
+
+    class Coordinator:
+        prepared = False
+
+        def command_inout(self, command, *args):
+            if command == "GetState":
+                return json.dumps({"state": "ON", "prepared": self.prepared, "time_range": "1 us",
+                                   "error": "", "frames": 0, "trigger_rate_hz": 5})
+            events.append((command, *args))
+            self.prepared = command != "Unprepare"
+
+        def set_timeout_millis(self, timeout):
+            pass
+
+    coordinator = Coordinator()
+
+    def initialize(steps, *, prepare_optics):
+        events.append(("power verified",))
+        return {"steps": steps, "device": prepare_optics()}
+
+    def shutdown(steps, *, shutdown_optics):
+        shutdown_optics()
+        events.append(("camera power off",))
+        return {"steps": steps}
+
+    def start_lifecycle(operation, action, intent):
+        events.append((operation, intent))
+        return jsonify(success=True, result=action([])), 202
+
+    for path in ("/initialize", "/deinitialize"):
+        routes.add_url_rule(path, endpoint=path, view_func=lambda: pytest.fail("Legacy lifecycle called"), methods=["POST"])
+    install_vd2_coordinator_routes(SimpleNamespace(
+        pump_probe_vd2_api=routes, VD2_COORDINATOR_DEVICE=name,
+        _serialized_vd2_mutation=lambda fn: fn, _mutation_payload=lambda fields: (request.json or {}, None),
+        authorization_required=lambda: authorization_required,
+        _exact_plan_required=lambda: (jsonify(success=False), 403),
+        DeviceProxy=lambda device: {name: coordinator}[device],
+        _initialize_equipment=initialize, _shutdown_equipment=shutdown,
+        _protocol_hardware_phase=lambda: "idle", _start_lifecycle=start_lifecycle,
+        tango_optics=SimpleNamespace(VD2_GRATING_BLAZE_NM={3: 500}),
+        _control_error=str,
+    ))
+    app.register_blueprint(routes)
+    client = app.test_client()
+    result = client.post("/vd2/initialize?background=1", json={"restore_mode": "alignment", "restore_id": None})
+    assert result.status_code == 202
+    assert result.json["result"]["restored"] == {"ui": {"tab": "alignment"}}
+    assert result.json["result"]["device"]["coordinator"]["prepared"]
+    assert client.post("/vd2/deinitialize?background=1", json={}).status_code == 202
+    assert events == [("prepare", {"restore_mode": "alignment"}),
+                      ("power verified",), ("Prepare",), ("SetTimeRange", "1 us"),
+                      ("shutdown", None), ("Unprepare",), ("camera power off",)]
+    events.clear()
+    assert client.post("/vd2/initialize?background=1", json={"restore_mode": "point"}).status_code == 400
+    authorization_required = True
+    assert client.post("/vd2/deinitialize?background=1", json={}).status_code == 403
+    assert events == []

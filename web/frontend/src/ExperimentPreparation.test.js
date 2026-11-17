@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ExperimentPreparation, { prepareV0, prepareVD2, shutdownVD2 } from './ExperimentPreparation';
 
@@ -227,12 +227,15 @@ test('accepted job replaces previous result while start request is in flight', a
   jest.useFakeTimers();
   let accept;
   global.fetch.mockResolvedValueOnce(completedJob({ message: 'Previous result' }))
+    .mockResolvedValueOnce(response({success: true, options: {previous: null, alignment: null, point: null}}))
     .mockImplementationOnce(() => new Promise(resolve => { accept = resolve; }));
   show();
   await act(async () => { await Promise.resolve(); });
   fireEvent.click(screen.getByRole('button', { name: 'Prepare VD2' }));
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Prepare VD2' }));
   await act(async () => { jest.advanceTimersByTime(1500); });
-  expect(global.fetch).toHaveBeenCalledTimes(2);
+  expect(global.fetch).toHaveBeenCalledTimes(3);
   expect(screen.queryByText(/Previous result/)).not.toBeInTheDocument();
   await act(async () => { accept(completedJob({ message: 'New result' })); });
   expect(screen.getByRole('status')).toHaveTextContent('New result');

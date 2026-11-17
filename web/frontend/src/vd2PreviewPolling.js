@@ -4,12 +4,23 @@ export function startPreviewPolling(readFrame, period = 190) {
   let stopped = false;
   let timer;
   let due = performance.now();
-  const poll = async () => {
-    await readFrame();
+  let retries = 0;
+  const poll = async (retry = false) => {
+    const repeatedFrame = await readFrame();
     if (stopped) return;
     const now = performance.now();
-    due = Math.max(due + period, now);
-    timer = window.setTimeout(poll, Math.max(0, due - now));
+    if (!retry) {
+      due = Math.max(due + period, now);
+      retries = 0;
+    }
+    const remaining = Math.max(0, due - now);
+    const backoff = 20 * (retries + 1);
+    if (repeatedFrame === true && retries < 3 && backoff < remaining) {
+      retries += 1;
+      timer = window.setTimeout(() => poll(true), backoff);
+    } else {
+      timer = window.setTimeout(poll, remaining);
+    }
   };
   poll();
   return () => { stopped = true; window.clearTimeout(timer); };

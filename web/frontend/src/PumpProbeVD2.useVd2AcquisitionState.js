@@ -255,7 +255,10 @@ export function useVd2AcquisitionState(measurementRate) {
       if (!payload.frame_available && payload.stream_state === 'waiting_for_frame') return;
       const identity = payload.received_at;
       const previous = previewIdentity.current;
-      if (identity && previous && (identity === previous || Date.parse(identity) < Date.parse(previous))) return;
+      if (identity && previous) {
+        if (identity === previous) return true;
+        if (Date.parse(identity) < Date.parse(previous)) return;
+      }
       setPreviewStream(payload.stream_state || 'acquiring');
       setPreviewAvailable(Boolean(payload.frame_available));
       setPreviewError('');
@@ -289,14 +292,15 @@ export function useVd2AcquisitionState(measurementRate) {
   }, [previewFreshness]);
 
   const previewPolling = previewShouldPoll(activeTab, state, protocol, previewEnabled);
+  const previewPeriod = state?.readout_backend === 'tango' && state.values?.trigger_rate_hz === 10 ? 95 : 190;
   const previewAllowed = hasVd2Preview(activeTab) && previewEnabled && !protocolSaving
     && (previewPolling || Boolean(state?.connected && state?.application_running));
   useEffect(() => {
     if (!previewAllowed) return undefined;
     if (!previewPolling) { loadPreview(); return undefined; }
-    const stop = startPreviewPolling(loadPreview);
+    const stop = startPreviewPolling(loadPreview, previewPeriod);
     return () => { stop(); previewController.current?.abort(); };
-  }, [activeTab, loadPreview, previewAllowed, previewPolling]);
+  }, [activeTab, loadPreview, previewAllowed, previewPolling, previewPeriod]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setPreviewClock(performance.now()), 500);

@@ -13,7 +13,7 @@ from DeviceServers.instruments.dg645.vd2_timing import apply_timing, timing_for_
 SENSOR_ROI = (352, 1632, 516, 1532, 2)
 GRATING_BLAZE_NM = {1: 300, 2: 800, 3: 500}
 LAMP_WARMUP_S = 10
-WARMUP_FRAME_COUNT = LAMP_WARMUP_S * 5
+TRIGGER_RATES_HZ = (5, 10)
 
 
 class DS_VD2(Device):
@@ -23,6 +23,7 @@ class DS_VD2(Device):
     ccd_device = device_property(dtype=str, default_value="vd2/camera/dcam")
     dg645_device = device_property(dtype=str, default_value="manip/sync/DG645")
     kymera_device = device_property(dtype=str, default_value="manip/CR/ANDOR_KYMERA1")
+    camera_pdu_device = device_property(dtype=str, default_value="manip/SD2/PDU_SD2")
     lamp_pdu_device = device_property(dtype=str, default_value="manip/VD2/PDU_VD2")
 
     def init_device(self):
@@ -31,6 +32,8 @@ class DS_VD2(Device):
         self._clock = None
         self._kymera = None
         self._time_range = "1 us"
+        self._rate_hz = 5
+        self._prepared = False
         self._optics = {}
         self._warmup_until = None
         self._warmup_frame = None
@@ -65,6 +68,65 @@ class DS_VD2(Device):
         generator.command_inout("scpi_write", f"TSRC {source}")
         if cls._query(generator, "TSRC?") != source:
             raise RuntimeError("DG645 did not verify its trigger source")
+
+    @classmethod
+    def _verify_standby(cls, generator):
+        if generator.state() != DevState.ON or cls._query(generator, "BURM?") != 0:
+            raise RuntimeError("DG645 must be ON with Burst off")
+        if cls._query(generator, "TSRC?") != 5:
+            raise RuntimeError("DG645 must be in standby")
+
+    @classmethod
+    def _write_rate(cls, generator, rate):
+        cls._verify_standby(generator)
+        if cls._query(generator, "TRAT?") != rate:
+            generator.command_inout("scpi_write", f"TRAT {rate}")
+            if cls._query(generator, "TRAT?") != rate:
+                raise RuntimeError("DG645 did not verify its trigger rate")
+
+    @command(dtype_in=int, dtype_out=int)
+    def SetRate(self, value):
+        if value not in TRIGGER_RATES_HZ:
+            raise ValueError("Choose 5 or 10 Hz")
+        self._require_idle()
+        if self._prepared:
+            self._write_rate(self._proxy(self.dg645_device), value)
+        self._rate_hz = value
+        return value
+
+    @command
+    def Prepare(self):
+        self._require_idle()
+        dg = self._proxy(self.dg645_device)
+        ky = self._proxy(self.kymera_device)
+        if ky.state() != DevState.ON or ky.shutter != "Closed":
+            raise RuntimeError("Verify Kymera is ON and the shutter is closed")
+        if dg.state() != DevState.ON or self._query(dg, "BURM?") != 0:
+            raise RuntimeError("DG645 must be ON with Burst off")
+        if not self._prepared and self._query(dg, "TSRC?") != 5:
+            self._set_clock(dg, 5)
+        self._write_rate(dg, self._rate_hz)
+        if self._prepared:
+            verify_timing(dg, timing_for_range(self._time_range), live=True)
+        else:
+            self._set_time_range(self._time_range)
+        self._read_optics(ky)
+        self._prepared = True
+        self._fault = ""
+        self.set_state(DevState.ON)
+        self.set_status("VD2 prepared; trigger in standby")
+
+    @command
+    def Unprepare(self):
+        self.StopLive()
+        self._require_idle()
+        dg = self._proxy(self.dg645_device)
+        if self._query(dg, "TSRC?") != 5:
+            raise RuntimeError("Cannot verify DG645 standby; power retained")
+        if self._outlet_power(self.camera_pdu_device):
+            self._proxy(self.head_device).command_inout("Park")
+        self._prepared = False
+        self.set_status("VD2 unprepared")
 
     @command(dtype_in=str, dtype_out=str)
     def SetTimeRange(self, value):
@@ -122,26 +184,29 @@ class DS_VD2(Device):
 
     @command
     def StartAlignment(self):
+        if not self._prepared:
+            raise RuntimeError("Prepare VD2 before starting Live")
         self._set_time_range("1 us")
         self._start_live()
 
+    def _read_optics(self, ky):
+        self._optics = {"grating_index": int(ky.grating), "blaze": float(ky.blaze_wavelength_nm),
+                        "wavelength_nm": float(ky.wavelength_nm)}
+
     def _start_live(self):
         self._require_idle()
+        if not self._prepared:
+            raise RuntimeError("Prepare VD2 before starting Live")
         dg = self._proxy(self.dg645_device)
-        if dg.state() != DevState.ON:
-            raise RuntimeError("DG645 is not ON")
-        source = self._query(dg, "TSRC?")
-        if source not in {0, 1, 2, 5} or self._query(dg, "BURM?") != 0:
-            raise RuntimeError("Select internal or external triggering with Burst off")
-        if source in {0, 5} and self._query(dg, "TRAT?") != 5:
-            raise RuntimeError("Set the DG645 internal rate to 5 Hz")
-        verify_timing(dg, timing_for_range(self._time_range))
+        self._verify_standby(dg)
+        if self._query(dg, "TRAT?") != self._rate_hz:
+            raise RuntimeError(f"DG645 rate did not verify at {self._rate_hz} Hz")
+        verify_timing(dg, timing_for_range(self._time_range), live=True)
         camera = self._proxy(self.ccd_device, 30000)
         ky = self._proxy(self.kymera_device)
         if ky.shutter != "Closed":
             raise RuntimeError("Start VD2 with the Kymera shutter closed")
-        self._optics = {"grating_index": int(ky.grating), "blaze": float(ky.blaze_wavelength_nm),
-                        "wavelength_nm": float(ky.wavelength_nm)}
+        self._read_optics(ky)
         self._camera = camera
         self._kymera = ky
         try:
@@ -156,9 +221,8 @@ class DS_VD2(Device):
             ky.shutter = "Open"
             if ky.shutter != "Open":
                 raise RuntimeError("Kymera shutter did not verify open")
-            if source == 5:
-                self._clock = dg
-                self._set_clock(dg, 0)
+            self._clock = dg
+            self._set_clock(dg, 0)
         except Exception as exc:
             self._fail_live(exc)
         self._fault = ""
@@ -178,10 +242,7 @@ class DS_VD2(Device):
     @command
     def PrepareMeasurement(self):
         """Warm the powered flash lamp at the selected clock before measuring."""
-        lamp = self._proxy(self.lamp_pdu_device)
-        outlets = tuple(map(int, lamp.ids))
-        states = tuple(map(int, lamp.states))
-        if len(states) != len(outlets) or outlets.count(1) != 1 or states[outlets.index(1)] != 1:
+        if not self._outlet_power(self.lamp_pdu_device):
             raise RuntimeError("Verify the VD2 flashlamp supply is ON")
         if self._camera is None:
             self._start_live()
@@ -192,6 +253,14 @@ class DS_VD2(Device):
         self._warmup_frame = int(self._camera.SweepFrameCount)
         self._warmup_until = monotonic() + LAMP_WARMUP_S
         self.set_status("VD2 warming the flash lamp")
+
+    def _outlet_power(self, device):
+        pdu = self._proxy(device)
+        outlets = tuple(map(int, pdu.ids))
+        states = tuple(map(int, pdu.states))
+        if len(states) != len(outlets) or outlets.count(1) != 1 or states[outlets.index(1)] not in {0, 1}:
+            raise RuntimeError(f"Invalid power readback from {device} outlet 1")
+        return states[outlets.index(1)] == 1
 
     @command
     def StopLive(self):
@@ -242,18 +311,20 @@ class DS_VD2(Device):
         state = str(self.get_state()).split(".")[-1]
         if state == "RUNNING" and (self._camera.state() != DevState.RUNNING or not self._camera.AcquisitionActive):
             return json.dumps({"state": "FAULT", "phase": "fault", "time_range": self._time_range,
+                               "prepared": self._prepared, "trigger_rate_hz": self._rate_hz,
                                "frames": 0, "remaining_warmup_s": None, "error": str(self._camera.status())})
         acquired_frames = int(self._camera.SweepFrameCount) if state == "RUNNING" else 0
         phase = {"ON": "idle", "RUNNING": "live", "FAULT": "fault"}.get(state, state.lower())
         remaining = None
         if self._warmup_until is not None:
             remaining = max(0.0, self._warmup_until - monotonic())
-            sufficient_frames = acquired_frames - self._warmup_frame >= WARMUP_FRAME_COUNT
+            sufficient_frames = acquired_frames - self._warmup_frame >= LAMP_WARMUP_S * self._rate_hz
             phase = "warming" if remaining else ("measurement_ready" if sufficient_frames else "waiting_for_trigger")
         elif phase == "live" and not acquired_frames:
             phase = "waiting_for_trigger"
         return json.dumps({"state": state, "phase": phase, "time_range": self._time_range,
                            "frames": acquired_frames, "remaining_warmup_s": remaining,
+                           "prepared": self._prepared, "trigger_rate_hz": self._rate_hz,
                            "optics": self._optics, "error": self._fault})
 
 

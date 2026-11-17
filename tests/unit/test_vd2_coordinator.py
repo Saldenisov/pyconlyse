@@ -54,18 +54,22 @@ def rig(monkeypatch):
             events.append(value)
             if value.startswith("DLAY 6,"):
                 self.settings["DLAY? 6"] = value.removeprefix("DLAY 6,")
+            elif value.startswith("TRAT "):
+                self.settings["TRAT?"] = value.removeprefix("TRAT ")
             else:
                 self.settings["TSRC?"] = value.removeprefix("TSRC ")
 
-    def head_readback(command, value):
+    def head_readback(command, value=None):
         events.append((command, value))
         return value
 
     ccd, generator = Camera(), Generator()
     lamp = SimpleNamespace(ids=[1, 2], states=[1, 1])
-    kymera = SimpleNamespace(shutter="Closed", wavelength_nm=550., grating=3, blaze_wavelength_nm=500.)
+    kymera = SimpleNamespace(state=lambda: tango.DevState.ON, shutter="Closed", wavelength_nm=550.,
+                             grating=3, blaze_wavelength_nm=500.)
     devices = {device.ccd_device: ccd, device.dg645_device: generator,
                device.kymera_device: kymera, device.lamp_pdu_device: lamp,
+               device.camera_pdu_device: SimpleNamespace(ids=[1, 2], states=[1, 1]),
                device.head_device: SimpleNamespace(command_inout=head_readback)}
     monkeypatch.setattr(device, "_proxy", lambda name, timeout=6000: devices[name])
     return device, events, ccd, generator, kymera, lamp, now
@@ -73,6 +77,8 @@ def rig(monkeypatch):
 
 def test_range_updates_head_and_e_then_starts_clock_only_after_arming_camera(rig):
     vd2, events, ccd, generator, kymera, _, _ = rig
+    vd2.Prepare()
+    events.clear()
     assert vd2.SetTimeRange("2 µs") == "2 us"
     assert events == [("ConfigureSweep", "2 us"), "DLAY 6,0,0.0022054"]
     assert generator.settings["DLAY? 2"] == "0,+0.0020417"
@@ -88,7 +94,8 @@ def test_range_updates_head_and_e_then_starts_clock_only_after_arming_camera(rig
     assert json.loads(vd2.GetState())["phase"] == "idle"
 
 
-def test_external_trigger_and_warmup_keep_operator_clock(rig):
+@pytest.mark.parametrize("rate", [5, 10])
+def test_internal_trigger_and_warmup_follow_selected_rate(rig, rate):
     vd2, events, ccd, generator, _, lamp, now = rig
     generator.settings["TSRC?"] = "1"
     lamp.states[0] = 0
@@ -96,20 +103,25 @@ def test_external_trigger_and_warmup_keep_operator_clock(rig):
         vd2.PrepareMeasurement()
     assert events == []
     lamp.states[0] = 1
+    assert vd2.SetRate(rate) == rate
+    vd2.Prepare()
     vd2.PrepareMeasurement()
     assert json.loads(vd2.GetState())["phase"] == "warming"
     now[0] += 10
-    ccd.SweepFrameCount = 49
+    ccd.SweepFrameCount = rate * 10 - 1
     assert json.loads(vd2.GetState())["phase"] == "waiting_for_trigger"
-    ccd.SweepFrameCount = 50
+    ccd.SweepFrameCount = rate * 10
     assert json.loads(vd2.GetState())["phase"] == "measurement_ready"
-    vd2.StopLive()
-    assert generator.settings["TSRC?"] == "1"
-    assert not any(item in ("TSRC 0", "TSRC 5") for item in events)
+    vd2.Unprepare()
+    assert generator.settings["TSRC?"] == "5"
+    assert int(generator.settings["TRAT?"]) == rate
+    assert events[-3:] == ["TSRC 5", ("CloseReadout", None), ("Park", None)]
+    assert not json.loads(vd2.GetState())["prepared"]
 
 
 def test_ccd_start_failure_releases_handles_without_emitting_pulses(rig):
     vd2, events, ccd, _, kymera, _, _ = rig
+    vd2.Prepare()
     ccd.reject_start = True
     with pytest.raises(RuntimeError, match="refused Live"):
         vd2.StartLive()
