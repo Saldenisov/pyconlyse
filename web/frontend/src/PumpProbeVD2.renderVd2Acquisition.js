@@ -3,6 +3,7 @@ import VD2PDUControl from './components/VD2PDUControl';
 import VD2RoiEditor from './components/VD2RoiEditor';
 import VD2LiveAverage from './components/VD2LiveAverage';
 import VD2LiveSettings from './components/VD2LiveSettings';
+import VD2Dg645Output from './components/VD2Dg645Output';
 import { hasVd2Preview } from './vd2AlignmentMath';
 import VD2PairedCapture from './components/VD2PairedCapture';
 import VD2ReadDiagnostics from './components/VD2ReadDiagnostics';
@@ -49,7 +50,13 @@ export function renderVd2Acquisition({
   const liveTab = activeTab === 'live';
   const directTango = state?.readout_backend === 'tango';
   const pairedActive = Boolean(protocol?.paired?.active);
-  const pairedMode = pairedActive || (protocol?.paired_available && measurementRate === '10');
+  const pairedMode = pairedActive || (protocol?.paired_available && (measurementRate === '10'
+    || (directTango && state.values?.trigger_rate_hz === 10 && !state.coordinator?.dark_checkout)));
+  const manualOutput = state?.coordinator && {
+    disabled: busy || protocolHardwareActive || protocolStarting || Boolean(preparedPhase)
+      || state.coordinator.state === 'RUNNING',
+    enableBlocked: !state.coordinator.prepared || state.coordinator.dark_checkout || state.coordinator.state !== 'ON',
+  };
   const live = state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live';
   const startLive = () => {
     if (directTango && values.streak_mode === 'Operate') {
@@ -161,6 +168,7 @@ export function renderVd2Acquisition({
           onDrop={event => { if (dragPanel) { event.preventDefault(); const box = event.currentTarget.getBoundingClientRect(); setImageRight(event.clientX > box.left + box.width / 2); setDragPanel(false); } }}>
           {liveTab ? <VD2LiveSettings values={values} onApply={writeParameter} live={live}
             directTango={directTango}
+            manualOutput={manualOutput}
             legacyAverage={Boolean(state && !directTango)}
             disabled={alignmentControlsBlocked || (!acquisitionIdle && !live)}
             onAverageReadError={setLiveAverageReadError} />
@@ -179,7 +187,13 @@ export function renderVd2Acquisition({
             {protocol?.paired_available && <label className="vd2-control-strip">
               <span>Measurement rate</span>
               <select value={pairedMode ? '10' : '5'} disabled={busy || protocolHardwareActive || Boolean(preparedPhase || guidedRun || guidedChoice)}
-                onChange={event => setMeasurementRate(event.target.value)}>
+                onChange={event => {
+                  const rate = event.target.value;
+                  setMeasurementRate(rate);
+                  if (directTango && rate === '5' && state.values?.trigger_rate_hz === 10) {
+                    writeParameter('trigger_rate_hz', 5);
+                  }
+                }}>
                 <option value="5">5 Hz · separate ABS and BASE</option>
                 <option value="10">10 Hz · paired ABS/BASE</option>
               </select>
@@ -223,6 +237,7 @@ export function renderVd2Acquisition({
               sampleHolder={<VD2SampleHolder disabled={busy || protocolStarting || protocolHardwareActive} />}
             />
             {pairedMode && <VD2PairedCapture available={protocol?.paired_available} run={protocol?.paired} settings={protocolSettings}
+              directTango={directTango}
               protocol={protocol} onBruit={() => prepareProtocolPhase('BRUIT')}
               disabled={!serverWorkspace.ready || busy || protocolStarting || protocolHardwareActive
                 || Boolean(preparedPhase || guidedRun || guidedChoice)}
@@ -402,7 +417,9 @@ export function renderVd2Acquisition({
               <ParameterCard card={directTango ? directVd2Card(card, values, live) : card}
                 values={directTango && !live && values.live_trigger_selection
                   ? { ...values, delay_trigger_mode: values.live_trigger_selection } : values}
-                onApply={writeParameter} busy={busy || protocolHardwareActive} key={card.title} />
+                onApply={writeParameter} busy={busy || protocolHardwareActive} key={card.title}>
+                {manualOutput && card.tone === 'timing' && <VD2Dg645Output {...manualOutput} />}
+              </ParameterCard>
             ))}
           </section>
         </>

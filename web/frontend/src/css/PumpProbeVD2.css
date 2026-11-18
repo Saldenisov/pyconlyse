@@ -1,2 +1,11 @@
 @import "./PumpProbeVD2.base.css";
 @import "./PumpProbeVD2.controls.css";
+
+.vd2-dg645-output {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.vd2-dg645-output small { flex-basis: 100%; }

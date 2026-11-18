@@ -35,6 +35,7 @@ class DS_VD2(Device):
         super().init_device()
         self._camera = None
         self._clock = None
+        self._manual_clock = None
         self._kymera = None
         self._time_range = "1 us"
         self._rate_hz = 5
@@ -47,6 +48,8 @@ class DS_VD2(Device):
         self._warmup_until = None
         self._warmup_frame = None
         self._recording_phase = None
+        self._paired_source = None
+        self._paired_dg_readbacks = None
         self._preview_configuration = None
         self._preview_first_frame = 0
         self._timing_values = {}
@@ -96,6 +99,52 @@ class DS_VD2(Device):
             generator.command_inout("scpi_write", f"TRAT {rate}")
             if cls._query(generator, "TRAT?") != rate:
                 raise RuntimeError("DG645 did not verify its trigger rate")
+
+    def _output_state(self, generator):
+        if generator.state() != DevState.ON:
+            raise RuntimeError("DG645 is not ON")
+        source = self._query(generator, "TSRC?")
+        rate = self._query(generator, "TRAT?")
+        if not math.isfinite(rate) or rate <= 0:
+            raise RuntimeError("DG645 did not return a valid internal trigger rate")
+        return {"enabled": source == 0 if source in {0, 5} else None, "rate_hz": rate}
+
+    @command(dtype_out=str)
+    def GetDg645Output(self):
+        return json.dumps(self._output_state(self._proxy(self.dg645_device)))
+
+    @command(dtype_in=bool, dtype_out=str)
+    def SetDg645Output(self, enabled):
+        if (self._camera is not None or self._clock is not None or self._kymera is not None
+                or self._recording_phase is not None or self._warmup_until is not None
+                or self.get_state() == DevState.RUNNING):
+            raise RuntimeError("Stop VD2 Live or finish the measurement before changing manual DG645 Output")
+        if enabled and (not self._prepared or self._dark_checkout or self.get_state() != DevState.ON):
+            raise RuntimeError("Manual DG645 Output requires standard VD2 preparation")
+        generator = self._proxy(self.dg645_device)
+        previous = self._output_state(generator)
+        if previous["enabled"] is None:
+            raise RuntimeError("DG645 is using another trigger source")
+        if enabled:
+            if self._query(generator, "BURM?") != 0:
+                raise RuntimeError("Turn off DG645 Burst before enabling manual Output")
+            if previous["rate_hz"] != self._rate_hz:
+                raise RuntimeError("DG645 rate does not match the configured VD2 rate")
+            # Retain ownership even if the write succeeds but its readback fails.
+            self._manual_clock = generator
+        if previous["enabled"] != enabled:
+            self._set_clock(generator, 0 if enabled else 5)
+        if not enabled:
+            self._manual_clock = None
+        self._timing_values.update(delay_trigger_mode="Internal" if enabled else "Standby",
+                                   dg_output="On" if enabled else "Standby")
+        return json.dumps({"enabled": enabled, "rate_hz": previous["rate_hz"]})
+
+    def _stop_manual_output(self):
+        if self._manual_clock is not None:
+            self._set_clock(self._manual_clock, 5)
+            self._manual_clock = None
+            self._timing_values.update(delay_trigger_mode="Standby", dg_output="Standby")
 
     @command(dtype_in=int, dtype_out=int)
     def SetRate(self, value):
@@ -188,6 +237,7 @@ class DS_VD2(Device):
     @command
     def Prepare(self):
         self._require_idle()
+        self._stop_manual_output()
         dg = self._proxy(self.dg645_device)
         ky = self._proxy(self.kymera_device)
         if ky.state() != DevState.ON or ky.shutter not in {"Closed", "Open"}:
@@ -426,6 +476,7 @@ class DS_VD2(Device):
     def _start_focus_preview(self):
         if self._dark_checkout:
             self._verify_dark_lamp()
+        self._stop_manual_output()
         dg = self._proxy(self.dg645_device)
         self._verify_standby(dg)
         ky = self._proxy(self.kymera_device)
@@ -548,12 +599,14 @@ class DS_VD2(Device):
         self._optics["streak_shutter"] = result
         return result
 
-    def _start_live(self, *, dark=False, recording=False, streak_open=True, kymera_open=True):
+    def _start_live(self, *, dark=False, recording=False, streak_open=True, kymera_open=True,
+                    hold_clock=False):
         self._require_idle()
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before starting Live")
         if self._dark_checkout:
             self._verify_dark_lamp()
+        self._stop_manual_output()
         dg = self._proxy(self.dg645_device)
         self._verify_standby(dg)
         if self._query(dg, "TRAT?") != self._rate_hz:
@@ -594,7 +647,7 @@ class DS_VD2(Device):
             if not recording:
                 self._camera_values["live_exposure_time"] = f'{self._preview_configuration["camera"]["exposure_ms"]:.9g} ms'
             self._clock = dg
-            source = 5 if dark else (0 if recording else self._live_trigger_source)
+            source = 5 if dark or hold_clock else (0 if recording else self._live_trigger_source)
             if source != 5:
                 self._set_clock(dg, source)
             mode = next(name for name, code in LIVE_TRIGGER_SOURCES.items() if code == source)
@@ -641,6 +694,8 @@ class DS_VD2(Device):
 
     @command(dtype_in=str, dtype_out=str)
     def StartPhase(self, phase):
+        if phase != "BRUIT" and self._rate_hz == 10 and not self._dark_checkout:
+            raise RuntimeError("At 10 Hz record ABS and BASE together via Paired acquisition")
         if phase not in RECORDING_PHASES:
             raise ValueError("Unknown VD2 recording phase")
         if self._recording_phase is not None:
@@ -665,6 +720,88 @@ class DS_VD2(Device):
             return self.PhaseConfiguration()
         except Exception as exc:
             self._fail_live(exc)
+
+    @command(dtype_in=int, dtype_out=str)
+    def ArmPaired(self, source):
+        if source not in {1, 2}:
+            raise ValueError("Select the external 5 Hz electron trigger for paired acquisition")
+        self._require_idle()
+        if not self._prepared or self._dark_checkout or self._time_range != "1 us":
+            raise RuntimeError("Pairing requires standard VD2 preparation and the calibrated 1 us range")
+        if self._read_head_mode() != "Operate" or not self._outlet_power(self.lamp_pdu_device):
+            raise RuntimeError("Confirm Operate mode and flashlamp power before paired acquisition")
+        self.SetRate(5)
+        self._start_live(recording=True, hold_clock=True)
+        self._recording_phase = "PAIRED"
+        self._paired_source = source
+        try:
+            # The reader is armed before the first pulse so it begins at the start of a burst.
+            self._camera.command_inout("BufferContinuousSequence")
+            dg = self._clock
+            queries = ["*IDN?", "TLVL?", "ADVT?", "HOLD?", "INHB?", "TIMB?", "BURD?", "BURT?"]
+            queries += [f"{key}? {output}" for key in ("PRES", "LAMP", "LOFF", "LPOL")
+                        for output in range(5)]
+            queries += [f"PHAS? {output}" for output in range(1, 5)]
+            self._paired_dg_readbacks = {
+                query: dg.command_inout("scpi_query", query).strip() for query in queries
+            }
+            return self._paired_configuration(5)
+        except Exception as exc:
+            self._fail_live(exc)
+
+    def _paired_configuration(self, source):
+        if self._recording_phase != "PAIRED" or not self._camera.AcquisitionActive:
+            raise RuntimeError("Paired camera acquisition is no longer active")
+        if self._query(self._clock, "TRAT?") != 5 or self._query(self._clock, "TSRC?") != source:
+            raise RuntimeError("Paired DG645 clock changed")
+        configuration = self._read_calibration_configuration()
+        if configuration["optics"]["shutter"] != "Open":
+            raise RuntimeError("Kymera shutter is closed")
+        delays = {name: self._clock.command_inout("scpi_query", f"DLAY? {channel}").strip()
+                  for name, channel in DG_CHANNELS.items()}
+        return json.dumps({**configuration, "phase": "PAIRED", "rate_hz": 10,
+                           "dg_trigger_source": self._paired_source, "ccd_trigger": "external",
+                           "delays": delays, "dark_checkout": False,
+                           "dg645_arm_readbacks": self._paired_dg_readbacks,
+                           "dg645_capture_settings": {"burst_enabled": True, "burst_count": 2,
+                                                       "burst_period_s": .1, "base_rate_hz": 5}})
+
+    @command
+    def FirePaired(self):
+        self._paired_configuration(5)
+        dg = self._clock
+        try:
+            for query in ("BURD?", "BURT?"):
+                if self._query(dg, query) != 0:
+                    raise RuntimeError("Pairing requires zero burst delay and T0 on both pulses")
+            for output in range(5):
+                if self._query(dg, f"PRES? {output}") != 1:
+                    raise RuntimeError("Pairing requires DG645 output prescales of one")
+            for keyword, value in (("BURC", 2), ("BURP", .1), ("BURM", 1)):
+                dg.command_inout("scpi_write", f"{keyword} {value}")
+                if self._query(dg, f"{keyword}?") != value:
+                    raise RuntimeError(f"DG645 did not verify {keyword}")
+            self._set_clock(dg, self._paired_source)
+            self._timing_values.update(delay_repetition_rate=10, delay_burst_mode="On",
+                                       delay_trigger_mode=next(name for name, source in LIVE_TRIGGER_SOURCES.items()
+                                                               if source == self._paired_source),
+                                       dg_output="On")
+            self.set_status("VD2 paired capture · two pulses per external trigger")
+        except Exception as exc:
+            self._fail_live(exc)
+
+    @command(dtype_out=str)
+    def PairedConfiguration(self):
+        configuration = self._paired_configuration(self._paired_source)
+        for keyword, value in (("BURM", 1), ("BURC", 2), ("BURP", .1)):
+            if self._query(self._clock, f"{keyword}?") != value:
+                raise RuntimeError("DG645 burst changed during paired recording")
+        return configuration
+
+    @command
+    def StopPaired(self):
+        if self._recording_phase == "PAIRED" or self._paired_source is not None:
+            self.StopLive()
 
     @command(dtype_out=str)
     def PhaseConfiguration(self):
@@ -720,10 +857,22 @@ class DS_VD2(Device):
 
     def _release(self, *, keep_shutters=False):
         errors = []
+        try:
+            self._stop_manual_output()
+        except Exception as exc:
+            errors.append(f"DG645 manual output: {exc}")
         if self._clock is not None:
             try:
                 if self._query(self._clock, "TSRC?") != 5:
                     self._set_clock(self._clock, 5)
+                if self._paired_source is not None:
+                    if self._query(self._clock, "BURM?") != 0:
+                        self._clock.command_inout("scpi_write", "BURM 0")
+                    self._verify_standby(self._clock)
+                    self._write_rate(self._clock, 5)
+                    self._timing_values.update(delay_repetition_rate=5, delay_burst_mode="Off")
+                    self._paired_source = None
+                    self._paired_dg_readbacks = None
                 self._timing_values.update(delay_trigger_mode="Standby", dg_output="Standby")
                 self._clock = None
             except Exception as exc:

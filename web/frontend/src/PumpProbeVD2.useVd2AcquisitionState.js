@@ -352,7 +352,7 @@ export function useVd2AcquisitionState(measurementRate) {
   const calibrationKey = previewAvailable ? preview?.calibration_key : null;
   const calibrationAvailable = Boolean(previewAvailable && preview?.calibration);
   const needsCalibration = activeTab === 'alignment' || (activeTab === 'acquisition'
-    && measurementRate === '10' && protocol?.paired_available
+    && (measurementRate === '10' || state?.values?.trigger_rate_hz === 10) && protocol?.paired_available
     && state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live');
   useEffect(() => {
     if (!needsCalibration || !calibrationKey || calibrationAvailable

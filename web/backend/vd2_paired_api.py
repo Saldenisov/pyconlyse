@@ -1,5 +1,5 @@
 """HTTP integration for the managed VD2 paired measurement."""
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from flask import jsonify
 
@@ -10,6 +10,7 @@ from vd2_paired_acquisition import PairedRequest, TRIGGER_SOURCES, target_error
 START_FIELDS = {
     "output_root", "sample_name", "reuse_bruit", "mode", "first_map_with_electrons",
     "pair_limit", "target_mod", "trigger_source", "roi", "band", "method", "sam_surface_percent",
+    "sample_description",
 }
 
 
@@ -24,19 +25,25 @@ def install_paired_routes(api):
         payload, blocked = api._mutation_payload(START_FIELDS)
         if blocked is not None:
             return blocked
-        if not api.VD2_CAMERA_ONLY:
-            return jsonify(success=False, error="Paired acquisition requires camera-only HPD-TA"), 409
+        direct = api.VD2_COORDINATOR_DEVICE
+        if not (direct or api.VD2_CAMERA_ONLY):
+            return jsonify(success=False, error="Paired acquisition is unavailable for this camera backend"), 409
         try:
             plan = PairedRequest.from_payload(payload, _ensure_within_allowed_root)
+            if direct:
+                if plan.trigger_source == "internal":
+                    raise ValueError("Select the external 5 Hz electron trigger for paired acquisition")
+                plan = replace(plan, native_sequence=False)
             timing = {"warmup_seconds": 10, "base_rate_hz": 5,
                       "burst_period_s": 0.1, "burst_count": 2,
                       "trigger_source": TRIGGER_SOURCES[plan.trigger_source], "stop_burst": 0}
             commands = ("StartSequence", "SaveCurrentSequence", "StopSequence", "write_attribute:sequence_loops"
                         ) if plan.native_sequence else ("StartPairedLive", "StopPairedLive")
+            targets = ([api._target(direct, command) for command in ("ArmPaired", "FirePaired", "StopPaired")]
+                       if direct else [api._target(api.DG645_DEVICE, "scpi_write"),
+                                       *(api._target(api.STREAK_DEVICE, cmd) for cmd in commands)])
             blocked = api._approval_or_response(
-                "paired.start",
-                [api._target(api.DG645_DEVICE, "scpi_write"),
-                 *(api._target(api.STREAK_DEVICE, cmd) for cmd in commands)],
+                "paired.start", targets,
                 {**asdict(plan), "timing": timing}, "vd2.paired.start", START_FIELDS,
             )
             if blocked is not None:
@@ -58,11 +65,13 @@ def install_paired_routes(api):
             if type(job) is not str or len(job) != 32 or api._paired_acquisition.status().get("job_id") != job:
                 raise ValueError("Paired measurement is no longer active")
             target = target_error(payload["target_mod"]) if action == "target" else None
-            blocked = api._approval_or_response(
-                f"paired.{action}",
-                [api._target(api.DG645_DEVICE, "scpi_write"), api._target(
+            direct = api.VD2_COORDINATOR_DEVICE
+            targets = [api._target(direct, "StopPaired")] if direct else [
+                api._target(api.DG645_DEVICE, "scpi_write"), api._target(
                     api.STREAK_DEVICE, "StopSequence" if api._paired_acquisition.status().get("capture") == "sequence"
-                    else "StopPairedLive")],
+                    else "StopPairedLive")]
+            blocked = api._approval_or_response(
+                f"paired.{action}", targets,
                 {"job_id": job, **({"target_mod": target} if action == "target" else {})},
                 f"vd2.paired.{action}", fields,
             )

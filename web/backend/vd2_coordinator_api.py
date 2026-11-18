@@ -69,6 +69,11 @@ ADJUSTMENT_CONFLICTS = {
     "Select Operate before opening the shutters for Live",
     "Stop Focus preview before changing synchronized Live settings",
     "Switch the VD2 flashlamp supply off before dark checkout",
+    "Stop VD2 Live or finish the measurement before changing manual DG645 Output",
+    "Manual DG645 Output requires standard VD2 preparation",
+    "DG645 is using another trigger source",
+    "Turn off DG645 Burst before enabling manual Output",
+    "DG645 rate does not match the configured VD2 rate",
 }
 
 
@@ -353,7 +358,7 @@ def install_vd2_coordinator_routes(api):
                     return mutate(*PARAMETERS[path])
                 if path in {"/alignment/calibration",
                             "/alignment/open-shutters", "/alignment/flash-lamp", "/live/rolling-average"} or path.startswith(
-                    ("/command/", "/parameter/", "/runtime/remoteex/", "/dcam/", "/paired/")
+                    ("/command/", "/parameter/", "/runtime/remoteex/", "/dcam/")
                 ):
                     return jsonify(success=False, error="This operation has no direct Tango VD2 implementation"), 409
             if request.method == "GET" and path == "/recovery/options":

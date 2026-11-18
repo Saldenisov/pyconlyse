@@ -230,7 +230,7 @@ export function EditableField({ field, value, onApply, busy }) {
   );
 }
 
-function ParameterCard({ card, values, onApply, busy, compact = false, disabledFields }) {
+function ParameterCard({ card, values, onApply, busy, compact = false, disabledFields, children }) {
   const fields = card.fields.map((field) => (
     field.key === 'grating' && Array.isArray(values.grating_options)
       ? { ...field, key: 'grating_index', options: values.grating_options, fixedOptions: true }
@@ -242,6 +242,7 @@ function ParameterCard({ card, values, onApply, busy, compact = false, disabledF
         <h2>{card.title}</h2>
         {!compact && card.subtitle && <p>{card.subtitle}</p>}
       </header>
+      {children}
       <div className="vd2-table" role="table" aria-label={`${card.title} parameters`}>
         {!compact && <div className="vd2-table-head" role="row">
           <span role="columnheader">Parameter</span>
@@ -446,7 +447,7 @@ export function updateRoisFromBounds(rois, id, next, linked, width, height) {
   });
 }
 
-function ProfilePlot({ title, series, axis, selectedId, onSelect, scale, hideLegend = false }) {
+function ProfilePlot({ title, series, axis, selectedId, onSelect, scale, hideLegend = false, summary }) {
   const container = useRef(null);
   const [size, setSize] = useState({ width: 600, height: 400 });
   useEffect(() => {
@@ -462,8 +463,9 @@ function ProfilePlot({ title, series, axis, selectedId, onSelect, scale, hideLeg
   const { width, height } = size;
   const padding = { left: 42, right: 12, top: 14, bottom: 30 };
   const points = series.flatMap(trace => trace.points);
-  const minimum = Math.min(...points.map(p => p.y));
-  const maximum = Math.max(...points.map(p => p.y));
+  const errorAt = point => Number.isFinite(point.error) ? point.error : 0;
+  const minimum = Math.min(...points.map(p => p.y - errorAt(p)));
+  const maximum = Math.max(...points.map(p => p.y + errorAt(p)));
   const xmin = Math.min(...points.map(p => p.x));
   const xmax = Math.max(...points.map(p => p.x));
   const span = Math.max(1, maximum - minimum);
@@ -474,7 +476,7 @@ function ProfilePlot({ title, series, axis, selectedId, onSelect, scale, hideLeg
 
   return (
     <section className="vd2-profile" aria-label={title}>
-      <header><strong>{title}</strong><span>{minimum.toFixed(1)} - {maximum.toFixed(1)}</span></header>
+      <header><strong>{title}</strong><span>{summary ?? `${minimum.toFixed(1)} - ${maximum.toFixed(1)}`}</span></header>
       {!hideLegend && <div className="vd2-roi-legend" aria-label={`${title} regions`}>
         {series.map(trace => <button type="button" key={trace.id} aria-pressed={trace.id === selectedId}
           style={{ color: trace.color }} onClick={() => onSelect?.(trace.id)}>ROI {trace.index + 1}</button>)}
@@ -488,6 +490,10 @@ function ProfilePlot({ title, series, axis, selectedId, onSelect, scale, hideLeg
           return <g key={i}><line x1={padding.left - 4} y1={py(value)} x2={width - padding.right} y2={py(value)} className="vd2-roi-grid" />
             <text x={padding.left - 7} y={py(value) + 3} textAnchor="end">{value.toFixed(1)}</text></g>;
         })}
+        {series.filter(trace => trace.points.every(point => Number.isFinite(point.error))).map(trace =>
+          <polygon key={trace.id} aria-label="Pointwise standard error" fill={trace.color} fillOpacity={0.22}
+            points={[...trace.points.map(p => `${px(p.x)},${py(p.y + p.error)}`),
+              ...trace.points.slice().reverse().map(p => `${px(p.x)},${py(p.y - p.error)}`)].join(' ')} />)}
         {series.map(trace => <polyline key={trace.id} role="button" tabIndex="0"
           aria-label={`ROI ${trace.index + 1} ${title.toLowerCase()}`} aria-pressed={trace.id === selectedId}
           points={trace.points.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}

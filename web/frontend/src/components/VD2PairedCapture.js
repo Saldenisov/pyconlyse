@@ -17,16 +17,16 @@ const STOP_LABELS = {
 };
 
 export default function VD2PairedCapture({
-  available, run, settings, disabled, roi, preview, protocol, onUpdate, onStop, onBruit,
+  available, directTango = false, run, settings, disabled, roi, preview, protocol, onUpdate, onStop, onBruit,
   cameraIdle, live, liveBlocked, onLive, correction, correctionRange, correctionFixed,
   referenceConfirmed, canFixCorrection, canConfirmReference,
   onChangeCorrection, onFixCorrection, onConfirmReference,
 }) {
   const [mode, setMode] = useState('fixed');
   const [first, setFirst] = useState(true);
-  const [pairs, setPairs] = useState('200');
-  const [limit, setLimit] = useState('5000');
-  const [target, setTarget] = useState('2');
+  const [pairs, setPairs] = useState(directTango ? '200' : '100');
+  const [limit, setLimit] = useState(directTango ? '1000' : '');
+  const [target, setTarget] = useState(directTango ? '1' : '2');
   const [trigger, setTrigger] = useState('external_rising');
   const [method, setMethod] = useState('lamp_matched');
   const [samSurface, setSamSurface] = useState('3');
@@ -35,7 +35,9 @@ export default function VD2PairedCapture({
   const [error, setError] = useState('');
   const active = Boolean(run?.active);
   const currentMode = active ? run.mode : mode;
-  const pairLimit = Number(mode === 'fixed' ? pairs : limit);
+  const showPrecision = active && currentMode === 'precision';
+  const hasKinetics = run?.kinetics?.od_mod?.length > 1;
+  const pairLimit = mode === 'precision' && !limit.trim() ? null : Number(mode === 'fixed' ? pairs : limit);
   const validTarget = Number(target) > 0 && Number(target) <= 1000;
   const band = active ? run.band : correctionRange.band;
   const spectralBand = active ? band : correctionRange.spectralBand;
@@ -73,6 +75,7 @@ export default function VD2PairedCapture({
   const start = () => send('start', {
     output_root: settings.outputRoot,
     sample_name: settings.runName,
+    sample_description: settings.sampleDescription || '',
     reuse_bruit: settings.reuseBruit === 'none' ? 'none' : 'latest',
     mode,
     first_map_with_electrons: first,
@@ -101,19 +104,23 @@ export default function VD2PairedCapture({
       setPending(false);
     }
   };
-  const recordBruit = () => control('/parameter/streak_shutter', { value: 'Closed' }, () => {
+  const prepareBruit = () => {
     setBruitAttempt({ prior: protocol?.job_id });
     onBruit();
-  });
-  const resume = () => control('/alignment/open-shutters', {}, async () => {
+  };
+  const recordBruit = () => directTango ? prepareBruit()
+    : control('/parameter/streak_shutter', { value: 'Closed' }, prepareBruit);
+  const resumePaired = async () => {
     setBruitAttempt(null);
     await start();
-  });
+  };
+  const resume = () => directTango ? resumePaired() : control('/alignment/open-shutters', {}, resumePaired);
   const locked = active || disabled || pending;
   const displayedCenter = active ? band?.center_nm : correctionRange.center ?? correction.center;
   const displayedBandwidth = active && band ? 2 * band.half_width_nm : correctionRange.bandwidth ?? correction.bandwidth;
-  const cannotStart = locked || !cameraIdle || !settings.runName?.trim() || !Number.isInteger(pairLimit)
-    || pairLimit < 1 || pairLimit > 10000 || !band || !correctionFixed || !referenceConfirmed
+  const validLimit = pairLimit === null || (Number.isInteger(pairLimit) && pairLimit >= 1 && pairLimit <= 10000);
+  const cannotStart = locked || !cameraIdle || !settings.runName?.trim() || !validLimit
+    || !band || !correctionFixed || !referenceConfirmed
     || (method.startsWith('sam_') && !(Number(samSurface) > 0 && Number(samSurface) <= 100))
     || (mode === 'precision' && !validTarget);
   return (
@@ -125,12 +132,14 @@ export default function VD2PairedCapture({
           <option value="precision">Target error across kinetics</option>
         </select></label>
         <label><span>{currentMode === 'fixed' ? 'Pairs' : 'Pair limit'}</span><input type="number" min="1" max="10000" step="1"
-          value={active ? run.pair_limit : mode === 'fixed' ? pairs : limit} disabled={locked}
+          placeholder={currentMode === 'precision' ? 'No frame limit' : undefined}
+          value={active ? run.pair_limit ?? '' : mode === 'fixed' ? pairs : limit} disabled={locked}
           onChange={event => (mode === 'fixed' ? setPairs : setLimit)(event.target.value)} /></label>
+        {currentMode === 'fixed' && <small>{2 * (active ? run.pair_limit : pairLimit)} frames</small>}
         <label><span>5 Hz sync</span><select value={active ? run.trigger_source : trigger} disabled={locked} onChange={event => setTrigger(event.target.value)}>
           <option value="external_rising">External rising</option>
           <option value="external_falling">External falling</option>
-          <option value="internal">Internal</option>
+          {!directTango && <option value="internal">Internal</option>}
         </select></label>
         <div className="vd2-paired-live">
           <label><input type="checkbox" checked={active ? run.first_map_with_electrons : first}
@@ -149,7 +158,7 @@ export default function VD2PairedCapture({
             disabled={pending || (active ? run.status === 'saving' : disabled)} onChange={event => setTarget(event.target.value)} />
         </label>}
       </div>
-      <fieldset className={`vd2-spectral-correction ${correctionFixed || active ? 'is-fixed' : ''}`}>
+      <fieldset className={`vd2-spectral-correction vd2-spectral-range ${correctionFixed || active ? 'is-fixed' : ''}`}>
         <legend>Spectral Correction Range</legend>
         <div className="vd2-protocol-settings">
           <label><span>Center (nm)</span><input type="number" min="1" step="any" value={displayedCenter ?? ''}
@@ -182,7 +191,8 @@ export default function VD2PairedCapture({
       {correctionFixed && referenceConfirmed && live && <small>Stop Live before starting Measurement.</small>}
       <div className="vd2-phase-buttons">
         {!needsBruit && <button type="button" className="vd2-measure-button" disabled={cannotStart} onClick={start}>Measurement</button>}
-        {needsBruit && !bruitReady && <button type="button" disabled={locked || !cameraIdle || !onBruit} onClick={recordBruit}>Record Bruit</button>}
+        {(needsBruit ? !bruitReady : directTango) &&
+          <button type="button" disabled={locked || !cameraIdle || !onBruit} onClick={recordBruit}>Record Bruit</button>}
         {needsBruit && bruitReady && <button type="button" disabled={cannotStart} onClick={resume}>Open shutters and continue</button>}
         {active && <button type="button" className="vd2-stop" disabled={pending || run.status === 'saving'} onClick={onStop}>Stop pairs</button>}
         {active && currentMode === 'precision' && <button type="button"
@@ -190,18 +200,27 @@ export default function VD2PairedCapture({
           onClick={() => send('target', { job_id: run.job_id, target_mod: Number(target) })}>Set target</button>}
       </div>
       {run?.job_id && <div aria-live="polite">
-        {run.pairs_recorded} / {run.pair_limit} pairs
+        {run.pairs_recorded}{run.pair_limit != null && ` / ${run.pair_limit}`} pairs
         {Number.isFinite(run.estimate_mod) && <span> · ΔOD {run.estimate_mod.toFixed(2)} mOD</span>}
         {run.mode === 'precision' && Number.isInteger(run.roi_pairs) && run.roi_pairs !== run.pairs_recorded
           && <span> · {run.roi_pairs} pairs used by estimator</span>}
         {run.mode === 'precision' && <span> · Maximum pointwise error {Number.isFinite(run.error_mod) ? run.error_mod.toFixed(2) + ' mOD' : 'estimating'}</span>}
       </div>}
-      {run?.kinetics?.od_mod?.length > 1 && <ProfilePlot title="OD kinetics (mOD)"
+      {(hasKinetics || showPrecision) && <section
+        className={showPrecision ? 'vd2-paired-progress' : undefined}
+        role={showPrecision ? 'dialog' : undefined}
+        aria-label={showPrecision ? 'Live OD kinetics' : undefined}>
+        {hasKinetics ? <ProfilePlot title="OD kinetics (mOD)"
+        summary={Number.isFinite(run.error_mod) ? `Max SE ${run.error_mod.toFixed(2)} mOD` : undefined}
         axis={run.time_scale ? `Time (${run.time_scale})` : 'Time'} hideLegend scale={1}
         series={[{ id: 'od', index: 0, color: '#4c98da',
-          points: run.kinetics.od_mod.map((y, index) => ({ x: run.kinetics.time[index], y })) }]} />}
+          points: run.kinetics.od_mod.map((y, index) => ({ x: run.kinetics.time[index], y,
+            error: run.kinetics.se_mod?.[index] })) }]} />
+          : <p role="status">{run.stage || 'Waiting for the first OD estimate'}</p>}
+      </section>}
       {(error || run?.error) && <small role="alert">{error || run.error}</small>}
       {run?.manifest_warning && <small role="alert">{run.manifest_warning}</small>}
+      {run?.export_warning && <small role="alert">{run.export_warning}</small>}
       {run?.h5_path && !active && <small title={run.h5_path}>{run.h5_path}</small>}
     </section>
   );

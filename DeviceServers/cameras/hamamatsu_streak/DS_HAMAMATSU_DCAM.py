@@ -53,6 +53,7 @@ class DS_HAMAMATSU_DCAM(Device):
         self._sweep_head = None
         self._sweep_shutter_requested = False
         self._sweep_mcp_gain = None
+        self._sweep_readbacks = None
         self._mcp_reset_required = False
         self._sweep_token = None
         self._sweep_frame = None
@@ -132,6 +133,7 @@ class DS_HAMAMATSU_DCAM(Device):
                          "roi": self._sensor_roi, "exposure_ms": self._exposure_ms}
         if self._sweep_head is not None:
             configuration["mcp_gain"] = self._sweep_mcp_gain
+            configuration.update(self._sweep_readbacks or {})
         return json.dumps(configuration)
 
     @attribute(name="LiveMcpGainMax", dtype=int)
@@ -319,6 +321,14 @@ class DS_HAMAMATSU_DCAM(Device):
             if open_shutter:
                 self._sweep_shutter_requested = True
                 set_streak_shutter(head, "Open")
+            self._sweep_readbacks = {
+                "ccd_trigger_mode": trigger,
+                "ccd_verified_properties": SWEEP_SENSOR_PROPERTIES,
+                "streak_head_arm_readbacks": {
+                    register: head.read(register)
+                    for register in ("ALL", "OPE", "VSR", "MCP", "GMD", "VTM", "VTS", "VTL", "SHT")
+                },
+            }
             head.rearm()
             self._sweep_vrt_count = 1
             if software_rate:
@@ -352,11 +362,12 @@ class DS_HAMAMATSU_DCAM(Device):
                 self._sweep_vrt_count += 1
                 self._sweep_frame_count += 1
                 self._sweep_frame = (int(info.timestamp_us), stamp, pixels.copy(order="C"))
-                if self._capture_remaining:
+                if self._capture_remaining != 0:
                     if len(self._capture_buffer) == self._capture_buffer.maxlen:
                         raise RuntimeError("DCAM recording buffer overflowed; sequence incomplete")
                     self._capture_buffer.append(self._sweep_frame)
-                    self._capture_remaining -= 1
+                    if self._capture_remaining is not None:
+                        self._capture_remaining -= 1
         except Exception as error:
             self._sweep_token = None
             detail = str(error)
@@ -384,6 +395,12 @@ class DS_HAMAMATSU_DCAM(Device):
         if self.get_state() != DevState.RUNNING or not 1 <= count <= 65535:
             raise RuntimeError("A synchronized sweep and 1–65535 frames are required")
         self._sdk(self._begin_sequence, count)
+
+    @command
+    def BufferContinuousSequence(self):
+        if self.get_state() != DevState.RUNNING:
+            raise RuntimeError("A synchronized sweep is required")
+        self._sdk(self._begin_sequence, None)
 
     def _begin_sequence(self, count):
         if self._sweep_head is None or self._capture_buffer is not None:
@@ -436,6 +453,7 @@ class DS_HAMAMATSU_DCAM(Device):
         self._capture_remaining = 0
         self._software_period = None
         self._next_software_trigger = None
+        self._sweep_readbacks = None
         synchronized = self._sweep_head is not None
         if synchronized:
             try:

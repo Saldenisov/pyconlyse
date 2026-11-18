@@ -105,7 +105,8 @@ class PairedRecording:
                 "analysis": config.get("method", "mean_pair_od"),
                 "paired_map_analysis": "mean_pair_od",
                 "beam_state_source": "operator_first_frame",
-                "camera_sequence_source": "his_frame_index" if config.get("native_sequence") else "camera_ring",
+                "camera_sequence_source": ("dcam_framestamp" if machine.get("readout_backend") == "tango"
+                                           else "his_frame_index" if config.get("native_sequence") else "camera_ring"),
             })
             self.sequence = self.file.create_dataset("camera_sequence", (0,), maxshape=(None,), dtype="i8")
             self.times = self.file.create_dataset("camera_timestamp_ms", (0,), maxshape=(None,), dtype="f8")

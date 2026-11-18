@@ -1,5 +1,6 @@
 import { CARDS, ParameterCard, directVd2Card } from '../PumpProbeVD2.API_BASE';
 import VD2LiveAverage from './VD2LiveAverage';
+import VD2Dg645Output from './VD2Dg645Output';
 
 const delays = Array.from('abcdefgh', channel => `delay_${channel}`);
 const liveFields = {
@@ -17,7 +18,8 @@ const liveCards = CARDS.map(card => ({
   )),
 }));
 
-export default function VD2LiveSettings({ values, onApply, disabled, live, legacyAverage, directTango, onAverageReadError }) {
+export default function VD2LiveSettings({ values, onApply, disabled, live, legacyAverage, directTango,
+  manualOutput, onAverageReadError }) {
   const liveValues = { ...values };
   if (directTango && !live && values.live_trigger_selection) {
     liveValues.delay_trigger_mode = values.live_trigger_selection;
@@ -44,11 +46,10 @@ export default function VD2LiveSettings({ values, onApply, disabled, live, legac
     <aside className="vd2-live-settings" aria-label="Live instrument settings">
       {liveCards.map(card => {
         const settings = directTango ? directVd2Card(card, values, live) : card;
-        if (directTango && card.tone === 'timing') {
-          settings.fields.unshift({key: 'dg_output', label: 'Output', readOnly: true});
-        }
         return <ParameterCard key={card.tone} card={settings} values={liveValues} onApply={apply}
-          compact busy={disabled} disabledFields={!directTango && live ? ['time_range'] : undefined} />
+          compact busy={disabled} disabledFields={!directTango && live ? ['time_range'] : undefined}>
+          {manualOutput && card.tone === 'timing' && <VD2Dg645Output {...manualOutput} />}
+        </ParameterCard>;
       })}
       {legacyAverage && <VD2LiveAverage disabled={disabled} onReadError={onAverageReadError} />}
     </aside>

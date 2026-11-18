@@ -40,7 +40,7 @@ class PairedRequest:
     reuse_bruit: str
     mode: str
     first_map_with_electrons: bool
-    pair_limit: int
+    pair_limit: int | None
     target_mod: float | None
     trigger_source: str
     roi: DetectorROI | None
@@ -48,6 +48,7 @@ class PairedRequest:
     method: str = "mean_pair_od"
     sam_surface_percent: float = 3.0
     native_sequence: bool = False
+    sample_description: str = ""
 
     @classmethod
     def from_payload(cls, payload, allowed_root):
@@ -58,7 +59,7 @@ class PairedRequest:
         if type(first) is not bool:
             raise ValueError("Select whether the first frame has electrons")
         limit = payload["pair_limit"]
-        if type(limit) is not int or not 1 <= limit <= MAX_PAIRS:
+        if not (mode == "precision" and limit is None) and (type(limit) is not int or not 1 <= limit <= MAX_PAIRS):
             raise ValueError(f"Pair limit must be an integer between 1 and {MAX_PAIRS}")
         source = payload["trigger_source"]
         if source not in tuple(TRIGGER_SOURCES):
@@ -66,7 +67,8 @@ class PairedRequest:
         if type(payload["output_root"]) is not str or type(payload["sample_name"]) is not str:
             raise ValueError("Select a project folder and sample name")
         root = allowed_root(payload["output_root"])
-        run = Vd2MeasurementProtocol._build_request("ABSORPTION", 2 * limit, root, payload["sample_name"])
+        run = Vd2MeasurementProtocol._build_request("ABSORPTION", 2 * (limit or 1), root, payload["sample_name"],
+                                                   payload.get("sample_description", ""))
         folder = Path(run.output_root).resolve()
         if not folder.is_dir() or not (folder / run.run_name).resolve().is_relative_to(folder):
             raise ValueError("Sample path must be inside an existing project folder")
@@ -85,7 +87,7 @@ class PairedRequest:
             raise ValueError("Select a calibrated spectral band or a camera ROI")
         threshold = target_error(payload["target_mod"]) if mode == "precision" else None
         return cls(str(folder), run.run_name, noise, mode, first, limit, threshold, source, roi,
-                   band, method, float(surface), mode == "fixed")
+                   band, method, float(surface), mode == "fixed", run.sample_description)
 
 
 def _dark_matches(api, current, artifact, native):
@@ -173,6 +175,7 @@ class PairedAcquisition:
             self._state = {
                 "job_id": job, "status": "preparing", "active": True, "stage": "Checking Bruit and camera",
                 "sample_name": request.sample_name, "mode": request.mode,
+                "sample_description": request.sample_description, "requested_at": _utc_now(),
                 "pair_limit": request.pair_limit, "first_map_with_electrons": request.first_map_with_electrons,
                 "trigger_source": request.trigger_source, "method": request.method,
                 "band": asdict(request.band) if request.band else None,
@@ -212,6 +215,9 @@ class PairedAcquisition:
             raise ValueError("Paired measurement is no longer active")
 
     def _run(self, api, request, job):
+        if getattr(api, "VD2_COORDINATOR_DEVICE", None):
+            self._run_direct(api, request, job)
+            return
         recording = analysis = kinetics = None
         bruit_required = False
         stop_reason = "operator_stop"
@@ -312,36 +318,134 @@ class PairedAcquisition:
         except Exception as exc:
             errors.append(str(exc))
         finally:
-            if kinetics is not None and recording is not None:
+            self._finish(root, request, recording, analysis, kinetics, errors, stop_reason, bruit_required)
+
+    def _finish(self, root, request, recording, analysis, kinetics, errors, stop_reason, bruit_required, machine=None):
+        if kinetics is not None and recording is not None:
+            try:
+                kinetics.calculate()
+                self._publish_kinetics(kinetics)
+            except Exception as exc:
+                errors.append(f"Kinetics calculation failed: {exc}")
+        final = "bruit_required" if bruit_required else "failed" if errors else "stopped" if stop_reason == "operator_stop" else "completed"
+        result = {"status": final, "stop_reason": "fault" if errors else stop_reason,
+                  "completed_at": _utc_now(), "error": " | ".join(errors)}
+        if recording:
+            self._update(status="saving", stage="Finalizing paired H5")
+            try:
+                summary = {**self.status(), **result, "active": False}
+                recording.finish(analysis, summary, kinetics)
+            except Exception as exc:
+                result.update(status="failed", stop_reason="fault",
+                              error=" | ".join(filter(None, (result["error"], f"H5 finalization failed: {exc}"))))
+            else:
+                if machine is not None:
+                    try:
+                        from vd2_paired_export import write_paired_metadata
+                        result.update(write_paired_metadata(summary["h5_path"], summary, machine))
+                    except (OSError, ValueError, RuntimeError) as exc:
+                        result["export_warning"] = f"H5 saved; JSON metadata unavailable: {exc}"
+                if summary["frames_recorded"]:
+                    try:
+                        result["manifest_path"] = self._project_writer(
+                            root, request.sample_name, Path(summary["h5_path"]), {**summary, **result})
+                    except (OSError, ValueError, KeyError) as exc:
+                        result["manifest_warning"] = f"Paired H5 saved; project history unavailable: {exc}"
+        self._update(**result, active=False, stage="")
+
+    def _run_direct(self, api, request, job):
+        from vd2_direct_recording import _machine, _sequence_frames, recording_axes
+
+        root = Path(request.output_root)
+        recording = analysis = kinetics = coordinator = machine = None
+        errors, stop_reason, bruit_required = [], "operator_stop", False
+        try:
+            coordinator = api.DeviceProxy(api.VD2_COORDINATOR_DEVICE)
+            ccd = api.DeviceProxy(api.VD2_COORDINATOR_CCD)
+            coordinator.set_timeout_millis(30_000)
+            ccd.set_timeout_millis(5_000)
+            if self._stop.is_set():
+                return
+            configuration = json.loads(coordinator.ArmPaired(TRIGGER_SOURCES[request.trigger_source]))
+            axes = recording_axes(configuration)
+            machine = _machine(configuration, axes)
+            wavelengths, calibration_id, columns = axes[1]
+            current = machine["streak_control"]["values"]
+            def matches(artifact):
+                before = (artifact.get("machine_before") or {}).get("direct_tango", {}).get("camera", {})
+                camera = configuration["camera"]
+                return _dark_matches(api, current, artifact, True) and all(
+                    before.get(key) == camera[key] for key in ("model", "serial", "roi"))
+            dark = self._dark_reader(root, request.sample_name, request.reuse_bruit,
+                                     None if request.band else request.roi, request.mode == "precision",
+                                     self._stop, compatible=matches)
+            if dark is None or self._stop.is_set():
+                return
+            if dark.image.shape != (len(wavelengths), len(axes[2])):
+                raise BruitRequired("Bruit geometry differs from the calibrated DCAM image")
+            machine.update(spectral_calibration_id=calibration_id, spectral_valid_columns=columns)
+            dark = replace(dark, wavelengths=wavelengths, timedelays=axes[2], time_scale="us")
+            if request.band:
+                low, high = sorted(wavelengths[column] for column in columns)
+                center, half_width = request.band.center_nm, request.band.half_width_nm
+                if center - half_width < low or center + half_width > high:
+                    raise ValueError("Selected wavelength band is outside the measured wavelength span")
+                kinetics = KineticAnalysis(dark.image, wavelengths, dark.timedelays, request.band,
+                                           request.method, request.sam_surface_percent, dark.roi_blocks)
+            analysis = PairedAnalysis(dark.image, None if request.band else request.roi, dark.roi_blocks)
+            folder = (root / request.sample_name).resolve()
+            if not folder.is_relative_to(root):
+                raise ValueError("Sample path is outside the project folder")
+            folder.mkdir(exist_ok=True)
+            run_folder = folder / f"paired-{job}"
+            run_folder.mkdir()
+            file = run_folder / "Absorption_Base.h5"
+            from DeviceServers.cameras.hamamatsu_streak.spectral_calibration import load_spectral_calibration
+            profiles = load_spectral_calibration()
+            spectral_profile = next(item for item in profiles.get("profiles", [profiles])
+                                    if item["id"] == calibration_id)
+            machine["spectral_profile"] = {
+                key: spectral_profile[key] for key in ("id", "source", "camera", "kymera", "validation")
+                if key in spectral_profile
+            }
+            machine["spectral_profile"]["h5_dataset"] = "/metadata/spectral_calibration_json"
+            recording = PairedRecording(file, dark, asdict(request), machine)
+            recording.metadata.create_dataset("spectral_calibration_json", data=json.dumps(spectral_profile))
+            recording.metadata.create_dataset("time_calibration_json", data=json.dumps(axes[3]))
+            self._update(h5_path=str(file), bruit_artifact_id=dark.identity, time_scale=dark.time_scale,
+                         status="acquiring", stage="Warming lamp at 10 Hz")
+            if self._stop.is_set():
+                return
+            coordinator.FirePaired()
+            if json.loads(coordinator.PairedConfiguration()) != configuration:
+                raise ValueError("VD2 settings changed after arming the paired acquisition")
+            def read_frame(_sequence):
+                timestamp, stamp, pixels = next(frames)
+                return pixels.T, stamp, timestamp / 1000
+            frames = _sequence_frames(ccd, axes)
+            stop_reason = self._read_pairs(ccd, request, recording, analysis, kinetics,
+                                           read_frame=read_frame, skip_frames=100)
+            if json.loads(coordinator.PairedConfiguration()) != configuration:
+                raise ValueError("VD2 settings changed during paired recording")
+        except BruitRequired as exc:
+            bruit_required = True
+            errors.append(str(exc))
+        except Exception as exc:
+            errors.append(str(exc))
+        finally:
+            if coordinator is not None:
                 try:
-                    kinetics.calculate()
-                    self._publish_kinetics(kinetics)
+                    coordinator.StopPaired()
                 except Exception as exc:
-                    errors.append(f"Kinetics calculation failed: {exc}")
-            final = "bruit_required" if bruit_required else "failed" if errors else "stopped" if stop_reason == "operator_stop" else "completed"
-            result = {"status": final, "stop_reason": "fault" if errors else stop_reason,
-                      "completed_at": _utc_now(), "error": " | ".join(errors)}
-            if recording:
-                self._update(status="saving", stage="Finalizing paired H5")
-                try:
-                    summary = {**self.status(), **result, "active": False}
-                    recording.finish(analysis, summary, kinetics)
-                except Exception as exc:
-                    result.update(status="failed", stop_reason="fault",
-                                  error=" | ".join(filter(None, (result["error"], f"H5 finalization failed: {exc}"))))
-                else:
-                    if summary["frames_recorded"]:
-                        try:
-                            result["manifest_path"] = self._project_writer(root, request.sample_name, file, summary)
-                        except (OSError, ValueError, KeyError) as exc:
-                            result["manifest_warning"] = f"Paired H5 saved; project history unavailable: {exc}"
-            self._update(**result, active=False, stage="")
+                    errors.append(f"Return to 5 Hz unverified: {exc}")
+            self._finish(root, request, recording, analysis, kinetics, errors, stop_reason, bruit_required, machine)
 
     def _publish_kinetics(self, kinetics):
         preview = None
         if kinetics.values is not None:
             index = np.linspace(0, len(kinetics.time) - 1, min(256, len(kinetics.time)), dtype=int)
-            preview = {"time": kinetics.time[index].tolist(), "od_mod": kinetics.values[index].tolist()}
+            preview = {"time": kinetics.time[index].tolist(), "od_mod": kinetics.values[index].tolist(),
+                       "se_mod": kinetics.errors[index].tolist() if kinetics.errors is not None else None}
         self._update(estimate_mod=kinetics.estimate_mod, error_mod=kinetics.error_mod,
                      roi_pairs=kinetics.pairs_used, kinetics=preview)
 
@@ -385,7 +489,7 @@ class PairedAcquisition:
                     kinetics.add(*pair)
                 self._update(pairs_recorded=(sequence + 1) // 2)
 
-    def _read_pairs(self, camera, request, recording, analysis, kinetics=None):
+    def _read_pairs(self, camera, request, recording, analysis, kinetics=None, *, read_frame=None, skip_frames=0):
         previous_sequence = None
         previous_time = None
         first_image = None
@@ -396,18 +500,29 @@ class PairedAcquisition:
         deadline = time.monotonic() + FRAME_TIMEOUT_S
         while not self._stop.is_set():
             sequence_request = -1 if previous_sequence is None else previous_sequence + 1
-            data = camera.command_inout("ReadPairedLiveFrame", sequence_request)
+            data = read_frame(sequence_request) if read_frame else camera.command_inout(
+                "ReadPairedLiveFrame", sequence_request)
             if not data:
                 if time.monotonic() >= deadline:
                     raise TimeoutError("Timed out waiting for the next 10 Hz camera frame")
                 self._stop.wait(0.025)
                 continue
-            image, sequence, timestamp = _raw_frame(json.loads(data), analysis.background.shape)
+            image, sequence, timestamp = data if read_frame else _raw_frame(json.loads(data), analysis.background.shape)
             is_contiguous = sequence >= 0 and math.isfinite(timestamp) and (
                 previous_sequence is None
                 or (sequence == previous_sequence + 1 and abs(timestamp - previous_time - 100.0) <= 5.0)
             )
             is_first = recording.frame_count % 2 == 0
+            if skip_frames:
+                if not is_contiguous:
+                    raise ValueError("10 Hz frame sequence interrupted during lamp warmup")
+                previous_sequence, previous_time = sequence, timestamp
+                skip_frames -= 1
+                if not skip_frames:
+                    self._update(stage="Recording 10 Hz pairs")
+                continue
+            if recording.frame_count == 0:
+                self._update(capture_started_at=_utc_now())
             role = int(request.first_map_with_electrons == is_first) if is_contiguous else -1
             recording.append(image, sequence, timestamp, role)
             self._update(frames_recorded=recording.frame_count)
@@ -447,6 +562,6 @@ class PairedAcquisition:
                     confirmations = confirmations + 1 if estimate.error_mod is not None and estimate.error_mod <= target else 0
                     if confirmations >= ERROR_CONFIRMATIONS:
                         return "precision_reached"
-            if count >= request.pair_limit:
+            if request.pair_limit is not None and count >= request.pair_limit:
                 return "pair_limit" if request.mode == "precision" else "pair_count_reached"
         return "operator_stop"

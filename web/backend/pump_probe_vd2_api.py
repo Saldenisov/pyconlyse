@@ -42,7 +42,7 @@ from vd2_phase_destination import PhaseDestinations
 from vd2_paired_acquisition import PairedAcquisition
 from vd2_paired_api import install_paired_routes
 from vd2_dcam_api import install_dcam_routes
-from vd2_coordinator_api import install_vd2_coordinator_routes
+from vd2_coordinator_api import adjustment_conflict, install_vd2_coordinator_routes
 from vd2_direct_recording import record_direct_phase
 from vd2_live_acquisition import SEQUENCE_TIMEOUT_S, SEQUENCE_WAIT_QUERY, camera_serialization_timeout, wait_for_sequence
 from vd2_alignment import read_alignment_axes, image_alignment_settings, image_intensity_settings, alignment_calibration_key, alignment_measurement_key
@@ -526,7 +526,7 @@ def protocol_state():
     status = _measurement_protocol.status()
     if paired["active"]:
         status.update(acquisition_active=True, acquisition_phase=paired["status"])
-    return jsonify({"success": True, **status, "paired_available": VD2_CAMERA_ONLY and not VD2_COORDINATOR_DEVICE,
+    return jsonify({"success": True, **status, "paired_available": bool(VD2_CAMERA_ONLY or VD2_COORDINATOR_DEVICE),
                     "paired": paired})
 
 
@@ -629,6 +629,52 @@ def _live_average_state(proxy):
         raise RuntimeError("HPD-TA Live rolling-average readback is invalid")
     _live_average_readback = {"enabled": enabled == "1", "frames": int(frames)}
     return dict(_live_average_readback)
+
+
+@pump_probe_vd2_api.route("/dg645/output", methods=["GET"])
+def dg645_output_state():
+    if not VD2_COORDINATOR_DEVICE:
+        return jsonify(success=False, error="Manual DG645 Output requires the VD2 coordinator"), 409
+    try:
+        coordinator = DeviceProxy(VD2_COORDINATOR_DEVICE)
+        coordinator.set_timeout_millis(5000)
+        return jsonify(success=True, **json.loads(coordinator.command_inout("GetDg645Output")))
+    except Exception as exc:
+        return jsonify(success=False, error=_control_error(exc)), 503
+
+
+@pump_probe_vd2_api.route("/dg645/output", methods=["POST"])
+@_serialized_vd2_mutation
+def set_dg645_output():
+    if not VD2_COORDINATOR_DEVICE:
+        return jsonify(success=False, error="Manual DG645 Output requires the VD2 coordinator"), 409
+    payload, rejected = _mutation_payload({"enabled"})
+    if rejected is not None:
+        return rejected
+    enabled = payload.get("enabled")
+    if type(enabled) is not bool or set(payload) != {"enabled"}:
+        return jsonify(success=False, error="Choose enabled true or false"), 400
+    blocked = _approval_or_response(
+        "dg645.output.on" if enabled else "dg645.output.off",
+        [_target(VD2_COORDINATOR_DEVICE, "SetDg645Output")], payload, "vd2.dg645.output", {"enabled"},
+    )
+    if blocked is not None:
+        return blocked
+    from pump_probe_v0_api import v0_uses_dg645
+
+    if _protocol_hardware_phase() in {"preparing", "acquiring", "saving", "processing"}:
+        return jsonify(success=False, error="VD2 measurement owns the DG645 clock"), 409
+    if v0_uses_dg645(DG645_DEVICE):
+        return jsonify(success=False, error="DG645 is in use by Pump Probe V0"), 409
+    try:
+        coordinator = DeviceProxy(VD2_COORDINATOR_DEVICE)
+        coordinator.set_timeout_millis(15000)
+        return jsonify(success=True, **json.loads(coordinator.command_inout("SetDg645Output", enabled)))
+    except Exception as exc:
+        conflict = adjustment_conflict(exc)
+        if conflict:
+            return jsonify(success=False, error=conflict), 409
+        return jsonify(success=False, error=_control_error(exc)), 503
 
 
 @pump_probe_vd2_api.route("/live/rolling-average", methods=["GET", "POST"])

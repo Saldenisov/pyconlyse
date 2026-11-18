@@ -316,6 +316,9 @@ def record_paired_project_run(root, sample_name, file, result):
         "job_id", "status", "pairs_recorded", "frames_recorded", "stop_reason", "completed_at",
         "bruit_artifact_id", "first_map_with_electrons", "mode",
     )}
+    if result.get("metadata_path"):
+        record["metadata"] = _relative(root, Path(result["metadata_path"]))
+        record["capture_rate_hz"] = 10
     with _lock:
         data = load_manifest(path)
         sample = data["samples"].setdefault(sample_name, {

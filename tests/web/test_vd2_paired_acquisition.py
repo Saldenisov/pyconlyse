@@ -3,6 +3,8 @@ import base64
 from contextlib import contextmanager
 from dataclasses import replace
 import json
+from pathlib import Path
+import struct
 from threading import Event
 from types import SimpleNamespace
 
@@ -101,13 +103,72 @@ def test_precision_stops_after_enough_completed_blocks(rig):
     run, request, control, events = rig
     camera = Camera(events)
     control._proxy = lambda: camera
-    run.start(control, replace(request, mode="precision", target_mod=2., pair_limit=250))
+    run.start(control, replace(request, mode="precision", target_mod=1., pair_limit=None))
     run.wait(10)
     result = run.status()
     assert result["stop_reason"] == "precision_reached"
     assert result["pairs_recorded"] == 180
     assert result["error_mod"] == pytest.approx(0., abs=1e-10)
     assert camera.index == 360
+
+
+@pytest.mark.parametrize("first_has_electrons", [True, False])
+def test_direct_stream_writes_400_frames_to_h5_and_json(rig, monkeypatch, first_has_electrons):
+    from vd2_direct_recording import _machine
+
+    run, request, control, events = rig
+    dark = run._dark_reader()
+    configuration = {"time_range": "1 us", "camera": {"model": "DCAM", "serial": "123", "roi": [0, 2, 0, 1, 1, 1],
+                     "exposure_ms": 10.0, "mcp_gain": 0}, "optics": {"wavelength_nm": 550, "grating": 3},
+                     "delays": {"a": "0,+0.0020417", "e": "0,+0.0022065"}, "dg_trigger_source": 1,
+                     "rate_hz": 10, "ccd_trigger": "external"}
+    axes = ("[Camera]\r\n", (dark.wavelengths, "test-calibration", (0, 1)),
+            np.array([0.], dtype="<f4"), {"id": "test-time", "original_first_us": 0., "source_sha256": "test"})
+    monkeypatch.setattr("vd2_direct_recording.recording_axes", lambda _config: axes)
+    monkeypatch.setattr("DeviceServers.cameras.hamamatsu_streak.spectral_calibration.load_spectral_calibration",
+                        lambda: {"id": "test-calibration", "kymera": {"grating": 3}})
+    dark.artifact["machine_before"] = _machine(configuration, axes)
+
+    def read_dark(*args, compatible):
+        assert compatible(dark.artifact)
+        return dark
+
+    run._dark_reader = read_dark
+    config = json.dumps(configuration)
+    coordinator = SimpleNamespace(
+        ArmPaired=lambda source: (events.append(("arm", source)), config)[1],
+        FirePaired=lambda: events.append("fire"),
+        PairedConfiguration=lambda: config,
+        StopPaired=lambda: events.append("return_5"),
+        set_timeout_millis=lambda value: None,
+    )
+    stream = iter(range(500))
+    def read_sequence():
+        index = next(stream)
+        image = np.array([90 if index % 2 == 0 else 110, 100], dtype="<u2")
+        return "vd2-frame-v1", struct.pack("<qq", 1_000_000 + index * 100_000, index) + image.tobytes()
+    ccd = SimpleNamespace(ReadSequenceFrame=read_sequence, set_timeout_millis=lambda value: None)
+    control.VD2_COORDINATOR_DEVICE, control.VD2_COORDINATOR_CCD = "coordinator", "ccd"
+    control.DeviceProxy = lambda name: {"coordinator": coordinator, "ccd": ccd}[name]
+    run.start(control, replace(request, pair_limit=200, first_map_with_electrons=first_has_electrons,
+                               sample_description="Paired optical test"))
+    run.wait(5)
+    result = run.status()
+    assert result["status"] == "completed", result["error"]
+    assert result["frames_recorded"] == 400 and result["pairs_recorded"] == 200
+    assert events == [("arm", 1), "fire", "return_5"]
+    path = Path(result["h5_path"])
+    with h5py.File(path) as file:
+        np.testing.assert_array_equal(file["beam_on"][:],
+                                      [int(first_has_electrons), int(not first_has_electrons)] * 200)
+        assert json.loads(file["metadata/spectral_calibration_json"][()])["kymera"]["grating"] == 3
+    assert not list(path.parent.glob("*.his"))
+    metadata = json.loads(path.with_name("Absorption_Base.json").read_text())
+    assert metadata["capture_rate_hz"] == 10 and metadata["electron_rate_hz"] == 5
+    assert metadata["first_frame_with_electrons"] is first_has_electrons
+    assert metadata["beam_phase_source"] == "operator_selection"
+    assert metadata["capture_started_at"]
+    assert metadata["sample_description"] == "Paired optical test"
 
 
 def test_invalid_dark_corrected_roi_cannot_trigger_automatic_success(rig):

@@ -30,7 +30,7 @@ test('precision mode sends the wavelength band and operator phase', async () => 
   const [url, options] = fetchVd2.mock.calls.at(-1);
   expect(url).toBe('/api/pump-probe-vd2/paired/start');
   expect(JSON.parse(options.body)).toMatchObject({
-    first_map_with_electrons: false, mode: 'precision', target_mod: 2, method: 'lamp_matched',
+    first_map_with_electrons: false, mode: 'precision', target_mod: 2, method: 'lamp_matched', pair_limit: null,
     band,
     roi: { x0: 2, x1: 8, y0: 4, y1: 8, width: 10, height: 20 },
   });
@@ -44,6 +44,16 @@ test('shows signed OD and permits stopping the recording', () => {
   expect(screen.getByText('· Maximum pointwise error 1.85 mOD')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Stop pairs' }));
   expect(props.onStop).toHaveBeenCalled();
+});
+
+test('direct precision displays the per-delay error envelope and maximum SE in a pop-up', () => {
+  render(<VD2PairedCapture {...props} directTango run={{ active: true, status: 'acquiring',
+    mode: 'precision', band, job_id: 'job', target_mod: 1, error_mod: 1.4,
+    pairs_recorded: 180, pair_limit: null, kinetics: { time: [0, 1], od_mod: [0.25, 0.4], se_mod: [0.2, 1.4] } }} />);
+  expect(screen.getByRole('dialog', { name: 'Live OD kinetics' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Pointwise standard error')).toBeInTheDocument();
+  expect(screen.getByText('Max SE 1.40 mOD')).toBeInTheDocument();
+  expect(screen.getByPlaceholderText('No frame limit')).toHaveValue(null);
 });
 
 test('missing Bruit closes the streak shutter and resumes after the new reference is verified', async () => {

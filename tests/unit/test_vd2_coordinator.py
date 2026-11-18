@@ -56,6 +56,11 @@ def rig(monkeypatch):
 
     class Generator:
         settings = {**{f"DLAY? {i}": "0,+0.0" for i in range(3,10)},
+                    **{f"PRES? {i}": "1" for i in range(5)},
+                    **{f"{key}? {i}": "0" for key in ("LAMP", "LOFF", "LPOL") for i in range(5)},
+                    **{f"PHAS? {i}": "0" for i in range(1, 5)},
+                    **{key: "0" for key in ("*IDN?", "TLVL?", "ADVT?", "HOLD?", "INHB?", "TIMB?")},
+                    "BURD?": "0", "BURT?": "0", "BURC?": "1", "BURP?": "0.1",
                     "TSRC?": "5", "TRAT?": "5", "BURM?": "0", "DLAY? 2": "0,+0.0020417",
                     "DLAY? 6": "0,+0.0022065", "*OPC?": "1"}
 
@@ -71,6 +76,9 @@ def rig(monkeypatch):
                 self.settings[f"DLAY? {channel}"] = settings
             elif value.startswith("TRAT "):
                 self.settings["TRAT?"] = value.removeprefix("TRAT ")
+            elif value.startswith(("BURC ", "BURP ", "BURM ")):
+                register, setting = value.split()
+                self.settings[f"{register}?"] = setting
             else:
                 self.settings["TSRC?"] = value.removeprefix("TSRC ")
 
@@ -140,6 +148,24 @@ def test_range_updates_head_and_e_then_starts_clock_only_after_arming_camera(rig
     assert events[-2:] == ["TSRC 5", ("CloseReadoutKeepShutter", None)]
     assert kymera.shutter == "Open"
     assert json.loads(vd2.GetState())["phase"] == "idle"
+
+
+def test_paired_mode_arms_before_the_first_burst_and_returns_to_five_hz(rig):
+    vd2, events, ccd, generator, _, lamp, _ = rig
+    vd2.Prepare()
+    vd2.SetRate(10)
+    with pytest.raises(RuntimeError, match="together"):
+        vd2.StartPhase("ABSORPTION")
+    assert json.loads(vd2.ArmPaired(1))["rate_hz"] == 10
+    assert generator.settings["TSRC?"] == "5" and generator.settings["BURM?"] == "0"
+    assert ("BufferContinuousSequence", None) in events
+    vd2.FirePaired()
+    assert events[-4:] == ["BURC 2", "BURP 0.1", "BURM 1", "TSRC 1"]
+    assert json.loads(vd2.PairedConfiguration())["dg_trigger_source"] == 1
+    vd2.StopPaired()
+    assert events[-3:] == ["TSRC 5", "BURM 0", ("CloseReadoutKeepShutter", None)]
+    assert generator.settings["TRAT?"] == "5"
+    assert not ccd.AcquisitionActive and lamp.states[0] == 1
 
 
 @pytest.mark.parametrize("rate", [5, 10])

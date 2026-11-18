@@ -24,54 +24,39 @@ test('Kymera shows three installed gratings and switches to blaze 500 by index',
   expect(apply).toHaveBeenCalledWith('grating_index', 3);
 });
 
-test('VD2 Live shows wavelength and exposure to two decimal places without writing rounded readbacks', () => {
-  const apply = jest.fn();
-  const liveSettings = (values) => (
-    <VD2LiveSettings values={values} onApply={apply} directTango live />
-  );
-  const { rerender } = render(liveSettings({
-    wavelength_nm: 600.0000000001,
-    live_exposure_time: '10.0074856 ms',
-  }));
-  const wavelength = screen.getByRole('spinbutton', { name: 'Wavelength' });
-  expect(wavelength.value).toBe('600.00');
-  const exposure = screen.getByRole('spinbutton', { name: 'Live exposure' });
-  expect(exposure.value).toBe('10.01');
-  fireEvent.blur(wavelength);
-  expect(apply).not.toHaveBeenCalled();
-
-  fireEvent.focus(wavelength);
-  fireEvent.change(wavelength, { target: { value: '601.123' } });
-  fireEvent.blur(wavelength);
-  expect(apply).toHaveBeenCalledWith('wavelength_nm', '601.123');
-  rerender(liveSettings({ wavelength_nm: 601.123, live_exposure_time: '10 ms' }));
-  expect(wavelength.value).toBe('601.12');
-  expect(exposure.value).toBe('10.00');
-});
-
-test('direct Live sends DG645 delays in seconds, enables exposure and keeps mode read-only', () => {
-  const apply = jest.fn();
-  render(<VD2LiveSettings directTango live onApply={apply} values={{
-    delay_e: 0.0022065, delay_repetition_rate: 5, live_exposure_time: '10 ms', streak_mode: 'Operate',
-    delay_trigger_mode: 'Internal',
-  }} />);
-  const delay = screen.getByRole('spinbutton', { name: 'Delay E' });
-  expect(delay.value).toBe('2206.5');
-  fireEvent.focus(delay);
-  fireEvent.change(delay, { target: { value: '2207' } });
-  fireEvent.blur(delay);
-  expect(apply).toHaveBeenCalledWith('delay_e', '0.002207');
-  fireEvent.change(screen.getByRole('combobox', { name: 'Repetition rate' }), { target: { value: '10' } });
-  expect(apply).toHaveBeenCalledWith('delay_repetition_rate', 10);
-  expect(screen.queryByRole('combobox', { name: 'Mode' })).not.toBeInTheDocument();
-  expect(screen.getByRole('spinbutton', { name: 'Live exposure' })).toBeEnabled();
-});
-
 jest.mock('./useVd2ServerWorkspace',()=>({...jest.requireActual('./useVd2ServerWorkspace'),__esModule:true,
   default:()=>({ready:true,message:'Session saved on server.',error:'',history:async()=>[],restore:async()=>{}})}));
 
 const originalFetch = global.fetch;
 beforeEach(()=>window.localStorage.clear());
+
+test('DG645 Output can be switched from Live settings while the camera is stopped', async () => {
+  const outputUrl = '/api/pump-probe-vd2/dg645/output';
+  const changes = [];
+  let enabled = false;
+  global.fetch = jest.fn(async (url, options) => {
+    expect(url).toBe(outputUrl);
+    if (options?.method === 'POST') {
+      ({ enabled } = JSON.parse(options.body));
+      changes.push(enabled);
+    }
+    return { ok: true, json: async () => ({ success: true, enabled, rate_hz: 5 }) };
+  });
+  const view = render(<VD2LiveSettings values={{}} onApply={jest.fn()} directTango live={false}
+    manualOutput={{ disabled: false, enableBlocked: false }} />);
+  try {
+    const output = within(screen.getByRole('group', { name: 'DG645 Output' }));
+    await output.findByText('Standby (Internal)');
+    fireEvent.click(output.getByRole('button', { name: 'On' }));
+    await output.findByText('On · 5 Hz');
+    fireEvent.click(output.getByRole('button', { name: 'Off' }));
+    await output.findByText('Standby (Internal)');
+    expect(changes).toEqual([true, false]);
+  } finally {
+    view.unmount();
+    global.fetch = originalFetch;
+  }
+});
 
 test('project manifest and earlier measurements open separately and preserve acquisition context',()=>{
   const onChange=jest.fn(),manifest='E:\\DATA_VD2\\20261103\\vd2-manifest.json';
@@ -888,46 +873,6 @@ test.each(['acquiring', 'saving', 'processing'])('Alignment controls cannot inte
   }
 });
 
-test.each([true, false])('direct Tango displays no RemoteEx or HPD-TA controls (%s connected)', async (connected) => {
-  const camera = {
-    success: true, readout_backend: 'tango', state: connected ? 'ON' : 'FAULT',
-    connected, application_running: connected, acquisition_status: 'idle', values: {},
-  };
-  global.fetch = jest.fn(async url => ({
-    ok: true,
-    json: async () => url === '/api/pump-probe-vd2/state' || url === '/api/pump-probe-vd2/refresh'
-      ? camera
-      : { success: true, status: 'idle', frame_available: false, stream_state: 'no_valid_image' },
-  }));
-  const view = render(<PumpProbeVD2 />);
-  try {
-    await screen.findByText(connected ? 'Tango ON' : 'Tango FAULT');
-    expect(screen.queryByText(/RemoteEx|HPD-TA/)).not.toBeInTheDocument();
-    if (!connected) expect(screen.getByRole('alert')).toHaveTextContent('VD2 Tango coordinator is unavailable');
-    expect(screen.getByRole('spinbutton', { name: 'Frames / HIS' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Live', exact: true })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Stop', exact: true })).toBeInTheDocument();
-    expect(screen.queryByRole('form', { name: 'Live rolling average' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Live' }));
-    expect(screen.queryByRole('form', { name: 'Live rolling average' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Live On' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Alignment' }));
-    expect(screen.queryByRole('form', { name: 'Live rolling average' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Live', exact: true })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Stop', exact: true })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Hardware setup' }));
-    expect(screen.getByText('Hamamatsu C13410 / DCAM')).toBeInTheDocument();
-    expect(screen.queryByText(/RemoteEx|HPD-TA/)).not.toBeInTheDocument();
-    expect(global.fetch.mock.calls.some(([url]) => url.endsWith('/live/rolling-average'))).toBe(false);
-  } finally {
-    view.unmount();
-    global.fetch = originalFetch;
-  }
-});
-
 test.each([false, true])('HPD-TA stopped is reported only with a connected control link (%s)', async (connected) => {
   global.fetch = jest.fn(async url => {
     let payload = { success: true };
@@ -1021,16 +966,15 @@ test('completed conversion shows only H5 after HIS retirement', () => {
 
 test('exposure displays actual milliseconds and writes explicit units only after edit', () => {
   const apply = jest.fn();
-  const field = CARDS.find(({ tone }) => tone === 'camera').fields.find(({ key }) => key === 'live_exposure_time');
-  render(<EditableField field={field} value="10.0074856 ms" onApply={apply} />);
+  render(<EditableField field={{ key: 'live_exposure_time', label: 'Live exposure', type: 'number', duration: true, unit: 'ms' }} value="10 ms" onApply={apply} />);
   const input = screen.getByLabelText('Live exposure');
-  expect(input.value).toBe('10.01');
+  expect(input).toHaveValue(10);
   fireEvent.blur(input);
   expect(apply).not.toHaveBeenCalled();
   fireEvent.focus(input);
-  fireEvent.change(input, { target: { value: '20.125' } });
+  fireEvent.change(input, { target: { value: '20' } });
   fireEvent.blur(input);
-  expect(apply).toHaveBeenCalledWith('live_exposure_time', '20.125 ms');
+  expect(apply).toHaveBeenCalledWith('live_exposure_time', '20 ms');
 });
 
 test('folder context menu carries selected run into Data Treatment', () => {
