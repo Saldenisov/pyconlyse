@@ -135,7 +135,11 @@ export function useVd2AcquisitionActions({
     }
   }, [loadPreview, reportError, resolveReadErrors]);
   const updateProtocolSetting = useCallback((name, value) => {
-    setProtocolSettings((current) => ({ ...current, [name]: value }));
+    setProtocolSettings(current => ({
+      ...current, [name]: value,
+      ...(name === 'outputRoot' && value !== current.outputRoot && current.reuseBruit !== 'none'
+        && { reuseBruit: 'latest' }),
+    }));
   }, []);
 
   const startProtocolPhase = useCallback(async (phase,resolution=null) => {
@@ -146,7 +150,7 @@ export function useVd2AcquisitionActions({
       const body=resolution?.body||{
         phase,frames_per_his:protocolSettings.framesPerHis,output_root:protocolSettings.outputRoot,run_name:protocolSettings.runName,
         sample_description:protocolSettings.sampleDescription||'',
-        reuse_bruit:guidedRun?.reuse ?? (protocolSettings.reuseBruit==='none'?'none':'latest'),
+        reuse_bruit:guidedRun?.reuse ?? protocolSettings.reuseBruit ?? 'latest',
       };
       let choice=resolution?.choice;
       if(!choice) {
@@ -224,6 +228,13 @@ export function useVd2AcquisitionActions({
     if (state?.coordinator?.dark_checkout) { beginGuidedRun('none'); return; }
     const own = project?.samples?.find(sample => sample.name === protocolSettings.runName)?.bruit_reference;
     const options = (project?.bruit_options || []).filter(item => item.status === 'completed');
+    const selected = protocolSettings.reuseBruit;
+    if (selected && selected !== 'latest' && selected !== 'none') {
+      const candidate = options.find(item => item.id === selected);
+      if (candidate) setGuidedChoice(candidate);
+      else reportError('Selected Bruit is no longer available in this project.', 'Noise Source');
+      return;
+    }
     const candidate = options.find(item => item.id === own) || [...options].sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)))[0];
     if (candidate) setGuidedChoice(candidate);
     else beginGuidedRun('none');

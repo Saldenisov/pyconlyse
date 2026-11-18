@@ -19,7 +19,7 @@ from vd2_paired_spectral import METHOD as SPECTRAL_METHOD, PRECISION_AXES, TRACE
 from vd2_paired_sequence import frames, native_capture, sequence_header
 from vd2_paired_storage import BruitRequired, PairedRecording, load_dark_reference
 from vd2_spectral_calibration import camera_geometry, wavelength_calibration
-from vd2_project_manifest import record_paired_project_run
+from vd2_project_manifest import is_bruit_id, record_paired_project_run
 from vd2_tango_optics import paired_capture_clock
 
 
@@ -76,7 +76,7 @@ class PairedRequest:
         if not folder.is_dir() or not (folder / run.run_name).resolve().is_relative_to(folder):
             raise ValueError("Sample path must be inside an existing project folder")
         noise = payload["reuse_bruit"]
-        if noise not in ("latest", "none"):
+        if noise not in ("latest", "none") and not is_bruit_id(noise):
             raise ValueError("Select a supported Noise Source")
         roi = DetectorROI.from_payload(payload["roi"]) if payload["roi"] is not None else None
         method = payload.get("method", "mean_pair_od")

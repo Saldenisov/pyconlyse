@@ -93,7 +93,7 @@ export default function VD2PairedCapture({
     output_root: settings.outputRoot,
     sample_name: settings.runName,
     sample_description: settings.sampleDescription || '',
-    reuse_bruit: settings.reuseBruit === 'none' ? 'none' : 'latest',
+    reuse_bruit: settings.reuseBruit || 'latest',
     mode,
     first_map_with_electrons: first,
     pair_limit: pairLimit,

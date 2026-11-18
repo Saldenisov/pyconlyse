@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import sqlite3
 
+from vd2_project_manifest import is_bruit_id
+
 
 def workspace_identity(value):
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9-]{10,100}", value):
@@ -28,7 +30,7 @@ def validate_vd2_workspace(value):
     frames = value["framesPerHis"]
     if not isinstance(frames, str) or len(frames) > 6 or (frames and not frames.isascii()) or (frames and not frames.isdecimal()):
         raise ValueError("Invalid frame count draft")
-    if value["reuseBruit"] not in {"latest", "none"}:
+    if value["reuseBruit"] not in ("latest", "none") and not is_bruit_id(value["reuseBruit"]):
         raise ValueError("Invalid Noise Source")
     return {**result, "framesPerHis": frames, "reuseBruit": value["reuseBruit"]}
 

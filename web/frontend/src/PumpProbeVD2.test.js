@@ -941,6 +941,21 @@ test('per-sample noise cannot silently reuse a different samples Bruit', () => {
   expect(screen.getByRole('button', { name: 'Absorption', exact: true })).toBeEnabled();
 });
 
+test('a completed project Bruit can be selected from its context menu', () => {
+  const onChange = jest.fn();
+  const project = { samples: [{ name: 'Run A', measurements: [
+    { id: 'saved-id', phase: 'BRUIT', status: 'completed', frames: 200 },
+  ] }], bruit_options: [{ id: 'saved-id', sample: 'Run A', status: 'completed' }] };
+  const props = { ...protocolProps, onChange, project, protocol: { status: 'idle' } };
+  const view = render(<Vd2PhaseProtocol {...props} />);
+  fireEvent.click(screen.getByText('Previous measurements · 1 samples'));
+  fireEvent.contextMenu(within(screen.getByRole('article')).getByText('Bruit'), { clientX: 10, clientY: 10 });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Use this Bruit' }));
+  expect(onChange).toHaveBeenCalledWith('reuseBruit', 'saved-id');
+  view.rerender(<Vd2PhaseProtocol {...props} settings={{ ...props.settings, reuseBruit: 'saved-id' }} />);
+  expect(screen.getByRole('combobox', { name: 'Noise Source' })).toHaveDisplayValue('Bruit from Run A');
+});
+
 test.each(['acquiring', 'saving', 'processing'])('%s blocks a second phase', (status) => {
   render(<Vd2PhaseProtocol {...protocolProps} protocol={{ status, phase: 'BRUIT' }} />);
   expect(screen.getByRole('button', { name: 'Bruit' })).toBeDisabled();

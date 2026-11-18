@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PureWindowsPath
+import re
 import tempfile
 from threading import RLock
 from uuid import uuid4
@@ -15,6 +16,10 @@ SCHEMA = "pyconlyse.vd2.project"
 _lock = RLock()
 BRUIT_SETTINGS = ("time_range", "streak_mode", "gate_mode", "mcp_gain", "wavelength_nm", "grating",
                   "acquire_exposure_time", "analog_integration_count", "delay_trigger_mode", "delay_a", "delay_e")
+
+
+def is_bruit_id(value):
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value) is not None
 
 
 def now():
@@ -113,8 +118,17 @@ class Vd2ProjectManifest:
                     raise ValueError(f"Bruit reuse cannot be verified ({key}); record a new Bruit")
             old_clock = previous.get("vd2_clock") or {}
             new_clock = machine.get("vd2_clock") or {}
-            if old_clock.get("nominal_capture_rate_hz") != new_clock.get("nominal_capture_rate_hz"):
-                raise ValueError("Bruit trigger rate differs; record a new Bruit")
+            dark_recording = previous.get("direct_tango") or {}
+            old_camera = dark_recording.get("camera") or {}
+            new_camera = (machine.get("direct_tango") or {}).get("camera") or {}
+            software_dark = (dark_recording.get("phase") == "BRUIT"
+                             and old_clock.get("ccd_trigger") == "software"
+                             and old_clock.get("trigger_source") == 5)
+            if software_dark and any(old_camera.get(key) is None or old_camera[key] != new_camera.get(key)
+                                     for key in ("model", "serial", "roi")):
+                raise ValueError("Bruit detector identity or ROI changed; record a new Bruit")
+            if not software_dark and old_clock.get("nominal_capture_rate_hz") != new_clock.get("nominal_capture_rate_hz"):
+                raise ValueError("Bruit trigger rate differs; use a verified software-triggered Bruit or record a new one")
 
     @staticmethod
     def _noise_candidate(data, request):

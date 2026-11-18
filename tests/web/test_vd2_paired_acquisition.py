@@ -262,7 +262,7 @@ def test_legacy_camera_server_is_rejected_before_warmup(rig):
 
 
 def test_real_bruit_and_paired_history_round_trip(rig, tmp_path):
-    from vd2_paired_storage import load_dark_reference
+    from vd2_paired_storage import BruitRequired, load_dark_reference
     from vd2_project_manifest import MANIFEST_NAME, SCHEMA, fingerprint, inspect_project, record_paired_project_run
 
     run, request, control, events = rig
@@ -292,6 +292,40 @@ def test_real_bruit_and_paired_history_round_trip(rig, tmp_path):
     recorded = sample["paired_runs"][0]
     assert recorded["pairs_recorded"] == 3 and recorded["bruit_artifact_id"] == "dark"
     assert recorded["h5"]["sha256"] == fingerprint(status["h5_path"])["sha256"]
+    with pytest.raises(BruitRequired, match="Selected Bruit"):
+        load_dark_reference(tmp_path, "noise", "a" * 32, None, False, Event())
+
+
+def test_software_bruit_reuse_ignores_rate_with_matching_detector(tmp_path):
+    from vd2_project_manifest import BRUIT_SETTINGS, MANIFEST_NAME, SCHEMA, Vd2ProjectManifest
+
+    camera = {"model": "CCD", "serial": "123", "roi": [0, 10, 0, 10, 1, 1]}
+    old = {
+        "streak_control": {"values": {key: "verified" for key in BRUIT_SETTINGS}},
+        "readout_backend": "tango",
+        "time_calibration": "time",
+        "spectral_calibration": "wavelength",
+        "direct_tango": {"phase": "BRUIT", "camera": camera},
+        "vd2_clock": {"nominal_capture_rate_hz": 10, "trigger_source": 5, "ccd_trigger": "software"},
+    }
+    identity = "a" * 32
+    path = tmp_path / MANIFEST_NAME
+    payload = {"schema": SCHEMA, "version": 1, "project_id": "test",
+               "samples": {"dark": {"name": "dark", "folder": "dark", "phases": {"BRUIT": identity}}},
+               "artifacts": {identity: {"id": identity, "sample": "dark", "phase": "BRUIT",
+                                        "status": "completed", "frames_requested": 200, "machine_before": old}}}
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    phase = SimpleNamespace(phase="BASE", output_root=str(tmp_path), reuse_bruit=identity, frames_per_his=200)
+    current = {**old, "vd2_clock": {"nominal_capture_rate_hz": 5, "trigger_source": 0, "ccd_trigger": "external"}}
+    Vd2ProjectManifest.verify_bruit_settings(phase, current)
+    current["direct_tango"] = {"camera": {**camera, "serial": "different"}}
+    with pytest.raises(ValueError, match="detector identity or ROI changed"):
+        Vd2ProjectManifest.verify_bruit_settings(phase, current)
+    current["direct_tango"] = {"camera": camera}
+    old["vd2_clock"]["trigger_source"] = 0
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="trigger rate differs"):
+        Vd2ProjectManifest.verify_bruit_settings(phase, current)
 
 def test_native_sequence_records_exact_pairs_and_saves_after_burst_off(rig):
     import struct

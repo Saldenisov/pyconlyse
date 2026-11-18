@@ -550,7 +550,10 @@ export function Vd2PhaseProtocol({ pairedMode = false, triggerRate = 5, protocol
   const sampleRecord=project?.samples?.find(sample=>sample.name===settings.runName);
   const boundBruit=sampleRecord?.bruit_reference||sampleRecord?.pending_bruit_reference;
   const boundSource = project?.bruit_options?.find(item => item.id === boundBruit);
-  const needsSampleBruit = settings.reuseBruit === 'none' && boundSource?.sample !== settings.runName;
+  const noiseSource = settings.reuseBruit || 'latest';
+  const explicitSource = noiseSource !== 'latest' && noiseSource !== 'none';
+  const selectedSource = project?.bruit_options?.find(item => item.id === noiseSource);
+  const needsSampleBruit = noiseSource === 'none' && boundSource?.sample !== settings.runName;
   useEffect(() => {
     if (!folderMenu) return undefined;
     const close = () => setFolderMenu(null);
@@ -562,6 +565,15 @@ export function Vd2PhaseProtocol({ pairedMode = false, triggerRate = 5, protocol
   const openFolderMenu = (event, folder) => {
     event.preventDefault();
     setFolderMenu({ x: Math.min(event.clientX, window.innerWidth - 225), y: Math.min(event.clientY, window.innerHeight - 50), folder });
+  };
+  const canUseBruit = item => item.phase === 'BRUIT' && item.status === 'completed'
+    && !settingsDisabled && !active && (pairedMode || !boundBruit || boundBruit === item.id);
+  const openBruitMenu = (event, item) => {
+    if (!canUseBruit(item)) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setFolderMenu({ bruitId: item.id, x: Math.min(event.clientX ?? bounds.left, window.innerWidth - 225),
+      y: Math.min(event.clientY ?? bounds.bottom, window.innerHeight - 50) });
   };
   return (
     <section className="vd2-phase-protocol" aria-label="VD2 Bruit Base Absorption protocol">
@@ -590,10 +602,13 @@ export function Vd2PhaseProtocol({ pairedMode = false, triggerRate = 5, protocol
       <div className="vd2-protocol-settings vd2-sample-details">
         <label><span>Sample details</span><textarea rows="2" maxLength="4000" placeholder="Optional sample description" value={settings.sampleDescription || ''}
           disabled={settingsDisabled || active} onChange={event => onChange('sampleDescription', event.target.value)} /></label>
-        <label><span>Noise Source</span><select value={settings.reuseBruit === 'none' ? 'none' : 'latest'} disabled={settingsDisabled || active}
+        <label><span>Noise Source</span><select value={noiseSource} disabled={settingsDisabled || active}
           onChange={event => onChange('reuseBruit', event.target.value)}>
           <option value="latest">Latest completed Bruit in project</option>
           <option value="none">Bruit for each sample</option>
+          {explicitSource && <option value={noiseSource}>
+            {selectedSource ? `Bruit from ${selectedSource.sample}` : 'Selected Bruit'}
+          </option>}
         </select></label>
       </div>
       <div className="vd2-phase-buttons">
@@ -635,7 +650,13 @@ export function Vd2PhaseProtocol({ pairedMode = false, triggerRate = 5, protocol
             onChange('runName',sample.name);onChange('sampleDescription',sample.description||'');
           }}>{sample.name}</button>
           <a target="_blank" rel="noopener noreferrer" href={manifestTreatmentUrl(project.manifest_path,sample.name)}>View in Data Treatment ↗</a></header>
-          {(sample.measurements||[]).map(item=><div key={item.id}>
+          {(sample.measurements||[]).map(item=><div key={item.id}
+            tabIndex={canUseBruit(item) ? 0 : undefined}
+            title={canUseBruit(item) ? 'Right-click to use this Bruit' : undefined}
+            onContextMenu={event => openBruitMenu(event, item)}
+            onKeyDown={event => {
+              if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) openBruitMenu(event, item);
+            }}>
             <strong>{PHASE_PROTOCOLS[item.phase]?.label||item.phase}</strong> · {item.status} · {item.frames} frames
             {item.recorded_at&&<small> · {new Date(item.recorded_at).toLocaleString()}</small>}{!item.selected&&<small> · previous version</small>}
             {item.error&&<span role="alert"> · {item.error}</span>}
@@ -662,7 +683,9 @@ export function Vd2PhaseProtocol({ pairedMode = false, triggerRate = 5, protocol
         </footer>
       )}
       {folderMenu && <div className="vd2-folder-menu" role="menu" style={{ left: folderMenu.x, top: folderMenu.y }}>
-        <a role="menuitem" target="_blank" rel="noopener noreferrer" href={treatmentUrl(folderMenu.folder)}>Open in Data Treatment</a>
+        {folderMenu.bruitId ? <button type="button" role="menuitem" autoFocus disabled={settingsDisabled || active}
+          onClick={() => { onChange('reuseBruit', folderMenu.bruitId); setFolderMenu(null); }}>Use this Bruit</button>
+          : <a role="menuitem" target="_blank" rel="noopener noreferrer" href={treatmentUrl(folderMenu.folder)}>Open in Data Treatment</a>}
       </div>}
     </section>
   );

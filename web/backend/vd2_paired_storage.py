@@ -32,13 +32,15 @@ def load_dark_reference(root, sample, reuse, roi, precision, stop, *, compatible
     except FileNotFoundError as exc:
         raise BruitRequired("Record Bruit in this project before paired acquisition") from exc
     candidates = [
-        artifact for artifact in data["artifacts"].values()
+        artifact for identity, artifact in data["artifacts"].items()
         if artifact["phase"] == "BRUIT" and artifact.get("status") == "completed"
-        and (reuse == "latest" or artifact["sample"] == sample)
+        and (reuse == "latest" or (reuse == "none" and artifact["sample"] == sample) or reuse == identity)
     ]
     if compatible is not None:
         candidates = [artifact for artifact in candidates if compatible(artifact)]
     if not candidates:
+        if reuse not in ("latest", "none"):
+            raise BruitRequired("Selected Bruit is unavailable or incompatible with these camera settings")
         raise BruitRequired("Record a new Bruit for these camera settings")
     artifact = max(candidates, key=lambda entry: entry["completed_at"])
     path = artifact_file(root, artifact)
