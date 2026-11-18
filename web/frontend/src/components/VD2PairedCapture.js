@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { API_BASE, fetchVd2, ProfilePlot, roiBounds } from '../PumpProbeVD2.API_BASE';
 
+const SPECTRAL_METHOD = 'pair_cubic_pool';
 const METHODS = [
+  [SPECTRAL_METHOD, 'Per-pair spectral correction'],
   ['lamp_matched', 'Match BASE by lamp intensity'],
   ['sam_matched', 'SAM + matched BASE → OD of means'],
   ['mean_pair_od', 'Mean OD of adjacent pairs'],
@@ -16,6 +18,11 @@ const STOP_LABELS = {
   operator_stop: 'Stopped by operator',
 };
 
+function odPoints(profile, axis) {
+  return profile?.od_mod?.flatMap((y, index) => Number.isFinite(y)
+    ? [{ x: profile[axis][index], y, error: profile.se_mod?.[index] }] : []) ?? [];
+}
+
 export default function VD2PairedCapture({
   available, directTango = false, run, settings, disabled, roi, preview, protocol, onUpdate, onStop, onBruit,
   cameraIdle, live, liveBlocked, onLive, correction, correctionRange, correctionFixed,
@@ -28,7 +35,10 @@ export default function VD2PairedCapture({
   const [limit, setLimit] = useState(directTango ? '1000' : '');
   const [target, setTarget] = useState(directTango ? '1' : '2');
   const [trigger, setTrigger] = useState('external_rising');
-  const [method, setMethod] = useState('lamp_matched');
+  const [method, setMethod] = useState(directTango ? SPECTRAL_METHOD : 'lamp_matched');
+  const [precisionAxis, setPrecisionAxis] = useState('kinetics');
+  const [delayStart, setDelayStart] = useState('');
+  const [delayEnd, setDelayEnd] = useState('');
   const [samSurface, setSamSurface] = useState('3');
   const [bruitAttempt, setBruitAttempt] = useState(null);
   const [pending, setPending] = useState(false);
@@ -36,7 +46,14 @@ export default function VD2PairedCapture({
   const active = Boolean(run?.active);
   const currentMode = active ? run.mode : mode;
   const showPrecision = active && currentMode === 'precision';
-  const hasKinetics = run?.kinetics?.od_mod?.length > 1;
+  const corrected = (active ? run.method : method) === SPECTRAL_METHOD;
+  const kineticsPoints = odPoints(run?.kinetics, 'time');
+  const spectrumPoints = odPoints(run?.spectrum, 'wavelength_nm');
+  const delayRange = delayStart.trim() || delayEnd.trim() ? [Number(delayStart), Number(delayEnd)] : null;
+  const validDelay = !delayRange || (delayStart.trim() && delayEnd.trim()
+    && delayRange.every(Number.isFinite) && delayRange[0] < delayRange[1]);
+  const targetMet = run?.precision_first_met_pair != null && Number.isFinite(run?.error_mod)
+    && run.error_mod <= run.target_mod;
   const pairLimit = mode === 'precision' && !limit.trim() ? null : Number(mode === 'fixed' ? pairs : limit);
   const validTarget = Number(target) > 0 && Number(target) <= 1000;
   const band = active ? run.band : correctionRange.band;
@@ -83,7 +100,7 @@ export default function VD2PairedCapture({
     target_mod: mode === 'precision' ? Number(target) : null,
     trigger_source: trigger,
     roi: selected,
-    band,
+    band: method === SPECTRAL_METHOD ? { ...band, delay_range: delayRange, precision_axis: precisionAxis } : band,
     method,
     sam_surface_percent: method.startsWith('sam_') ? Number(samSurface) : 3,
   });
@@ -122,14 +139,14 @@ export default function VD2PairedCapture({
   const cannotStart = locked || !cameraIdle || !settings.runName?.trim() || !validLimit
     || !band || !correctionFixed || !referenceConfirmed
     || (method.startsWith('sam_') && !(Number(samSurface) > 0 && Number(samSurface) <= 100))
-    || (mode === 'precision' && !validTarget);
+    || (mode === 'precision' && !validTarget) || (corrected && !validDelay);
   return (
     <section className="vd2-phase-protocol" aria-label="Paired ABS/BASE acquisition">
       <header><h2>Paired ABS/BASE · 10 Hz</h2><small role="status">{run?.stage || STOP_LABELS[run?.stop_reason] || ''}</small></header>
       <div className="vd2-protocol-settings">
         <label><span>Stop condition</span><select value={currentMode} disabled={locked} onChange={event => setMode(event.target.value)}>
           <option value="fixed">Fixed pair count</option>
-          <option value="precision">Target error across kinetics</option>
+          <option value="precision">Target error</option>
         </select></label>
         <label><span>{currentMode === 'fixed' ? 'Pairs' : 'Pair limit'}</span><input type="number" min="1" max="10000" step="1"
           placeholder={currentMode === 'precision' ? 'No frame limit' : undefined}
@@ -157,9 +174,17 @@ export default function VD2PairedCapture({
           <input type="number" min="0.001" max="1000" step="any" value={target}
             disabled={pending || (active ? run.status === 'saving' : disabled)} onChange={event => setTarget(event.target.value)} />
         </label>}
+        {corrected && currentMode === 'precision' && <label><span>Precision target for</span>
+          <select value={active ? run.precision_axis : precisionAxis} disabled={locked}
+            onChange={event => setPrecisionAxis(event.target.value)}>
+            <option value="kinetics">Kinetics</option>
+            <option value="spectrum">Spectrum</option>
+            <option value="both">Kinetics and spectrum</option>
+          </select>
+        </label>}
       </div>
       <fieldset className={`vd2-spectral-correction vd2-spectral-range ${correctionFixed || active ? 'is-fixed' : ''}`}>
-        <legend>Spectral Correction Range</legend>
+        <legend>{corrected ? 'OD wavelength range' : 'Spectral Correction Range'}</legend>
         <div className="vd2-protocol-settings">
           <label><span>Center (nm)</span><input type="number" min="1" step="any" value={displayedCenter ?? ''}
             disabled={locked || correctionFixed} onChange={event => onChangeCorrection('center', event.target.value)} /></label>
@@ -178,6 +203,17 @@ export default function VD2PairedCapture({
           {correctionRange.span && !correctionRange.bounds && ' · Adjust the range to fit the calibrated image.'}
         </small>}
       </fieldset>
+      {corrected && <fieldset className="vd2-spectral-correction">
+        <legend>{directTango ? 'OD delay range (µs)' : 'OD delay range (camera units)'}</legend>
+        <div className="vd2-protocol-settings">
+          <label><span>Start delay</span><input type="number" step="any" placeholder="After reference"
+            value={active ? run.delay_range?.[0] ?? '' : delayStart} disabled={locked}
+            onChange={event => setDelayStart(event.target.value)} /></label>
+          <label><span>End delay</span><input type="number" step="any" placeholder="End of trace"
+            value={active ? run.delay_range?.[1] ?? '' : delayEnd} disabled={locked}
+            onChange={event => setDelayEnd(event.target.value)} /></label>
+        </div>
+      </fieldset>}
       <fieldset className={`vd2-spectral-correction ${referenceConfirmed || active ? 'is-fixed' : ''}`}>
         <legend>Lamp reference</legend>
         <div className="vd2-protocol-settings">
@@ -187,6 +223,7 @@ export default function VD2PairedCapture({
           <button type="button" disabled={locked || (!referenceConfirmed && !canConfirmReference)}
             onClick={onConfirmReference}>{referenceConfirmed ? 'Edit' : 'Confirm'}</button>
         </div>
+        {corrected && <small>Use rows before the signal.</small>}
       </fieldset>
       {correctionFixed && referenceConfirmed && live && <small>Stop Live before starting Measurement.</small>}
       <div className="vd2-phase-buttons">
@@ -205,18 +242,23 @@ export default function VD2PairedCapture({
         {run.mode === 'precision' && Number.isInteger(run.roi_pairs) && run.roi_pairs !== run.pairs_recorded
           && <span> · {run.roi_pairs} pairs used by estimator</span>}
         {run.mode === 'precision' && <span> · Maximum pointwise error {Number.isFinite(run.error_mod) ? run.error_mod.toFixed(2) + ' mOD' : 'estimating'}</span>}
+        {targetMet && <strong className="vd2-precision-met"> · Target met at {run.precision_first_met_pair} pairs</strong>}
       </div>}
-      {(hasKinetics || showPrecision) && <section
+      {(kineticsPoints.length > 0 || spectrumPoints.length > 0 || showPrecision) && <section
         className={showPrecision ? 'vd2-paired-progress' : undefined}
         role={showPrecision ? 'dialog' : undefined}
-        aria-label={showPrecision ? 'Live OD kinetics' : undefined}>
-        {hasKinetics ? <ProfilePlot title="OD kinetics (mOD)"
-        summary={Number.isFinite(run.error_mod) ? `Max SE ${run.error_mod.toFixed(2)} mOD` : undefined}
-        axis={run.time_scale ? `Time (${run.time_scale})` : 'Time'} hideLegend scale={1}
-        series={[{ id: 'od', index: 0, color: '#4c98da',
-          points: run.kinetics.od_mod.map((y, index) => ({ x: run.kinetics.time[index], y,
-            error: run.kinetics.se_mod?.[index] })) }]} />
-          : <p role="status">{run.stage || 'Waiting for the first OD estimate'}</p>}
+        aria-label={showPrecision ? (run.method === SPECTRAL_METHOD ? 'Live OD' : 'Live OD kinetics') : undefined}>
+        <div className={spectrumPoints.length ? 'vd2-paired-profiles' : undefined}>
+          {kineticsPoints.length > 0 && <ProfilePlot title="OD kinetics (mOD)"
+            summary={precisionSummary(run.kinetics_error_mod ?? (run.method !== SPECTRAL_METHOD ? run.error_mod : null))}
+            axis={run.time_scale ? `Time (${run.time_scale})` : 'Time'} hideLegend scale={1}
+            series={[{ id: 'od', index: 0, color: '#4c98da', points: kineticsPoints }]} />}
+          {spectrumPoints.length > 0 && <ProfilePlot title="OD spectrum (mOD)"
+            summary={precisionSummary(run.spectrum_error_mod)} axis="Wavelength (nm)" hideLegend scale={1}
+            series={[{ id: 'od', index: 0, color: '#63cb90', points: spectrumPoints }]} />}
+        </div>
+        {!kineticsPoints.length && !spectrumPoints.length && <p role="status">{run.stage || 'Waiting for the first OD estimate'}</p>}
+        {run.error_reference === 'fixed_bruit' && <small>Standard error with fixed Bruit reference</small>}
       </section>}
       {(error || run?.error) && <small role="alert">{error || run.error}</small>}
       {run?.manifest_warning && <small role="alert">{run.manifest_warning}</small>}
@@ -224,4 +266,8 @@ export default function VD2PairedCapture({
       {run?.h5_path && !active && <small title={run.h5_path}>{run.h5_path}</small>}
     </section>
   );
+}
+
+function precisionSummary(error) {
+  return Number.isFinite(error) ? `Max SE ${error.toFixed(2)} mOD` : undefined;
 }

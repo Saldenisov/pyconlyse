@@ -13,8 +13,9 @@ import numpy as np
 from utilities.dataio.hamamatsu_file_opener import HamamatsuFileOpener
 from utilities.dataio.hamamatsu_his_calibration import embed_his_wavelengths, relative_delays
 from vd2_measurement_protocol import Vd2MeasurementProtocol, _utc_now
-from vd2_paired_analysis import DetectorROI, ERROR_CONFIRMATIONS, PairedAnalysis
+from vd2_paired_analysis import BLOCK_PAIRS, DetectorROI, ERROR_CONFIRMATIONS, PairedAnalysis
 from vd2_paired_kinetics import KineticAnalysis, METHODS, SpectralBand
+from vd2_paired_spectral import METHOD as SPECTRAL_METHOD, PRECISION_AXES, TRACE_UPDATE_PAIRS, SpectralPairAnalysis
 from vd2_paired_sequence import frames, native_capture, sequence_header
 from vd2_paired_storage import BruitRequired, PairedRecording, load_dark_reference
 from vd2_spectral_calibration import camera_geometry, wavelength_calibration
@@ -49,6 +50,8 @@ class PairedRequest:
     sam_surface_percent: float = 3.0
     native_sequence: bool = False
     sample_description: str = ""
+    delay_range: tuple[float, float] | None = None
+    precision_axis: str = "kinetics"
 
     @classmethod
     def from_payload(cls, payload, allowed_root):
@@ -76,10 +79,24 @@ class PairedRequest:
         if noise not in ("latest", "none"):
             raise ValueError("Select a supported Noise Source")
         roi = DetectorROI.from_payload(payload["roi"]) if payload["roi"] is not None else None
-        band = SpectralBand.from_payload(payload["band"]) if payload.get("band") is not None else None
         method = payload.get("method", "mean_pair_od")
-        if method not in METHODS or (band is None and method != "mean_pair_od"):
+        band_payload = payload.get("band")
+        axis, delay = "kinetics", None
+        if method == SPECTRAL_METHOD and isinstance(band_payload, dict):
+            band_payload = band_payload.copy()
+            axis = band_payload.pop("precision_axis", axis)
+            delay = band_payload.pop("delay_range", delay)
+        band = SpectralBand.from_payload(band_payload) if band_payload is not None else None
+        if method not in (*METHODS, SPECTRAL_METHOD) or (band is None and method != "mean_pair_od"):
             raise ValueError("Choose an OD method and a calibrated spectral band")
+        if axis not in PRECISION_AXES:
+            raise ValueError("Select kinetics, spectrum, or both for the precision target")
+        if delay is not None:
+            if (not isinstance(delay, (tuple, list)) or len(delay) != 2
+                    or any(type(value) not in (int, float) or not math.isfinite(value) for value in delay)
+                    or delay[0] >= delay[1]):
+                raise ValueError("Enter an increasing, finite delay range")
+            delay = tuple(map(float, delay))
         surface = payload.get("sam_surface_percent", 3.0)
         if type(surface) not in (int, float) or not math.isfinite(surface) or not 0 < surface <= 100:
             raise ValueError("SAM surface threshold must be above 0 and at most 100%")
@@ -87,7 +104,15 @@ class PairedRequest:
             raise ValueError("Select a calibrated spectral band or a camera ROI")
         threshold = target_error(payload["target_mod"]) if mode == "precision" else None
         return cls(str(folder), run.run_name, noise, mode, first, limit, threshold, source, roi,
-                   band, method, float(surface), mode == "fixed", run.sample_description)
+                   band, method, float(surface), mode == "fixed", run.sample_description, delay, axis)
+
+
+def _profile_analysis(request, dark, calibrated_columns=None):
+    if request.method == SPECTRAL_METHOD:
+        return SpectralPairAnalysis(dark.image, dark.wavelengths, dark.timedelays, request.band,
+                                    request.delay_range, request.precision_axis, calibrated_columns)
+    return KineticAnalysis(dark.image, dark.wavelengths, dark.timedelays, request.band,
+                           request.method, request.sam_surface_percent, dark.roi_blocks)
 
 
 def _dark_matches(api, current, artifact, native):
@@ -179,6 +204,7 @@ class PairedAcquisition:
                 "pair_limit": request.pair_limit, "first_map_with_electrons": request.first_map_with_electrons,
                 "trigger_source": request.trigger_source, "method": request.method,
                 "band": asdict(request.band) if request.band else None,
+                "delay_range": request.delay_range, "precision_axis": request.precision_axis,
                 "capture": "sequence" if request.native_sequence else "stream", "time_scale": "",
                 "target_mod": request.target_mod, "estimate_mod": None, "error_mod": None,
                 "pairs_recorded": 0, "frames_recorded": 0, "roi_pairs": 0, "h5_path": None, "error": "",
@@ -208,6 +234,7 @@ class PairedAcquisition:
             if self._state["mode"] != "precision" or self._stop.is_set():
                 raise ValueError("An active precision measurement is required")
             self._state["target_mod"] = target_error(value)
+            self._state.pop("precision_first_met_pair", None)
             return self._state.copy()
 
     def _assert_job(self, job):
@@ -266,8 +293,7 @@ class PairedAcquisition:
                                 or request.band.center_nm + request.band.half_width_nm > max(low, high)):
                             raise ValueError("Selected wavelength band is outside the measured wavelength span")
             if request.band:
-                kinetics = KineticAnalysis(dark.image, dark.wavelengths, dark.timedelays, request.band,
-                                           request.method, request.sam_surface_percent, dark.roi_blocks)
+                kinetics = _profile_analysis(request, dark)
             folder = (root / request.sample_name).resolve()
             if not folder.is_relative_to(root):
                 raise ValueError("Sample path is outside the project folder")
@@ -390,8 +416,7 @@ class PairedAcquisition:
                 center, half_width = request.band.center_nm, request.band.half_width_nm
                 if center - half_width < low or center + half_width > high:
                     raise ValueError("Selected wavelength band is outside the measured wavelength span")
-                kinetics = KineticAnalysis(dark.image, wavelengths, dark.timedelays, request.band,
-                                           request.method, request.sam_surface_percent, dark.roi_blocks)
+                kinetics = _profile_analysis(request, dark, columns)
             analysis = PairedAnalysis(dark.image, None if request.band else request.roi, dark.roi_blocks)
             folder = (root / request.sample_name).resolve()
             if not folder.is_relative_to(root):
@@ -441,13 +466,30 @@ class PairedAcquisition:
             self._finish(root, request, recording, analysis, kinetics, errors, stop_reason, bruit_required, machine)
 
     def _publish_kinetics(self, kinetics):
-        preview = None
-        if kinetics.values is not None:
-            index = np.linspace(0, len(kinetics.time) - 1, min(256, len(kinetics.time)), dtype=int)
-            preview = {"time": kinetics.time[index].tolist(), "od_mod": kinetics.values[index].tolist(),
-                       "se_mod": kinetics.errors[index].tolist() if kinetics.errors is not None else None}
-        self._update(estimate_mod=kinetics.estimate_mod, error_mod=kinetics.error_mod,
-                     roi_pairs=kinetics.pairs_used, kinetics=preview)
+        self._update(**self._profile_status(kinetics))
+
+    @staticmethod
+    def _profile_status(analysis):
+        def preview(axis_name, axis, values, errors):
+            if values is None:
+                return None
+            index = np.linspace(0, len(axis) - 1, min(256, len(axis)), dtype=int)
+
+            def nullable(data):
+                return [float(data[i]) if np.isfinite(data[i]) else None for i in index] if data is not None else None
+
+            return {axis_name: axis[index].tolist(), "od_mod": nullable(values), "se_mod": nullable(errors)}
+
+        status = {"estimate_mod": analysis.estimate_mod, "error_mod": analysis.error_mod,
+                  "roi_pairs": analysis.pairs_used,
+                  "kinetics": preview("time", analysis.time, analysis.values, analysis.errors)}
+        if isinstance(analysis, SpectralPairAnalysis):
+            status.update(
+                spectrum=preview("wavelength_nm", analysis.wavelengths, analysis.spectrum, analysis.spectrum_errors),
+                kinetics_error_mod=analysis.kinetics_error_mod, spectrum_error_mod=analysis.spectrum_error_mod,
+                error_reference="fixed_bruit",
+            )
+        return status
 
     def _calibrate_sequence(self, api, camera, path, request, machine, dark):
         info = HamamatsuFileOpener().read_critical_info(path)
@@ -496,6 +538,7 @@ class PairedAcquisition:
         count = 0
         next_preview = 0
         confirmations = 0
+        first_met = None
         target = request.target_mod
         deadline = time.monotonic() + FRAME_TIMEOUT_S
         while not self._stop.is_set():
@@ -543,25 +586,41 @@ class PairedAcquisition:
             absorption, base = (first_image, image) if request.first_map_with_electrons else (image, first_image)
             block_done = analysis.add(absorption, base)
             estimate = analysis
-            used = analysis.roi_pair_count
-            if kinetics is not None:
-                block_done = kinetics.add(absorption, base)
-                if block_done:
-                    kinetics.calculate()
-                    self._publish_kinetics(kinetics)
-                estimate = kinetics
-                used = kinetics.pairs_used
+            updates = {"estimate_mod": analysis.estimate_mod, "error_mod": analysis.error_mod,
+                       "roi_pairs": analysis.roi_pair_count}
             count += 1
-            self._update(pairs_recorded=count, estimate_mod=estimate.estimate_mod,
-                         error_mod=estimate.error_mod, roi_pairs=used)
+            if kinetics is not None:
+                try:
+                    block_done = kinetics.add(absorption, base)
+                except ValueError:
+                    self._update(pairs_recorded=count)
+                    raise
+                if block_done or (request.method == SPECTRAL_METHOD and count % TRACE_UPDATE_PAIRS == 0):
+                    kinetics.calculate()
+                    updates = self._profile_status(kinetics)
+                else:
+                    updates = {}
+                estimate = kinetics
             if request.mode == "precision":
-                current_target = self.status()["target_mod"]
-                if target != current_target or estimate.error_mod is None:
-                    target, confirmations = current_target, 0
-                if block_done:
-                    confirmations = confirmations + 1 if estimate.error_mod is not None and estimate.error_mod <= target else 0
-                    if confirmations >= ERROR_CONFIRMATIONS:
+                with self._lock:
+                    current_target = self._state["target_mod"]
+                    if target != current_target or estimate.error_mod is None:
+                        target, confirmations, first_met = current_target, 0, None
+                    if block_done and estimate.error_mod is not None:
+                        if estimate.error_mod > target:
+                            confirmations, first_met = 0, None
+                        else:
+                            first_met = count if first_met is None else first_met
+                            # Confirm with a new full 40-pair block when the SE uses both block sizes.
+                            if request.method != SPECTRAL_METHOD or count % (2 * BLOCK_PAIRS) == 0:
+                                confirmations += 1
+                    if request.method == SPECTRAL_METHOD:
+                        updates["precision_first_met_pair"] = first_met
+                    self._state.update(pairs_recorded=count, **updates)
+                    if confirmations >= ERROR_CONFIRMATIONS and not self._stop.is_set():
                         return "precision_reached"
+            else:
+                self._update(pairs_recorded=count, **updates)
             if request.pair_limit is not None and count >= request.pair_limit:
                 return "pair_limit" if request.mode == "precision" else "pair_count_reached"
         return "operator_stop"

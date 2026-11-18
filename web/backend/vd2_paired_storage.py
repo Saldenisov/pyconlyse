@@ -147,6 +147,14 @@ class PairedRecording:
                     self.file.create_dataset("kinetics_od_mod", data=kinetics.values)
                 if kinetics.errors is not None:
                     self.file.create_dataset("kinetics_standard_error_mod", data=kinetics.errors)
+                if hasattr(kinetics, "corrected_map"):
+                    corrected = self.file.create_dataset("paired_od_spectral_corrected", data=kinetics.corrected_map())
+                    corrected.attrs.update(unit="OD", method="pair_cubic_pool")
+                    self.file.create_dataset("spectrum_wavelength_nm", data=kinetics.wavelengths)
+                    if kinetics.spectrum is not None:
+                        self.file.create_dataset("spectrum_od_mod", data=kinetics.spectrum)
+                    if kinetics.spectrum_errors is not None:
+                        self.file.create_dataset("spectrum_standard_error_mod", data=kinetics.spectrum_errors)
             self.metadata.attrs["summary"] = json.dumps(status, allow_nan=False)
             self.metadata.attrs["pair_count"] = status["pairs_recorded"]
             self.metadata.attrs["status"] = status["status"]

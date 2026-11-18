@@ -21,7 +21,12 @@ def write_paired_metadata(h5_path, result, machine):
         "frames_recorded": result["frames_recorded"], "pairs_recorded": result["pairs_recorded"],
         "bruit_artifact_id": result["bruit_artifact_id"], "mode": result["mode"],
         "target_mod": result.get("target_mod"), "error_mod": result.get("error_mod"),
-        "band": result.get("band"), "completed_at": result["completed_at"],
+        "band": result.get("band"), "delay_range": result.get("delay_range"),
+        "precision_axis": result.get("precision_axis"),
+        "method": result.get("method"), "error_reference": result.get("error_reference"),
+        "kinetics_error_mod": result.get("kinetics_error_mod"), "spectrum_error_mod": result.get("spectrum_error_mod"),
+        "precision_first_met_pair": result.get("precision_first_met_pair"),
+        "completed_at": result["completed_at"],
     }
     sidecar = path.with_suffix(".json")
     temporary = sidecar.with_suffix(".tmp")

@@ -56,6 +56,34 @@ test('direct precision displays the per-delay error envelope and maximum SE in a
   expect(screen.getByPlaceholderText('No frame limit')).toHaveValue(null);
 });
 
+test('paired spectral correction submits both precision axes and the selected delay range', async () => {
+  fetchVd2.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, paired: { active: true } }) });
+  render(<VD2PairedCapture {...props} directTango />);
+  fireEvent.change(screen.getByLabelText('Stop condition'), { target: { value: 'precision' } });
+  fireEvent.change(screen.getByLabelText('Precision target for'), { target: { value: 'both' } });
+  fireEvent.change(screen.getByLabelText('Start delay'), { target: { value: '0.2' } });
+  expect(screen.getByRole('button', { name: 'Measurement' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('End delay'), { target: { value: '0.8' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Measurement' }));
+  await waitFor(() => expect(JSON.parse(fetchVd2.mock.calls.at(-1)[1].body)).toMatchObject({
+    method: 'pair_cubic_pool', mode: 'precision', target_mod: 1,
+    band: { ...band, delay_range: [0.2, 0.8], precision_axis: 'both' },
+  }));
+});
+
+test('shows the selected-window kinetics and spectrum error independently', () => {
+  render(<VD2PairedCapture {...props} directTango run={{ active: true, status: 'acquiring', job_id: 'paired',
+    method: 'pair_cubic_pool', mode: 'precision', precision_axis: 'both', target_mod: 1,
+    error_mod: 0.98, kinetics_error_mod: 0.98, spectrum_error_mod: 0.7, precision_first_met_pair: 600,
+    kinetics: { time: [0.2, 0.3], od_mod: [0.1, 0.2], se_mod: [0.5, 0.98] },
+    spectrum: { wavelength_nm: [545, 555], od_mod: [0.2, 0.1], se_mod: [0.65, 0.7] } }} />);
+  expect(screen.getByRole('dialog', { name: 'Live OD' })).toBeInTheDocument();
+  expect(screen.getAllByLabelText('Pointwise standard error')).toHaveLength(2);
+  expect(screen.getByText('Max SE 0.98 mOD')).toBeInTheDocument();
+  expect(screen.getByText('Max SE 0.70 mOD')).toBeInTheDocument();
+  expect(screen.getByText('· Target met at 600 pairs')).toBeInTheDocument();
+});
+
 test('missing Bruit closes the streak shutter and resumes after the new reference is verified', async () => {
   const onBruit = jest.fn();
   const previous = { job_id: 'older', phase: 'BASE', status: 'completed' };

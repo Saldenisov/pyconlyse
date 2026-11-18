@@ -147,7 +147,15 @@
   border-radius: 0.5rem;
   box-shadow: 0 8px 30px #0008;
   z-index: 25;
+  max-height: 72vh;
+  overflow: auto;
 }
+.vd2-paired-profiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0.55rem;
+}
+.vd2-precision-met { color: #63cb90; }
 .vd2-paired-live button[aria-pressed="true"], .vd2-spectral-correction.is-fixed {
   border-color: #63cb90;
   background: #183b2a;

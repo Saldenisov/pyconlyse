@@ -212,11 +212,19 @@ def test_manual_stop_and_target_change_while_the_camera_is_waiting(rig):
         assert json.loads(file["metadata"].attrs["summary"])["target_mod"] == 1.
 
 
-def test_paired_http_authorizes_before_start_and_locks_legacy_control(monkeypatch, rig):
+@pytest.mark.parametrize("spectral", [False, True])
+def test_paired_http_authorizes_before_start_and_locks_legacy_control(monkeypatch, rig, spectral):
     run, request, _, _ = rig
     monkeypatch.setattr(api, "VD2_CAMERA_ONLY", True)
     monkeypatch.setattr(api, "_paired_acquisition", run)
-    monkeypatch.setattr(api, "_approval_or_response", lambda *args: (jsonify(success=False), 428))
+    def approval(_action, _targets, plan, _workflow, _fields):
+        if spectral:
+            assert plan["method"] == "pair_cubic_pool"
+            assert plan["precision_axis"] == "both"
+            assert plan["delay_range"] == (0.2, 0.8)
+        return jsonify(success=False), 428
+
+    monkeypatch.setattr(api, "_approval_or_response", approval)
     monkeypatch.setattr(run, "start", lambda *args: pytest.fail("Unapproved hardware run"))
     from treatment_api import __dict__ as treatment_globals
     monkeypatch.setitem(treatment_globals, "_ensure_within_allowed_root", lambda root: root)
@@ -226,6 +234,10 @@ def test_paired_http_authorizes_before_start_and_locks_legacy_control(monkeypatc
     payload = {"output_root": request.output_root, "sample_name": "sample", "reuse_bruit": "latest",
                "mode": "fixed", "first_map_with_electrons": False, "pair_limit": 4, "target_mod": None,
                "trigger_source": "external_rising", "roi": None}
+    if spectral:
+        payload.update(mode="precision", target_mod=1, method="pair_cubic_pool",
+                       band={"center_nm": 550, "half_width_nm": 5, "monitor_rows": 30,
+                             "precision_axis": "both", "delay_range": [0.2, 0.8]})
     assert client.post("/api/pump-probe-vd2/paired/start", json=payload).status_code == 428
     run._update(active=True, status="acquiring")
     assert client.post("/api/pump-probe-vd2/command/StartLive", json={}).status_code == 409

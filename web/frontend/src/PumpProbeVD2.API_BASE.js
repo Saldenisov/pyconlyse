@@ -499,6 +499,8 @@ function ProfilePlot({ title, series, axis, selectedId, onSelect, scale, hideLeg
           points={trace.points.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}
           stroke={trace.color} style={{ strokeWidth: trace.id === selectedId ? 2.5 : 1.5 }}
           onClick={() => onSelect?.(trace.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect?.(trace.id); } }} />)}
+        {series.filter(trace => trace.points.length === 1).map(trace =>
+          <circle key={trace.id} cx={px(trace.points[0].x)} cy={py(trace.points[0].y)} r={3} fill={trace.color} />)}
         <text x={padding.left} y={height - 6}>{axis}</text>
         <text x={padding.left} y={height - 17}>{xmin}</text><text x={width - padding.right} y={height - 17} textAnchor="end">{xmax}</text>
       </svg>
