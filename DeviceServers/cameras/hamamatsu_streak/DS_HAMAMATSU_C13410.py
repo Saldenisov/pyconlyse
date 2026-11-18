@@ -18,6 +18,15 @@ class DS_HAMAMATSU_C13410(Device):
         super().init_device()
         self.set_state(DevState.ON)
 
+    @command(dtype_out=str)
+    def ReadMode(self):
+        head = C13410Usb()
+        try:
+            head.read("ALL")
+            return {"FCS": "Focus", "OPE": "Operate"}[head.read("OPE")]
+        finally:
+            head.close()
+
     @command(dtype_in=str, dtype_out=str)
     def ConfigureSweep(self, time_range):
         """Set and verify Operate and the requested calibrated time range."""

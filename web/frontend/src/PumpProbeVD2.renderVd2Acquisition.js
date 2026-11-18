@@ -25,6 +25,7 @@ import { Vd2ErrorTray } from "./PumpProbeVD2.Vd2ErrorTray";
 
 export function renderVd2Acquisition({
   measurementRate, setMeasurementRate, pairedCorrection, setPairedCorrection,
+  confirmShutters, setConfirmShutters,
   state, preview, previewAvailable, errors, activeErrorId, previewError,
   setAlignmentAverage, setLiveAverageReadError, setPreviewEnabled, busy, activeTab,
   setActiveTab, calibration, calibrationUpdating, calibrationError, previewStream,
@@ -50,6 +51,13 @@ export function renderVd2Acquisition({
   const pairedActive = Boolean(protocol?.paired?.active);
   const pairedMode = pairedActive || (protocol?.paired_available && measurementRate === '10');
   const live = state?.acquisition_status === 'busy' && String(state?.acquisition_mode).toLowerCase() === 'live';
+  const startLive = () => {
+    if (directTango && values.streak_mode === 'Operate') {
+      setConfirmShutters(true);
+    } else {
+      runCommand('StartLive');
+    }
+  };
   const pairedRange = pairedMode ? pairedSpectralRegion(calibration, pairedCorrection) : {};
   const { fixed, confirmedReference } = pairedCorrection;
   const calibrationKey = preview?.calibration_key;
@@ -78,7 +86,7 @@ export function renderVd2Acquisition({
     }
   };
   const alignmentLiveControls = <>
-    <button type="button" onClick={() => runCommand('StartLive')} disabled={alignmentControlsBlocked || !acquisitionIdle}>Live</button>
+    <button type="button" onClick={startLive} disabled={alignmentControlsBlocked || !acquisitionIdle}>Live</button>
     <button type="button" className="vd2-stop" onClick={() => runCommand('StopAcquisition')} disabled={alignmentControlsBlocked || acquisitionIdle}>Stop</button>
   </>;
   const framesPerHisControl = (
@@ -95,6 +103,7 @@ export function renderVd2Acquisition({
           <p className="vd2-subtitle">Streak-camera control and timing configuration</p>
         </div>
         <div className="vd2-statuses" aria-live="polite">
+          {state?.coordinator?.dark_checkout && <span className="vd2-status">Dark checkout</span>}
           {awaitingCameraState ? <span className="vd2-status">Camera status deferred</span> : <>
             <span className={`vd2-status ${statusClass}`}>Tango {state?.state || 'OFFLINE'}</span>
             {state && !directTango && <>
@@ -179,7 +188,7 @@ export function renderVd2Acquisition({
               <div className="vd2-acquisition-actions">
                 <button
                   type="button"
-                  onClick={() => runCommand('StartLive')}
+                  onClick={startLive}
                   disabled={busy || protocolHardwareActive || !state?.application_running || state?.remoteex_status === 'starting'}
                 >
                   Live
@@ -218,7 +227,7 @@ export function renderVd2Acquisition({
               disabled={!serverWorkspace.ready || busy || protocolStarting || protocolHardwareActive
                 || Boolean(preparedPhase || guidedRun || guidedChoice)}
               cameraIdle={acquisitionIdle} live={live} liveBlocked={alignmentControlsBlocked}
-              onLive={() => runCommand(live ? 'StopAcquisition' : 'StartLive')}
+              onLive={() => live ? runCommand('StopAcquisition') : startLive()}
               correction={pairedCorrection} correctionRange={pairedRange} correctionFixed={correctionFixed}
               referenceConfirmed={referenceConfirmed}
               canFixCorrection={canFixCorrection} canConfirmReference={canConfirmReference}
@@ -292,7 +301,7 @@ export function renderVd2Acquisition({
               {liveTab ? <div className="vd2-live-actions" role="group" aria-label="Live controls">
                 <button type="button" className={live ? 'is-live' : ''} aria-pressed={live}
                   disabled={alignmentControlsBlocked || !acquisitionIdle}
-                  onClick={() => runCommand('StartLive')}>Live On</button>
+                  onClick={startLive}>Live On</button>
                 <button type="button" className="vd2-stop" disabled={alignmentControlsBlocked || !live}
                   onClick={() => runCommand('StopAcquisition')}>Live Off</button>
               </div> : <button type="button" onClick={() => setImageRight(current => !current)}
@@ -412,6 +421,18 @@ export function renderVd2Acquisition({
         onCancel={cancelPreparedPhase}
         onStart={startProtocolPhase}
       />
+      {confirmShutters && <div className="vd2-modal-backdrop">
+        <section role="dialog" aria-modal="true" aria-label="Open shutters for Live" className="vd2-phase-dialog"
+          onKeyDown={event => { if (event.key === 'Escape') setConfirmShutters(false); }}>
+          <h2>Open shutters for Live?</h2>
+          <p>Confirm it is safe to expose the streak camera before opening both shutters.</p>
+          <footer>
+            <button type="button" autoFocus onClick={() => setConfirmShutters(false)}>Cancel</button>
+            <button type="button" disabled={alignmentControlsBlocked || !acquisitionIdle || values.streak_mode !== 'Operate'}
+              onClick={() => { setConfirmShutters(false); runCommand('StartLiveWithShutters'); }}>Open shutters and start Live</button>
+          </footer>
+        </section>
+      </div>}
       {guidedChoice && <div className="vd2-modal-backdrop">
         <section className="vd2-phase-dialog" role="dialog" aria-modal="true" aria-label="Choose Bruit for this measurement">
           <header><h2>Do Measurement</h2></header>

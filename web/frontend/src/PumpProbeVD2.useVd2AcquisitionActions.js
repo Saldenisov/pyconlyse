@@ -74,7 +74,7 @@ export function useVd2AcquisitionActions({
       } else {
         setState(payload);
       }
-      if (['/command/StartLive', '/command/StartSequence', '/command/Acquire', '/command/AcquireSingle'].includes(path)) {
+      if (['/command/StartLive', '/command/StartLiveWithShutters', '/command/StartSequence', '/command/Acquire', '/command/AcquireSingle'].includes(path)) {
         previewPaused.current = false;
         setPreviewEnabled(true);
         setPreviewError('');
@@ -211,13 +211,17 @@ export function useVd2AcquisitionActions({
   }, [protocolSettings, reportError, guidedRun]);
 
   const beginGuidedRun = reuse => {
+    const phases = state?.coordinator?.dark_checkout ? ['BRUIT', 'BASE', 'ABSORPTION']
+      : reuse === 'none' ? ['ABSORPTION', 'BASE', 'BRUIT'] : ['ABSORPTION', 'BASE'];
+    const first = phases[0];
     setGuidedChoice(null);
-    setGuidedMessage('Waiting for Absorption confirmation.');
-    setGuidedRun({ reuse, phases: reuse === 'none' ? ['ABSORPTION', 'BASE', 'BRUIT'] : ['ABSORPTION', 'BASE'], jobs: [] });
-    setPreparedPhase({ phase: 'ABSORPTION', readyAt: Date.now() });
+    setGuidedMessage(`Waiting for ${PHASE_PROTOCOLS[first].label} confirmation.`);
+    setGuidedRun({ reuse, phases, jobs: [] });
+    setPreparedPhase({ phase: first, readyAt: Date.now() });
   };
   const chooseGuidedRun = () => {
     if (!project) return;
+    if (state?.coordinator?.dark_checkout) { beginGuidedRun('none'); return; }
     const own = project?.samples?.find(sample => sample.name === protocolSettings.runName)?.bruit_reference;
     const options = (project?.bruit_options || []).filter(item => item.status === 'completed');
     const candidate = options.find(item => item.id === own) || [...options].sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)))[0];
@@ -246,14 +250,34 @@ export function useVd2AcquisitionActions({
     const phase = guidedRun.phases[guidedRun.jobs.length];
     if (phase) {
       setGuidedMessage(`Waiting for ${PHASE_PROTOCOLS[phase].label} confirmation.`);
-      setPreparedPhase({ phase, readyAt: Date.now() + PHASE_PROTOCOLS[phase].preparationSeconds * 1000 });
+      const delay = state?.coordinator?.dark_checkout ? 0 : PHASE_PROTOCOLS[phase].preparationSeconds;
+      setPreparedPhase({ phase, readyAt: Date.now() + delay * 1000 });
     } else if (completed.every(job => job?.status === 'completed')) {
       setGuidedRun(null);
-      setGuidedMessage('Measurement saved. All H5 files verified.');
+      const manifest = last?.manifest_path || project?.manifest_path;
+      if (!manifest) {
+        setGuidedMessage('H5 verified. Open the project manifest in Data Treatment to calculate optical density.');
+        return;
+      }
+      setGuidedMessage('H5 verified. Queuing standard optical density.');
+      fetchWithCsrfToken('/api/treatment/manifest/vd2/queue', {
+        method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ manifest_path: manifest, samples: [last.sample_name || protocolSettings.runName],
+          calc_mode: 'averaged', mode: 'new', clean: !state?.coordinator?.dark_checkout }),
+      }).then(async response => {
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Optical density queue failed');
+        if (protocolAlive.current) setGuidedMessage(result.queue_jobs?.length
+          ? 'H5 verified. Standard optical density queued in Data Treatment.'
+          : 'H5 verified. Standard optical density already exists.');
+      }).catch(error => {
+        if (protocolAlive.current) setGuidedMessage(`H5 verified. Optical density could not be queued. ${error.message}`);
+      });
     } else {
       setGuidedMessage('Waiting for H5 conversion and verification.');
     }
-  }, [guidedRun, protocol, preparedPhase, protocolStarting]);
+  }, [guidedRun, protocol, preparedPhase, protocolStarting, state?.coordinator?.dark_checkout,
+    project?.manifest_path, protocolSettings.runName]);
 
   const prepareProtocolPhase = useCallback((phase) => {
     window.clearTimeout(phaseClickTimer.current);

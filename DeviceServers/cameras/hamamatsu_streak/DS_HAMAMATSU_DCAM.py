@@ -275,6 +275,12 @@ class DS_HAMAMATSU_DCAM(Device):
             raise ValueError("Choose the qualified 5 or 10 Hz dark frame rate")
         self._start_synchronized_live("1 us", True, software_rate=rate)
 
+    @command(dtype_in=int)
+    def StartSynchronizedDarkClosed(self, rate):
+        if rate not in {5, 10}:
+            raise ValueError("Choose 5 or 10 Hz")
+        self._start_synchronized_live("1 us", software_rate=rate, open_shutter=False)
+
     def _start_synchronized_live(self, time_range, accept_open=False, software_rate=None, open_shutter=True):
         self._require_idle()
         if not .95 <= self._exposure_ms <= 25.05:
@@ -400,6 +406,10 @@ class DS_HAMAMATSU_DCAM(Device):
         if self.get_state() != DevState.RUNNING:
             return "vd2-idle-v1", b""
         frame = self._sweep_frame
+        if self._sweep_head is None:
+            pixels = self._sdk(self._latest_frame)
+            if pixels is not None:
+                frame = (self._timestamp_us, self._frame_stamp, pixels)
         if frame is None:
             return "vd2-frame-v1", b""
         timestamp, stamp, pixels = frame

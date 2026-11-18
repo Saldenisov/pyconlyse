@@ -567,7 +567,7 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
     _prepare_kymera_for_vd2.__module__ = api.__name__
     _prepare_kymera_for_vd2.__qualname__ = "_prepare_kymera_for_vd2"
 
-    def _initialize_equipment(steps, *, prepare_optics=None) -> dict[str, Any]:
+    def _initialize_equipment(steps, *, prepare_optics=None, dark_checkout=False) -> dict[str, Any]:
         if prepare_optics is None:
             api._progress(steps, "Checking whether VD2 is already running; existing settings will be retained", stage=0)
             api._assert_preparation_idle()
@@ -600,15 +600,31 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
         # Check every PDU independently; only its own dependent branch is blocked.
         sd2_pdu = attempt("SD2 PDU", lambda: api._ensure_server(api.VD2_PDU_DEVICE, steps))
         zaber_pdu = attempt("VD2 PDU", lambda: api._ensure_server(api.ZABER_PDU_DEVICE, steps))
+        if dark_checkout:
+            if zaber_pdu is None:
+                raise RuntimeError("Cannot verify flashlamp power for dark checkout")
+            states = dict(zip(map(int, api._value(zaber_pdu, "ids")), map(int, api._value(zaber_pdu, "states"))))
+            if states.get(1) != 0:
+                raise RuntimeError("Switch the VD2 flashlamp supply off before dark checkout")
         owis_pdu = attempt("OWIS PDU", lambda: api._ensure_server(api.OWIS_PDU_DEVICE, steps))
         sd2_power_on = attempt("SD2 power", lambda: api._enable_vd2_power(sd2_pdu, steps), ("SD2 PDU",))
-        attempt("VD2 power", lambda: api._enable_required_power(zaber_pdu, steps, api.VD2_REQUIRED_PDU_OUTPUTS, "VD2"), ("VD2 PDU",))
+        required = {key: label for key, label in api.VD2_REQUIRED_PDU_OUTPUTS.items()
+                    if not dark_checkout or key != 1}
+        attempt("VD2 power", lambda: api._enable_required_power(zaber_pdu, steps, required, "VD2"), ("VD2 PDU",))
         attempt("OWIS power", lambda: api._enable_required_power(owis_pdu, steps, api.OWIS_REQUIRED_PDU_OUTPUTS, "OWIS"), ("OWIS PDU",))
         dg645_power_on = (sd2_power_on or {}).get(2)
         dg645_options = {}
         if dg645_power_on is not None:
             dg645_options["dg645_boot_deadline"] = dg645_power_on + api.DG645_POWER_UP_TIMEOUT_S
         dg645 = attempt("DG645 server", lambda: api._ensure_server(api.DG645_DEVICE, steps, **dg645_options), ("SD2 power",))
+        if prepare_optics is not None and dg645_power_on is not None:
+            def restore_direct_timing():
+                api.tango_optics.pause_internal_clock(dg645)
+                try:
+                    api._prepare_dg645_for_vd2(dg645, steps)
+                finally:
+                    api.tango_optics.pause_internal_clock(dg645)
+            attempt("DG645 timing", restore_direct_timing, ("DG645 server",))
         if prepare_optics is None and not api.VD2_CAMERA_ONLY:
             attempt("DG645 timing", lambda: api._prepare_dg645_for_vd2(dg645, steps), ("DG645 server",))
         # VD2 uses axis 2 on the IP backend. The shared aggregator also depends on
@@ -622,7 +638,10 @@ def _bind_pump_probe_vd2_api_parts_recover_owis_device(api):
             optical = attempt("Streak / Kymera optical startup", lambda: api._start_vd2_optics(streak, steps), ("Hamamatsu server", dg645_step))
         else:
             attempt("Kymera server", lambda: api._ensure_server(api.KYMERA_DEVICE, steps), ("SD2 power",))
-            optical = attempt("Direct Tango optics", prepare_optics, ("Kymera server", "DG645 server", "VD2 power"))
+            dependencies = ("Kymera server", "DG645 server", "VD2 power")
+            if dg645_power_on is not None:
+                dependencies += ("DG645 timing",)
+            optical = attempt("Direct Tango optics", prepare_optics, dependencies)
         if failed:
             # No global ready flag for a partially prepared rig, even if optics work.
             raise RuntimeError("VD2 preparation incomplete: " + "; ".join(f"{name}: {detail}" for name, detail in failed.items()))

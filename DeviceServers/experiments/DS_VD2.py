@@ -41,6 +41,8 @@ class DS_VD2(Device):
         self._live_trigger_source = 0
         self._live_exposure_ms = 10.0
         self._prepared = False
+        self._dark_checkout = False
+        self._focus_preview = False
         self._optics = {}
         self._warmup_until = None
         self._warmup_frame = None
@@ -113,6 +115,8 @@ class DS_VD2(Device):
         if self._recording_phase is not None or self._warmup_until is not None:
             raise RuntimeError("Finish the VD2 measurement before changing Live settings")
         if self.get_state() == DevState.RUNNING:
+            if self._focus_preview:
+                raise RuntimeError("Stop Focus preview before changing synchronized Live settings")
             if self._camera is None or self._clock is None or not self._camera.AcquisitionActive:
                 raise RuntimeError("VD2 Live is no longer active. Stop Live and retry.")
             return True
@@ -204,15 +208,35 @@ class DS_VD2(Device):
             name for name, source in LIVE_TRIGGER_SOURCES.items() if source == self._live_trigger_source
         )
         self._camera_values.setdefault("live_exposure_time", f"{self._live_exposure_ms:.9g} ms")
-        self._camera_values.update(streak_mode="Operate", gate_mode="Normal", mcp_gain=0, streak_trigger_mode="Single")
+        actual_mode = self._proxy(self.head_device).command_inout("ReadMode")
+        self._camera_values.update(streak_mode=actual_mode, gate_mode="Normal", mcp_gain=0, streak_trigger_mode="Single")
         self._prepared = True
         self._fault = ""
         self.set_state(DevState.ON)
         self.set_status("VD2 prepared; trigger in standby")
 
     @command
+    def PrepareDarkCheckout(self):
+        self._verify_dark_lamp()
+        self._require_idle()
+        self._proxy(self.head_device).command_inout("SetShutter", "Closed")
+        self.Prepare()
+        self.SetStreakMode("Focus")
+        self._dark_checkout = True
+
+    @command
+    def PrepareStandard(self):
+        self.Prepare()
+        self._dark_checkout = False
+
+    def _verify_dark_lamp(self):
+        if self._outlet_power(self.lamp_pdu_device):
+            raise RuntimeError("Switch the VD2 flashlamp supply off before dark checkout")
+
+    @command
     def Unprepare(self):
         self._prepared = False
+        self._dark_checkout = False
         self._stop_live(keep_shutters=False)
         camera = self._proxy(self.ccd_device, 30000)
         try:
@@ -355,7 +379,7 @@ class DS_VD2(Device):
         return ky
 
     def _refresh_preview_configuration(self, optics):
-        if self._camera is not None:
+        if self._camera is not None and not self._focus_preview:
             configuration = self._read_calibration_configuration(optics)
             # Skip an in-flight exposure and allow for frame publication after the counter advances.
             self._mark_preview_changed()
@@ -363,15 +387,71 @@ class DS_VD2(Device):
 
     @command
     def StartLive(self):
+        if self._read_head_mode() == "Focus":
+            self._start_focus_preview()
+            return
+        self._start_live(streak_open=False, kymera_open=False)
+
+    @command
+    def StartLiveWithShutters(self):
+        if self._read_head_mode() != "Operate":
+            raise RuntimeError("Select Operate before opening the shutters for Live")
         self._start_live()
 
     @command
     def StartAlignment(self):
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before starting Live")
+        if self._read_head_mode() == "Focus":
+            self._start_focus_preview()
+            return
+        if self._time_range != "1 us":
+            self.SetTimeRange("1 us")
+        self._start_live(streak_open=False, kymera_open=False)
+
+    @command
+    def StartAlignmentWithShutters(self):
+        if self._read_head_mode() != "Operate":
+            raise RuntimeError("Select Operate before opening the shutters for Live")
         if self._time_range != "1 us":
             self.SetTimeRange("1 us")
         self._start_live()
+
+    def _read_head_mode(self):
+        self._require_idle()
+        if not self._prepared:
+            raise RuntimeError("Prepare VD2 before starting Live")
+        return self._proxy(self.head_device).command_inout("ReadMode")
+
+    def _start_focus_preview(self):
+        if self._dark_checkout:
+            self._verify_dark_lamp()
+        dg = self._proxy(self.dg645_device)
+        self._verify_standby(dg)
+        ky = self._proxy(self.kymera_device)
+        self._proxy(self.head_device).command_inout("SetShutter", "Closed")
+        self._optics["streak_shutter"] = "Closed"
+        self._set_kymera_shutter(ky, "Closed")
+        self._camera = camera = self._proxy(self.ccd_device, 30000)
+        self._kymera = ky
+        self._clock = dg
+        try:
+            camera.command_inout("OpenReadout")
+            if tuple(camera.command_inout("SetROI", SENSOR_ROI)) != (*SENSOR_ROI, SENSOR_ROI[-1]):
+                raise RuntimeError("CCD ROI did not verify")
+            camera.ExposureMs = self._live_exposure_ms
+            camera.command_inout("StartLive")
+            if camera.state() != DevState.RUNNING or not camera.AcquisitionActive:
+                raise RuntimeError("CCD did not confirm Focus preview")
+            self._camera_values.update(streak_mode="Focus", streak_trigger_status="Internal",
+                                       mcp_gain=0, live_mcp_gain_max=0,
+                                       live_exposure_time=f"{camera.ExposureMs:.9g} ms")
+        except Exception as exc:
+            self._fail_live(exc)
+        self._focus_preview = True
+        self._fault = ""
+        self.set_state(DevState.RUNNING)
+        self.set_status("VD2 Focus preview; shutters closed")
 
     def _read_optics(self, ky):
         values = self._read_kymera(ky)
@@ -472,6 +552,8 @@ class DS_VD2(Device):
         self._require_idle()
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before starting Live")
+        if self._dark_checkout:
+            self._verify_dark_lamp()
         dg = self._proxy(self.dg645_device)
         self._verify_standby(dg)
         if self._query(dg, "TRAT?") != self._rate_hz:
@@ -480,6 +562,8 @@ class DS_VD2(Device):
         camera = self._proxy(self.ccd_device, 30000)
         ky = self._proxy(self.kymera_device)
         self._read_optics(ky)
+        if not streak_open:
+            self._proxy(self.head_device).command_inout("SetShutter", "Closed")
         self._camera = camera
         self._kymera = ky
         try:
@@ -489,7 +573,8 @@ class DS_VD2(Device):
                 raise RuntimeError("CCD ROI did not verify")
             camera.ExposureMs = 10.0 if recording else self._live_exposure_ms
             if dark:
-                camera.command_inout("StartSynchronizedDark", self._rate_hz)
+                camera.command_inout("StartSynchronizedDark" if streak_open else "StartSynchronizedDarkClosed",
+                                     self._rate_hz)
             else:
                 command_name = ("StartSynchronizedLiveWithOpenShutterAt" if streak_open
                                 else "StartSynchronizedLiveWithClosedShutterAt")
@@ -533,8 +618,12 @@ class DS_VD2(Device):
     @command
     def PrepareMeasurement(self):
         """Warm the powered flash lamp at the selected clock before measuring."""
+        if self._dark_checkout:
+            raise RuntimeError("Dark checkout does not warm the flashlamp")
         if not self._outlet_power(self.lamp_pdu_device):
             raise RuntimeError("Verify the VD2 flashlamp supply is ON")
+        if self._camera is None and self._read_head_mode() != "Operate":
+            raise RuntimeError("Select Operate before starting a VD2 measurement")
         if self._camera is None:
             self._start_live(recording=True)
         elif self.get_state() != DevState.RUNNING or not self._camera.AcquisitionActive:
@@ -563,12 +652,15 @@ class DS_VD2(Device):
         self._require_idle()
         if not self._prepared:
             raise RuntimeError("Prepare VD2 before recording")
-        if phase != "BRUIT" and not self._outlet_power(self.lamp_pdu_device):
+        if self._read_head_mode() != "Operate":
+            raise RuntimeError("Select Operate before starting a VD2 measurement")
+        if not self._dark_checkout and phase != "BRUIT" and not self._outlet_power(self.lamp_pdu_device):
             raise RuntimeError("Verify the VD2 flashlamp supply is ON")
-        self._start_live(dark=phase == "BRUIT", recording=True)
+        self._start_live(dark=self._dark_checkout or phase == "BRUIT", recording=True,
+                         streak_open=not self._dark_checkout, kymera_open=not self._dark_checkout)
         self._recording_phase = phase
         try:
-            if phase != "BRUIT":
+            if not self._dark_checkout and phase != "BRUIT":
                 self._start_warmup()
             return self.PhaseConfiguration()
         except Exception as exc:
@@ -578,20 +670,23 @@ class DS_VD2(Device):
     def PhaseConfiguration(self):
         if self._recording_phase is None or self.get_state() != DevState.RUNNING:
             raise RuntimeError("VD2 has no active sequence")
-        dark = self._recording_phase == "BRUIT"
+        dark = self._dark_checkout or self._recording_phase == "BRUIT"
+        if self._dark_checkout:
+            self._verify_dark_lamp()
         trigger_source = 5 if dark else 0
         if not self._camera.AcquisitionActive or self._query(self._clock, "TSRC?") != trigger_source:
             raise RuntimeError("VD2 synchronized sequence is no longer active")
         if self._query(self._clock, "TRAT?") != self._rate_hz or self._query(self._clock, "BURM?") != 0:
             raise RuntimeError("DG645 rate or burst changed during recording")
         configuration = self._read_calibration_configuration()
-        if configuration["optics"]["shutter"] != "Open":
+        if configuration["optics"]["shutter"] != ("Closed" if self._dark_checkout else "Open"):
             raise RuntimeError("Kymera shutter changed during recording")
         delays = {name: self._clock.command_inout("scpi_query", f"DLAY? {channel}").strip()
                   for channel, name in enumerate("abcdefgh", 2)}
         return json.dumps({**configuration, "phase": self._recording_phase,
                            "rate_hz": self._rate_hz, "dg_trigger_source": trigger_source,
-                           "ccd_trigger": "software" if dark else "external", "delays": delays})
+                           "ccd_trigger": "software" if dark else "external", "delays": delays,
+                           "dark_checkout": self._dark_checkout})
 
     def _read_calibration_configuration(self, optics=None):
         return {"time_range": self._time_range, "camera": json.loads(self._camera.ReadoutConfiguration()),
@@ -652,6 +747,7 @@ class DS_VD2(Device):
         self._warmup_until = None
         self._warmup_frame = None
         self._preview_configuration = None
+        self._focus_preview = False
         self._preview_first_frame = 0
         self._camera_values["streak_trigger_status"] = "Idle"
         if not errors:
@@ -673,14 +769,15 @@ class DS_VD2(Device):
             remaining = max(0.0, self._warmup_until - monotonic())
             sufficient_frames = acquired_frames - self._warmup_frame >= LAMP_WARMUP_S * self._rate_hz
             phase = "warming" if remaining else ("measurement_ready" if sufficient_frames else "waiting_for_trigger")
-        elif phase == "live" and not acquired_frames:
+        elif phase == "live" and not acquired_frames and not self._focus_preview:
             phase = "waiting_for_trigger"
-        preview_pending = state == "RUNNING" and (
+        preview_pending = state == "RUNNING" and not self._focus_preview and (
             self._preview_configuration is None or acquired_frames < self._preview_first_frame
         )
         return json.dumps({"state": state, "phase": phase, "time_range": self._time_range,
                            "frames": acquired_frames, "remaining_warmup_s": remaining,
                            "prepared": self._prepared, "trigger_rate_hz": self._rate_hz,
+                           "dark_checkout": self._dark_checkout,
                            "optics": self._optics, "values": {**self._camera_values, **self._timing_values},
                            "preview_configuration": None if preview_pending else self._preview_configuration,
                            "preview_configuration_pending": preview_pending, "error": self._fault})

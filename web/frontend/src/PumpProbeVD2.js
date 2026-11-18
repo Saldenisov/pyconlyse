@@ -11,6 +11,7 @@ import './css/PumpProbeVD2.css';
 function PumpProbeVD2() {
   const [measurementRate, setMeasurementRate] = useState('5');
   const [pairedCorrection, setPairedCorrection] = useState(DEFAULT_PAIRED_CORRECTION);
+  const [confirmShutters, setConfirmShutters] = useState(false);
   const {
     state, setState, preview, previewAvailable, errors, setErrors, readFailures,
     activeErrorId, setActiveErrorId, previewError, setPreviewError, setAlignmentAverage,
@@ -56,6 +57,7 @@ function PumpProbeVD2() {
   });
 
   return renderVd2Acquisition({
+    confirmShutters, setConfirmShutters,
     measurementRate, setMeasurementRate, pairedCorrection, setPairedCorrection,
     state, preview, previewAvailable, errors, activeErrorId, previewError,
     setAlignmentAverage, setLiveAverageReadError, setPreviewEnabled, busy, activeTab,

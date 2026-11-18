@@ -6,6 +6,7 @@ const choices = [
   ['alignment', 'Return to Alignment'],
   ['point', 'Previous measurement point'],
   ['default', 'Standard preparation · 1 us on cold startup'],
+  ['dark', 'Dark checkout · flashlamp off'],
 ];
 
 export default function VD2PrepareChoice({onCancel, onConfirm}) {
@@ -52,7 +53,7 @@ export default function VD2PrepareChoice({onCancel, onConfirm}) {
       <h2 id="vd2-prepare-choice-title">Prepare VD2 · return to</h2>
       {loading && <p role="status">Reading saved camera configurations…</p>}
       {error && <p role="alert">{error} Standard preparation is available; no saved settings will be applied.</p>}
-      {choices.map(([key, label]) => {
+      {choices.filter(([key]) => key !== 'dark' || options?.dark_checkout_available).map(([key, label]) => {
         const saved = options?.[key];
         const disabled = loading || (['previous', 'point'].includes(key) && !saved) || (key === 'alignment' && !options);
         return <label key={key} className={`experiment-restore-option${disabled ? ' is-disabled' : ''}`}>
@@ -60,7 +61,8 @@ export default function VD2PrepareChoice({onCancel, onConfirm}) {
             onChange={() => setSelected(key)} />
           <span>{label}<small>{saved
             ? `${saved.settings.time_range} · ${saved.settings.streak_mode} · ${new Date(saved.created_at).toLocaleString()}`
-            : key === 'alignment' ? '1 us · saved regions in this browser' : key === 'default' ? 'Keep current settings if already ready' : 'No saved return point yet'}</small></span>
+            : key === 'alignment' ? '1 us · saved regions in this browser' : key === 'default' ? 'Keep current settings if already ready'
+              : key === 'dark' ? 'Focus · shutters closed · dark test recording' : 'No saved return point yet'}</small></span>
         </label>;
       })}
       <p>Camera settings are verified after recovery. Acquisition stays stopped. Shutters, magnets and stages are not restored.</p>

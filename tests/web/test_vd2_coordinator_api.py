@@ -147,8 +147,8 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
 
     coordinator = Coordinator()
 
-    def initialize(steps, *, prepare_optics):
-        events.append(("power verified",))
+    def initialize(steps, *, prepare_optics, dark_checkout=False):
+        events.append(("power verified", dark_checkout))
         return {"steps": steps, "device": prepare_optics()}
 
     def shutdown(steps, *, shutdown_optics):
@@ -181,8 +181,12 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
     assert result.json["result"]["device"]["coordinator"]["prepared"]
     assert client.post("/vd2/deinitialize?background=1", json={}).status_code == 202
     assert events == [("prepare", {"restore_mode": "alignment"}),
-                      ("power verified",), ("Prepare",), ("SetTimeRange", "1 us"),
+                      ("power verified", False), ("PrepareStandard",), ("SetTimeRange", "1 us"),
                       ("shutdown", None), ("Unprepare",), ("camera power off",)]
+    events.clear()
+    assert client.post("/vd2/initialize?background=1", json={"restore_mode": "dark"}).status_code == 202
+    assert events == [("prepare", {"restore_mode": "dark"}), ("power verified", True),
+                      ("SetSpectrographShutter", "Closed"), ("PrepareDarkCheckout",)]
     events.clear()
     assert client.post("/vd2/initialize?background=1", json={"restore_mode": "point"}).status_code == 400
     authorization_required = True

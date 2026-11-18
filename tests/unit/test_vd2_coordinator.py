@@ -39,7 +39,7 @@ def rig(monkeypatch):
             elif command == "SetROI":
                 return (*value, value[-1])
             elif command in {"StartSynchronizedLiveWithOpenShutterAt", "StartSynchronizedLiveWithClosedShutterAt",
-                             "StartSynchronizedDark"}:
+                             "StartSynchronizedDark", "StartSynchronizedDarkClosed", "StartLive"}:
                 if self.reject_start:
                     raise RuntimeError("Test CCD refused Live")
                 self.current_state = tango.DevState.RUNNING
@@ -74,7 +74,15 @@ def rig(monkeypatch):
             else:
                 self.settings["TSRC?"] = value.removeprefix("TSRC ")
 
+    head_mode = ["Focus"]
+
     def head_readback(command, value=None):
+        if command == "ReadMode":
+            return head_mode[0]
+        if command == "ConfigureSweep":
+            head_mode[0] = "Operate"
+        elif command == "Park":
+            head_mode[0] = "Focus"
         events.append((command, value))
         return value
 
@@ -119,7 +127,7 @@ def test_range_updates_head_and_e_then_starts_clock_only_after_arming_camera(rig
     assert vd2.SetTimeRange("2 µs") == "2 us"
     assert events == [("SetShutter", "Closed"), ("ConfigureSweep", "2 us"), "DLAY 6,0,0.0022054"]
     assert generator.settings["DLAY? 2"] == "0,+0.0020417"
-    vd2.StartLive()
+    vd2.StartLiveWithShutters()
     assert events[-2:] == [("StartSynchronizedLiveWithOpenShutterAt", "2 us"), "TSRC 0"]
     assert ccd.ExposureMs == 10.0
     assert kymera.shutter == "Open"
@@ -164,7 +172,7 @@ def test_ccd_start_failure_releases_handles_without_emitting_pulses(rig):
     vd2.Prepare()
     ccd.reject_start = True
     with pytest.raises(RuntimeError, match="refused Live"):
-        vd2.StartLive()
+        vd2.StartLiveWithShutters()
     assert events[-1] == ("CloseReadout", None)
     assert "TSRC 0" not in events
     assert kymera.shutter == "Closed"
@@ -186,7 +194,7 @@ def test_bruit_keeps_dg_in_standby_and_leaves_shutters_and_power_alone(rig):
 def test_live_kymera_changes_restore_open_shutter_and_wait_for_new_calibrated_frames(rig):
     vd2, events, ccd, generator, kymera, _, _ = rig
     vd2.Prepare()
-    vd2.StartLive()
+    vd2.StartLiveWithShutters()
     ccd.SweepFrameCount = 20
     events.clear()
     kymera.writes.clear()
@@ -221,7 +229,7 @@ def test_idle_kymera_keeps_an_initially_closed_shutter_closed(rig):
 def test_unconfirmed_kymera_motion_leaves_shutter_closed_and_invalidates_preview(rig):
     vd2, _, ccd, _, kymera, _, _ = rig
     vd2.Prepare()
-    vd2.StartLive()
+    vd2.StartLiveWithShutters()
     kymera.reject_wavelength = True
     with pytest.raises(RuntimeError, match="shutter was left closed"):
         vd2.SetWavelength(600.)
@@ -235,7 +243,7 @@ def test_unconfirmed_kymera_motion_leaves_shutter_closed_and_invalidates_preview
 def test_unconfirmed_shutter_reopening_preserves_verified_spectral_position(rig):
     vd2, _, _, _, kymera, _, _ = rig
     vd2.Prepare()
-    vd2.StartLive()
+    vd2.StartLiveWithShutters()
     kymera.reject_reopen = True
     with pytest.raises(RuntimeError, match="shutter reopening is unverified"):
         vd2.SetGrating(2)
@@ -263,7 +271,7 @@ def test_measurement_blocks_all_kymera_adjustments_before_shutter_changes(rig, c
 def test_live_dg_delay_rate_and_source_use_readback_without_reopening_camera(rig):
     vd2, events, camera, generator, _, _, _ = rig
     vd2.Prepare()
-    vd2.StartLive()
+    vd2.StartLiveWithShutters()
     events.clear()
     generator.settings["DLAY? 3"] = "2,+0.000001"
     assert vd2.SetDelay(["b", "0.000002"]) == 0.000002
@@ -279,7 +287,7 @@ def test_live_dg_delay_rate_and_source_use_readback_without_reopening_camera(rig
 def test_exposure_rearms_live_and_preserves_closed_shutter(rig):
     vd2, events, camera, _, _, _, _ = rig
     vd2.Prepare()
-    vd2.StartLive()
+    vd2.StartLiveWithShutters()
     assert vd2.SetStreakShutter("Closed") == "Closed"
     assert vd2.SetLiveExposure(18.25) == "18.25 ms"
     assert camera.ExposureMs == 18.25
@@ -317,7 +325,7 @@ def test_unprepare_releases_dcam_even_if_powered_dg645_does_not_reply(rig, monke
 def test_mode_change_requires_idle_and_focus_parks_head(rig):
     vd2, events, _, _, _, _, _ = rig
     vd2.Prepare()
-    vd2.StartLive()
+    vd2.StartLiveWithShutters()
     with pytest.raises(RuntimeError, match="Stop Live"):
         vd2.SetStreakMode("Focus")
     vd2.StopLive()
@@ -326,3 +334,31 @@ def test_mode_change_requires_idle_and_focus_parks_head(rig):
     state = json.loads(vd2.GetState())
     assert state["values"]["streak_mode"] == "Focus"
     assert state["optics"]["streak_shutter"] == "Closed"
+
+
+def test_dark_checkout_disables_light_during_focus_preview_and_recording(rig):
+    vd2, events, camera, generator, kymera, lamp, _ = rig
+    with pytest.raises(RuntimeError, match="flashlamp supply off"):
+        vd2.PrepareDarkCheckout()
+    assert not events
+    lamp.states[0] = 0
+    vd2.PrepareDarkCheckout()
+    vd2.SetRate(10)
+    with pytest.raises(RuntimeError, match="Select Operate"):
+        vd2.StartLiveWithShutters()
+    vd2.StartLive()
+    focus = json.loads(vd2.GetState())
+    assert focus["values"]["streak_mode"] == "Focus"
+    assert focus["optics"]["streak_shutter"] == kymera.shutter == "Closed"
+    assert camera.AcquisitionActive and generator.settings["TSRC?"] == "5"
+    vd2.StopLive()
+    vd2.SetStreakMode("Operate")
+    vd2.StartLive()
+    assert json.loads(vd2.GetState())["optics"]["streak_shutter"] == "Closed"
+    vd2.StopLive()
+    vd2.StartLiveWithShutters()
+    assert json.loads(vd2.GetState())["optics"]["streak_shutter"] == "Open"
+    configuration = json.loads(vd2.StartPhase("BASE"))
+    assert configuration["dark_checkout"] and configuration["ccd_trigger"] == "software"
+    assert configuration["optics"]["shutter"] == "Closed" and configuration["rate_hz"] == 10
+    assert ("StartSynchronizedDarkClosed", 10) in events and generator.settings["TSRC?"] == "5"

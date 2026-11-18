@@ -16,6 +16,8 @@ LIVE_COMMANDS = {
     "/command/StartLive": "StartLive",
     "/command/StopAcquisition": "StopLive",
     "/alignment/start": "StartAlignment",
+    "/alignment/confirmed-start": "StartAlignmentWithShutters",
+    "/command/StartLiveWithShutters": "StartLiveWithShutters",
     "/coordinator/prepare-measurement": "PrepareMeasurement",
 }
 
@@ -64,6 +66,9 @@ ADJUSTMENT_CONFLICTS = {
     "Set II-Gain to zero before opening the streak shutter",
     "Stop Live before changing the streak camera mode",
     "Choose 5 or 10 Hz",
+    "Select Operate before opening the shutters for Live",
+    "Stop Focus preview before changing synchronized Live settings",
+    "Switch the VD2 flashlamp supply off before dark checkout",
 }
 
 
@@ -252,7 +257,7 @@ def install_vd2_coordinator_routes(api):
             try:
                 actual = coordinator.command_inout(command, *args)
             except Exception as exc:
-                conflict = adjustment_conflict(exc) if adjusts_preview else None
+                conflict = adjustment_conflict(exc)
                 if conflict:
                     return jsonify(success=False, error=conflict), 409
                 raise
@@ -273,7 +278,7 @@ def install_vd2_coordinator_routes(api):
         if authorization_required:
             return api._exact_plan_required()
         mode = payload.get("restore_mode", "default")
-        if set(payload) - fields or mode not in ("default", "alignment") or payload.get("restore_id") is not None:
+        if set(payload) - fields or mode not in ("default", "alignment", "dark") or payload.get("restore_id") is not None:
             return jsonify(success=False, error="Choose Standard preparation or the direct 1 us Alignment setup"), 400
 
         def action(steps):
@@ -292,7 +297,11 @@ def install_vd2_coordinator_routes(api):
                 raise RuntimeError("Stop Live before preparing VD2")
 
             def prepare_optics():
-                coordinator.command_inout("Prepare")
+                if mode == "dark":
+                    coordinator.command_inout("SetSpectrographShutter", "Closed")
+                    coordinator.command_inout("PrepareDarkCheckout")
+                else:
+                    coordinator.command_inout("PrepareStandard")
                 if mode == "alignment":
                     coordinator.command_inout("SetTimeRange", "1 us")
                 result = status(coordinator)
@@ -301,7 +310,10 @@ def install_vd2_coordinator_routes(api):
                 steps.append({"step": "Direct Tango optics", "status": "prepared; DG645 in standby"})
                 return result
 
-            result = api._initialize_equipment(steps, prepare_optics=prepare_optics)
+            arguments = {"prepare_optics": prepare_optics}
+            if mode == "dark":
+                arguments["dark_checkout"] = True
+            result = api._initialize_equipment(steps, **arguments)
             if mode == "alignment":
                 result["restored"] = {"ui": {"tab": "alignment"}}
             return {**result, "readout_backend": "tango"}
@@ -345,7 +357,8 @@ def install_vd2_coordinator_routes(api):
                 ):
                     return jsonify(success=False, error="This operation has no direct Tango VD2 implementation"), 409
             if request.method == "GET" and path == "/recovery/options":
-                return jsonify(success=True, options={"previous": None, "alignment": None, "point": None})
+                return jsonify(success=True, options={"previous": None, "alignment": None, "point": None,
+                                                      "dark_checkout_available": True})
             if (request.method, path) in {
                 ("GET", "/state"), ("POST", "/refresh"), ("GET", "/runtime/state"), ("GET", "/preview")
             }:

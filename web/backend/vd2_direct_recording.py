@@ -141,9 +141,9 @@ def _machine(configuration, axes):
             "spectral_calibration": {"id": axes[1][1], "valid_columns": list(axes[1][2])}}
 
 
-def _wait_ready(coordinator, phase):
+def _wait_ready(coordinator, phase, *, dark_checkout=False):
     deadline = monotonic() + 20
-    expected = "live" if phase == "BRUIT" else "measurement_ready"
+    expected = "live" if phase == "BRUIT" or dark_checkout else "measurement_ready"
     while monotonic() < deadline:
         state = json.loads(coordinator.GetState())
         if state["state"] != "RUNNING":
@@ -165,7 +165,7 @@ def record_direct_phase(request, coordinator, ccd, update, record, verify_bruit)
             axes = recording_axes(configuration)
             machine = _machine(configuration, axes)
             verify_bruit(machine)
-            _wait_ready(coordinator, request.phase)
+            _wait_ready(coordinator, request.phase, dark_checkout=configuration.get("dark_checkout", False))
             rate = configuration["rate_hz"]
             record("acquiring", machine_before=machine)
             update(status="acquiring", capture_rate=rate, capture_started_at=datetime.now(timezone.utc).isoformat())
