@@ -12,25 +12,36 @@ Key Features:
 - Thread-safe operations
 
 Usage Example:
-    from avantes_parallel import parallel_measure, parallel_poll_and_get_data
+    from avantes_parallel import parallel_measure, parallel_poll_and_get_data, parallel_prepare_measure
     
     # Assuming spec1 and spec2 are two Avantes instances
     specs = [spec1, spec2]
     configs = [config1, config2]
     
     # Start measurements on both simultaneously
-    parallel_measure(specs, configs, num_measurements=1)
+    parallel_prepare_measure(specs, configs)
+    parallel_measure(specs, num_measurements=1)
     
     # Poll and retrieve data from both
     results = parallel_poll_and_get_data(specs, timeout=5.0)
 """
 
+import logging
 import time
 from typing import List, Dict, Tuple, Optional
 import numpy as np
 
 
-def parallel_prepare_measure(spectrometers: List, configs: List) -> Dict[int, bool]:
+logger = logging.getLogger(__name__)
+
+
+def _report_failure(diagnostics, index, stage, error):
+    logger.warning("Spectrometer %s %s: %s", index + 1, stage, error)
+    if diagnostics is not None:
+        diagnostics[index] = {"stage": stage, "error": str(error)}
+
+
+def parallel_prepare_measure(spectrometers: List, configs: List, *, diagnostics=None) -> Dict[int, bool]:
     """
     Prepare measurements for multiple spectrometers in parallel.
     
@@ -46,21 +57,23 @@ def parallel_prepare_measure(spectrometers: List, configs: List) -> Dict[int, bo
     Dict[int, bool]
         Dictionary mapping spectrometer index to success status
     """
+    if len(spectrometers) != len(configs):
+        raise ValueError("Each spectrometer requires a measurement configuration")
     results = {}
     
     for idx, (spec, config) in enumerate(zip(spectrometers, configs)):
         try:
             spec.prepare_measure(config)
             results[idx] = True
-        except Exception as e:
-            print(f"Error preparing spectrometer {idx}: {e}")
+        except Exception as exc:
+            _report_failure(diagnostics, idx, "prepare", exc)
             results[idx] = False
             
     return results
 
 
-def parallel_measure(spectrometers: List, num_measurements: int = 1, 
-                     window_handles: Optional[List] = None) -> Dict[int, bool]:
+def parallel_measure(spectrometers: List, num_measurements: int = 1,
+                     window_handles: Optional[List] = None, *, diagnostics=None) -> Dict[int, bool]:
     """
     Start measurements on multiple spectrometers simultaneously.
     
@@ -85,14 +98,16 @@ def parallel_measure(spectrometers: List, num_measurements: int = 1,
     
     if window_handles is None:
         window_handles = [None] * len(spectrometers)
+    if len(spectrometers) != len(window_handles):
+        raise ValueError("Each spectrometer requires a window handle or None")
     
     # Start all measurements as quickly as possible
     for idx, (spec, wh) in enumerate(zip(spectrometers, window_handles)):
         try:
             spec.measure(num_measurements, wh)
             results[idx] = True
-        except Exception as e:
-            print(f"Error starting measurement on spectrometer {idx}: {e}")
+        except Exception as exc:
+            _report_failure(diagnostics, idx, "start", exc)
             results[idx] = False
             
     return results
@@ -131,17 +146,18 @@ def parallel_poll_and_get_data(spectrometers: List, timeout: float = 5.0,
     results = {idx: (False, None) for idx in range(len(spectrometers))}
     data_ready = {idx: False for idx in range(len(spectrometers))}
     retry_count = {idx: 0 for idx in range(len(spectrometers))}
-    start_time = time.time()
+    retry_after = dict.fromkeys(data_ready, 0.0)
+    deadline = time.monotonic() + timeout
     
     # Poll all spectrometers until all are ready or timeout
     while not all(data_ready.values()):
-        if time.time() - start_time > timeout:
-            print(f"Timeout waiting for measurements. Ready: {sum(data_ready.values())}/{len(spectrometers)}")
+        now = time.monotonic()
+        if now >= deadline:
             break
             
         # Poll each spectrometer that hasn't finished yet
         for idx, spec in enumerate(spectrometers):
-            if data_ready[idx]:
+            if data_ready[idx] or now < retry_after[idx]:
                 continue  # Skip if already got data
                 
             try:
@@ -152,51 +168,54 @@ def parallel_poll_and_get_data(spectrometers: List, timeout: float = 5.0,
                     # Data is ready, retrieve it
                     try:
                         tick_count, data = spec.get_data()
-                        results[idx] = (True, data)
-                        data_ready[idx] = True
-                        if diagnostics is not None:
-                            info = {"device_tick": int(tick_count) if tick_count is not None else None,
-                                    "saturated_pixels": None}
-                            diagnostics[idx] = info
-                            get_saturation = getattr(spec, "get_saturated_pixels", None)
-                            if callable(get_saturation):
-                                try:
-                                    pixels = np.asarray(get_saturation())
-                                    if pixels.shape == np.shape(data):
-                                        info["saturated_pixels"] = np.flatnonzero(pixels).tolist()
-                                except Exception as exc:
-                                    info["saturation_error"] = str(exc)
                     except Exception as get_error:
                         # Handle ERR_INVALID_MEAS_DATA - data not ready yet
                         if "INVALID_MEAS_DATA" in str(get_error) and retry_count[idx] < max_retries:
                             retry_count[idx] += 1
-                            print(f"Spec {idx}: Data not ready, retry {retry_count[idx]}/{max_retries}")
-                            time.sleep(0.01)  # Wait a bit before next poll
+                            retry_after[idx] = time.monotonic() + 0.01
                             continue
                         else:
                             raise  # Re-raise if max retries exceeded or other error
-                    
-            except Exception as e:
-                print(f"Error polling/retrieving data from spectrometer {idx}: {e}")
+                    data = np.asarray(data)
+                    if data.ndim != 1 or not data.size or data.dtype.kind not in "iuf":
+                        raise ValueError("Expected a one-dimensional numeric spectrum")
+                    results[idx] = (True, data)
+                    data_ready[idx] = True
+                    if diagnostics is not None:
+                        info = {"device_tick": None, "saturated_pixels": None}
+                        diagnostics[idx] = info
+                        try:
+                            info["device_tick"] = int(tick_count) if tick_count is not None else None
+                        except (TypeError, ValueError, OverflowError) as exc:
+                            info["device_tick_error"] = str(exc)
+                        try:
+                            get_saturation = getattr(spec, "get_saturated_pixels", None)
+                            if callable(get_saturation):
+                                pixels = np.asarray(get_saturation())
+                                if pixels.shape == data.shape:
+                                    info["saturated_pixels"] = np.flatnonzero(pixels).tolist()
+                        except Exception as exc:
+                            info["saturation_error"] = str(exc)
+
+            except Exception as exc:
                 results[idx] = (False, None)
                 data_ready[idx] = True  # Mark as done (failed)
-                if diagnostics is not None:
-                    diagnostics[idx] = {"error": str(e)}
+                _report_failure(diagnostics, idx, "readout", exc)
         
         # Small sleep to prevent CPU spinning
         if not all(data_ready.values()):
             time.sleep(poll_interval)
     
-    if diagnostics is not None:
-        for idx, ready in data_ready.items():
-            if not ready:
-                diagnostics[idx] = {"error": "readout timeout"}
+    for idx, ready in data_ready.items():
+        if not ready:
+            _report_failure(diagnostics, idx, "readout", "readout timeout")
     return results
 
 
 def parallel_full_measurement(spectrometers: List, configs: List, 
                                num_measurements: int = 1,
-                               timeout: float = 5.0) -> Dict[int, Tuple[bool, Optional[np.ndarray]]]:
+                               timeout: float = 5.0, *,
+                               diagnostics=None) -> Dict[int, Tuple[bool, Optional[np.ndarray]]]:
     """
     Complete parallel measurement workflow: prepare, measure, poll, and retrieve data.
     
@@ -212,6 +231,8 @@ def parallel_full_measurement(spectrometers: List, configs: List,
         Number of measurements (default: 1)
     timeout : float, optional
         Maximum wait time in seconds (default: 5.0)
+    diagnostics : dict, optional
+        Receives diagnostic details from preparation, startup, readout, and cleanup.
         
     Returns
     -------
@@ -219,28 +240,30 @@ def parallel_full_measurement(spectrometers: List, configs: List,
         Dictionary mapping spectrometer index to (success, data) tuple
     """
     # Step 1: Prepare all measurements
-    prep_results = parallel_prepare_measure(spectrometers, configs)
+    prep_results = parallel_prepare_measure(spectrometers, configs, diagnostics=diagnostics)
     
     if not all(prep_results.values()):
-        failed = [idx for idx, success in prep_results.items() if not success]
-        print(f"Failed to prepare spectrometers: {failed}")
         return {idx: (False, None) for idx in range(len(spectrometers))}
     
     # Step 2: Start all measurements
-    meas_results = parallel_measure(spectrometers, num_measurements)
+    meas_results = parallel_measure(spectrometers, num_measurements, diagnostics=diagnostics)
     
     if not all(meas_results.values()):
-        failed = [idx for idx, success in meas_results.items() if not success]
-        print(f"Failed to start measurements on spectrometers: {failed}")
+        parallel_stop_measure(spectrometers, diagnostics=diagnostics)
         return {idx: (False, None) for idx in range(len(spectrometers))}
     
     # Step 3: Poll and retrieve data
-    data_results = parallel_poll_and_get_data(spectrometers, timeout)
-    
+    try:
+        data_results = parallel_poll_and_get_data(spectrometers, timeout, diagnostics=diagnostics)
+    except Exception:
+        parallel_stop_measure(spectrometers, diagnostics=diagnostics)
+        raise
+    failed = [idx for idx, (success, _) in data_results.items() if not success]
+    parallel_stop_measure(spectrometers, indices=failed, diagnostics=diagnostics)
     return data_results
 
 
-def parallel_stop_measure(spectrometers: List) -> Dict[int, bool]:
+def parallel_stop_measure(spectrometers: List, *, indices=None, diagnostics=None) -> Dict[int, bool]:
     """
     Stop measurements on multiple spectrometers.
     
@@ -256,12 +279,14 @@ def parallel_stop_measure(spectrometers: List) -> Dict[int, bool]:
     """
     results = {}
     
-    for idx, spec in enumerate(spectrometers):
+    for idx in range(len(spectrometers)) if indices is None else indices:
         try:
-            spec.stop_measure()
+            spectrometers[idx].stop_measure()
             results[idx] = True
-        except Exception as e:
-            print(f"Error stopping spectrometer {idx}: {e}")
+        except Exception as exc:
+            logger.warning("Spectrometer %s cleanup: %s", idx + 1, exc)
+            if diagnostics is not None:
+                diagnostics.setdefault(idx, {})["cleanup_error"] = str(exc)
             results[idx] = False
             
     return results

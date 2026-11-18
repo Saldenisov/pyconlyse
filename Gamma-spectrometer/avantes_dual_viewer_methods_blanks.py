@@ -19,7 +19,7 @@ def _bind_avantes_dual_viewer_methods_blanks(api):
 
     def calibration_matches_detector_setup(self):
         current = self.current_detector_setup()
-        return all(self.same_detector_setup(current, block["metadata"]["channels"])
+        return all(self.same_detector_setup(current, block.get("metadata", {}).get("channels"))
                    for blocks in self.calibration_blocks.values() for block in blocks)
 
     def current_detector_setup(self):
@@ -27,8 +27,20 @@ def _bind_avantes_dual_viewer_methods_blanks(api):
 
     @staticmethod
     def same_detector_setup(current, saved):
-        keys = ("serial", "integration_ms", "trigger_mode")
-        return all(all(a[key] == b[key] for key in keys) for a, b in zip(current, saved))
+        if not isinstance(saved, (list, tuple)) or len(current) != len(saved):
+            return False
+        for actual, recorded in zip(current, saved):
+            if not isinstance(recorded, dict):
+                return False
+            if any(actual[key] != recorded.get(key) for key in ("serial", "trigger_mode")):
+                return False
+            integration = recorded.get("integration_ms")
+            # The hardware SDK stores integration time as a C float.
+            if not isinstance(integration, (int, float)) or not api.np.isclose(
+                actual["integration_ms"], integration, rtol=api.np.finfo(api.np.float32).eps, atol=0,
+            ):
+                return False
+        return True
 
     def restore_run_calibration(self, run):
         blocks = run.calibration_blocks()
@@ -66,25 +78,50 @@ def _bind_avantes_dual_viewer_methods_blanks(api):
     def log_run_event(self, event, **details):
         try:
             self.collection_run.append_event(event, api.time.time(), **details)
-        except (OSError, ValueError, RuntimeError) as exc:
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
             self.fail_run_write(exc)
             return False
         return True
 
     def fail_run_write(self, exc):
-        self.logger.error("HDF5 write failed: %s", exc)
+        self.logger.error("HDF5 write failed: %s", exc, exc_info=True)
         self.set_collection_state(active=False, paused=False)
+        if self.restart_active_collection("HDF5 write failure", new_segment=True):
+            return
+        self.statusBar().showMessage("Collection stopped: HDF5 write failed.")
         api.QMessageBox.critical(self, "HDF5 write failed", str(exc))
 
+    def pause_collection_after_error(self, reason):
+        self.logger.error("ACQUISITION: %s", reason)
+        self.set_collection_state(active=False, paused=True)
+        if self.log_run_event("acquisition_interrupted", reason=reason):
+            if self.restart_active_collection(reason):
+                return
+        else:
+            return
+        self.statusBar().showMessage(f"Collection paused: {reason}.")
+
     def toggle_collection_pause(self):
-        if self.current_measurement_role is not None or self.analysis_worker is not None:
+        if self.calibration_capture is not None or self.analysis_worker is not None:
             return
         if self.data_collection_active:
+            if self.current_measurement_role not in {None, "collection"}:
+                return
             self.set_collection_state(active=False, paused=True)
+            if not self.disarm_recovery():
+                return
             if self.log_run_event("pause"):
                 self.statusBar().showMessage("Collection paused. Add Reference or Resume DC.")
         elif self.collection_paused:
+            if self.current_measurement_role is not None:
+                return
             if not self.validate_collection_rate(show_warning=True):
+                return
+            try:
+                self.arm_recovery(self.collection_run)
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                self.logger.exception("Cannot save collection recovery state")
+                api.QMessageBox.critical(self, "Resume DC", str(exc))
                 return
             if self.log_run_event("resume"):
                 self.set_collection_state(active=True, paused=False)
@@ -94,7 +131,7 @@ def _bind_avantes_dual_viewer_methods_blanks(api):
         if not self.may_open_collection() and not self.collection_paused:
             return
         if (self.collection_run is None or self.data_collection_active or self.current_measurement_role is not None
-                or self.analysis_worker is not None):
+                or self.calibration_capture is not None or self.analysis_worker is not None):
             return
         if not self.check_sample_metadata(require_reference=True):
             return
@@ -144,6 +181,7 @@ def _bind_avantes_dual_viewer_methods_blanks(api):
         "set_collection_state": set_collection_state,
         "log_run_event": log_run_event,
         "fail_run_write": fail_run_write,
+        "pause_collection_after_error": pause_collection_after_error,
         "toggle_collection_pause": toggle_collection_pause,
         "add_reference": add_reference,
         "save_blank": save_blank,

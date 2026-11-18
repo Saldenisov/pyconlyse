@@ -22,7 +22,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         except (OSError, ValueError, KeyError, RuntimeError) as exc:
             api.QMessageBox.critical(self, "Open HDF5", str(exc))
 
-    def load_collection_hdf5_file(self, path):
+    def load_collection_hdf5_file(self, path, *, show_map=True):
         run = api.AvantesRun(path)
         wavelengths, serials, epoch, count = run.info()
         pending, comment = run.preparation_info()
@@ -51,12 +51,23 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         self.collection_point_index = count
         self.set_open_collection_path(run.path)
         self.sample_comment_input.setText(comment)
+        if self.match_run_hardware(wavelengths, serials):
+            if show_map:
+                self.apply_settings_dict(run.settings(), apply_trigger_frequency=False)
+            if {"background", "reference"}.issubset(run.calibration_blocks()):
+                self.restore_run_calibration(run)
+                self.latest_reference_correction = run.latest_reference_drift()
+            self.set_open_collection_path(run.path)
         self.reset_od_heatmap()
-        self.show_od_heatmap_window()
+        if show_map:
+            self.show_od_heatmap_window()
 
     def set_open_collection_path(self, path):
         self.collection_file_path = path
         self.exposure_state = self.collection_run.irradiation_state() if self.collection_run else (api.np.nan, False)
+        self.dose_timeline_interrupted = (
+            self.collection_run is not None and self.collection_run.dose_timeline_interrupted()
+        )
         self.run_volumes = self.collection_run.sample_volumes() if self.collection_run else (api.np.nan, api.np.nan)
         self.collection_sample_metadata = self.collection_run.sample_metadata() if self.collection_run else {}
         self.save_folder_input.setText(str(path.parent))
@@ -159,7 +170,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
             missing += api.missing_reference_fields(setup)
         if not missing:
             return True
-        message = "Заполните обязательные поля перед измерением.\n\n" + "\n".join(missing)
+        message = "Complete the required sample fields before measuring.\n\n" + "\n".join(missing)
         if archived:
             message += "\n\nUse New Experiment to start a series with complete sample metadata."
         api.QMessageBox.information(self, "Sample metadata", message)
@@ -182,7 +193,12 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
             probe_value = optical if api.np.isfinite(optical) else 0
             probe_default = "Unknown"
             metadata = self.collection_sample_metadata
-            labels = [f"Irradiation marked {'on' if irradiating else 'off'}"]
+            labels = [
+                "Click again after switching irradiation off."
+                if irradiating else "Click after switching irradiation on."
+            ]
+            if self.dose_timeline_interrupted:
+                labels.append("Dose unknown after interruption")
             if api.np.isfinite(rate):
                 labels.append(f"{rate:g} Gy/h")
         else:
@@ -228,6 +244,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
             run.mark_irradiation(not enabled, api.time.time())
             self.exposure_state = (rate, not enabled)
         except (KeyError, ValueError, RuntimeError, OSError) as exc:
+            self.update_analysis_buttons()
             api.QMessageBox.warning(self, "Irradiation marker", str(exc))
             return
         self.update_analysis_buttons()
@@ -266,6 +283,98 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
     def recalculate_blank_od(self):
         self.start_run_analysis(lambda run: run.recalculate(), "OD recalculation")
 
+    def inspect_calibration_history(self):
+        if self.collection_run is not None and not self.can_analyze_run():
+            return
+        if self.collection_run is None and not self.may_open_collection():
+            return
+        try:
+            run = self.ensure_standard_run() if self.collection_run is not None else self.preparation_run
+            if run is None:
+                return
+            options = run.calibration_options()
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
+            api.QMessageBox.warning(self, "Calibration from raw data", str(exc))
+            return
+
+        dialog = api.QDialog(self)
+        dialog.setWindowTitle("Calibration from raw data")
+        dialog.resize(780, 620)
+        layout = api.QVBoxLayout(dialog)
+        controls = api.QFormLayout()
+        layout.addLayout(controls)
+        inputs = {}
+        preview_role = api.QComboBox()
+        zero = api.QComboBox()
+        for role, choices in options.items():
+            if not choices:
+                continue
+            select = api.QComboBox()
+            for label, capture_id in choices:
+                select.addItem(label, capture_id)
+            controls.addRow(role.title(), select)
+            inputs[role] = select
+            preview_role.addItem(role.title(), role)
+        for role in ("reference", "empty"):
+            if role in inputs:
+                zero.addItem(role.title(), role)
+        controls.addRow("Preview capture", preview_role)
+        controls.addRow("OD zero", zero)
+        preview_role.setCurrentIndex(max(0, preview_role.findData("empty")))
+
+        counts_plot = api.pg.PlotWidget(title="Archived detector counts")
+        counts_plot.setLabel("bottom", "Wavelength", units="nm")
+        counts_plot.getAxis("bottom").enableAutoSIPrefix(False)
+        counts_plot.addLegend()
+        counts_1 = counts_plot.plot(pen="c", name="Channel 1")
+        counts_2 = counts_plot.plot(pen="y", name="Channel 2")
+        layout.addWidget(counts_plot, 1)
+        od_plot = api.pg.PlotWidget(title="Optical density relative to the selected zero")
+        od_plot.setLabel("bottom", "Wavelength", units="nm")
+        od_plot.getAxis("bottom").enableAutoSIPrefix(False)
+        od_curve = od_plot.plot(pen="w")
+        layout.addWidget(od_plot, 1)
+        status = api.QLabel()
+        status.setWordWrap(True)
+        layout.addWidget(status)
+
+        def selected_inputs():
+            return {role: field.currentData() for role, field in inputs.items()}
+
+        def show_preview():
+            counts_1.setData([], [])
+            counts_2.setData([], [])
+            od_curve.setData([], [])
+            if preview_role.currentData() is None:
+                status.setText("No completed calibration captures")
+                return
+            try:
+                wavelengths, counts, od = run.preview_calibration(
+                    preview_role.currentData(), selected_inputs(), zero.currentData(),
+                )
+                counts_1.setData(wavelengths[0], counts[0])
+                counts_2.setData(wavelengths[1], counts[1])
+                if od is not None:
+                    od_curve.setData(wavelengths[0], od)
+                status.clear()
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                status.setText(str(exc))
+
+        for field in (*inputs.values(), preview_role, zero):
+            field.currentIndexChanged.connect(show_preview)
+        buttons = api.QDialogButtonBox(api.QDialogButtonBox.Close)
+        recalculate = buttons.addButton("Recalculate OD", api.QDialogButtonBox.AcceptRole)
+        recalculate.setEnabled(self.can_analyze_run() and int(self.collection_point_index) > 0
+                               and {"background", "reference"}.issubset(inputs))
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        show_preview()
+        if dialog.exec_() == api.QDialog.Accepted:
+            selections = selected_inputs()
+            baseline = zero.currentData()
+            self.start_run_analysis(lambda run: run.reprocess_raw(selections, baseline), "OD from raw counts")
+
     def run_mcr(self):
         if not self.can_analyze_run():
             return
@@ -277,20 +386,28 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
     def can_analyze_run(self):
         return (self.collection_run is not None and not self.data_collection_active
                 and self.current_measurement_role is None
+                and self.calibration_capture is None
                 and self.analysis_worker is None)
 
     def on_run_analysis_finished(self):
         worker = self.analysis_worker
         self.analysis_worker = None
+        worker.deleteLater()
         self.update_analysis_buttons()
         if self.closing_requested:
             api.QTimer.singleShot(0, self.close)
             return
         if worker.error:
+            self.statusBar().showMessage("Run analysis failed.")
             api.QMessageBox.warning(self, "Run analysis", worker.error)
         elif isinstance(worker.result, dict):
+            self.statusBar().showMessage("MCR-ALS fit saved.")
             self.show_mcr_result(worker.result)
         else:
+            if isinstance(worker.result, str) and worker.result.endswith("_raw_recalculation"):
+                self.show_od_heatmap_window()
+                source = self.od_heatmap_window.od_source
+                source.setCurrentIndex(source.findData("od_reprocessed"))
             self.render_od_heatmap()
             self.statusBar().showMessage(f"OD recalculation saved: {worker.result}")
 
@@ -346,6 +463,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         "ensure_standard_run": ensure_standard_run,
         "start_run_analysis": start_run_analysis,
         "recalculate_blank_od": recalculate_blank_od,
+        "inspect_calibration_history": inspect_calibration_history,
         "run_mcr": run_mcr,
         "can_analyze_run": can_analyze_run,
         "on_run_analysis_finished": on_run_analysis_finished,

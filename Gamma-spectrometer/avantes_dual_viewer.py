@@ -78,7 +78,7 @@ from PyQt5.QtWidgets import (
     QCheckBox, QSplitter, QMenu, QDialog, QDialogButtonBox, QFormLayout,
     QSizePolicy, QInputDialog
 )
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread, QRectF
+from PyQt5.QtCore import QLockFile, QTimer, Qt, pyqtSignal, QThread, QRectF
 from PyQt5.QtGui import QFont
 
 import pyqtgraph as pg
@@ -98,17 +98,13 @@ else:
         ) from exc
 
     MSL_EQUIPMENT_API = "modern"
-from avantes_parallel import (
-    parallel_prepare_measure,
-    parallel_measure,
-    parallel_poll_and_get_data
-)
 from arduino_trigger_controller import ArduinoTriggerController
 from avantes_analysis import fit_mcr, read_mcr
 from avantes_h5 import (
     QUARTZ_CELL_TYPES, SCHEMA_VERSION, missing_reference_fields, missing_sample_fields, optical_volume_ml,
 )
 from avantes_mcr_view import ask_mcr_options, show_mcr_dialog
+from avantes_recovery import CollectionRecovery
 from avantes_run import AvantesRun, mean_counts, optical_density, valid_counts
 from avantes_emulator import (
     ARDUINO_TRIGGER_HZ,
@@ -148,8 +144,9 @@ class RunAnalysisThread(QThread):
     def run(self):
         try:
             self.result = self.operation()
-        except (KeyError, ValueError, RuntimeError, OSError) as exc:
-            self.error = str(exc)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Run analysis failed")
+            self.error = str(exc) or type(exc).__name__
 
 
 class SpectrometerWidget(QGroupBox):
@@ -236,11 +233,12 @@ class SpectrometerWidget(QGroupBox):
         self.setLayout(layout)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
 
-    def connect_spectrometer(self):
+    def connect_spectrometer(self, *, unattended=False):
         """Connect to the Avantes spectrometer."""
         serial = self.serial_input.text().strip()
         if not serial:
-            QMessageBox.warning(self, "Error", "Please enter serial number")
+            if not unattended:
+                QMessageBox.warning(self, "Error", "Please enter serial number")
             return
 
         try:
@@ -289,8 +287,11 @@ class SpectrometerWidget(QGroupBox):
             self.serial_input.setEnabled(False)
 
         except Exception as e:
-            logging.error(f"Spec {self.spec_id}: Connection failed - {str(e)}")
-            QMessageBox.critical(self, "Connection Error", f"Failed to connect:\n{str(e)}")
+            logging.exception("Spec %s: Connection failed", self.spec_id)
+            self.spec = None
+            self.wavelengths = None
+            if not unattended:
+                QMessageBox.critical(self, "Connection Error", f"Failed to connect:\n{str(e)}")
 
     def _connect_with_discovery_retry(self, connector, serial, attempts=6, delay_s=2.0):
         """Connect to an Ethernet AvaSpec, retrying transient discovery misses.
@@ -439,7 +440,7 @@ class SpectrometerWidget(QGroupBox):
 class AvantesDualViewer(QMainWindow):
     """Main application window for dual spectrometer viewing."""
 
-    def __init__(self):
+    def __init__(self, recovery=None):
         super().__init__()
         self.spec1_widget = None
         self.spec2_widget = None
@@ -449,19 +450,25 @@ class AvantesDualViewer(QMainWindow):
         self.calibration_capture = None
         self.preparation_run = None
         self.empty_zero_selected = False
+        self.reference_zero_selected = False
         self.latest_reference_correction = None
-        self.pending_ref_bg_role = None
         self.collection_run = None
         self.analysis_worker = None
         self.mcr_options = {}
         self.exposure_setup = dict(path_length_mm=10.0, reference_same_cell=True)
         self.collection_sample_metadata = {}
         self.exposure_state = (np.nan, False)
+        self.dose_timeline_interrupted = False
         self.run_volumes = (np.nan, np.nan)
         self.collection_paused = False
         self.calibration_blocks = {}
         self.measurement_metadata = None
         self.closing_requested = False
+        self.recovery = recovery or CollectionRecovery()
+        self.pending_recovery = None
+        self.recovery_active = False
+        self.recovery_restart_requested = False
+        self.system_session_ending = False
         self.collection_point_index = 0
         self.collection_start_time = None
         self.collection_point_start_time = None
@@ -500,6 +507,10 @@ class AvantesDualViewer(QMainWindow):
         self.lamp_warmup_timer = QTimer()
         self.lamp_warmup_timer.setSingleShot(True)
         self.lamp_warmup_timer.timeout.connect(self.prepare_lamp_for_collection)
+
+        self.calibration_start_timer = QTimer(self)
+        self.calibration_start_timer.setSingleShot(True)
+        self.calibration_start_timer.timeout.connect(self.begin_spectral_readout)
         self.collection_countdown_timer = QTimer()
         self.collection_countdown_timer.setInterval(1000)
         self.collection_countdown_timer.timeout.connect(self.update_collection_countdown_label)
@@ -513,9 +524,102 @@ class AvantesDualViewer(QMainWindow):
 
         self.init_ui()
         self.update_analysis_buttons()
+        try:
+            self.pending_recovery = self.recovery.load()
+            if self.pending_recovery is not None:
+                if self.pending_recovery["demo"] != self.demo_kinetics_enabled:
+                    raise ValueError("The interrupted run was launched in a different demo mode")
+                self.apply_settings_dict(self.pending_recovery["settings"], apply_trigger_frequency=False)
+                self.logger.info("RECOVERY: Found active run %s", self.pending_recovery["path"])
+        except (OSError, ValueError, KeyError, RuntimeError):
+            self.logger.exception("RECOVERY: Could not load active collection state")
+            self.pending_recovery = None
+            self.statusBar().showMessage("Could not load active collection state. See the Gamma log.")
 
         # Auto-connect both spectrometers after UI is ready
         QTimer.singleShot(500, self.auto_connect_spectrometers)
+
+    def handle_session_end(self, session):
+        self.system_session_ending = True
+        if self.recovery_active:
+            self.logger.info("RECOVERY: Windows session ending; keeping the active collection for the next launch")
+
+    def recover_collection(self):
+        state = self.pending_recovery
+        if state is None or self.closing_requested or self.system_session_ending:
+            return
+        path = Path(state["path"])
+        run = AvantesRun(path)
+        try:
+            try:
+                run.validate_continuation()
+            except (OSError, ValueError, KeyError, RuntimeError):
+                self.logger.exception("RECOVERY: Cannot continue writing %s", path)
+                run = self.recovery.continue_in_new_file(state, run, path)
+                self.logger.warning("RECOVERY: Prepared a fallback HDF5 %s", run.path)
+            wavelengths, serials, _, _ = run.info()
+            if not self.match_run_hardware(wavelengths, serials):
+                raise ValueError("Connected spectrometers do not match the interrupted run")
+            try:
+                run.record_interruption(time.time(), event="collection_recovered",
+                                        previous_path=str(path), continued_in_new_file=path != run.path)
+            except (OSError, ValueError, KeyError, RuntimeError):
+                if run.path != path or state.get("fallback_used"):
+                    raise
+                self.logger.exception("RECOVERY: Could not record interruption in %s", path)
+                run = self.recovery.continue_in_new_file(state, run, path)
+                run.record_interruption(time.time(), event="collection_recovered",
+                                        previous_path=str(path), continued_in_new_file=True)
+            self.pending_recovery = None
+            self.load_collection_hdf5_file(run.path, show_map=False)
+            self.dose_timeline_interrupted = True
+            if path != run.path:
+                state = dict(state, path=str(run.path.resolve()), new_segment=False, fallback_used=True)
+                self.recovery.write(state)
+            self.recovery_active = False
+            self.blank_status.setText("After an interruption, check the irradiation state, Background, Empty, and reference.")
+            self.statusBar().showMessage("HDF5 recovered. Select Start DC and confirm to continue.")
+        except (OSError, ValueError, KeyError, RuntimeError):
+            self.logger.exception("RECOVERY: Could not resume %s", path)
+            self.statusBar().showMessage("Automatic recovery stopped. See the Gamma log.")
+            self.pending_recovery = None
+
+    def arm_recovery(self, run):
+        self.recovery.arm(run, self.get_settings_dict(), self.demo_kinetics_enabled)
+        self.recovery_active = True
+
+    def restart_active_collection(self, reason, *, new_segment=False):
+        if (not self.recovery_active or self.closing_requested or self.system_session_ending
+                or os.environ.get("AVANTES_SUPERVISED") != "1"):
+            return False
+        if new_segment:
+            try:
+                state = self.recovery.load()
+                if state.get("fallback_used"):
+                    self.logger.error("RECOVERY: Could not write to the fallback HDF5")
+                    return False
+                self.recovery.write(dict(state, new_segment=True))
+            except (AttributeError, OSError, ValueError):
+                self.logger.exception("RECOVERY: Could not record the need for a new HDF5 segment")
+                return False
+        self.logger.warning("RECOVERY: Requesting viewer restart after %s", reason)
+        self.recovery_restart_requested = True
+        if self.current_measurement_role is None:
+            QApplication.exit(75)
+        return True
+
+    def disarm_recovery(self):
+        if not self.recovery_active and self.pending_recovery is None and not self.recovery.active_path.exists():
+            return True
+        try:
+            self.recovery.disarm()
+        except (OSError, ValueError, KeyError):
+            self.logger.exception("RECOVERY: Could not clear the active-run record")
+            self.statusBar().showMessage("Could not clear the active-run record. See the Gamma log.")
+            return False
+        self.pending_recovery = None
+        self.recovery_active = False
+        return True
 
     def apply_kinetic_zero(self, od):
         if od is not None and self.zero_baseline_od is not None:
@@ -547,6 +651,7 @@ class AvantesDualViewer(QMainWindow):
     open_preparation_run = _avantes_dual_viewer_methods_get_settings_dict["open_preparation_run"]
     measure_calibration = _avantes_dual_viewer_methods_get_settings_dict["measure_calibration"]
     start_spectral_capture = _avantes_dual_viewer_methods_get_settings_dict["start_spectral_capture"]
+    begin_spectral_readout = _avantes_dual_viewer_methods_get_settings_dict["begin_spectral_readout"]
     complete_spectral_capture = _avantes_dual_viewer_methods_get_settings_dict["complete_spectral_capture"]
     calculate_calibration_od = _avantes_dual_viewer_methods_get_settings_dict["calculate_calibration_od"]
     set_calibration_zero = _avantes_dual_viewer_methods_get_settings_dict["set_calibration_zero"]
@@ -601,6 +706,7 @@ class AvantesDualViewer(QMainWindow):
     browse_save_folder = _avantes_dual_viewer_methods_toggle_data_collection["browse_save_folder"]
     update_loaded_collection_label = _avantes_dual_viewer_methods_toggle_data_collection["update_loaded_collection_label"]
     ask_collection_start_mode = _avantes_dual_viewer_methods_toggle_data_collection["ask_collection_start_mode"]
+    ask_hdf5_resume = _avantes_dual_viewer_methods_toggle_data_collection["ask_hdf5_resume"]
     suggest_new_collection_file_path = _avantes_dual_viewer_methods_toggle_data_collection["suggest_new_collection_file_path"]
     get_resume_collection_time_offset = _avantes_dual_viewer_methods_toggle_data_collection["get_resume_collection_time_offset"]
     load_collection_dat = _avantes_dual_viewer_methods_toggle_data_collection["load_collection_dat"]
@@ -625,6 +731,7 @@ class AvantesDualViewer(QMainWindow):
     set_collection_state = _avantes_dual_viewer_methods_blanks["set_collection_state"]
     log_run_event = _avantes_dual_viewer_methods_blanks["log_run_event"]
     fail_run_write = _avantes_dual_viewer_methods_blanks["fail_run_write"]
+    pause_collection_after_error = _avantes_dual_viewer_methods_blanks["pause_collection_after_error"]
     toggle_collection_pause = _avantes_dual_viewer_methods_blanks["toggle_collection_pause"]
     add_reference = _avantes_dual_viewer_methods_blanks["add_reference"]
     save_blank = _avantes_dual_viewer_methods_blanks["save_blank"]
@@ -647,6 +754,7 @@ class AvantesDualViewer(QMainWindow):
     ensure_standard_run = _avantes_dual_viewer_methods_analysis["ensure_standard_run"]
     start_run_analysis = _avantes_dual_viewer_methods_analysis["start_run_analysis"]
     recalculate_blank_od = _avantes_dual_viewer_methods_analysis["recalculate_blank_od"]
+    inspect_calibration_history = _avantes_dual_viewer_methods_analysis["inspect_calibration_history"]
     run_mcr = _avantes_dual_viewer_methods_analysis["run_mcr"]
     can_analyze_run = _avantes_dual_viewer_methods_analysis["can_analyze_run"]
     on_run_analysis_finished = _avantes_dual_viewer_methods_analysis["on_run_analysis_finished"]
@@ -664,8 +772,17 @@ def main():
     # Set application style
     app.setStyle('Fusion')
 
+    recovery = CollectionRecovery()
+    recovery.directory.parent.mkdir(parents=True, exist_ok=True)
+    lock = QLockFile(str(recovery.directory.parent / "viewer.lock"))
+    lock.setStaleLockTime(0)
+    if not lock.tryLock(0):
+        print("Gamma viewer is already running or its lock file cannot be written.", file=sys.stderr)
+        return
+
     # Create and show main window
-    window = AvantesDualViewer()
+    window = AvantesDualViewer(recovery)
+    app.commitDataRequest.connect(window.handle_session_end, Qt.DirectConnection)
     window.show()
 
     sys.exit(app.exec_())

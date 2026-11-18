@@ -1,6 +1,8 @@
 """Disk format and OD calculations for the standalone Gamma spectrometer."""
 
 import json
+from contextlib import contextmanager, nullcontext, suppress
+import errno
 from pathlib import Path
 import time
 
@@ -9,48 +11,44 @@ import numpy as np
 
 
 from avantes_h5 import (
-    SCHEMA_VERSION, TEXT, appendable, axes, field, init_entry, init_exposure, nx,
-    missing_reference_fields, missing_sample_fields, process_revision, published_processes, utc_iso, write_sample_geometry,
+    SCHEMA_VERSION, TEXT, append_record, appendable, axes, field, init_entry, init_exposure, nx,
+    missing_reference_fields, missing_sample_fields, publish_group, published_processes,
+    utc_iso, write_sample_geometry,
+)
+
+from avantes_processing import (
+    mean_counts, optical_density, publish_blank_correction, publish_raw_recalculation, valid_counts,
 )
 
 
-OD_DATASETS = ("od_raw", "od_delta", "od_corrected")
+
+OD_DATASETS = ("od_raw", "od_delta", "od_corrected", "od_reprocessed")
+CALIBRATION_ROLES = ("background", "empty", "reference")
 
 
-def valid_counts(block):
-    spectra = []
-    diagnostics = block["metadata"].get("readout", {})
-    for index, channel in enumerate(("ch1", "ch2")):
-        counts = block[channel]
-        pixels = diagnostics.get(str(index), {}).get("saturated_pixels")
-        if pixels:
-            counts = np.array(counts, dtype=float, copy=True)
-            counts[pixels] = np.nan
-        spectra.append(counts)
-    return tuple(spectra)
+@contextmanager
+def _new_run_file(path):
+    # Acquire the path exclusively. Never clean up a file we failed to open.
+    file = h5py.File(path, "x")
+    try:
+        with file:
+            yield file
+    except Exception:
+        with suppress(OSError):
+            path.unlink()
+        raise
 
 
-def mean_counts(blocks):
-    return tuple(np.mean(channel, axis=0) for channel in zip(*(valid_counts(block) for block in blocks)))
-
-
-def optical_density(ch1, ch2, reference, dark, wavelengths):
-    """Calculate ratio-of-ratios OD on the Ch1 wavelength grid."""
-    w1, w2 = wavelengths
-    sample1 = np.asarray(ch1, dtype=float) - dark[0]
-    sample2 = np.asarray(ch2, dtype=float) - dark[1]
-    ref1 = np.asarray(reference[0], dtype=float) - dark[0]
-    ref2 = np.asarray(reference[1], dtype=float) - dark[1]
-    order = np.argsort(w2)
-    # An invalid source pixel must not become valid through interpolation.
-    sample2 = np.where(sample2 > 0, sample2, np.nan)
-    ref2 = np.where(ref2 > 0, ref2, np.nan)
-    sample2 = np.interp(w1, w2[order], sample2[order], left=np.nan, right=np.nan)
-    ref2 = np.interp(w1, w2[order], ref2[order], left=np.nan, right=np.nan)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        od = (np.log10(ref1) - np.log10(sample1)) + (np.log10(sample2) - np.log10(ref2))
-    od[~np.isfinite(od)] = np.nan
-    return od
+def _open_run_for_write(path):
+    """Allow a concurrent reader to release its lock before a write."""
+    for delay in (0.05, 0.1, 0.2, 0.4, 0.8):
+        try:
+            return h5py.File(path, "r+")
+        except OSError as exc:
+            if exc.errno not in (errno.EAGAIN, errno.EWOULDBLOCK) and "Win32 GetLastError() = 33" not in str(exc):
+                raise
+            time.sleep(delay)
+    return h5py.File(path, "r+")
 
 
 class AvantesRun:
@@ -62,95 +60,188 @@ class AvantesRun:
     @classmethod
     def create(cls, path, wavelengths, serials, started_utc_s, settings, calibration):
         run = cls(path)
-        with h5py.File(run.path, "x") as file:
-            file.attrs.update(
-                format="avantes-gamma", version=SCHEMA_VERSION, started_utc_s=started_utc_s,
-                settings_json=json.dumps(settings), serials_json=json.dumps(serials),
-            )
-            entry = init_entry(file, wavelengths, serials, started_utc_s, settings.get("exposure", {}))
-            if "sample_name" in settings:
-                file.attrs["calibration_pending"] = True
-                entry["title"][()] = settings["sample_name"]
-                field(entry["sample"], "name", settings["sample_name"])
-                field(entry["sample"], "description", settings.get("sample_comment", ""))
-            for role, blocks in calibration.items():
-                if blocks:
-                    cls._write_blocks(entry, entry["calibration"], role, blocks)
+        with _new_run_file(run.path) as file:
+            cls._initialize_file(file, wavelengths, serials, started_utc_s, settings, calibration)
         return run
 
+    @classmethod
+    def _initialize_file(cls, file, wavelengths, serials, started_utc_s, settings, calibration):
+        file.attrs.update(
+            format="avantes-gamma", version=SCHEMA_VERSION, started_utc_s=started_utc_s,
+            settings_json=json.dumps(settings), serials_json=json.dumps(serials),
+        )
+        entry = init_entry(file, wavelengths, serials, started_utc_s, settings.get("exposure", {}))
+        if "sample_name" in settings:
+            file.attrs["calibration_pending"] = True
+            entry["title"][()] = settings["sample_name"]
+            field(entry["sample"], "name", settings["sample_name"])
+            field(entry["sample"], "description", settings.get("sample_comment", ""))
+        for role, blocks in calibration.items():
+            if blocks:
+                cls._write_blocks(entry, entry["calibration"], role, blocks)
+        return entry
+
     def begin_capture(self, role, repeats, blocks_per_repeat):
-        with h5py.File(self.path, "r+") as file:
+        if repeats < 1 or blocks_per_repeat < 1:
+            raise ValueError("A spectral capture requires at least one block and one repeat")
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             if "calibration_captures" not in entry:
                 nx(entry, "calibration_captures", "NXcollection")
             captures = entry["calibration_captures"]
-            name = f"{len(captures):08d}"
-            capture = nx(captures, name, "NXcollection")
-            capture.attrs.update(role=role, repeats=repeats, blocks_per_repeat=blocks_per_repeat,
-                                 committed_blocks=0, complete=False)
-            for key in ("block_index", "repeat_index", "block_in_repeat"):
-                appendable(capture, key, dtype="i8", fill=-1)
-            capture["block_index"].make_scale("block_index")
-            appendable(capture, "time_utc", units="s")
-            appendable(capture, "metadata_json", dtype=TEXT, fill="{}")
-            for i in (1, 2):
-                wavelength = entry[f"raw_ch{i}/wavelength"]
-                data = appendable(capture, f"ch{i}_counts", width=len(wavelength), units="counts")
-                data.dims[0].attach_scale(capture["block_index"])
-                data.dims[1].attach_scale(wavelength)
+            sequence = max((int(key) for key in captures if key.isdecimal()), default=-1) + 1
+            name = f"{sequence:08d}"
+            with publish_group(captures, name, "NXcollection") as capture:
+                capture.attrs.update(role=role, capture_id=name, repeats=repeats, blocks_per_repeat=blocks_per_repeat,
+                                     committed_blocks=0, complete=False)
+                for key in ("block_index", "repeat_index", "block_in_repeat"):
+                    appendable(capture, key, dtype="i8", fill=-1)
+                capture["block_index"].make_scale("block_index")
+                appendable(capture, "time_utc", units="s")
+                appendable(capture, "metadata_json", dtype=TEXT, fill="{}")
+                for i in (1, 2):
+                    wavelength = entry[f"raw_ch{i}/wavelength"]
+                    data = appendable(capture, f"ch{i}_counts", width=len(wavelength), units="counts")
+                    data.dims[0].attach_scale(capture["block_index"])
+                    data.dims[1].attach_scale(wavelength)
             return name
 
     def append_capture_block(self, name, block):
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             capture = self._writable_entry(file)[f"calibration_captures/{name}"]
             index = int(capture.attrs["committed_blocks"])
             repeat, in_repeat = divmod(index, int(capture.attrs["blocks_per_repeat"]))
+            if capture.attrs["complete"] or repeat >= capture.attrs["repeats"]:
+                raise ValueError("The spectral capture already has every requested block")
             meta = dict(block["metadata"], repeat_index=repeat, block_in_repeat=in_repeat)
             values = dict(block_index=index, repeat_index=repeat, block_in_repeat=in_repeat,
                           time_utc=meta["utc_s"], ch1_counts=block["ch1"], ch2_counts=block["ch2"],
                           metadata_json=json.dumps(meta))
-            for key, value in values.items():
-                data = capture[key]
-                data.resize(index + 1, axis=0)
-                data[index] = data.fillvalue if value is None else value
-            file.flush()
-            capture.attrs.modify("committed_blocks", index + 1)
+            append_record(index, ((capture[key], value) for key, value in values.items()),
+                          commit=(capture, "committed_blocks"))
             return index + 1
 
+    def append_preview_block(self, block):
+        with _open_run_for_write(self.path) as file:
+            entry = self._writable_entry(file)
+            if "preview_captures" not in entry:
+                with publish_group(entry, "preview_captures", "NXcollection") as preview:
+                    preview.attrs["committed_blocks"] = 0
+                    appendable(preview, "time_utc", units="s")
+                    appendable(preview, "metadata_json", dtype=TEXT, fill="{}")
+                    for channel in (1, 2):
+                        wavelength = entry[f"raw_ch{channel}/wavelength"]
+                        counts = appendable(preview, f"ch{channel}_counts", width=len(wavelength), units="counts")
+                        counts.dims[1].attach_scale(wavelength)
+            preview = entry["preview_captures"]
+            metadata = block["metadata"]
+            append_record(
+                int(preview.attrs["committed_blocks"]),
+                ((preview["time_utc"], metadata["utc_s"]),
+                 (preview["metadata_json"], json.dumps(metadata)),
+                 (preview["ch1_counts"], block["ch1"]),
+                 (preview["ch2_counts"], block["ch2"])),
+                commit=(preview, "committed_blocks"),
+            )
+
     def finish_capture(self, name):
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             capture = entry[f"calibration_captures/{name}"]
             if capture.attrs["committed_blocks"] != capture.attrs["repeats"] * capture.attrs["blocks_per_repeat"]:
                 raise ValueError("Incomplete spectral capture")
             role = capture.attrs["role"]
-            capture.attrs.modify("complete", True)
-            if role != "blank":
+            blocks = self._read_blocks(capture)
+            if len(blocks) != capture.attrs["committed_blocks"]:
+                raise ValueError("A spectral capture dataset is shorter than its committed record count")
+            if capture.attrs["complete"]:
+                return blocks
+            if role in {"background", "empty", "reference"}:
                 calibration = entry["calibration"]
-                if role in calibration and calibration[role].id != capture.id:
-                    raise ValueError(f"{role.title()} was already selected in this run")
-                if role not in calibration:
-                    calibration[role] = capture
-            return self._read_blocks(capture)
+                previous = calibration.get(role)
+                replacing = previous is not None and previous.id != capture.id
+                if replacing and not file.attrs.get("calibration_pending", False):
+                    raise ValueError("Calibration is locked once sample collection starts")
+                archive = self._archive_replaced_zeros(entry, role) if replacing else nullcontext()
+                with archive:
+                    try:
+                        if replacing:
+                            del calibration[role]
+                        if role not in calibration:
+                            calibration[role] = capture
+                        capture.attrs.modify("complete", True)
+                    except Exception:
+                        with suppress(OSError, RuntimeError, ValueError):
+                            if role in calibration and calibration[role].id == capture.id:
+                                del calibration[role]
+                            if previous is not None and role not in calibration:
+                                calibration[role] = previous
+                            capture.attrs.modify("complete", False)
+                        raise
+            else:
+                capture.attrs.modify("complete", True)
+            return blocks
+
+    @staticmethod
+    @contextmanager
+    def _archive_replaced_zeros(entry, role):
+        """Retain earlier zero selections and the provisional drift anchor."""
+        zero_roles = ("empty", "reference") if role in {"background", "empty"} else ("reference",)
+        zeros = entry.get("calibration_zeros")
+        to_archive = [f"calibration_zeros/{key}" for key in zero_roles if zeros is not None and key in zeros]
+        anchor = entry.get("blanks/00000000")
+        if anchor is not None and "initial" in anchor and bool(anchor["initial"][()]):
+            to_archive.append("blanks/00000000")
+        initial_blank = entry.get("calibration/initial_blank")
+        moved = []
+        try:
+            if to_archive:
+                if "calibration_zero_history" not in entry:
+                    nx(entry, "calibration_zero_history", "NXcollection")
+                history = entry["calibration_zero_history"]
+                for source in to_archive:
+                    label = "initial_anchor" if source.startswith("blanks/") else source.rsplit("/", 1)[-1]
+                    destination = f"calibration_zero_history/{len(history):08d}_{label}"
+                    entry.move(source, destination)
+                    moved.append((source, destination))
+            if initial_blank is not None:
+                del entry["calibration/initial_blank"]
+            yield
+        except Exception:
+            for source, destination in reversed(moved):
+                with suppress(OSError, RuntimeError, ValueError):
+                    entry.move(destination, source)
+            if initial_blank is not None and "calibration/initial_blank" not in entry:
+                with suppress(OSError, RuntimeError, ValueError):
+                    entry["calibration/initial_blank"] = initial_blank
+            raise
 
     def set_preparation_zero(self, role, od):
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             calibration = entry["calibration"]
             source = calibration[role]
             zeros = entry.require_group("calibration_zeros")
-            if role not in zeros:
-                zero = nx(zeros, role, "NXdata")
-                zero["wavelength"] = entry["raw_ch1/wavelength"]
-                field(zero, "od", od, "1")
-                field(zero, "selected_utc", time.time(), "s")
-                zero["spectra"] = source
-                axes(zero, "od", ("wavelength",))
             if role == "reference":
-                if not len(entry["blanks"]):
-                    self._store_blank(entry, 0, self._read_blocks(source), od, True)
-                if "initial_blank" not in calibration:
-                    calibration["initial_blank"] = source
+                self._ensure_reference_anchor(entry, od)
+            if role in zeros and not self._zero_complete(zeros[role]):
+                del zeros[role]
+            if role not in zeros:
+                with publish_group(zeros, role, "NXdata") as zero:
+                    zero["wavelength"] = entry["raw_ch1/wavelength"]
+                    field(zero, "od", od, "1")
+                    field(zero, "selected_utc", time.time(), "s")
+                    zero["spectra"] = source
+                    axes(zero, "od", ("wavelength",))
+
+    @classmethod
+    def _ensure_reference_anchor(cls, entry, od):
+        calibration = entry["calibration"]
+        source = calibration["reference"]
+        if not len(entry["blanks"]):
+            cls._store_blank(entry, 0, cls._read_blocks(source), od, True)
+        if "initial_blank" not in calibration:
+            calibration["initial_blank"] = source
 
     def preparation_info(self):
         with h5py.File(self.path, "r") as file:
@@ -161,14 +252,28 @@ class AvantesRun:
 
     def has_preparation_zero(self, role):
         with h5py.File(self.path, "r") as file:
-            return f"entry/calibration_zeros/{role}" in file
+            return self._has_preparation_zero(file["entry"], role) if "entry" in file else False
+
+    @staticmethod
+    def _zero_complete(zero):
+        return zero is not None and all(key in zero for key in ("wavelength", "od", "selected_utc", "spectra"))
+
+    @classmethod
+    def _has_preparation_zero(cls, entry, role):
+        if not cls._zero_complete(entry.get(f"calibration_zeros/{role}")):
+            return False
+        if role == "reference":
+            anchor = entry.get("blanks/00000000")
+            return ("calibration/initial_blank" in entry and anchor is not None
+                    and "initial" in anchor and bool(anchor["initial"][()]))
+        return True
 
     def exposure_config(self):
         with h5py.File(self.path, "r") as file:
             return json.loads(file.attrs["settings_json"]).get("exposure", {})
 
     def set_prepared_exposure(self, setup):
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             if not file.attrs.get("calibration_pending", False):
                 raise ValueError("Sample metadata is locked once sample collection starts")
@@ -200,16 +305,24 @@ class AvantesRun:
         missing = missing_sample_fields(exposure_setup) + missing_reference_fields(exposure_setup)
         if missing:
             raise ValueError("Complete sample metadata: " + ", ".join(missing))
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             if not file.attrs.get("calibration_pending", False):
                 return float(file.attrs["started_utc_s"])
-            if "initial_blank" not in entry["calibration"]:
-                raise ValueError("Set Reference Zero before starting acquisition")
+            calibration = entry["calibration"]
+            if not set(CALIBRATION_ROLES).issubset(calibration):
+                raise ValueError("Measure Background, Empty and Reference before starting acquisition")
+            dark = mean_counts(self._read_blocks(calibration["background"]))
+            reference = mean_counts(self._read_blocks(calibration["reference"]))
+            wavelengths = tuple(entry[f"raw_ch{i}/wavelength"][:] for i in (1, 2))
+            initial_od = optical_density(*reference, reference, dark, wavelengths)
+            if not np.isfinite(initial_od).any():
+                raise ValueError("Reference has no valid OD after background subtraction")
             setup = dict(exposure_setup, start_offset_s=offset)
             rate = setup.get("dose_rate_gy_h", np.nan)
             if not np.isnan(rate) and (not np.isfinite(rate) or rate < 0):
                 raise ValueError("Dose rate must be finite and nonnegative")
+            self._ensure_reference_anchor(entry, initial_od)
             file.attrs["started_utc_s"] = epoch
             entry["start_time"][()] = utc_iso(epoch)
             entry["irradiation/state/time"].attrs["start"] = utc_iso(epoch)
@@ -271,9 +384,11 @@ class AvantesRun:
 
     @staticmethod
     def _read_blocks(group):
+        committed = int(group.attrs.get("committed_blocks", len(group["metadata_json"])))
         return [
             dict(ch1=ch1, ch2=ch2, metadata=json.loads(metadata))
-            for ch1, ch2, metadata in zip(group["ch1_counts"][:], group["ch2_counts"][:], group["metadata_json"][:])
+            for ch1, ch2, metadata in zip(group["ch1_counts"][:committed], group["ch2_counts"][:committed],
+                                          group["metadata_json"][:committed])
         ]
 
     def info(self):
@@ -301,6 +416,123 @@ class AvantesRun:
         with h5py.File(self.path, "r") as file:
             saved = json.loads(file.attrs["settings_json"])["spectrometers"]
             return [saved["1"], saved["2"]]
+
+    def settings(self):
+        with h5py.File(self.path, "r") as file:
+            self._version(file)
+            return json.loads(file.attrs["settings_json"])
+
+    @staticmethod
+    def suggest_continuation_path(path):
+        candidate = path.with_name(f"{path.stem}_continued.h5")
+        index = 2
+        while candidate.exists():
+            candidate = path.with_name(f"{path.stem}_continued_{index}.h5")
+            index += 1
+        return candidate
+
+    def create_continuation_checkpoint(self, destination):
+        """Keep calibration and reference anchors in an independent, small HDF5."""
+        wavelengths, serials, epoch, _ = self.info()
+        settings = self.settings()
+        calibration = self.calibration_blocks()
+        with h5py.File(self.path, "r") as original, _new_run_file(Path(destination)) as file:
+            source = original["entry"]
+            entry = self._initialize_file(file, wavelengths, serials, epoch, settings, calibration)
+            for _, blank in sorted(source["blanks"].items()):
+                self._store_blank(entry, blank["anchor_time"][()], self._read_blocks(blank),
+                                  blank["od"][:], bool(blank["initial"][()]))
+            old_state = source["irradiation/state"]
+            new_state = entry["irradiation/state"]
+            count = self._irradiation_log_length(old_state)
+            for key in ("time", "value"):
+                new_state[key].resize(count, axis=0)
+                new_state[key][:] = old_state[key][:count]
+            new_state.attrs.modify("committed_rows", count)
+            entry["irradiation"].attrs["dose_unknown_after_s"] = self._resume_cutoff(source)
+            file.attrs["calibration_pending"] = False
+
+    @staticmethod
+    def _resume_cutoff(entry):
+        acq = entry["acquisition"]
+        count = int(acq.attrs["committed_rows"])
+        if count < 0 or any(len(dataset) < count for _, dataset in AvantesRun._row_fields(entry)):
+            raise ValueError("A measurement dataset is shorter than its committed row count")
+        if count:
+            elapsed = acq["time"][count - 1]
+            prior_cutoff = entry["irradiation"].attrs.get("dose_unknown_after_s", elapsed)
+            return min(elapsed, prior_cutoff)
+        return entry["irradiation"].attrs.get("dose_unknown_after_s", 0.0)
+
+    def validate_continuation(self):
+        with _open_run_for_write(self.path) as file:
+            entry = self._writable_entry(file)
+            if file.attrs.get("calibration_pending", False):
+                raise ValueError("The acquisition has not completed calibration")
+            self._resume_cutoff(entry)
+            if not {"background", "reference"}.issubset(entry["calibration"]):
+                raise ValueError("The acquisition is missing calibration counts")
+
+    def latest_reference_utc(self):
+        with h5py.File(self.path, "r") as file:
+            if self._version(file) == SCHEMA_VERSION:
+                blanks = file["entry/blanks"]
+                if len(blanks):
+                    latest = blanks[sorted(blanks)[-1]]
+                    if "capture_time_utc" in latest:
+                        value = float(latest["capture_time_utc"][()])
+                        if np.isfinite(value):
+                            return value
+                reference = file.get("entry/calibration/reference")
+            else:
+                reference = file.get("calibration/reference")
+            if reference is None:
+                return None
+            times = [block["metadata"].get("utc_s", np.nan) for block in self._read_blocks(reference)]
+            finite = [float(value) for value in times if value is not None and np.isfinite(value)]
+            return max(finite, default=None)
+
+    def begin_collection_segment(self, utc_s):
+        """Index a new segment and expose completed spectra as same-file HDF5 views."""
+        with _open_run_for_write(self.path) as file:
+            entry = self._writable_entry(file)
+            acquisition = entry["acquisition"]
+            stop = int(acquisition.attrs["committed_rows"])
+            segments = entry.require_group("acquisition_segments")
+            segments.attrs["NX_class"] = "NXcollection"
+            names = sorted(name for name in segments if name.isdecimal())
+            first = int(segments[names[-1]]["stop_row"][()]) if names else 0
+            if first == stop:
+                return None
+            if not 0 <= first < stop:
+                raise ValueError("Invalid acquisition segment bounds")
+            name = f"{int(names[-1]) + 1 if names else 0:08d}"
+            with publish_group(segments, name, "NXcollection") as archive:
+                field(archive, "first_row", first)
+                field(archive, "stop_row", stop)
+                field(archive, "archived_utc", utc_s, "s")
+                archive["source_acquisition"] = acquisition
+                for key, source in (
+                    ("time", acquisition["time"]), ("time_utc", acquisition["time_utc"]),
+                    ("ch1_counts", entry["raw_ch1/data"]), ("ch2_counts", entry["raw_ch2/data"]),
+                    ("od", entry["od_live/od"]), ("delta_od", entry["od_live/delta_od"]),
+                ):
+                    layout = h5py.VirtualLayout(shape=(stop - first, *source.shape[1:]), dtype=source.dtype)
+                    layout[:] = h5py.VirtualSource(".", source.name, shape=source.shape)[first:stop]
+                    archived = archive.create_virtual_dataset(key, layout, fillvalue=np.nan)
+                    if "units" in source.attrs:
+                        archived.attrs["units"] = source.attrs["units"]
+                for channel in (1, 2):
+                    archive[f"wavelength_ch{channel}"] = entry[f"raw_ch{channel}/wavelength"]
+            return name
+
+    def record_interruption(self, utc_s, *, event="automatic_resume", **details):
+        with _open_run_for_write(self.path) as file:
+            entry = self._writable_entry(file)
+            cutoff = self._resume_cutoff(entry)
+            entry["irradiation"].attrs["dose_unknown_after_s"] = cutoff
+        self.append_event(event, utc_s, last_known_dose_elapsed_s=float(cutoff),
+                          **details)
 
     @staticmethod
     def _row_fields(entry):
@@ -332,7 +564,7 @@ class AvantesRun:
 
     def append(self, time_s, utc_s, ch1, ch2, od_raw, od_delta, metadata):
         """Publish a row only after both counts and the live OD have been written."""
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             acq = entry["acquisition"]
             index = int(acq.attrs["committed_rows"])
@@ -342,37 +574,45 @@ class AvantesRun:
                           metadata_json=json.dumps(metadata), **self._typed_detector_fields(metadata))
             if "dose" in acq:
                 values["dose"] = self._dose(entry, time_s) if np.isfinite(utc_s) else np.nan
-            for name, dataset in self._row_fields(entry):
-                dataset.resize(index + 1, axis=0)
-                value = values[name]
-                dataset[index] = dataset.fillvalue if value is None else value
-            file.flush()
-            acq.attrs.modify("committed_rows", index + 1)
+            append_record(index, ((dataset, values[name]) for name, dataset in self._row_fields(entry)),
+                          commit=(acq, "committed_rows"))
             return index + 1
 
     @staticmethod
     def _dose(entry, elapsed):
         irradiation = entry["irradiation"]
         rate = irradiation["dose_rate_set"][()]
-        if not np.isfinite(rate):
+        if not np.isfinite(rate) or elapsed > irradiation.attrs.get("dose_unknown_after_s", np.inf):
             return np.nan
         return AvantesRun._irradiation_seconds(irradiation["state"], elapsed) * rate / 3600
 
     @staticmethod
     def _irradiation_seconds(state, elapsed):
-        time_points = state["time"][:]
+        time_points = state["time"][:AvantesRun._irradiation_log_length(state)]
         end = np.searchsorted(time_points, elapsed, side="right")
         if end == 0:
             return np.nan
         durations = np.diff(np.append(time_points[:end], elapsed))
         return np.dot(durations, state["value"][:end])
 
+    @staticmethod
+    def _irradiation_log_length(state):
+        count = min(len(state["time"]), len(state["value"]))
+        return min(int(state.attrs.get("committed_rows", count)), count)
+
     def irradiation_state(self):
         with h5py.File(self.path, "r") as file:
             irradiation = file.get("entry/irradiation")
             if irradiation is None:
                 return np.nan, False
-            return irradiation["dose_rate_set"][()], bool(irradiation["state/value"][-1])
+            state = irradiation["state"]
+            count = self._irradiation_log_length(state)
+            return irradiation["dose_rate_set"][()], bool(count and state["value"][count - 1])
+
+    def dose_timeline_interrupted(self):
+        with h5py.File(self.path, "r") as file:
+            irradiation = file.get("entry/irradiation")
+            return irradiation is not None and "dose_unknown_after_s" in irradiation.attrs
 
     def sample_volumes(self):
         with h5py.File(self.path, "r") as file:
@@ -383,29 +623,28 @@ class AvantesRun:
 
     def mark_irradiation(self, enabled, utc_s):
         """Log the operator's observation of the external irradiation state."""
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             if "irradiation" not in entry:
                 init_exposure(entry, {})
             log = entry["irradiation/state"]
             elapsed = utc_s - file.attrs["started_utc_s"]
-            if not np.isfinite(elapsed) or elapsed < log["time"][-1]:
+            count = self._irradiation_log_length(log)
+            if not np.isfinite(elapsed) or (count and elapsed < log["time"][count - 1]):
                 raise ValueError("Irradiation events must be in chronological order")
-            if bool(log["value"][-1]) != bool(enabled):
-                index = len(log["time"])
-                for name, value in (("time", elapsed), ("value", bool(enabled))):
-                    log[name].resize(index + 1, axis=0)
-                    log[name][index] = value
+            if not count or bool(log["value"][count - 1]) != bool(enabled):
+                append_record(count, ((log["time"], elapsed), (log["value"], bool(enabled))),
+                              commit=(log, "committed_rows"))
 
     def append_event(self, event, utc_s, **details):
-        with h5py.File(self.path, "r+") as file:
+        encoded = json.dumps(dict(event=event, utc_s=utc_s, **details))
+        with _open_run_for_write(self.path) as file:
             events = self._writable_entry(file)["events/metadata_json"]
-            events.resize(len(events) + 1, axis=0)
-            events[-1] = json.dumps(dict(event=event, utc_s=utc_s, **details))
+            append_record(len(events), ((events, encoded),))
 
     def add_blank(self, time_s, blocks, od, *, initial=False):
         """Record an independent blank OD spectrum and publish a new correction."""
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             entry = self._writable_entry(file)
             self._store_blank(entry, time_s, blocks, od, initial)
             if len(entry["blanks"]) < 2:
@@ -444,60 +683,73 @@ class AvantesRun:
             raise
 
     def recalculate(self):
-        with h5py.File(self.path, "r+") as file:
+        with _open_run_for_write(self.path) as file:
             return self._correct(self._writable_entry(file), reason="user requested")
 
     @staticmethod
-    def _correct(entry, reason):
-        anchors = [entry["blanks"][key] for key in sorted(entry["blanks"])]
-        if len(anchors) < 2:
-            raise ValueError("At least two measured blanks are required for drift correction")
-        count = int(entry["acquisition"].attrs["committed_rows"])
-        times = entry["acquisition/time"][:count]
-        elapsed = np.array([blank["anchor_time"][()] for blank in anchors])
-        blank_od = np.stack([blank["od"][:] for blank in anchors])
-        drift = blank_od - blank_od[0]
-        parameters = {
-            "blank_paths": np.asarray([blank.name for blank in anchors], dtype=TEXT),
-            "source": entry["od_live/delta_od"].name,
-            "reason": reason,
-            "method": "Piecewise linear interpolation of measured blank OD relative to first blank; no extrapolation",
-            "input_rows": count,
-        }
-        with process_revision(entry, "blank_correction", "Gamma blank interpolation", "1", utc_iso(time.time()),
-                              parameters) as (revision, path):
-            field(revision, "anchor_time", elapsed, "s")
-            field(revision, "anchor_od", blank_od, "1")
-            if "irradiation" in entry and np.isfinite(entry["irradiation/dose_rate_set"][()]):
-                field(revision, "anchor_dose", [AvantesRun._dose(entry, value) for value in elapsed], "Gy")
-            revision.attrs["default"] = "data"
-            data = nx(revision, "data", "NXdata")
-            field(data, "time", times, "s")
-            if "dose" in entry["acquisition"]:
-                field(data, "dose", entry["acquisition/dose"][:count], "Gy")
-                data.attrs["dose_indices"] = 0
-            data["wavelength"] = entry["od_live/wavelength"]
-            fields = {}
-            shape = count, blank_od.shape[1]
-            for name in ("od", "blank_drift"):
-                fields[name] = data.create_dataset(name, shape=shape, dtype="f8", fillvalue=np.nan,
-                                                   compression="gzip", compression_opts=1)
-                fields[name].attrs["units"] = "1"
-            axes(data, "od", ("time", "wavelength"), ("blank_drift",))
-            source = entry["od_live/delta_od"]
-            for i in range(len(anchors) - 1):
-                first = np.searchsorted(times, elapsed[i], side="left" if i == 0 else "right")
-                last = np.searchsorted(times, elapsed[i + 1], side="right")
-                for start in range(first, last, 128):
-                    end = min(start + 128, last)
-                    fraction = ((times[start:end] - elapsed[i]) / (elapsed[i + 1] - elapsed[i]))[:, None]
-                    interpolated = (1 - fraction) * drift[i] + fraction * drift[i + 1]
-                    # An exact anchor only depends on its own valid wavelengths.
-                    interpolated = np.where(fraction == 0, drift[i], interpolated)
-                    interpolated = np.where(fraction == 1, drift[i + 1], interpolated)
-                    fields["blank_drift"][start:end] = interpolated
-                    fields["od"][start:end] = source[start:end] - interpolated
-        return path
+    def _calibration_input(entry, role, capture_id):
+        if role not in CALIBRATION_ROLES:
+            raise ValueError(f"Unknown calibration role: {role}")
+        if capture_id is None:
+            return entry["calibration"][role]
+        if not capture_id.isdecimal():
+            raise ValueError("Invalid calibration capture ID")
+        capture = entry[f"calibration_captures/{capture_id}"]
+        if capture.attrs["role"] != role or not capture.attrs["complete"]:
+            raise ValueError(f"Capture {capture_id} is not a completed {role}")
+        return capture
+
+    def calibration_options(self):
+        with h5py.File(self.path, "r") as file:
+            entry = self._writable_entry(file)
+            captures = entry.get("calibration_captures", {})
+            options = {}
+            for role in CALIBRATION_ROLES:
+                active = entry["calibration"].get(role)
+                choices = []
+                if active is not None:
+                    label = "Active capture"
+                    if "capture_id" in active.attrs:
+                        label += f" #{active.attrs['capture_id']}"
+                    choices.append((label, None))
+                for name in sorted(captures, reverse=True):
+                    capture = captures[name]
+                    if (name.isdecimal() and capture.attrs.get("role") == role and capture.attrs.get("complete")
+                            and (active is None or capture.id != active.id)):
+                        choices.append((f"Capture #{name} · {len(capture['ch1_counts'])} blocks", name))
+                options[role] = choices
+            return options
+
+    def preview_calibration(self, role, selections, zero):
+        with h5py.File(self.path, "r") as file:
+            entry = self._writable_entry(file)
+            selected = self._calibration_input(entry, role, selections.get(role))
+            blocks = self._read_blocks(selected)
+            wavelengths = tuple(entry[f"raw_ch{i}/wavelength"][:] for i in (1, 2))
+            counts = mean_counts(blocks)
+            od = None
+            if role != "background" and zero is not None:
+                baseline = mean_counts(self._read_blocks(self._calibration_input(entry, zero, selections.get(zero))))
+                dark = mean_counts(self._read_blocks(self._calibration_input(entry, "background", selections.get("background"))))
+                od = optical_density(*counts, baseline, dark, wavelengths)
+            return wavelengths, counts, od
+
+    def reprocess_raw(self, selections=None, zero="reference"):
+        """Derive OD from archived detector counts with independently selected calibration inputs."""
+        if zero not in {"empty", "reference"}:
+            raise ValueError("Choose Empty or Reference as the OD baseline")
+        selections = selections or {}
+        with _open_run_for_write(self.path) as file:
+            entry = self._writable_entry(file)
+            selected = {}
+            for role in CALIBRATION_ROLES:
+                if role != "empty" or role == zero or role in entry["calibration"]:
+                    selected[role] = self._calibration_input(entry, role, selections.get(role))
+            return publish_raw_recalculation(entry, selected, zero, self._read_blocks, self._dose)
+
+    @staticmethod
+    def _correct(entry, reason, *, source=None, blank_od=None):
+        return publish_blank_correction(entry, reason, AvantesRun._dose, source=source, blank_od=blank_od)
 
     def view(self, dataset="od_delta", time_range=None, limit=500):
         if dataset not in (*OD_DATASETS, "od_vs_blank", "blank_drift"):
@@ -521,6 +773,9 @@ class AvantesRun:
                     latest = next(reversed(list(published_processes(entry, "blank_correction"))), None)
                     name = "od" if dataset == "od_corrected" else "blank_drift"
                     signal = latest[f"data/{name}"] if latest is not None else None
+                elif dataset == "od_reprocessed":
+                    latest = next(reversed(list(published_processes(entry, "raw_recalculation"))), None)
+                    signal = latest["data/od"] if latest is not None else None
                 else:
                     signal = entry["od_live/delta_od" if dataset == "od_delta" else "od_live/od"]
             first, last = 0, len(times)
@@ -545,10 +800,13 @@ class AvantesRun:
         with h5py.File(self.path, "r") as old:
             if self._version(old) != 1:
                 raise ValueError("Only version 1 files need upgrading")
-            upgraded = self.create(destination, wavelengths, serials, epoch,
-                                   json.loads(old.attrs["settings_json"]), self.calibration_blocks())
-            with h5py.File(upgraded.path, "r+") as new:
-                entry = new["entry"]
+            upgraded = type(self)(destination)
+            settings = json.loads(old.attrs["settings_json"])
+            calibration = self.calibration_blocks()
+            with _new_run_file(upgraded.path) as new:
+                entry = self._initialize_file(new, wavelengths, serials, epoch, settings, calibration)
+                if "calibration_pending" in new.attrs:
+                    new.attrs.modify("calibration_pending", False)
                 old_rows = old["measurements"]
                 legacy_names = {
                     "time": "time_s", "time_utc": "utc_s", "metadata_json": "metadata_json",

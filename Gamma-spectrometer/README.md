@@ -4,9 +4,9 @@ Standalone PyQt5 application for two Avantes spectrometers and Arduino TTL contr
 
 This subproject does not use Tango.
 
-## Windows на экспериментальном ноутбуке
+## Windows on the experiment laptop
 
-Скачайте папку `Gamma-spectrometer` из ветки [Avantes](https://github.com/Saldenisov/pyconlyse/tree/Avantes). Если Git уже есть, скопируйте в PowerShell:
+With Git installed, run these commands in PowerShell to check out `Gamma-spectrometer` from the [Avantes branch](https://github.com/Saldenisov/pyconlyse/tree/Avantes).
 
 ```powershell
 git clone --branch Avantes --single-branch --filter=blob:none --sparse https://github.com/Saldenisov/pyconlyse.git pyconlyse-avantes-gamma
@@ -15,18 +15,34 @@ cd .\pyconlyse-avantes-gamma\Gamma-spectrometer
 .\run_avantes_dual_viewer.bat
 ```
 
-Если предыдущий клон остановился на ошибке Git LFS в `utilities/IRpy-server`, выполните команды выше в папке, где ещё нет `pyconlyse-avantes-gamma`. Выборочная выгрузка берёт программу и её драйверы из `Gamma-spectrometer`.
+If a previous clone stopped on a Git LFS error in `utilities/IRpy-server`, run the commands in a folder where `pyconlyse-avantes-gamma` is available as a new directory name. The sparse checkout fetches the application and drivers from `Gamma-spectrometer`.
 
-Если Git ещё нет, [скачайте ZIP ветки Avantes](https://github.com/Saldenisov/pyconlyse/archive/refs/heads/Avantes.zip), распакуйте его, откройте папку `Gamma-spectrometer` и дважды щёлкните `run_avantes_dual_viewer.bat`.
+You can also download and extract the [Avantes ZIP](https://github.com/Saldenisov/pyconlyse/archive/refs/heads/Avantes.zip), open `Gamma-spectrometer`, and double-click `run_avantes_dual_viewer.bat`.
 
-При первом запуске нужен интернет. BAT проверит 64-разрядный Python 3.11 и Git, скачает переносимые копии при необходимости, создаст окружение в `.gamma-tools\venv311` и установит зависимости. Для MCR-ALS используется проверенный пакет `pyMCR 0.3.2`. После проверки импортов откроется окно программы для работы со спектрометрами. Права администратора для этого запуска не требуются.
+The first launch needs internet access. The launcher checks for 64-bit Python 3.11 and Git, downloads portable copies when needed, and installs dependencies into `.gamma-tools\venv311`. It opens the viewer after checking imports, including `pyMCR 0.3.2` for MCR-ALS. A standard Windows account can run it.
 
-При следующих запусках используйте тот же BAT. Окружение используется повторно. Если запуск прервётся, окно покажет ошибку. Для пробы на двух эмулируемых спектрометрах запустите `run_gamma_demo.bat`.
+Use the same BAT file for later launches. It reuses the environment and displays startup errors in the console. Run `run_gamma_demo.bat` to test with two emulated spectrometers.
 
-Чтобы только установить пакеты, запустите из папки `Gamma-spectrometer`:
+When you select **Start DC**, Gamma records the active run and saves a calibration checkpoint. After a crash, the launcher opens Gamma again. It reconnects the spectrometers, restores the settings, and loads the HDF5 file. Select **Start DC** and confirm to resume recording. If the original file is unavailable for writing, Gamma prepares `*_continued.h5` from the calibration checkpoint and links to the original path in the `collection_recovered` event. Elapsed time stays relative to the original run start. Accumulated dose after the interruption is marked as unknown. Startup and error logs are under `logs`.
+
+For recovery after a reboot, register the Windows sign-in task once.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\register_gamma_recovery.ps1
+```
+
+The sign-in task opens Gamma for an interrupted active run using the installed environment. **Pause DC**, **Stop DC**, and closing the window normally clear the active-run record. To resume manually, choose **Data → Open HDF5…**, connect the original spectrometers, and select **Start DC**.
+
+To install packages without opening the viewer, run this command from `Gamma-spectrometer`.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install_gamma_packages.ps1
+```
+
+From the same directory, run the readout and HDF5 write tests with simulated faults.
+
+```powershell
+.\.gamma-tools\venv311\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 ## Conda Setup
@@ -102,9 +118,15 @@ python avantes_dual_viewer.py
 ## Recording a run and measuring references
 
 1. Enter **Sample name**, **Measured volume** in mL, **Entrance aperture diameter** and **Sample optical path** in mm, and the sample quartz type **QZ** or **QS**. These fields are required before measurement. Add optional notes in **Sample**. Set **Probe volume** in mL or leave it on **Auto** to calculate it from the sample geometry. Choose **Repeats** and **Blocks / repeat**. **Background** switches off the probe lamp and starts writing both channels and the sample metadata to the named HDF5 file.
-2. Measure **Empty** and select **Set Empty Zero**. In **Reference cell**, keep **Same cell as sample** to reuse the sample path length and quartz type, or clear it and enter both reference values before pressing **Reference**. Both cells share the entrance aperture diameter. The measured volume applies to the sample. Insert the water reference, measure it, inspect its OD against Empty, then select **Set Reference Zero**. Use those reference cell specifications for later **Add Reference** captures in the run. Insert the sample, set the interval, and click **Start DC**.
+2. Measure **Empty**. In **Reference cell**, keep **Same cell as sample** to reuse the sample path length and quartz type, or clear it and enter both reference values before pressing **Reference**. Both cells share the entrance aperture diameter. The measured volume applies to the sample. Insert the water reference and measure **Reference**. **Set Empty Zero** and **Set Reference Zero** are optional. **Start DC** uses the measured reference as the default sample OD baseline and first drift anchor. Use those reference cell specifications for later **Add Reference** captures in the run.
 3. When the apparatus permits a reference measurement, select **Pause DC**, record the external source state with **Mark irradiation off**, and insert the reference. **Add Reference** starts capture immediately. It displays the reference OD against the initial reference and archives its acquisition times. Restore the sample and record the external source state before **Resume DC**. The same file stays open. A final reference can also be taken after **Stop DC**.
 4. After resuming, the live spectrum subtracts the most recent measured reference drift. In **Show DC → OD corrected for blank drift**, the archived correction interpolates between measured reference times and only fills covered intervals. **Estimated blank drift** shows the contribution being subtracted.
+
+Before **Start DC**, you can repeat **Background**, **Empty**, or **Reference**. Each attempt is stored in `calibration_captures`. The latest completed capture of each role becomes active under `calibration`. Interrupted captures leave the selection in place. Repeating a capture archives affected manual zeros in `calibration_zero_history`.
+
+Use **Analysis → Calibration from raw data…** in a draft, a paused or stopped series, or a reopened HDF5. Select saved calibration captures, preview detector counts and OD, and choose Empty or Reference as the OD zero. **Recalculate OD** reads the archived counts of both sample channels and, when available, the raw repeat-reference counts used for drift correction. The recalculation is published as a new processing revision. **Show DC → Recalculated OD from raw** displays the result alongside the original measured OD view.
+
+After **Stop DC** or opening an HDF5 through **Data → Open HDF5…**, **Start DC** offers **Continue**, **New Segment**, and **Check Calibration**. A new segment places the completed interval under `/entry/acquisition_segments` and uses the same file and elapsed time scale. Calibration checks record Background and Empty separately while preserving the original zeros. Use **Add Reference** for a new drift anchor. The dialog shows the age of the latest reference and recommends a fresh capture at 30 minutes or if the timestamp is unavailable.
 
 The HDF5 file stores every block on both native wavelength grids, with a UTC timestamp, repeat index, index within the repeat, and detector settings. With 50 repeats of three blocks, each channel has a 150-row counts matrix for that capture. Counts are the spectra returned by the SDK after its configured hardware averaging. A stopped capture retains its recorded blocks and can be repeated. Calibration can be reopened before sample acquisition.
 
@@ -120,6 +142,8 @@ Gamma v2 uses NeXus base classes. The file has `format = avantes-gamma`, `versio
 | --- | --- | --- |
 | `instrument/detector_1`, `instrument/detector_2` | `NXdetector` | `data[scan, pixel]` as `float64` counts straight from the SDK after hardware averaging. `wavelength[pixel]` is the native grid in nm. `count_time_set[scan]` (s), `averages_set[scan]`, `trigger_mode_set[scan]`, and `readout_ok[scan]` describe each acquisition. |
 | `acquisition` | `NXcollection` | Elapsed `time[scan]` and POSIX `time_utc[scan]` in s, estimated `dose[scan]` in Gy when specified, `metadata_json[scan]` for diagnostics and settings, and `committed_rows` as a group attribute. |
+| `acquisition_segments/<id>` | `NXcollection` | Bounds of a completed interval, with same-file virtual views of its raw counts, times and OD. |
+| `preview_captures` | `NXcollection` | Raw counts and timestamps recorded by Live Preview, grouped separately from the sample time series. |
 | `raw_ch1`, `raw_ch2` | `NXdata` | Hard links to the detector signal and its native grid and to elapsed time. Each detector can have a different pixel count. |
 | `lamp_monitor` | `NXdata` | Alias of raw Ch2, captured on every paired acquisition. This represents the lamp spectrum if Ch2 follows an independent reference path. |
 | `sample` | `NXsample` | Run name and description, `sample_volume` (mL), `window_diameter` (entrance aperture in mm), `cell_type` (QZ or QS), optical path (mm), and `optical_volume` (probe volume in mL). |
@@ -130,7 +154,8 @@ Gamma v2 uses NeXus base classes. The file has `format = avantes-gamma`, `versio
 | `calibration/{background,empty,reference,initial_blank}` | `NXcollection` | Completed calibration blocks. The older `sample_t0` role can still be read. |
 | `calibration_zeros/{empty,reference}` | `NXdata` | Zero OD spectrum, selected UTC time and a link to the blocks used. |
 | `blanks/<id>` | `NXcollection` | Reference counts, plottable `spectrum`, `capture_time_utc` from the first block, and `anchor_time` at the mean acquisition time for a repeat reference. Times are in s. |
-| `processing/<revision>_blank_correction` | `NXprocess` | Blank IDs, measured anchor spectra, source live-OD path, method and processing date. `data/od` is corrected OD and `data/blank_drift` is the subtracted contribution. |
+| `processing/<revision>_blank_correction` | `NXprocess` | Blank IDs, measured anchor spectra, source OD path, method and processing date. `data/od` is corrected OD and `data/blank_drift` is the subtracted contribution. |
+| `processing/<revision>_raw_recalculation` | `NXprocess` | Selected calibration paths and OD zero, source raw detector paths, and a new OD matrix on the native Ch1 grid. |
 | `processing/<revision>_mcr_als` | `NXprocess` | Correction path, fitted row and wavelength indices, settings, objective history and fit diagnostics. `spectra/loadings`, `kinetics/amplitudes`, `data/fitted_od` and `data/residual_od` are plottable results. |
 | `events/metadata_json` | Event list | Acquisition starts, stops, pauses and resumes with UTC timestamps. |
 
@@ -144,7 +169,7 @@ Each blank correction version freezes its input time axis and stores a complete 
 
 The fit uses OD from the latest blank correction. Interpolation fixes the blank contribution before fitting sample components. The fit retains rows with some valid corrected OD and uses wavelengths valid across those rows. Spectra and amplitudes are nonnegative by default. They can be independently switched to signed least squares for changes such as bleaching. Amplitudes are relative to spectra normalized to unit L2 norm. Overlap or a small residual alone does not uniquely identify chemical species. [pyMCR documentation](https://pages.nist.gov/pyMCR/usage.html).
 
-Set the known dose rate and sample geometry in **Experiment → Dose and sample geometry…** before a run. A circular 8 mm window and 10 mm optical path give a geometric probe volume of 0.503 mL. Enter the filled volume separately if known. Use **Mark irradiation on/off** to record changes in the external source state. Pausing acquisition alone leaves that state unchanged. When available, MCR plots can switch between elapsed minutes and the dose integrated from the rate and those markers. Raw Ch2 records the monitor spectrum for future lamp corrections.
+Set the known dose rate and sample geometry in **Experiment → Dose and sample geometry…** before a run. A circular 8 mm window and 10 mm optical path give a geometric probe volume of 0.503 mL. Enter the filled volume separately if known. Use the red **Radiation present** and green **Radiation absent** button to log the operator's observations of the external source. Pausing acquisition alone leaves the marker as recorded. When available, MCR plots can switch between elapsed minutes and the dose integrated from the rate and those markers. Raw Ch2 records the monitor spectrum for future lamp corrections.
 
 Run these commands inside the Gamma environment and project folder:
 

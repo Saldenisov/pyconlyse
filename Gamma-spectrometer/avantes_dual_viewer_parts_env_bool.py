@@ -1,5 +1,7 @@
 """Implementation for _env_bool and related operations."""
 
+from avantes_parallel import parallel_full_measurement
+
 
 def _bind_avantes_dual_viewer_parts_env_bool(api):
     """Bind implementation to the owning module and its runtime state."""
@@ -165,7 +167,8 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
             controls = api.QHBoxLayout()
             self.od_source = api.QComboBox()
             for label, source in (
-                ("Measured OD (Set Zero applied)", "od_delta"),
+                ("Measured OD (as recorded)", "od_delta"),
+                ("Recalculated OD from raw", "od_reprocessed"),
                 ("OD vs initial blank", "od_vs_blank"),
                 ("OD corrected for blank drift", "od_corrected"),
                 ("Estimated blank drift", "blank_drift"),
@@ -401,45 +404,31 @@ def _bind_avantes_dual_viewer_parts_env_bool(api):
         measurement_complete = api.pyqtSignal(dict)  # Signal with results
         measurement_error = api.pyqtSignal(str)  # Signal with error message
 
-        def __init__(self, spectrometers, configs, num_measurements=1):
+        def __init__(self, spectrometers, configs, num_measurements=1, timeout=10.0):
             super().__init__()
             self.spectrometers = spectrometers
             self.configs = configs
             self.num_measurements = num_measurements
-            self.running = True
+            self.timeout = timeout
             self.diagnostics = {}
 
         def run(self):
             """Execute parallel measurement in background thread."""
             try:
-                # Prepare
-                prep_results = api.parallel_prepare_measure(self.spectrometers, self.configs)
-                if not all(prep_results.values()):
-                    self.measurement_error.emit("Failed to prepare measurements")
-                    return
-
-                # Measure
-                meas_results = api.parallel_measure(self.spectrometers, self.num_measurements)
-                if not all(meas_results.values()):
-                    self.measurement_error.emit("Failed to start measurements")
-                    return
-
-                # Poll and get data
-                data_results = api.parallel_poll_and_get_data(
-                    self.spectrometers,
-                    timeout=10.0,
-                    poll_interval=0.001,
+                data_results = parallel_full_measurement(
+                    self.spectrometers, self.configs, self.num_measurements,
+                    timeout=self.timeout,
                     diagnostics=self.diagnostics,
                 )
-
+                if not any(success for success, _ in data_results.values()):
+                    failures = [f"Ch{index + 1} {info['stage']}: {info['error']}"
+                                for index, info in sorted(self.diagnostics.items()) if "error" in info]
+                    self.measurement_error.emit("No spectra received. " + " | ".join(failures))
+                    return
                 self.measurement_complete.emit(data_results)
 
-            except Exception as e:
-                self.measurement_error.emit(f"Measurement error: {str(e)}")
-
-        def stop(self):
-            """Stop the measurement thread."""
-            self.running = False
+            except Exception as exc:
+                self.measurement_error.emit(f"Measurement error: {exc}")
 
     MeasurementThread.__module__ = api.__name__
     MeasurementThread.__qualname__ = "MeasurementThread"

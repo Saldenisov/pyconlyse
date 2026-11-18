@@ -1,6 +1,6 @@
 """NeXus base classes and typed datasets used by the Gamma HDF5 format."""
 
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -45,6 +45,33 @@ def appendable(group, name, *, width=None, dtype="f8", fill=np.nan, units=None, 
     )
     describe(dataset, units, long_name)
     return dataset
+
+
+def append_record(index, items, *, commit=None):
+    """Write all columns before publishing the record count."""
+    items = tuple(items)
+    if any(len(dataset) < index for dataset, _ in items):
+        raise ValueError("An HDF5 dataset is shorter than its committed record count")
+    publishing = False
+    try:
+        for dataset, value in items:
+            dataset.resize(index + 1, axis=0)
+            dataset[index] = dataset.fillvalue if value is None else value
+        if commit is not None:
+            group, attribute = commit
+            group.file.flush()
+            publishing = True
+            group.attrs.modify(attribute, index + 1)
+    except Exception:
+        if publishing:
+            with suppress(OSError, RuntimeError, ValueError):
+                group.attrs.modify(attribute, index)
+        # The committed count still excludes this row if an I/O failure also prevents truncation.
+        for dataset, _ in items:
+            with suppress(OSError, RuntimeError, ValueError):
+                if len(dataset) > index:
+                    dataset.resize(index, axis=0)
+        raise
 
 
 def axes(group, signal, coordinate_names, auxiliary=()):
@@ -136,8 +163,9 @@ def write_sample_geometry(entry, setup):
 
 
 def init_exposure(entry, setup):
-    nx(entry, "sample", "NXsample")
-    write_sample_geometry(entry, setup)
+    if "sample" not in entry:
+        nx(entry, "sample", "NXsample")
+        write_sample_geometry(entry, setup)
     exposure = nx(entry, "irradiation", "NXcollection")
     rate = setup.get("dose_rate_gy_h", np.nan)
     if not np.isnan(rate) and (not np.isfinite(rate) or rate < 0):
@@ -147,14 +175,16 @@ def init_exposure(entry, setup):
     appendable(log, "time", units="s")
     appendable(log, "value", dtype="u1", fill=0)
     log["time"].attrs["start"] = entry["start_time"].asstr()[()]
-    for name, value in (("time", setup.get("start_offset_s", 0.0)),
-                        ("value", bool(setup.get("irradiating_at_start", False)))):
-        log[name].resize(1, axis=0)
-        log[name][0] = value
+    log.attrs["committed_rows"] = 0
+    append_record(0, ((log["time"], setup.get("start_offset_s", 0.0)),
+                      (log["value"], bool(setup.get("irradiating_at_start", False)))),
+                  commit=(log, "committed_rows"))
     acq = entry["acquisition"]
-    dose = appendable(acq, "dose", units="Gy", long_name="Estimated accumulated absorbed dose")
-    dose.resize(acq.attrs["committed_rows"], axis=0)
-    entry["od_live/dose"] = dose
+    if "dose" not in acq:
+        dose = appendable(acq, "dose", units="Gy", long_name="Estimated accumulated absorbed dose")
+        dose.resize(acq.attrs["committed_rows"], axis=0)
+    if "dose" not in entry["od_live"]:
+        entry["od_live/dose"] = acq["dose"]
     entry["od_live"].attrs["dose_indices"] = 0
     if "lamp_monitor" not in entry:
         entry["lamp_monitor"] = entry["raw_ch2"]
@@ -215,15 +245,27 @@ def published_processes(entry, kind):
 
 
 @contextmanager
+def publish_group(parent, name, nx_class):
+    draft = f"_pending_{uuid4().hex}"
+    try:
+        yield nx(parent, draft, nx_class)
+        parent.file.flush()
+        parent.move(draft, name)
+    except Exception:
+        with suppress(OSError, RuntimeError, ValueError):
+            if draft in parent:
+                del parent[draft]
+        raise
+
+
+@contextmanager
 def process_revision(entry, kind, program, version, date, inputs):
     parent = entry["processing"]
     sequence = max((int(item["sequence_index"][()]) for name, item in parent.items()
                     if not name.startswith("_")), default=0) + 1
-    draft = f"_pending_{uuid4().hex}"
     name = f"{sequence:06d}_{kind}"
-    process = nx(parent, draft, "NXprocess")
-    process.attrs["kind"] = kind
-    try:
+    with publish_group(parent, name, "NXprocess") as process:
+        process.attrs["kind"] = kind
         field(process, "program", program)
         field(process, "version", version)
         field(process, "date", date)
@@ -232,9 +274,3 @@ def process_revision(entry, kind, program, version, date, inputs):
         for key, value in inputs.items():
             field(parameters, key, value)
         yield process, f"{parent.name}/{name}"
-        entry.file.flush()
-        parent.move(draft, name)
-    except Exception:
-        if draft in parent:
-            del parent[draft]
-        raise

@@ -49,7 +49,7 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             "trigger_mode": int(widget.trigger_combo.currentIndex()),
         }
 
-    def apply_settings_dict(self, settings: dict):
+    def apply_settings_dict(self, settings: dict, *, apply_trigger_frequency=True):
         """Apply settings loaded from JSON."""
         arduino = settings.get("arduino", {})
         if "lamp_warmup_seconds" in arduino:
@@ -62,7 +62,7 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             self.lamp_off_between_points_enabled = bool(arduino["lamp_off_between_points_enabled"])
         if "frequency_hz" in arduino:
             frequency = min(max(float(arduino["frequency_hz"]), 1.0), 100.0)
-            if not self.set_arduino_frequency_hz(frequency):
+            if not apply_trigger_frequency or not self.set_arduino_frequency_hz(frequency):
                 self.arduino_frequency_hz = frequency
 
         spectrometers = settings.get("spectrometers", {})
@@ -207,14 +207,8 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             self.schedule_collection_due_time(self.collection_next_due_time)
         return result
 
-    def set_lamp_and_avantes(self, wait_for_thermalization=False):
-        """Set Arduino to trigger both lamp and Avantes.
-
-        Parameters
-        ----------
-        wait_for_thermalization : bool
-            If True, wait 1 second after enabling lamp for thermalization
-        """
+    def set_lamp_and_avantes(self):
+        """Set Arduino to trigger both lamp and Avantes."""
         if self.is_lamp_enabled() and self.is_avantes_enabled():
             self.arduino_status_label.setText("Status: Lamp + Avantes")
             self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
@@ -224,16 +218,6 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             self.arduino_status_label.setText("Status: Lamp + Avantes")
             self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
             self.logger.info("ARDUINO: Lamp + Avantes mode activated")
-
-            # Wait for lamp thermalization if requested
-            if wait_for_thermalization:
-                self.logger.info("ARDUINO: Waiting 1s for lamp thermalization...")
-                api.QTimer.singleShot(1000, lambda: self.logger.info("ARDUINO: Thermalization complete"))
-                # Process events to keep UI responsive during wait
-                from PyQt5.QtCore import QEventLoop
-                loop = QEventLoop()
-                api.QTimer.singleShot(1000, loop.quit)
-                loop.exec_()
 
             return True
         else:
@@ -278,6 +262,12 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         else:
             if not self.check_sample_metadata():
                 return
+            if self.collection_run is not None:
+                try:
+                    self.ensure_standard_run()
+                except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                    api.QMessageBox.warning(self, "Live Preview", str(exc))
+                    return
             # Start live preview at a modest rate; experiment collection has its own timer.
             interval_ms = self.get_live_preview_interval_ms()
             self.continuous_timer.start(interval_ms)
@@ -299,11 +289,14 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
 
     def stop_measurement(self):
         """Stop after the current readout, keeping the raw capture on disk."""
-        if self.calibration_capture is not None:
+        self.calibration_start_timer.stop()
+        if self.current_measurement_role is None:
+            self.calibration_capture = None
+        elif self.calibration_capture is not None:
             self.calibration_capture["aborted"] = True
-        self.pending_ref_bg_role = None
         self.stop_measure_btn.setEnabled(False)
         self.statusBar().showMessage("Capture stopped. Recorded blocks remain in HDF5.")
+        self.update_analysis_buttons()
 
     def open_preparation_run(self):
         name = self.save_name_input.text().strip()
@@ -334,10 +327,28 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         self.measure_calibration("reference")
 
     def measure_calibration(self, role):
-        if not self.may_open_collection() or self.collection_run is not None:
+        if self.collection_run is not None:
+            if (role not in {"background", "empty"} or self.data_collection_active
+                    or self.current_measurement_role is not None or self.calibration_capture is not None
+                    or self.analysis_worker is not None):
+                return
+            if not self.check_sample_metadata(require_reference=True):
+                return
+            try:
+                run = self.ensure_standard_run()
+                wavelengths, serials, _, _ = run.info()
+                if not self.match_run_hardware(wavelengths, serials):
+                    raise ValueError("Connect the same spectrometers used in the run")
+                if not self.same_detector_setup(self.current_detector_setup(), run.detector_setup()):
+                    raise ValueError("Use the same integration times and trigger modes as the run")
+                self.start_spectral_capture(run, f"{role}_check")
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                api.QMessageBox.critical(self, "Calibration check", str(exc))
+            return
+        if not self.may_open_collection():
             return
         if not self.save_name_input.text().strip():
-            api.QMessageBox.information(self, "Background", "Сначала введите название образца.")
+            api.QMessageBox.information(self, "Background", "Enter the sample name first.")
             self.save_name_input.setFocus()
             return
         if not self.check_sample_metadata(require_reference=role == "reference"):
@@ -345,8 +356,7 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         if not self.spec1_widget.spec or not self.spec2_widget.spec:
             self.statusBar().showMessage("Connect both spectrometers before measuring")
             return
-        if (role == "empty" and not self.has_background or role == "reference" and not self.empty_zero_selected
-                or role in self.calibration_blocks):
+        if (role == "empty" and not self.has_background or role == "reference" and "empty" not in self.calibration_blocks):
             return
         try:
             run = self.preparation_run or self.open_preparation_run()
@@ -365,37 +375,51 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         repeats = self.ref_repeats_spin.value()
         blocks = self.ref_blocks_spin.value()
         name = run.begin_capture(role, repeats, blocks)
-        self.calibration_capture = dict(run=run, name=name, target=repeats * blocks, aborted=False)
+        self.calibration_capture = dict(run=run, name=name, role=role, target=repeats * blocks, aborted=False)
         self.update_analysis_buttons()
         self.stop_measure_btn.setEnabled(True)
-        self.statusBar().showMessage("Preparing " + ("dark acquisition" if role == "background" else "lamp") + "…")
+        dark = role in {"background", "background_check"}
+        self.statusBar().showMessage("Preparing " + ("dark acquisition" if dark else "lamp") + "…")
+        warmup = role in {"empty", "empty_check", "reference"} and not (self.is_lamp_enabled() and self.is_avantes_enabled())
         try:
-            lamp_ready = self.set_avantes_only() if role == "background" else self.set_lamp_and_avantes(
-                wait_for_thermalization=role != "blank"
-            )
+            lamp_ready = self.set_avantes_only() if dark else self.set_lamp_and_avantes()
             if not lamp_ready:
                 raise RuntimeError("Could not set the lamp and spectrometer triggers")
-            if not self.calibration_capture["aborted"] and not self.closing_requested:
-                if self.single_measurement(measurement_role=role):
-                    return
         except Exception:
             self.stop_measurement()
-            self.calibration_capture = None
-            self.update_analysis_buttons()
+            raise
+        if warmup:
+            self.statusBar().showMessage("Warming the lamp before acquisition…")
+            self.calibration_start_timer.start(1000)
+        else:
+            self.begin_spectral_readout()
+
+    def begin_spectral_readout(self):
+        capture = self.calibration_capture
+        if capture is not None and not self.single_measurement(measurement_role=capture["role"]):
+            self.stop_measurement()
             if self.closing_requested:
                 api.QTimer.singleShot(0, self.close)
-            raise
-        self.stop_measurement()
-        self.calibration_capture = None
-        self.update_analysis_buttons()
-        if self.closing_requested:
-            api.QTimer.singleShot(0, self.close)
 
     def complete_spectral_capture(self, role, blocks):
         if role == "blank":
             self.save_blank(blocks)
             return
+        if role in {"background_check", "empty_check"}:
+            label = role.partition("_")[0].title()
+            self.statusBar().showMessage(f"{label} check saved ({len(blocks)} blocks)")
+            self.blank_status.setText(f"{label} check saved. The stored calibration remains selected.")
+            return
         ch1, ch2 = api.mean_counts(blocks)
+        repeated = role in self.calibration_blocks
+        if repeated:
+            if role in {"background", "empty"}:
+                self.empty_zero_selected = False
+            self.reference_zero_selected = False
+            self.calibration_blocks.pop("initial_blank", None)
+            self.curve_od.setData([], [])
+            self.plot_od.setTitle("Optical Density (OD) Spectrum")
+            self.blank_status.setText("The latest capture is selected. Set Zero is optional.")
         self.calibration_blocks[role] = blocks
         w1, w2 = self.current_hardware()[0]
         if role == "background":
@@ -403,13 +427,19 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             self.has_background = True
             self.bg_curve1.setData(w1, ch1)
             self.bg_curve2.setData(w2, ch2)
+        elif role == "empty":
+            self.curve1.setData(w1, ch1)
+            self.curve2.setData(w2, ch2)
         elif role == "reference":
+            self.reference_ch1, self.reference_ch2 = ch1, ch2
+            self.reference_wavelengths = w1
+            self.has_reference = True
             od = self.calculate_calibration_od((ch1, ch2), api.mean_counts(self.calibration_blocks["empty"]))
             self.curve_od.setData(w1, od)
             self.plot_od.setTitle("Reference OD vs Empty")
             self.ref_curve1.setData(w1, ch1)
             self.ref_curve2.setData(w2, ch2)
-        self.statusBar().showMessage(f"{role.title()} saved to HDF5 ({len(blocks)} blocks)")
+        self.statusBar().showMessage(f"{role.title()} saved and selected ({len(blocks)} blocks)")
 
     def calculate_calibration_od(self, counts, baseline):
         return api.optical_density(
@@ -440,9 +470,14 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             self.reference_wavelengths = self.current_hardware()[0][0]
             self.calibration_blocks["initial_blank"] = blocks
             self.has_reference = True
+            self.reference_zero_selected = True
         self.plot_od.setTitle(f"Optical Density vs {role.title()} Zero")
         self.curve_od.setData(self.current_hardware()[0][0], od)
-        self.blank_status.setText("Insert the reference." if role == "empty" else "Insert the sample, then Start DC.")
+        if role == "empty":
+            text = "Measure the reference, or use the saved reference to start collection."
+        else:
+            text = "Insert the sample, then Start DC."
+        self.blank_status.setText(text)
         self.statusBar().showMessage(f"{role.title()} zero saved to HDF5")
         self.update_analysis_buttons()
 
@@ -469,6 +504,7 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         "open_preparation_run": open_preparation_run,
         "measure_calibration": measure_calibration,
         "start_spectral_capture": start_spectral_capture,
+        "begin_spectral_readout": begin_spectral_readout,
         "complete_spectral_capture": complete_spectral_capture,
         "calculate_calibration_od": calculate_calibration_od,
         "set_calibration_zero": set_calibration_zero,

@@ -26,7 +26,7 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         block = dict(ch1=ch1, ch2=ch2, metadata=metadata)
         self._measurement_count += 1
 
-        if role in {"reference", "empty", "background", "blank"}:
+        if role in {"reference", "empty", "background", "blank", "background_check", "empty_check"}:
             capture = self.calibration_capture
             if capture is None:
                 return
@@ -41,7 +41,6 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
                     self.calibration_capture = None
                     self.complete_spectral_capture(role, blocks)
                 else:
-                    self.pending_ref_bg_role = role
                     self.statusBar().showMessage(f"{role.title()} block {count}/{capture['target']} saved")
             except (OSError, ValueError, KeyError, RuntimeError) as exc:
                 self.calibration_capture = None
@@ -50,12 +49,28 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
                 self.stop_measure_btn.setEnabled(False)
             return
 
+        if role in {"preview", "manual"}:
+            run = self.collection_run if self.collection_run is not None else self.preparation_run
+            if run is not None:
+                try:
+                    run.append_preview_block(block)
+                except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                    self.stop_live_preview()
+                    self.logger.exception("Could not save preview counts")
+                    api.QMessageBox.warning(self, "Save preview", str(exc))
+                    return
+
         elapsed = None
         if role == "collection":
             elapsed = metadata["utc_s"] - self.collection_start_time
-        od_raw = self.calculate_optical_density(*api.valid_counts(block),
-                                               apply_zero_baseline=False) if paired else None
-        od = self.apply_kinetic_zero(od_raw)
+        od_raw = od = None
+        if paired:
+            try:
+                od_raw = self.calculate_optical_density(*api.valid_counts(block), apply_zero_baseline=False)
+                od = self.apply_kinetic_zero(od_raw)
+            except (ValueError, TypeError, IndexError, RuntimeError) as exc:
+                metadata["od_error"] = str(exc)
+                self.logger.exception("OD calculation failed for %s. Retaining detector counts.", role)
         if od is not None:
             plotted = od
             if role == "collection" and self.latest_reference_correction is not None:
@@ -73,11 +88,14 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
                 self.collection_point_index = self.collection_run.append(
                     elapsed, metadata["utc_s"], ch1, ch2, od_raw, od, metadata
                 )
-            except (OSError, ValueError, RuntimeError) as exc:
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
                 self.fail_run_write(exc)
                 return
             if self.od_heatmap_window is not None and not self.map_refresh_timer.isActive():
                 self.map_refresh_timer.start()
+            if ch1 is None and ch2 is None and self.data_collection_active and not self.closing_requested:
+                self.pause_collection_after_error(metadata.get("error", "neither spectrometer returned a spectrum"))
+                return
             suffix = "" if paired else " (incomplete readout)"
             self.statusBar().showMessage(f"Saved point {self.collection_point_index}{suffix}")
             if not self.closing_requested:
@@ -90,9 +108,15 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
     def on_measurement_error(self, error_msg):
         self.logger.error("Measurement error: %s", error_msg)
         role = self.current_measurement_role
-        if role in {"collection", "blank", "reference", "empty", "background"}:
+        if role in {"collection", "blank", "reference", "empty", "background", "background_check", "empty_check"}:
             self.measurement_metadata["error"] = error_msg
             self.on_measurement_complete({})
+        elif role in {"preview", "manual"}:
+            self.measurement_metadata["error"] = error_msg
+            self.on_measurement_complete({})
+            if "INVALID_MEAS_DATA" not in error_msg and self.continuous_mode:
+                self.stop_live_preview()
+            self.statusBar().showMessage(f"Error: {error_msg}")
         elif "INVALID_MEAS_DATA" not in error_msg and self.continuous_mode:
             self.stop_live_preview()
             self.statusBar().showMessage(f"Error: {error_msg}")
@@ -100,16 +124,20 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
             self.statusBar().showMessage(f"Error: {error_msg}")
 
     def on_measurement_finished(self):
-        pending_role = self.pending_ref_bg_role
-        self.pending_ref_bg_role = None
+        thread = self.measurement_thread
+        self.measurement_thread = None
+        thread.deleteLater()
         self.current_measurement_role = None
+        self.measurement_metadata = None
+        if self.recovery_restart_requested:
+            api.QApplication.exit(75)
+            return
         if self.closing_requested:
             self.calibration_capture = None
             api.QTimer.singleShot(0, self.close)
             return
-        if pending_role is not None and not self.single_measurement(measurement_role=pending_role):
-            self.stop_measurement()
-            self.calibration_capture = None
+        if self.calibration_capture is not None:
+            self.begin_spectral_readout()
         self.update_collection_countdown_label()
         self.update_analysis_buttons()
 
@@ -293,26 +321,36 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
 
     def auto_connect_spectrometers(self):
         """Automatically connect to both spectrometers on startup."""
+        if self.closing_requested or self.system_session_ending:
+            return
         self.logger.info("="*60)
         self.logger.info("AUTO-CONNECT: Starting sequence...")
 
         # Connect spectrometer 1
-        self.spec1_widget.connect_spectrometer()
+        if not self.spec1_widget.spec:
+            self.spec1_widget.connect_spectrometer(unattended=self.pending_recovery is not None)
 
         # Small delay between connections
         api.QTimer.singleShot(1000, self.auto_connect_spec2)
 
     def auto_connect_spec2(self):
         """Connect to spectrometer 2."""
-        self.spec2_widget.connect_spectrometer()
+        if self.closing_requested or self.system_session_ending:
+            return
+        if not self.spec2_widget.spec:
+            self.spec2_widget.connect_spectrometer(unattended=self.pending_recovery is not None)
 
         if self.spec1_widget.spec and self.spec2_widget.spec:
             self.logger.info("AUTO-CONNECT: Both spectrometers connected")
             self.logger.info("="*60)
 
-            # Keep idle after connection; measurements are user-triggered.
+            if self.pending_recovery is not None:
+                self.recover_collection()
         else:
             self.logger.error("AUTO-CONNECT: Failed to connect both spectrometers")
+            if self.pending_recovery is not None:
+                self.statusBar().showMessage("Recovery waiting for both spectrometers. Retrying in 30 seconds.")
+                api.QTimer.singleShot(30000, self.auto_connect_spectrometers)
 
     def auto_start_continuous(self):
         """Check Arduino after connection without starting measurements."""
@@ -346,17 +384,25 @@ def _bind_avantes_dual_viewer_methods_on_measurement_complete(api):
         self.collection_timer.stop()
         self.lamp_warmup_timer.stop()
         self.collection_countdown_timer.stop()
+        if self.calibration_start_timer.isActive():
+            self.calibration_start_timer.stop()
+            self.calibration_capture = None
         if self.current_measurement_role is not None or self.calibration_capture is not None or self.analysis_worker is not None:
             self.closing_requested = True
             self.statusBar().showMessage("Finishing the current operation before closing…")
             event.ignore()
             return
 
+        if not self.system_session_ending:
+            self.disarm_recovery()
         if self.collection_run is not None:
             try:
                 if self.data_collection_active or self.collection_paused:
-                    self.collection_run.append_event("stop", api.time.time(), reason="application closed")
-            except (OSError, ValueError, RuntimeError) as exc:
+                    if self.system_session_ending and self.recovery_active:
+                        self.collection_run.append_event("system_session_end", api.time.time())
+                    else:
+                        self.collection_run.append_event("stop", api.time.time(), reason="application closed")
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
                 self.logger.error("Failed to save shutdown event: %s", exc)
 
         count = self._measurement_count if hasattr(self, '_measurement_count') else 0

@@ -278,9 +278,11 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         ref_bg_layout.addLayout(btn_layout)
         zero_layout = api.QHBoxLayout()
         self.zero_empty_btn = api.QPushButton("Set Empty Zero")
+        self.zero_empty_btn.setToolTip("Optional. Display the selected Empty as zero OD.")
         self.zero_empty_btn.clicked.connect(lambda: self.set_calibration_zero("empty"))
         zero_layout.addWidget(self.zero_empty_btn)
         self.zero_reference_btn = api.QPushButton("Set Reference Zero")
+        self.zero_reference_btn.setToolTip("Optional. Display the measured reference as zero OD.")
         self.zero_reference_btn.clicked.connect(lambda: self.set_calibration_zero("reference"))
         zero_layout.addWidget(self.zero_reference_btn)
         ref_bg_layout.addLayout(zero_layout)
@@ -401,7 +403,8 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         self.add_blank_btn.clicked.connect(self.add_reference)
         blank_controls.addWidget(self.add_blank_btn)
 
-        self.irradiation_btn = api.QPushButton("Mark irradiation on")
+        self.irradiation_btn = api.QPushButton("Irradiation marker")
+        self.irradiation_btn.setCheckable(True)
         self.irradiation_btn.setToolTip("Record the state of the external irradiation source")
         self.irradiation_btn.clicked.connect(self.toggle_irradiation_marker)
         blank_controls.addWidget(self.irradiation_btn)
@@ -468,6 +471,7 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
 
         # Live preview control
         self.continuous_btn = api.QPushButton("Start Live Preview")
+        self.continuous_btn.setToolTip("Preview spectra and save their raw counts separately in HDF5")
         self.continuous_btn.clicked.connect(self.toggle_continuous_readout)
         self.continuous_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
         tools_layout.addWidget(self.continuous_btn)
@@ -493,6 +497,7 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
         data_menu.addAction("Load DAT...", self.load_collection_dat)
 
         analysis = self.menuBar().addMenu("Analysis")
+        self.calibration_history_action = analysis.addAction("Calibration from raw data…", self.inspect_calibration_history)
         self.recalculate_action = analysis.addAction("Recalculate OD from blanks", self.recalculate_blank_od)
         self.mcr_action = analysis.addAction("Run MCR-ALS…", self.run_mcr)
         self.show_mcr_action = analysis.addAction("Show latest MCR-ALS", self.show_latest_mcr)
@@ -630,102 +635,101 @@ def _bind_avantes_dual_viewer_methods_init_ui(api):
 
     def single_measurement(self, averages_override=None, measurement_role=None):
         """Perform a single parallel measurement."""
-        if self.current_measurement_role is not None:
+        if self.closing_requested or self.current_measurement_role is not None:
             self.statusBar().showMessage("Measurement already in progress...")
             return False
 
-        spec1 = self.spec1_widget.spec
-        spec2 = self.spec2_widget.spec
-
-        # Check both spectrometers are connected
-        if not spec1 or not spec2:
-            if not self.continuous_mode:
-                api.QMessageBox.warning(self, "Error", "Both spectrometers must be connected")
-            else:
-                self.logger.error("Spectrometer connection lost - stopping live preview")
-                self.stop_live_preview()
-            return False
-
-        # Validate connections are still active
+        role = measurement_role or ("preview" if self.continuous_mode else "manual")
+        widgets = (self.spec1_widget, self.spec2_widget)
+        devices = [widget.spec for widget in widgets]
+        thread = None
         try:
-            cfg1 = self.spec1_widget.get_measurement_config()
-            cfg2 = self.spec2_widget.get_measurement_config()
+            if not all(devices):
+                raise RuntimeError("Both spectrometers must be connected")
+            configs = [widget.get_measurement_config() for widget in widgets]
+            if not all(configs):
+                raise RuntimeError("Failed to create measurement configuration")
             if averages_override is not None:
-                cfg1.m_NrAverages = int(averages_override)
-                cfg2.m_NrAverages = int(averages_override)
-        except Exception as e:
-            self.logger.error(f"Failed to get measurement config: {e}")
-            if self.continuous_mode:
-                self.logger.error("Stopping live preview due to connection error")
-                self.stop_live_preview()
-            else:
-                api.QMessageBox.critical(self, "Error", f"Connection error:\n{str(e)}")
-            return False
-
-        if not cfg1 or not cfg2:
-            if not self.continuous_mode:
-                api.QMessageBox.warning(self, "Error", "Failed to create measurement configuration")
-            return False
-
-        # Disable controls during measurement
-        if measurement_role:
-            self.current_measurement_role = measurement_role
-        else:
-            self.current_measurement_role = "preview" if self.continuous_mode else "manual"
-        if self.current_measurement_role in {"reference", "empty", "background", "blank", "collection"}:
-            self.logger.info(
-                f"MEASUREMENT: role={self.current_measurement_role}, "
-                f"Avantes averages ch1={int(cfg1.m_NrAverages)}, ch2={int(cfg2.m_NrAverages)}"
-            )
-        self.statusBar().showMessage("Measuring...")
-
-        self.measurement_metadata = {
-            "utc_s": api.time.time(),
-            "role": self.current_measurement_role,
-            "channels": [
-                dict(self.get_spectrometer_settings(widget),
+                for cfg in configs:
+                    cfg.m_NrAverages = int(averages_override)
+            channels = [
+                dict(self.get_spectrometer_settings(w),
                      integration_ms=float(cfg.m_IntegrationTime),
                      averages=int(cfg.m_NrAverages),
                      trigger_mode=int(cfg.m_Trigger.m_Mode),
                      trigger_source=int(cfg.m_Trigger.m_Source),
-                     integration_delay=int(getattr(cfg, 'm_IntegrationDelay', 0)),
-                     start_pixel=int(getattr(cfg, 'm_StartPixel', 0)),
+                     integration_delay=int(getattr(cfg, "m_IntegrationDelay", 0)),
+                     start_pixel=int(getattr(cfg, "m_StartPixel", 0)),
                      stop_pixel=int(cfg.m_StopPixel))
-                for widget, cfg in zip((self.spec1_widget, self.spec2_widget), (cfg1, cfg2))
-            ],
-            "arduino_frequency_hz": self.arduino_frequency_hz,
-            "lamp_on": self.is_lamp_enabled(),
-            "avantes_trigger_on": self.is_avantes_enabled(),
-            "collection_interval_s": self.collection_rate_spin.value(),
-        }
-        if self.demo_kinetics_enabled:
-            spec1.sample_optical_density = 0.0
-            role = self.current_measurement_role
-            wavelengths = self.spec1_widget.wavelengths
-            if "empty" in self.calibration_blocks and role in {"reference", "collection", "blank", "preview", "manual"}:
-                spec1.sample_optical_density = 0.03 + 0.02 * api.np.exp(-0.5 * ((wavelengths - 320.0) / 120.0) ** 2)
-            if role in {"collection", "blank"}:
-                elapsed = self.measurement_metadata["utc_s"] - self.collection_start_time
-                if "empty" in self.calibration_blocks:
-                    elapsed = self.collection_run.irradiation_seconds(elapsed)
-                progress = 1.0 - api.np.exp(-max(0.0, elapsed) / max(1.0, self.demo_kinetics_duration_s))
-                # Both the sample and the water blank include the same simulated fiber loss.
-                uv_band = api.np.exp(-0.5 * ((wavelengths - 285.0) / 43.0) ** 2)
-                spec1.sample_optical_density += 0.24 * progress * uv_band
-                if role == "collection":
-                    spec1.sample_optical_density += self.get_demo_species_od(wavelengths, elapsed)
-        self.update_analysis_buttons()
-        # Start measurement thread
-        self.measurement_thread = api.MeasurementThread(
-            spectrometers=[spec1, spec2],
-            configs=[cfg1, cfg2],
-            num_measurements=1
-        )
-        self.measurement_thread.measurement_complete.connect(self.on_measurement_complete)
-        self.measurement_thread.measurement_error.connect(self.on_measurement_error)
-        self.measurement_thread.finished.connect(self.on_measurement_finished)
-        self.measurement_thread.start()
+                for w, cfg in zip(widgets, configs)
+            ]
+            metadata = dict(
+                utc_s=api.time.time(), role=role, channels=channels,
+                arduino_frequency_hz=self.arduino_frequency_hz, lamp_on=self.is_lamp_enabled(),
+                avantes_trigger_on=self.is_avantes_enabled(), collection_interval_s=self.collection_rate_spin.value(),
+            )
+            if self.demo_kinetics_enabled:
+                apply_demo_optical_density(self, devices[0], metadata)
+
+            trigger_period = 1.0 / max(self.arduino_frequency_hz, 1.0)
+            acquisition_s = max(
+                (channel["integration_ms"] / 1000.0
+                 + (trigger_period if channel["trigger_mode"] in {1, 2} else 0.0))
+                * channel["averages"] for channel in channels
+            )
+            thread = api.MeasurementThread(
+                spectrometers=devices, configs=configs, num_measurements=1,
+                timeout=max(10.0, acquisition_s + 5.0),
+            )
+            thread.measurement_complete.connect(self.on_measurement_complete)
+            thread.measurement_error.connect(self.on_measurement_error)
+            thread.finished.connect(self.on_measurement_finished)
+            self.measurement_thread = thread
+            self.current_measurement_role = role
+            self.measurement_metadata = metadata
+            self.update_analysis_buttons()
+            self.statusBar().showMessage("Measuring…")
+            thread.start()
+        except Exception as exc:
+            self.logger.exception("Could not start %s acquisition", role)
+            if thread is not None:
+                thread.deleteLater()
+            self.measurement_thread = None
+            self.current_measurement_role = None
+            self.measurement_metadata = None
+            self.update_analysis_buttons()
+            if self.continuous_mode:
+                self.stop_live_preview()
+                self.statusBar().showMessage(f"Could not start acquisition: {exc}")
+            else:
+                api.QMessageBox.critical(self, "Acquisition could not start", str(exc))
+            return False
+
+        if role in {"reference", "empty", "background", "blank", "collection"}:
+            self.logger.info(
+                "MEASUREMENT: role=%s, Avantes averages ch1=%s, ch2=%s",
+                role, channels[0]["averages"], channels[1]["averages"],
+            )
         return True
+
+    def apply_demo_optical_density(self, spectrometer, metadata):
+        role = metadata["role"]
+        wavelengths = self.spec1_widget.wavelengths
+        has_empty = "empty" in self.calibration_blocks
+        od = 0.0
+        if has_empty and role in {"reference", "collection", "blank", "preview", "manual"}:
+            od = 0.03 + 0.02 * api.np.exp(-0.5 * ((wavelengths - 320.0) / 120.0) ** 2)
+        if role in {"collection", "blank"}:
+            elapsed = metadata["utc_s"] - self.collection_start_time
+            if has_empty:
+                elapsed = self.collection_run.irradiation_seconds(elapsed)
+            progress = 1.0 - api.np.exp(-max(0.0, elapsed) / max(1.0, self.demo_kinetics_duration_s))
+            # The sample and water blank include the same simulated fiber loss.
+            uv_band = api.np.exp(-0.5 * ((wavelengths - 285.0) / 43.0) ** 2)
+            od += 0.24 * progress * uv_band
+            if role == "collection":
+                od += self.get_demo_species_od(wavelengths, elapsed)
+        spectrometer.sample_optical_density = od
 
     def continuous_measurement(self):
         """Trigger measurement for live preview mode."""

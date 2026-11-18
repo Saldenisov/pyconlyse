@@ -5,12 +5,17 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
     """Bind implementation to the owning module and its runtime state."""
 
     def toggle_data_collection(self):
-        if self.current_measurement_role is not None or self.analysis_worker is not None:
-            return
         if self.data_collection_active or self.collection_paused:
+            if (self.current_measurement_role not in {None, "collection"}
+                    or self.calibration_capture is not None or self.analysis_worker is not None):
+                return
             self.set_collection_state(active=False, paused=False)
-            self.log_run_event("stop")
-            self.statusBar().showMessage(f"Collection stopped ({self.collection_point_index} points). Add Reference is available.")
+            if not self.disarm_recovery():
+                return
+            if self.log_run_event("stop"):
+                self.statusBar().showMessage(f"Collection stopped ({self.collection_point_index} points). Add Reference is available.")
+            return
+        if self.current_measurement_role is not None or self.calibration_capture is not None or self.analysis_worker is not None:
             return
         if not self.save_name_input.text().strip() or not self.validate_collection_rate(show_warning=True):
             return
@@ -25,6 +30,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
             return
         if not self.check_sample_metadata(require_reference=True):
             return
+        resume_mode = "resume"
         try:
             wavelengths, serials, epoch, count = run.info()
             if not self.match_run_hardware(wavelengths, serials):
@@ -33,7 +39,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
                 raise ValueError("Restore the integration times and trigger modes used in the run")
             if prepared:
                 if not self.has_reference or not self.calibration_matches_detector_setup():
-                    raise ValueError("Complete Background, Empty Zero and Reference Zero first")
+                    raise ValueError("Complete Background, Empty and Reference first")
                 setup = dict(self.exposure_setup)
                 setup.setdefault("irradiating_at_start", self.demo_kinetics_enabled)
                 offset = 0.0
@@ -50,12 +56,21 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
                         for t, row in list(zip(self.od_heatmap_times, self.od_heatmap_rows))[count:]:
                             count = run.append(t, api.np.nan, None, None, None, row, {"source": "legacy_dat"})
                         run.append_event("import_dat", api.time.time(), path=str(dat), rows=count)
-                epoch = run.start_prepared_collection(api.time.time() - offset, setup, offset=offset)
             else:
+                resume_mode = self.ask_hdf5_resume(run)
+                if resume_mode in (None, "review"):
+                    if resume_mode == "review":
+                        self.blank_status.setText(
+                            "Check Background and Empty, then use Add Reference to capture a fresh reference."
+                        )
+                    return
                 run = self.standard_run(run)
             self.restore_run_calibration(run)
             correction = run.latest_reference_drift()
-            run.append_event("start" if prepared else "resume", api.time.time())
+            if prepared:
+                epoch = run.start_prepared_collection(api.time.time() - offset, setup, offset=offset)
+            segment = run.begin_collection_segment(api.time.time()) if resume_mode == "restart" else None
+            self.arm_recovery(run)
         except (OSError, ValueError, KeyError, RuntimeError) as exc:
             self.logger.exception("Cannot start data collection")
             api.QMessageBox.critical(self, "Start DC", str(exc))
@@ -71,11 +86,17 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.set_open_collection_path(run.path)
         self.reset_od_heatmap()
         self.collection_point_start_time = None
+        event = "start" if prepared else "restart" if resume_mode == "restart" else "resume"
+        details = {"previous_segment": segment, "first_row": count} if resume_mode == "restart" else {}
+        if not self.log_run_event(event, **details):
+            return
         self.set_collection_state(active=True, paused=False)
         self.collect_data_point()
 
     def new_named_run(self):
         if not self.may_open_collection():
+            return
+        if self.pending_recovery is not None and not self.disarm_recovery():
             return
         if self.continuous_mode:
             self.stop_live_preview()
@@ -86,6 +107,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.collection_point_index = 0
         self.latest_reference_correction = None
         self.empty_zero_selected = False
+        self.reference_zero_selected = False
         self.exposure_state = (api.np.nan, False)
         self.run_volumes = (api.np.nan, api.np.nan)
         self.collection_sample_metadata = {}
@@ -112,18 +134,16 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         n_avg = self.get_detector_average_count()
         self.collection_timer.stop()
         self.lamp_warmup_timer.stop()
-        if not self.is_lamp_enabled():
-            self.logger.info("DATA COLLECTION: Lamp was off at measurement time; enabling now")
+        if not (self.is_lamp_enabled() and self.is_avantes_enabled()):
+            self.logger.info("DATA COLLECTION: Lamp or detector triggers were off; enabling now")
             if not self.set_lamp_and_avantes():
-                self.statusBar().showMessage("Data collection paused: failed to enable lamp")
-                self.schedule_next_collection_point()
+                self.pause_collection_after_error("could not enable lamp and spectrometer triggers")
                 return
         self.collection_point_start_time = api.time.time()
         self.statusBar().showMessage(f"Collecting point {self.collection_point_index + 1} (avg={n_avg})...")
         self.update_collection_countdown_label()
         if not self.single_measurement(averages_override=n_avg, measurement_role="collection"):
-            self.set_collection_state(active=False, paused=True)
-            self.log_run_event("acquisition_paused", reason="spectrometer not ready")
+            self.pause_collection_after_error("spectrometer not ready")
 
     def schedule_next_collection_point(self):
         """Schedule next collection point without overlapping hardware averaging."""
@@ -184,6 +204,8 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         else:
             if not self.is_lamp_enabled():
                 self.prepare_lamp_for_collection()
+                if not self.data_collection_active:
+                    return
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s; lamp stays on")
             if (
@@ -208,6 +230,8 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
             self.statusBar().showMessage(f"Lamp warming; next point in {max(0.0, due - api.time.time()):.0f}s")
             self.logger.info("DATA COLLECTION: Lamp enabled for scheduled measurement")
             self.update_collection_countdown_label()
+        else:
+            self.pause_collection_after_error("could not prepare lamp and spectrometer triggers")
 
     def format_seconds_for_countdown(self, seconds: float) -> str:
         """Format countdown seconds as compact time text."""
@@ -282,6 +306,33 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         if clicked == new_btn:
             return "new"
         return None
+
+    def ask_hdf5_resume(self, run):
+        captured_at = run.latest_reference_utc()
+        if captured_at is None:
+            reference = "The last reference has no timestamp. Capture a fresh reference before continuing."
+        else:
+            age_minutes = max(0, int((api.time.time() - captured_at) / 60))
+            reference = f"Last reference captured {age_minutes} min ago."
+            if age_minutes >= 30:
+                reference += " Consider capturing a fresh reference with Add Reference."
+        dialog = api.QMessageBox(self)
+        dialog.setWindowTitle("Resume acquisition")
+        dialog.setText(f"Continue recording in {run.path.name}?")
+        dialog.setInformativeText(
+            reference + "\n\n"
+            "New Segment archives the previous segment in a separate HDF5 group. "
+            "Continuing uses the saved calibration and latest reference.\n\n"
+            "To check calibration, capture Background and Empty, then use Add Reference."
+        )
+        resume = dialog.addButton("Continue", api.QMessageBox.AcceptRole)
+        restart = dialog.addButton("New Segment", api.QMessageBox.ActionRole)
+        review = dialog.addButton("Check Calibration", api.QMessageBox.ActionRole)
+        cancel = dialog.addButton("Cancel", api.QMessageBox.RejectRole)
+        dialog.setDefaultButton(resume)
+        dialog.setEscapeButton(cancel)
+        dialog.exec_()
+        return {resume: "resume", restart: "restart", review: "review"}.get(dialog.clickedButton())
 
     def suggest_new_collection_file_path(self, path):
         """Find a free sibling name. HDF5 exclusive creation also checks for races."""
@@ -374,16 +425,20 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         calibrated = self.has_reference and self.has_background
         named = bool(self.save_name_input.text().strip())
         open_run = self.preparation_run is not None or self.collection_run is not None
-        self.start_collection_btn.setEnabled(not busy and (running or named and (calibrated or self.collection_run is not None)))
-        self.pause_collection_btn.setEnabled(not busy and running)
+        collecting = self.data_collection_active and self.current_measurement_role == "collection"
+        self.start_collection_btn.setEnabled(collecting or not busy and (
+            running or named and (calibrated or self.collection_run is not None)
+        ))
+        self.pause_collection_btn.setEnabled(collecting or not busy and running)
         self.track_wl_btn.setEnabled(calibrated)
         idle = not running and not busy
         preparing = idle and named and self.collection_run is None
-        self.measure_bg_btn.setEnabled(idle and self.collection_run is None and not self.has_background)
-        self.measure_empty_btn.setEnabled(preparing and self.has_background and "empty" not in self.calibration_blocks)
+        checking = self.collection_run is not None and not busy and not self.data_collection_active
+        self.measure_bg_btn.setEnabled(idle or checking)
+        self.measure_empty_btn.setEnabled((preparing and self.has_background) or checking)
         self.zero_empty_btn.setEnabled(preparing and "empty" in self.calibration_blocks and not self.empty_zero_selected)
-        self.measure_ref_btn.setEnabled(preparing and self.empty_zero_selected and "reference" not in self.calibration_blocks)
-        self.zero_reference_btn.setEnabled(preparing and "reference" in self.calibration_blocks and not self.has_reference)
+        self.measure_ref_btn.setEnabled(preparing and "empty" in self.calibration_blocks)
+        self.zero_reference_btn.setEnabled(preparing and self.has_reference and not self.reference_zero_selected)
         self.clear_btn.setEnabled(idle and not open_run)
         self.new_run_btn.setEnabled(idle)
         self.save_name_input.setReadOnly(open_run)
@@ -403,9 +458,12 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.browse_save_btn.setEnabled(idle and not open_run)
         self.ref_blocks_spin.setEnabled(not busy and not self.data_collection_active)
         self.ref_repeats_spin.setEnabled(not busy and not self.data_collection_active)
-        self.continuous_btn.setEnabled(calibrated and not running and self.analysis_worker is None)
+        self.continuous_btn.setEnabled(calibrated and not running and (self.continuous_mode or not busy))
+        for button in (self.lamp_on_btn, self.lamp_off_btn, self.arduino_advanced_btn):
+            button.setEnabled(self.current_measurement_role is None and self.calibration_capture is None)
         for action in (self.recalculate_action, self.mcr_action):
             action.setEnabled(self.can_analyze_run())
+        self.calibration_history_action.setEnabled(open_run and not busy and not self.data_collection_active)
         can_show_mcr = self.collection_run is not None and self.analysis_worker is None
         self.show_mcr_action.setEnabled(can_show_mcr)
         self.show_mcr_btn.setEnabled(can_show_mcr)
@@ -413,8 +471,18 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         rate, irradiating = self.exposure_state
         self.irradiation_action.setEnabled(can_show_mcr)
         self.irradiation_action.setText("Mark irradiation off" if irradiating else "Mark irradiation on")
-        self.irradiation_btn.setEnabled(can_show_mcr and not busy)
-        self.irradiation_btn.setText(self.irradiation_action.text())
+        self.irradiation_btn.setEnabled(can_show_mcr)
+        self.irradiation_btn.setChecked(bool(self.collection_run is not None and irradiating))
+        self.irradiation_btn.setText(
+            ("Radiation present" if irradiating else "Radiation absent")
+            if self.collection_run is not None else "Irradiation marker"
+        )
+        color = "#a32624" if irradiating else "#23713e"
+        style = f"QPushButton {{ background-color: {color}; color: white; font-weight: bold; }}"
+        if self.collection_run is None:
+            style = ""
+        if self.irradiation_btn.styleSheet() != style:
+            self.irradiation_btn.setStyleSheet(style)
         if api.np.isfinite(rate):
             self.irradiation_action.setToolTip(f"Recording state for {rate:g} Gy/h")
         else:
@@ -518,6 +586,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         "browse_save_folder": browse_save_folder,
         "update_loaded_collection_label": update_loaded_collection_label,
         "ask_collection_start_mode": ask_collection_start_mode,
+        "ask_hdf5_resume": ask_hdf5_resume,
         "suggest_new_collection_file_path": suggest_new_collection_file_path,
         "get_resume_collection_time_offset": get_resume_collection_time_offset,
         "load_collection_dat": load_collection_dat,
