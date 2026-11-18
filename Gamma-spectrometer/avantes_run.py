@@ -10,7 +10,7 @@ import numpy as np
 
 from avantes_h5 import (
     SCHEMA_VERSION, TEXT, appendable, axes, field, init_entry, init_exposure, nx,
-    optical_volume_ml, process_revision, published_processes, utc_iso,
+    missing_reference_fields, missing_sample_fields, process_revision, published_processes, utc_iso, write_sample_geometry,
 )
 
 
@@ -163,7 +163,43 @@ class AvantesRun:
         with h5py.File(self.path, "r") as file:
             return f"entry/calibration_zeros/{role}" in file
 
+    def exposure_config(self):
+        with h5py.File(self.path, "r") as file:
+            return json.loads(file.attrs["settings_json"]).get("exposure", {})
+
+    def set_prepared_exposure(self, setup):
+        with h5py.File(self.path, "r+") as file:
+            entry = self._writable_entry(file)
+            if not file.attrs.get("calibration_pending", False):
+                raise ValueError("Sample metadata is locked once sample collection starts")
+            settings = json.loads(file.attrs["settings_json"])
+            settings["exposure"] = setup
+            write_sample_geometry(entry, setup)
+            file.attrs["settings_json"] = json.dumps(settings)
+
+    def sample_metadata(self):
+        with h5py.File(self.path, "r") as file:
+            sample = file.get("entry/sample")
+            if sample is None:
+                return {}
+            metadata = {}
+            for key, name in (("sample_volume_ml", "sample_volume"), ("window_diameter_mm", "window_diameter"),
+                              ("path_length_mm", "path_length")):
+                if name in sample:
+                    metadata[key] = float(sample[name][()])
+            if "cell_type" in sample:
+                metadata["cell_type"] = sample["cell_type"].asstr()[()]
+            reference = file.get("entry/reference")
+            if reference is not None:
+                metadata["reference_same_cell"] = bool(reference["same_cell_as_sample"][()])
+                metadata["reference_path_length_mm"] = float(reference["path_length"][()])
+                metadata["reference_cell_type"] = reference["cell_type"].asstr()[()]
+            return metadata
+
     def start_prepared_collection(self, epoch, exposure_setup, offset=0.0):
+        missing = missing_sample_fields(exposure_setup) + missing_reference_fields(exposure_setup)
+        if missing:
+            raise ValueError("Complete sample metadata: " + ", ".join(missing))
         with h5py.File(self.path, "r+") as file:
             entry = self._writable_entry(file)
             if not file.attrs.get("calibration_pending", False):
@@ -180,13 +216,7 @@ class AvantesRun:
             entry["irradiation/state/time"][0] = offset
             entry["irradiation/state/value"][0] = bool(setup.get("irradiating_at_start", False))
             entry["irradiation/dose_rate_set"][()] = rate
-            sample = entry["sample"]
-            diameter = setup.get("window_diameter_mm", np.nan)
-            length = setup.get("path_length_mm", np.nan)
-            sample["window_diameter"][()] = diameter
-            sample["path_length"][()] = length
-            sample["optical_volume"][()] = optical_volume_ml(diameter, length)
-            sample["sample_volume"][()] = setup.get("sample_volume_ml", np.nan)
+            write_sample_geometry(entry, setup)
             settings = json.loads(file.attrs["settings_json"])
             settings["exposure"] = setup
             file.attrs["settings_json"] = json.dumps(settings)

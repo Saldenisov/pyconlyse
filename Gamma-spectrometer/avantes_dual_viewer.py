@@ -105,7 +105,9 @@ from avantes_parallel import (
 )
 from arduino_trigger_controller import ArduinoTriggerController
 from avantes_analysis import fit_mcr, read_mcr
-from avantes_h5 import SCHEMA_VERSION, optical_volume_ml
+from avantes_h5 import (
+    QUARTZ_CELL_TYPES, SCHEMA_VERSION, missing_reference_fields, missing_sample_fields, optical_volume_ml,
+)
 from avantes_mcr_view import ask_mcr_options, show_mcr_dialog
 from avantes_run import AvantesRun, mean_counts, optical_density, valid_counts
 from avantes_emulator import (
@@ -452,7 +454,8 @@ class AvantesDualViewer(QMainWindow):
         self.collection_run = None
         self.analysis_worker = None
         self.mcr_options = {}
-        self.exposure_setup = dict(window_diameter_mm=8.0, path_length_mm=10.0)
+        self.exposure_setup = dict(path_length_mm=10.0, reference_same_cell=True)
+        self.collection_sample_metadata = {}
         self.exposure_state = (np.nan, False)
         self.run_volumes = (np.nan, np.nan)
         self.collection_paused = False
@@ -633,6 +636,11 @@ class AvantesDualViewer(QMainWindow):
     load_collection_hdf5_file = _avantes_dual_viewer_methods_analysis["load_collection_hdf5_file"]
     set_open_collection_path = _avantes_dual_viewer_methods_analysis["set_open_collection_path"]
     edit_exposure_setup = _avantes_dual_viewer_methods_analysis["edit_exposure_setup"]
+    apply_exposure_setup = _avantes_dual_viewer_methods_analysis["apply_exposure_setup"]
+    set_sample_geometry = _avantes_dual_viewer_methods_analysis["set_sample_geometry"]
+    set_reference_geometry = _avantes_dual_viewer_methods_analysis["set_reference_geometry"]
+    check_sample_metadata = _avantes_dual_viewer_methods_analysis["check_sample_metadata"]
+    set_probe_volume = _avantes_dual_viewer_methods_analysis["set_probe_volume"]
     update_exposure_label = _avantes_dual_viewer_methods_analysis["update_exposure_label"]
     toggle_irradiation_marker = _avantes_dual_viewer_methods_analysis["toggle_irradiation_marker"]
     standard_run = _avantes_dual_viewer_methods_analysis["standard_run"]

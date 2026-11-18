@@ -276,6 +276,8 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         if self.continuous_mode:
             self.stop_live_preview()
         else:
+            if not self.check_sample_metadata():
+                return
             # Start live preview at a modest rate; experiment collection has its own timer.
             interval_ms = self.get_live_preview_interval_ms()
             self.continuous_timer.start(interval_ms)
@@ -332,7 +334,13 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
         self.measure_calibration("reference")
 
     def measure_calibration(self, role):
-        if not self.may_open_collection() or self.collection_run is not None or not self.save_name_input.text().strip():
+        if not self.may_open_collection() or self.collection_run is not None:
+            return
+        if not self.save_name_input.text().strip():
+            api.QMessageBox.information(self, "Background", "Сначала введите название образца.")
+            self.save_name_input.setFocus()
+            return
+        if not self.check_sample_metadata(require_reference=role == "reference"):
             return
         if not self.spec1_widget.spec or not self.spec2_widget.spec:
             self.statusBar().showMessage("Connect both spectrometers before measuring")
@@ -344,6 +352,8 @@ def _bind_avantes_dual_viewer_methods_get_settings_dict(api):
             run = self.preparation_run or self.open_preparation_run()
             if not self.same_detector_setup(self.current_detector_setup(), run.detector_setup()):
                 raise ValueError("Restore the detector settings used for Background")
+            if role == "reference":
+                run.set_prepared_exposure(self.exposure_setup)
             self.start_spectral_capture(run, role)
         except (OSError, ValueError, KeyError, RuntimeError) as exc:
             api.QMessageBox.critical(self, "Calibration capture", str(exc))

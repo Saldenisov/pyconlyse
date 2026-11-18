@@ -31,9 +31,12 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
                 raise ValueError("Connect the spectrometers used for calibration to continue this run")
             self.new_named_run()
             self.preparation_run = run
+            self.exposure_setup = run.exposure_config()
+            blocks = run.calibration_blocks()
+            if "reference" not in blocks:
+                self.exposure_setup.setdefault("reference_same_cell", True)
             self.set_open_collection_path(run.path)
             self.sample_comment_input.setText(comment)
-            blocks = run.calibration_blocks()
             for role in ("background", "empty", "reference"):
                 if role in blocks:
                     self.complete_spectral_capture(role, blocks[role])
@@ -55,6 +58,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         self.collection_file_path = path
         self.exposure_state = self.collection_run.irradiation_state() if self.collection_run else (api.np.nan, False)
         self.run_volumes = self.collection_run.sample_volumes() if self.collection_run else (api.np.nan, api.np.nan)
+        self.collection_sample_metadata = self.collection_run.sample_metadata() if self.collection_run else {}
         self.save_folder_input.setText(str(path.parent))
         self.save_name_input.setText(path.stem)
         self.blank_status.clear()
@@ -66,7 +70,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         if not self.may_open_collection():
             return
         dialog = api.QDialog(self)
-        dialog.setWindowTitle("Dose and sample geometry for the next run")
+        dialog.setWindowTitle("Dose and sample geometry")
         form = api.QFormLayout(dialog)
         has_rate = api.QCheckBox("Dose rate is known")
         has_rate.setChecked("dose_rate_gy_h" in self.exposure_setup)
@@ -87,48 +91,132 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         form.addRow(initially_on)
         has_rate.toggled.connect(rate.setEnabled)
         rate.setEnabled(has_rate.isChecked())
-        diameter = spin("Window diameter (mm)", "window_diameter_mm", 0.001, 1000, 8)
-        length = spin("Optical path (mm)", "path_length_mm", 0.001, 1000, 10)
-        total = spin("Filled volume (mL)", "sample_volume_ml", 0, 1000, 0)
-        total.setSpecialValueText("Unknown")
         volume = api.QLabel()
         form.addRow("Geometric probe volume", volume)
-
-        def update_volume():
-            volume.setText(f"{api.optical_volume_ml(diameter.value(), length.value()):.3f} mL")
-
-        diameter.valueChanged.connect(update_volume)
-        length.valueChanged.connect(update_volume)
-        update_volume()
+        geometry = api.optical_volume_ml(self.exposure_setup.get("window_diameter_mm", api.np.nan),
+                                         self.exposure_setup.get("path_length_mm", api.np.nan))
+        volume.setText(f"{geometry:.3f} mL" if api.np.isfinite(geometry)
+                       else "Enter the sample geometry in the main window")
         buttons = api.QDialogButtonBox(api.QDialogButtonBox.Ok | api.QDialogButtonBox.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
         if dialog.exec_() == api.QDialog.Accepted:
-            self.exposure_setup = dict(window_diameter_mm=diameter.value(), path_length_mm=length.value(),
-                                       irradiating_at_start=initially_on.isChecked())
+            setup = dict(self.exposure_setup, irradiating_at_start=initially_on.isChecked())
+            setup.pop("dose_rate_gy_h", None)
             if has_rate.isChecked():
-                self.exposure_setup["dose_rate_gy_h"] = rate.value()
-            if total.value() > 0:
-                self.exposure_setup["sample_volume_ml"] = total.value()
-            self.update_exposure_label()
+                setup["dose_rate_gy_h"] = rate.value()
+            self.apply_exposure_setup(setup)
+
+    def apply_exposure_setup(self, setup):
+        if self.preparation_run is not None:
+            try:
+                self.preparation_run.set_prepared_exposure(setup)
+            except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                self.update_exposure_label()
+                api.QMessageBox.warning(self, "Sample metadata", str(exc))
+                return
+        self.exposure_setup = setup
+        self.update_exposure_label()
+
+    def set_sample_geometry(self):
+        if self.collection_run is not None:
+            return
+        setup = dict(self.exposure_setup)
+        before_reference = "reference" not in self.calibration_blocks
+        values = {"sample_volume_ml": self.measured_volume_spin.value()}
+        if before_reference:
+            values["window_diameter_mm"] = self.aperture_diameter_spin.value()
+        if before_reference or not setup.get("reference_same_cell", True):
+            values["path_length_mm"] = self.sample_path_spin.value()
+            values["cell_type"] = self.cell_type_combo.currentText() if self.cell_type_combo.currentIndex() else ""
+        for key, value in values.items():
+            if value:
+                setup[key] = value
+            else:
+                setup.pop(key, None)
+        self.apply_exposure_setup(setup)
+
+    def set_reference_geometry(self):
+        if self.collection_run is not None or "reference" in self.calibration_blocks:
+            return
+        setup = dict(self.exposure_setup, reference_same_cell=self.reference_same_cell_check.isChecked())
+        length = self.reference_path_spin.value()
+        if length:
+            setup["reference_path_length_mm"] = length
+        else:
+            setup.pop("reference_path_length_mm", None)
+        setup["reference_cell_type"] = (
+            self.reference_cell_type_combo.currentText() if self.reference_cell_type_combo.currentIndex() else ""
+        )
+        self.apply_exposure_setup(setup)
+
+    def check_sample_metadata(self, require_reference=False):
+        archived = self.collection_run is not None
+        setup = self.collection_sample_metadata if archived else self.exposure_setup
+        missing = api.missing_sample_fields(setup)
+        if require_reference:
+            missing += api.missing_reference_fields(setup)
+        if not missing:
+            return True
+        message = "Заполните обязательные поля перед измерением.\n\n" + "\n".join(missing)
+        if archived:
+            message += "\n\nUse New Experiment to start a series with complete sample metadata."
+        api.QMessageBox.information(self, "Sample metadata", message)
+        return False
+
+    def set_probe_volume(self, value):
+        if self.collection_run is not None:
+            return
+        setup = dict(self.exposure_setup)
+        if value:
+            setup["probe_volume_ml"] = value
+        else:
+            setup.pop("probe_volume_ml", None)
+        self.apply_exposure_setup(setup)
 
     def update_exposure_label(self):
         if self.collection_run is not None:
             rate, irradiating = self.exposure_state
-            optical, filled = self.run_volumes
+            optical, _ = self.run_volumes
+            probe_value = optical if api.np.isfinite(optical) else 0
+            probe_default = "Unknown"
+            metadata = self.collection_sample_metadata
             labels = [f"Irradiation marked {'on' if irradiating else 'off'}"]
             if api.np.isfinite(rate):
                 labels.append(f"{rate:g} Gy/h")
         else:
             config = self.exposure_setup
-            optical = api.optical_volume_ml(config["window_diameter_mm"], config["path_length_mm"])
-            filled = config.get("sample_volume_ml", api.np.nan)
-            labels = ["Next run"]
-        if api.np.isfinite(optical):
-            labels.append(f"Probe volume {optical:.3f} mL")
-        if api.np.isfinite(filled):
-            labels.append(f"Filled {filled:g} mL")
+            probe_value = config.get("probe_volume_ml", 0)
+            geometry = api.optical_volume_ml(config.get("window_diameter_mm", api.np.nan),
+                                             config.get("path_length_mm", api.np.nan))
+            probe_default = f"Auto ({geometry:.3f} mL)" if api.np.isfinite(geometry) else "Auto"
+            metadata = config
+            labels = []
+        spin = self.probe_volume_spin
+        blocked = spin.blockSignals(True)
+        spin.setSpecialValueText(probe_default)
+        spin.setValue(probe_value)
+        spin.blockSignals(blocked)
+        for widget, key in ((self.measured_volume_spin, "sample_volume_ml"),
+                            (self.aperture_diameter_spin, "window_diameter_mm"),
+                            (self.sample_path_spin, "path_length_mm"),
+                            (self.reference_path_spin, "reference_path_length_mm")):
+            value = metadata.get(key, 0)
+            blocked = widget.blockSignals(True)
+            widget.setValue(value if api.np.isfinite(value) else 0)
+            widget.blockSignals(blocked)
+        for cell, key in ((self.cell_type_combo, "cell_type"),
+                          (self.reference_cell_type_combo, "reference_cell_type")):
+            blocked = cell.blockSignals(True)
+            cell.setCurrentIndex(max(0, cell.findText(metadata.get(key, ""))))
+            cell.blockSignals(blocked)
+        check = self.reference_same_cell_check
+        blocked = check.blockSignals(True)
+        check.setChecked(metadata.get("reference_same_cell", True))
+        check.blockSignals(blocked)
+        self.reference_cell_group.setVisible("reference_same_cell" in metadata)
+        self.reference_cell_fields.setVisible(not check.isChecked())
         self.exposure_label.setText(" | ".join(labels))
 
     def toggle_irradiation_marker(self):
@@ -167,7 +255,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         try:
             run = self.ensure_standard_run()
         except (KeyError, ValueError, RuntimeError, OSError) as exc:
-            api.QMessageBox.critical(self, title, str(api.exc))
+            api.QMessageBox.critical(self, title, str(exc))
             return
         self.analysis_worker = api.RunAnalysisThread(lambda: operation(run))
         self.analysis_worker.finished.connect(self.on_run_analysis_finished)
@@ -225,7 +313,7 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
             if self.collection_run.schema_version() == api.SCHEMA_VERSION:
                 return api.read_mcr(self.collection_run)
         except (KeyError, ValueError, RuntimeError, OSError) as exc:
-            self.logger.warning("MCR result could not be read: %s", api.exc)
+            self.logger.warning("MCR result could not be read: %s", exc)
         return None
 
     def show_latest_mcr(self):
@@ -247,6 +335,11 @@ def _bind_avantes_dual_viewer_methods_analysis(api):
         "load_collection_hdf5_file": load_collection_hdf5_file,
         "set_open_collection_path": set_open_collection_path,
         "edit_exposure_setup": edit_exposure_setup,
+        "apply_exposure_setup": apply_exposure_setup,
+        "set_sample_geometry": set_sample_geometry,
+        "set_reference_geometry": set_reference_geometry,
+        "check_sample_metadata": check_sample_metadata,
+        "set_probe_volume": set_probe_volume,
         "update_exposure_label": update_exposure_label,
         "toggle_irradiation_marker": toggle_irradiation_marker,
         "standard_run": standard_run,

@@ -10,6 +10,7 @@ import numpy as np
 
 SCHEMA_VERSION = 2
 TEXT = h5py.string_dtype(encoding="utf-8")
+QUARTZ_CELL_TYPES = ("QZ", "QS")
 OD_DESCRIPTION = "Decadic optical density, log10(reference ratio / measured ratio)"
 
 
@@ -67,16 +68,76 @@ def optical_volume_ml(diameter_mm, length_mm):
     return np.pi * (diameter_mm / 2) ** 2 * length_mm / 1000
 
 
+def probe_volume_ml(setup):
+    if "probe_volume_ml" in setup:
+        return setup["probe_volume_ml"]
+    return optical_volume_ml(setup.get("window_diameter_mm", np.nan), setup.get("path_length_mm", np.nan))
+
+
+def missing_sample_fields(setup):
+    missing = []
+    for key, label in (("sample_volume_ml", "Measured volume (mL)"),
+                       ("window_diameter_mm", "Entrance aperture diameter (mm)"),
+                       ("path_length_mm", "Sample optical path (mm)")):
+        value = setup.get(key)
+        if not isinstance(value, (int, float, np.number)) or not np.isfinite(value) or value <= 0:
+            missing.append(label)
+    if setup.get("cell_type") not in QUARTZ_CELL_TYPES:
+        missing.append("Quartz cell type (QZ or QS)")
+    return missing
+
+
+def missing_reference_fields(setup):
+    if setup.get("reference_same_cell", True):
+        return []
+    missing = []
+    length = setup.get("reference_path_length_mm", 0)
+    if not isinstance(length, (int, float, np.number)) or not np.isfinite(length) or length <= 0:
+        missing.append("Reference optical path (mm)")
+    if setup.get("reference_cell_type") not in QUARTZ_CELL_TYPES:
+        missing.append("Reference quartz cell type (QZ or QS)")
+    return missing
+
+
+def write_sample_geometry(entry, setup):
+    sample = entry["sample"]
+    fields = (
+        ("window_diameter", float(setup.get("window_diameter_mm", np.nan)), "mm", "Entrance aperture diameter"),
+        ("path_length", float(setup.get("path_length_mm", np.nan)), "mm", "Optical path length"),
+        ("optical_volume", probe_volume_ml(setup), "mL", "Probe volume entered or calculated from geometry"),
+        ("sample_volume", setup.get("sample_volume_ml", np.nan), "mL", "Measured volume of the sample"),
+        ("cell_type", setup.get("cell_type", ""), None, "Quartz cell type"),
+    )
+    for name, value, units, description in fields:
+        if name in sample:
+            sample[name][()] = value
+        else:
+            field(sample, name, value, units, description)
+
+    if "reference_same_cell" not in setup:
+        return
+    if "reference" not in entry:
+        reference = nx(entry, "reference", "NXsample")
+        reference["window_diameter"] = sample["window_diameter"]
+    else:
+        reference = entry["reference"]
+    same = setup["reference_same_cell"]
+    length_key = "path_length_mm" if same else "reference_path_length_mm"
+    type_key = "cell_type" if same else "reference_cell_type"
+    for name, value, units in (
+        ("same_cell_as_sample", same, None),
+        ("path_length", float(setup.get(length_key, np.nan)), "mm"),
+        ("cell_type", setup.get(type_key, ""), None),
+    ):
+        if name in reference:
+            reference[name][()] = value
+        else:
+            field(reference, name, value, units)
+
+
 def init_exposure(entry, setup):
-    sample = nx(entry, "sample", "NXsample")
-    diameter = setup.get("window_diameter_mm", np.nan)
-    length = setup.get("path_length_mm", np.nan)
-    field(sample, "window_diameter", diameter, "mm")
-    field(sample, "path_length", length, "mm")
-    field(sample, "optical_volume", optical_volume_ml(diameter, length), "mL",
-          "Geometric probe volume for a circular beam filling the window")
-    field(sample, "sample_volume", setup.get("sample_volume_ml", np.nan), "mL",
-          "Actual filled volume entered by the operator")
+    nx(entry, "sample", "NXsample")
+    write_sample_geometry(entry, setup)
     exposure = nx(entry, "irradiation", "NXcollection")
     rate = setup.get("dose_rate_gy_h", np.nan)
     if not np.isnan(rate) and (not np.isfinite(rate) or rate < 0):

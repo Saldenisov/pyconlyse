@@ -23,6 +23,8 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         if run is None:
             self.statusBar().showMessage("Create a named run and complete calibration before Start DC.")
             return
+        if not self.check_sample_metadata(require_reference=True):
+            return
         try:
             wavelengths, serials, epoch, count = run.info()
             if not self.match_run_hardware(wavelengths, serials):
@@ -86,6 +88,10 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.empty_zero_selected = False
         self.exposure_state = (api.np.nan, False)
         self.run_volumes = (api.np.nan, api.np.nan)
+        self.collection_sample_metadata = {}
+        for key in ("sample_volume_ml", "window_diameter_mm", "cell_type", "reference_path_length_mm", "reference_cell_type"):
+            self.exposure_setup.pop(key, None)
+        self.exposure_setup["reference_same_cell"] = True
         self.clear_plots()
         self.save_name_input.clear()
         self.sample_comment_input.clear()
@@ -373,7 +379,7 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.track_wl_btn.setEnabled(calibrated)
         idle = not running and not busy
         preparing = idle and named and self.collection_run is None
-        self.measure_bg_btn.setEnabled(preparing and not self.has_background)
+        self.measure_bg_btn.setEnabled(idle and self.collection_run is None and not self.has_background)
         self.measure_empty_btn.setEnabled(preparing and self.has_background and "empty" not in self.calibration_blocks)
         self.zero_empty_btn.setEnabled(preparing and "empty" in self.calibration_blocks and not self.empty_zero_selected)
         self.measure_ref_btn.setEnabled(preparing and self.empty_zero_selected and "reference" not in self.calibration_blocks)
@@ -383,6 +389,17 @@ def _bind_avantes_dual_viewer_methods_toggle_data_collection(api):
         self.save_name_input.setReadOnly(open_run)
         self.save_folder_input.setReadOnly(open_run)
         self.sample_comment_input.setReadOnly(open_run)
+        self.probe_volume_spin.setReadOnly(not idle or self.collection_run is not None)
+        sample_editable = idle and self.collection_run is None
+        before_reference = sample_editable and "reference" not in self.calibration_blocks
+        linked = self.exposure_setup.get("reference_same_cell", True)
+        self.measured_volume_spin.setReadOnly(not sample_editable)
+        self.aperture_diameter_spin.setReadOnly(not before_reference)
+        self.sample_path_spin.setReadOnly(not sample_editable or linked and not before_reference)
+        self.cell_type_combo.setEnabled(sample_editable and (not linked or before_reference))
+        self.reference_same_cell_check.setEnabled(before_reference)
+        self.reference_path_spin.setReadOnly(not before_reference)
+        self.reference_cell_type_combo.setEnabled(before_reference)
         self.browse_save_btn.setEnabled(idle and not open_run)
         self.ref_blocks_spin.setEnabled(not busy and not self.data_collection_active)
         self.ref_repeats_spin.setEnabled(not busy and not self.data_collection_active)

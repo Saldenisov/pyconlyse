@@ -96,6 +96,8 @@ def _bind_avantes_dual_viewer_methods_blanks(api):
         if (self.collection_run is None or self.data_collection_active or self.current_measurement_role is not None
                 or self.analysis_worker is not None):
             return
+        if not self.check_sample_metadata(require_reference=True):
+            return
         if not self.spec1_widget.spec or not self.spec2_widget.spec:
             self.blank_status.setText("Connect both spectrometers to capture a reference.")
             return
