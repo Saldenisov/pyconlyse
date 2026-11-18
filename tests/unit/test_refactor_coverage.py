@@ -9,6 +9,12 @@ def _file_summary(covered_lines, num_statements):
 
 
 def _payload(percentages):
+    percentages = dict(percentages)
+    for owner, paths in verify_coverage._extracted_modules().items():
+        if owner in percentages:
+            for path in paths:
+                percentages.setdefault(path, percentages[owner])
+
     files = {}
     total_covered = 0
     total_statements = 0
@@ -99,7 +105,25 @@ class TestCoverageGate(unittest.TestCase):
 
         percentages = verify_coverage.check_coverage_payload(payload)
 
-        self.assertEqual(set(percentages), set(verify_coverage.MINIMUM_MODULE_COVERAGE))
+        self.assertEqual(set(percentages), set(payload["files"]))
+
+    def test_refactor_preserves_coverage_floor_across_extracted_modules(self):
+        owner = "web/backend/treatment_service.py"
+        extracted = "web/backend/treatment_cleaning.py"
+        payload = _payload({path: 100.0 for path in verify_coverage.MINIMUM_MODULE_COVERAGE})
+
+        configured_dataio = {
+            path for path in verify_coverage.MINIMUM_MODULE_COVERAGE
+            if path.startswith("utilities/dataio/")
+        }
+        with patch.object(verify_coverage, "_dataio_source_modules", return_value=configured_dataio):
+            payload["files"][extracted] = _file_summary(0, 900)
+            with self.assertRaisesRegex(verify_coverage.CoverageGateError, owner):
+                verify_coverage.check_coverage_payload(payload)
+
+            del payload["files"][extracted]
+            with self.assertRaisesRegex(verify_coverage.CoverageGateError, extracted):
+                verify_coverage.check_coverage_payload(payload)
 
     def test_rejects_missing_focused_module(self):
         payload = _payload(

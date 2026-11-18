@@ -13,13 +13,18 @@ include =
     utilities/dataio/hamamatsu_file_opener.py
     utilities/dataio/opener.py
     web/backend/device_api.py
+    web/backend/device_api_*.py
     web/backend/device_catalog_service.py
     web/backend/device_snapshot_service.py
     web/backend/folder_api.py
     web/backend/treatment_api.py
+    web/backend/treatment_api_*.py
     web/backend/treatment_file_cache.py
     web/backend/treatment_network_path.py
     web/backend/treatment_service.py
+    web/backend/treatment_cleaning.py
+    web/backend/treatment_h5_conversion.py
+    web/backend/treatment_selection.py
     web/backend/tango_gateway.py
     web/backend/vd2_measurement_protocol.py
     web/backend/websocket_handler.py

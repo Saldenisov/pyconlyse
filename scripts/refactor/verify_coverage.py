@@ -40,6 +40,15 @@ MINIMUM_MODULE_COVERAGE = {
     "web/backend/hardware_authorization.py": 60.0,
     "web/start_production.py": 50.0,
 }
+EXTRACTED_MODULE_FILES = {
+    "web/backend/device_api.py": ("web/backend/device_api_*.py",),
+    "web/backend/treatment_api.py": ("web/backend/treatment_api_*.py",),
+    "web/backend/treatment_service.py": (
+        "web/backend/treatment_cleaning.py",
+        "web/backend/treatment_h5_conversion.py",
+        "web/backend/treatment_selection.py",
+    ),
+}
 MINIMUM_TOTAL_COVERAGE = 60.0
 
 
@@ -63,7 +72,7 @@ def _percent(summary: Mapping[str, object]) -> float:
     return 100.0 if statements == 0 else 100.0 * covered / statements
 
 
-def coverage_percentages(payload: Mapping[str, object]) -> dict[str, float]:
+def _coverage_summaries(payload: Mapping[str, object]) -> dict[str, Mapping[str, object]]:
     files = payload.get("files")
     if not isinstance(files, dict):
         raise CoverageGateError("Coverage JSON does not contain a files mapping.")
@@ -72,8 +81,23 @@ def coverage_percentages(payload: Mapping[str, object]) -> dict[str, float]:
     for raw_path, data in files.items():
         if not isinstance(data, dict) or not isinstance(data.get("summary"), dict):
             continue
-        results[_normalized_path(str(raw_path))] = _percent(data["summary"])
+        results[_normalized_path(str(raw_path))] = data["summary"]
     return results
+
+
+def coverage_percentages(payload: Mapping[str, object]) -> dict[str, float]:
+    return {path: _percent(summary) for path, summary in _coverage_summaries(payload).items()}
+
+
+def _extracted_modules() -> dict[str, set[str]]:
+    return {
+        owner: {
+            path.relative_to(PROJECT_ROOT).as_posix()
+            for pattern in patterns
+            for path in PROJECT_ROOT.glob(pattern)
+        }
+        for owner, patterns in EXTRACTED_MODULE_FILES.items()
+    }
 
 
 def _dataio_source_modules() -> set[str]:
@@ -94,10 +118,21 @@ def check_coverage_payload(payload: Mapping[str, object]) -> dict[str, float]:
             + ", ".join(unconfigured_dataio_modules)
         )
 
-    percentages = coverage_percentages(payload)
-    missing = sorted(set(MINIMUM_MODULE_COVERAGE) - set(percentages))
+    summaries = _coverage_summaries(payload)
+    extracted = _extracted_modules()
+    required = set(MINIMUM_MODULE_COVERAGE).union(*extracted.values())
+    missing = sorted(required - summaries.keys())
     if missing:
         raise CoverageGateError("Coverage report omitted: " + ", ".join(missing))
+
+    percentages = {path: _percent(summary) for path, summary in summaries.items()}
+    for owner, paths in extracted.items():
+        # Apply the original floor to all statements previously in the owner.
+        summaries_for_owner = [summaries[path] for path in paths | {owner}]
+        percentages[owner] = _percent({
+            key: sum(float(summary[key]) for summary in summaries_for_owner)
+            for key in ("covered_lines", "num_statements")
+        })
 
     failures = [
         f"{path}: {percentages[path]:.1f}% < {minimum:.1f}%"
