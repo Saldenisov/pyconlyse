@@ -233,7 +233,8 @@ test('Acquisition shows averaging then 100 Frames / HIS; timing controls stay in
     await waitFor(() => expect(screen.getByRole('spinbutton', { name: 'Frames / HIS' })).toBeEnabled());
     const frames = screen.getByRole('spinbutton', { name: 'Frames / HIS' });
     expect(frames).toHaveValue(100);
-    expect(screen.getByRole('checkbox', { name: 'Rolling average' }).compareDocumentPosition(frames) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const averaging = await screen.findByRole('checkbox', { name: 'Rolling average' });
+    expect(averaging.compareDocumentPosition(frames) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     for (const name of ['Live exposure', 'Acquire exposure', 'Integrations', 'Sequence loops']) {
       expect(screen.queryByLabelText(name)).not.toBeInTheDocument();
     }
