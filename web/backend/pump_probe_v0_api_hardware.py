@@ -1,4 +1,4 @@
-"""V0 Tango access, recovery and hardware authorization targets."""
+"""pump probe v0 api hardware operations."""
 
 
 def bind(api):
@@ -51,6 +51,18 @@ def bind(api):
         return str(expected).strip() == str(actual).strip()
 
 
+    def _axis_is_ready(state, position):
+        """Tango get_status_axis returns numeric DevState, not an error string."""
+        if not api.math.isfinite(position):
+            return False
+        text = str(state).strip().upper()
+        if "DEVSTATE." in text:
+            text = text.rsplit(".", 1)[-1]
+        # DevState.ON=0, MOVING=6, RUNNING=10. In particular OFF=1 and FAULT=8
+        # must not pass merely because their string lacks the word 'FAULT'.
+        return text in {"0", "6", "10", "ON", "MOVING", "RUNNING"}
+
+
     def _load_dg645_recall_config(config_path):
         path = api.Path(str(config_path or api.DEFAULT_DG645_RECALL_CONFIG)).expanduser()
         with open(path, "r", encoding="utf-8") as handle:
@@ -83,7 +95,13 @@ def bind(api):
         return [str(name) for name in db.get_device_exported("*") if str(name).startswith("tango/admin/")]
 
 
-    def _starter_for_server(server_name):
+    def _starter_for_server(server_name, preferred_starter=None):
+        if preferred_starter:
+            starter = api._tango_proxy(preferred_starter, timeout_ms=5000)
+            running = set(starter.command_inout("DevGetRunningServers", False))
+            stopped = set(starter.command_inout("DevGetStopServers", False))
+            return preferred_starter, starter, running, stopped
+
         for starter_name in api._starter_devices():
             try:
                 starter = api._tango_proxy(starter_name, timeout_ms=5000)
@@ -96,26 +114,29 @@ def bind(api):
         raise RuntimeError(f"No Starter manages server {server_name}")
 
 
-    def _restart_server_for_device(device_name):
+    def _restart_server_for_device(device_name, preferred_starter=None):
         server_name = api._server_name_for_device(device_name)
-        starter_name, starter, running, _stopped = api._starter_for_server(server_name)
-        if server_name in running:
-            try:
-                starter.command_inout("DevStop", server_name)
-                api.time.sleep(2)
-            except Exception:
+        if server_name.lower().startswith("ds_standa_motor/"):
+            raise RuntimeError("V0 preparation never starts or restarts STANDA servers; check Elysium2")
+        starter_name, starter, running, _stopped = api._starter_for_server(
+            server_name,
+            preferred_starter=preferred_starter,
+        )
+
+        def wait_exported():
+            deadline = api.time.monotonic() + 25.0
+            last_error = None
+            while api.time.monotonic() < deadline:
                 try:
-                    starter.command_inout("HardKillServer", server_name)
-                    api.time.sleep(2)
-                except Exception:
-                    pass
-        try:
-            starter.command_inout("DevStart", server_name)
-        except Exception as exc:
-            text = str(exc).lower()
-            if "already_running" not in text and "already running" not in text:
-                raise
-        api.time.sleep(2)
+                    proxy = api._tango_proxy(device_name, timeout_ms=3000)
+                    proxy.state()
+                    return proxy
+                except Exception as exc:
+                    last_error = exc
+                    api.time.sleep(0.5)
+            raise RuntimeError(f"{device_name} did not become available: {last_error}")
+
+        api.start_managed_server(starter, server_name, wait_exported, restart_existing=False)
         return {"server": server_name, "starter": starter_name}
 
 
@@ -172,12 +193,27 @@ def bind(api):
                 {"device": backend, "command": "get_status_axis"},
                 {"device": backend, "command": "read_position_axis"},
                 {"device": backend, "command": "turn_on_axis"},
-                {"device": dg645, "command": "scpi_write"},
                 {"device": dg645, "command": "scpi_query"},
                 {"device": daqmx, "command": "read_counter"},
             ]
-            for output in api.REQUIRED_NETIO_OUTPUTS:
+            for output in api.V0_PREPARATION_NETIO_OUTPUTS:
                 targets.append({"device": str(output["device"]), "command": "set_channels_states"})
+            preparation_devices = (
+                *api.V0_PREPARATION_PDU_DEVICES, *api.V0_CAMERA_DEVICES, *api.V0_LASER_POINTING_DEVICES,
+                aggregator, backend, str(config["owis_legacy_device"]),
+                dg645, daqmx,
+            )
+            for device in preparation_devices:
+                targets.extend(
+                    {"device": device, "command": command}
+                    for command in ("recover", "turn_on", "Init")
+                )
+            targets.extend(
+                {"device": api.V0_STARTER_DEVICE, "command": command}
+                for command in ("DevStart",)
+            )
+            targets.extend({"device": camera, "command": "start_grabbing"}
+                           for camera in api.V0_CAMERA_DEVICES)
             return targets
         if action in {"v0.stage-move", "v0.sample-stage-move"}:
             return [{"device": aggregator, "command": "move_axis"}]
@@ -252,6 +288,7 @@ def bind(api):
     api._tango_proxy = _tango_proxy
     api._numeric_list = _numeric_list
     api._values_match = _values_match
+    api._axis_is_ready = _axis_is_ready
     api._load_dg645_recall_config = _load_dg645_recall_config
     api._json_ok = _json_ok
     api._json_fail = _json_fail

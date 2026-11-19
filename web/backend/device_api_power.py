@@ -1,4 +1,4 @@
-"""PDU status and iTest power supply endpoints."""
+"""device api power operations."""
 
 
 def bind(api):

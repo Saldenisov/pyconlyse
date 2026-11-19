@@ -1,5 +1,4 @@
-"""Tango device API and shared cache and authorization dependencies."""
-
+# device_api.py - Enhanced Tango Device API for Browser Clients
 import sys as _sys
 from device_api_readback import bind as _bind_readback
 from device_api_acquisition import bind as _bind_acquisition
@@ -40,12 +39,11 @@ from mutation_auth import install_mutation_auth
 device_api = Blueprint("device_api", __name__)
 install_mutation_auth(device_api, protected_get_endpoints=("debug_monitor_device",))
 
-# Feature modules share this module's runtime and compatibility exports.
-_api = _sys.modules[__name__]
-_bind_readback(_api)
+_bind_readback(_sys.modules[__name__])
 
 
 DAQMX_DEVICE_CLASSES = (
+    "DS_DAQmx",
     "DS_DAQmx_ZMQ",
     "DS_PSP_SUPERVISION",
     "DS_PSP_Supervision",
@@ -64,13 +62,13 @@ PSP_GROUPS = (
 )
 
 
-_bind_acquisition(_api)
+_bind_acquisition(_sys.modules[__name__])
 
 
-_bind_laser_pointing(_api)
+_bind_laser_pointing(_sys.modules[__name__])
 
 
-_bind_request(_api)
+_bind_request(_sys.modules[__name__])
 
 
 _CAMERA_PARAMETER_NAMES = frozenset({
@@ -92,7 +90,9 @@ _PSP_ACK_COMMANDS = ('acknowledge_command_json', 'AcknowledgeCommandJson')
 _DAQMX_WRITE_COMMANDS = (
     'write_variable_json', 'set_variable_value_json', 'set_channel_value_json',
     'write_variable', 'set_variable_value', 'set_channel_value',
+    'write_digital_output', 'write_channel',
 )
+_DAQMX_RESET_COMMANDS = ('reset_counter',)
 _PSP_ACK_FIELDS = frozenset({
     'command', 'id', 'ok', 'status', 'error', 'message', 'timestamp',
     'command_variant',
@@ -140,7 +140,7 @@ def _device_proxy_target(device_name):
 
 class DeviceManager:
     """Manages Tango device connections and operations"""
-    
+
     @staticmethod
     def get_device(device_name):
         """Get or create device proxy with caching"""
@@ -188,7 +188,7 @@ class DeviceManager:
         for prop_name in prop_list:
             try:
                 prop_values = db.get_device_property(device_name, prop_name)
-                properties[prop_name] = _api.make_json_safe(prop_values.get(prop_name, []))
+                properties[prop_name] = make_json_safe(prop_values.get(prop_name, []))
             except Exception as e:
                 properties[prop_name] = {'error': str(e)}
         return properties
@@ -203,7 +203,7 @@ class DeviceManager:
                 attr_config = device.get_attribute_config(attr_name)
                 value = attr.value if hasattr(attr, 'value') else None
                 attributes[attr_name] = {
-                    'value': _api.make_json_safe(value),
+                    'value': make_json_safe(value),
                     'quality': str(attr.quality),
                     'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None,
                     'writable': attr_config.writable != tango.AttrWriteType.READ,
@@ -246,7 +246,7 @@ def _read_device_snapshot(device_name, server_name, dev_class):
             current_class = current_class or getattr(info, "dev_class", None)
         return current_state, current_server, current_class
 
-    return _api._with_device_retry(device_name, read_state_and_info)
+    return _with_device_retry(device_name, read_state_and_info)
 
 
 _device_snapshot_service = DeviceSnapshotService(
@@ -256,57 +256,105 @@ _device_snapshot_service = DeviceSnapshotService(
 _device_catalog_service = DeviceCatalogService()
 
 
-_bind_servers(_api)
+_bind_servers(_sys.modules[__name__])
 
 
-device_api.route('/api/server/<path:server_name>/diagnostics', methods=['GET'])(_api.get_server_diagnostics)
-device_api.route('/api/devices', methods=['GET'])(_api.list_devices)
-device_api.route('/api/server/control', methods=['POST'])(_api.control_server)
-
-_bind_attributes(_api)
-device_api.route('/api/device/<path:device_name>/info', methods=['GET'])(_api.get_device_info)
-device_api.route('/api/device/<path:device_name>/summary', methods=['GET'])(_api.get_device_summary)
-device_api.route('/api/device/<path:device_name>/commands', methods=['GET'])(_api.get_device_commands)
-device_api.route('/api/device/<path:device_name>/attributes', methods=['GET'])(_api.get_device_attributes)
-device_api.route('/api/device/<path:device_name>/attribute/<attr_name>', methods=['GET', 'POST'])(_api.handle_attribute)
-device_api.route('/api/device/<path:device_name>/command/<command_name>', methods=['POST'])(_api.execute_command)
-device_api.route('/api/device/<path:device_name>/state', methods=['GET'])(_api.get_device_state)
-device_api.route('/api/device/<path:device_name>/properties', methods=['GET'])(_api.get_device_properties)
-device_api.route('/api/laser-pointing/<path:device_name>/snapshot', methods=['GET'])(_api.get_laser_pointing_snapshot)
+get_server_diagnostics = (device_api.route('/api/server/<path:server_name>/diagnostics', methods=['GET']))(get_server_diagnostics)
 
 
-_bind_power(_api)
-device_api.route('/api/device/<path:device_name>/pdu/outputs', methods=['GET'])(_api.get_pdu_outputs)
-device_api.route('/api/device/ds_itest_psu/<path:device_name>/slots', methods=['GET'])(_api.get_ds_itest_psu_slots)
-device_api.route('/api/device/ds_itest_psu/<path:device_name>/tab_config', methods=['GET'])(_api.get_ds_itest_psu_tab_config)
-device_api.route('/api/device/itest/<path:device_name>/all_slots', methods=['GET'])(_api.get_itest_all_slots)
-device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/output', methods=['POST'])(_api.set_itest_slot_output)
-device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/current', methods=['POST'])(_api.set_ds_itest_psu_current)
-device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/state', methods=['POST'])(_api.set_ds_itest_psu_state)
-device_api.route('/api/device/itest/<path:device_name>/current', methods=['GET', 'POST'])(_api.handle_itest_current)
-device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/current', methods=['GET', 'POST'])(_api.handle_itest_slot_current)
+list_devices = (device_api.route('/api/devices', methods=['GET']))(list_devices)
 
-_bind_optics(_api)
-device_api.route('/api/device/camera/<path:device_name>/capture', methods=['POST'])(_api.camera_capture)
-device_api.route('/api/daqmx/devices', methods=['GET'])(_api.list_daqmx_devices)
-device_api.route('/api/psp/devices', methods=['GET'])(_api.list_psp_devices)
-device_api.route('/api/psp/device/<path:device_name>/group/<group_name>/history', methods=['GET'])(_api.get_psp_group_history)
-device_api.route('/api/psp/device/<path:device_name>/commands/pending', methods=['GET'])(_api.get_psp_pending_commands)
-device_api.route('/api/psp/device/<path:device_name>/commands/ack', methods=['POST'])(_api.acknowledge_psp_command)
-device_api.route('/api/daqmx/device/<path:device_name>/latest', methods=['GET'])(_api.get_daqmx_latest)
-device_api.route('/api/daqmx/device/<path:device_name>/history', methods=['GET'])(_api.get_daqmx_history)
-device_api.route('/api/daqmx/device/<path:device_name>/write', methods=['POST'])(_api.write_daqmx_channel)
-device_api.route('/api/cameras', methods=['GET'])(_api.list_cameras)
-device_api.route('/api/camera/<path:device_name>/info', methods=['GET'])(_api.get_camera_info)
 
-handle_camera_parameters = (device_api.route('/api/camera/<path:device_name>/parameters', methods=['GET', 'POST']))((device_api.route('/api/device/camera/<path:device_name>/parameters', methods=['GET', 'POST']))(_api.handle_camera_parameters))
+control_server = (device_api.route('/api/server/control', methods=['POST']))(control_server)
 
-device_api.route('/api/camera/<path:device_name>/grabbing', methods=['GET', 'POST'])(_api.handle_camera_grabbing)
-device_api.route('/api/camera/<path:device_name>/image', methods=['GET'])(_api.get_camera_image)
-device_api.route('/api/spectrographs', methods=['GET'])(_api.list_spectrographs)
-device_api.route('/api/spectrograph/<path:device_name>/info', methods=['GET'])(_api.get_spectrograph_info)
-device_api.route('/api/spectrograph/<path:device_name>/parameters', methods=['GET', 'POST'])(_api.handle_spectrograph_parameters)
-device_api.route('/api/camera/<path:device_name>/trigger', methods=['POST'])(_api.trigger_camera)
+_bind_attributes(_sys.modules[__name__])
+get_device_info = (device_api.route('/api/device/<path:device_name>/info', methods=['GET']))(get_device_info)
+
+
+get_device_summary = (device_api.route('/api/device/<path:device_name>/summary', methods=['GET']))(get_device_summary)
+
+
+get_device_commands = (device_api.route('/api/device/<path:device_name>/commands', methods=['GET']))(get_device_commands)
+
+get_device_attributes = (device_api.route('/api/device/<path:device_name>/attributes', methods=['GET']))(get_device_attributes)
+
+handle_attribute = (device_api.route('/api/device/<path:device_name>/attribute/<attr_name>', methods=['GET', 'POST']))(handle_attribute)
+
+execute_command = (device_api.route('/api/device/<path:device_name>/command/<command_name>', methods=['POST']))(execute_command)
+
+get_device_state = (device_api.route('/api/device/<path:device_name>/state', methods=['GET']))(get_device_state)
+
+get_device_properties = (device_api.route('/api/device/<path:device_name>/properties', methods=['GET']))(get_device_properties)
+
+
+get_laser_pointing_snapshot = (device_api.route('/api/laser-pointing/<path:device_name>/snapshot', methods=['GET']))(get_laser_pointing_snapshot)
+
+
+_bind_power(_sys.modules[__name__])
+get_pdu_outputs = (device_api.route('/api/device/<path:device_name>/pdu/outputs', methods=['GET']))(get_pdu_outputs)
+
+get_ds_itest_psu_slots = (device_api.route('/api/device/ds_itest_psu/<path:device_name>/slots', methods=['GET']))(get_ds_itest_psu_slots)
+
+get_ds_itest_psu_tab_config = (device_api.route('/api/device/ds_itest_psu/<path:device_name>/tab_config', methods=['GET']))(get_ds_itest_psu_tab_config)
+
+get_itest_all_slots = (device_api.route('/api/device/itest/<path:device_name>/all_slots', methods=['GET']))(get_itest_all_slots)
+
+set_itest_slot_output = (device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/output', methods=['POST']))(set_itest_slot_output)
+
+set_ds_itest_psu_current = (device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/current', methods=['POST']))(set_ds_itest_psu_current)
+
+set_ds_itest_psu_state = (device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/state', methods=['POST']))(set_ds_itest_psu_state)
+
+handle_itest_current = (device_api.route('/api/device/itest/<path:device_name>/current', methods=['GET', 'POST']))(handle_itest_current)
+
+handle_itest_slot_current = (device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/current', methods=['GET', 'POST']))(handle_itest_slot_current)
+
+_bind_optics(_sys.modules[__name__])
+camera_capture = (device_api.route('/api/device/camera/<path:device_name>/capture', methods=['POST']))(camera_capture)
+
+list_daqmx_devices = (device_api.route('/api/daqmx/devices', methods=['GET']))(list_daqmx_devices)
+
+
+list_psp_devices = (device_api.route('/api/psp/devices', methods=['GET']))(list_psp_devices)
+
+
+get_psp_group_history = (device_api.route('/api/psp/device/<path:device_name>/group/<group_name>/history', methods=['GET']))(get_psp_group_history)
+
+
+get_psp_pending_commands = (device_api.route('/api/psp/device/<path:device_name>/commands/pending', methods=['GET']))(get_psp_pending_commands)
+
+
+acknowledge_psp_command = (device_api.route('/api/psp/device/<path:device_name>/commands/ack', methods=['POST']))(acknowledge_psp_command)
+
+
+get_daqmx_latest = (device_api.route('/api/daqmx/device/<path:device_name>/latest', methods=['GET']))(get_daqmx_latest)
+
+
+get_daqmx_history = (device_api.route('/api/daqmx/device/<path:device_name>/history', methods=['GET']))(get_daqmx_history)
+
+
+write_daqmx_channel = (device_api.route('/api/daqmx/device/<path:device_name>/write', methods=['POST']))(write_daqmx_channel)
+
+
+reset_daqmx_counter = (device_api.route('/api/daqmx/device/<path:device_name>/counter/reset', methods=['POST']))(reset_daqmx_counter)
+
+list_cameras = (device_api.route('/api/cameras', methods=['GET']))(list_cameras)
+
+get_camera_info = (device_api.route('/api/camera/<path:device_name>/info', methods=['GET']))(get_camera_info)
+
+handle_camera_parameters = (device_api.route('/api/camera/<path:device_name>/parameters', methods=['GET', 'POST']))((device_api.route('/api/device/camera/<path:device_name>/parameters', methods=['GET', 'POST']))(handle_camera_parameters))
+
+handle_camera_grabbing = (device_api.route('/api/camera/<path:device_name>/grabbing', methods=['GET', 'POST']))(handle_camera_grabbing)
+
+get_camera_image = (device_api.route('/api/camera/<path:device_name>/image', methods=['GET']))(get_camera_image)
+
+list_spectrographs = (device_api.route('/api/spectrographs', methods=['GET']))(list_spectrographs)
+
+get_spectrograph_info = (device_api.route('/api/spectrograph/<path:device_name>/info', methods=['GET']))(get_spectrograph_info)
+
+handle_spectrograph_parameters = (device_api.route('/api/spectrograph/<path:device_name>/parameters', methods=['GET', 'POST']))(handle_spectrograph_parameters)
+
+trigger_camera = (device_api.route('/api/camera/<path:device_name>/trigger', methods=['POST']))(trigger_camera)
 
 # Error handling
 @device_api.errorhandler(Exception)

@@ -1,4 +1,4 @@
-"""Generic Tango device inspection, attributes and commands."""
+"""device api attributes operations."""
 
 
 def bind(api):
@@ -83,7 +83,7 @@ def bind(api):
                 attr = device.read_attribute(attr_name)
                 return api.jsonify({
                     'attribute': attr_name,
-                    'value': attr.value if hasattr(attr, 'value') else None,
+                    'value': api.make_json_safe(attr.value) if hasattr(attr, 'value') else None,
                     'quality': str(attr.quality),
                     'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None,
                     'success': True
@@ -118,7 +118,7 @@ def bind(api):
 
                 return api.jsonify({
                     'attribute': attr_name,
-                    'value': attr.value if hasattr(attr, 'value') else None,
+                    'value': api.make_json_safe(attr.value) if hasattr(attr, 'value') else None,
                     'quality': str(attr.quality),
                     'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None,
                     'success': True
@@ -178,7 +178,7 @@ def bind(api):
 
             return api.jsonify({
                 'command': command_name,
-                'result': result,
+                'result': api.make_json_safe(result),
                 'verified_states': verified_states,
                 'success': True
             })

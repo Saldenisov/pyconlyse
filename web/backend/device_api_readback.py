@@ -1,4 +1,4 @@
-"""Tango readback normalization, retries and command discovery."""
+"""device api readback operations."""
 
 
 def bind(api):

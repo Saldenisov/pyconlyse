@@ -1,4 +1,4 @@
-"""Laser pointing device status and role mapping."""
+"""device api laser pointing operations."""
 
 
 def bind(api):
@@ -52,8 +52,14 @@ def bind(api):
                 automatic_supported = 'start_automatic_search' in commands
                 pause_supported = 'pause_automatic_search' in commands
                 resume_supported = 'resume_automatic_search' in commands
+                cancel_keep_current_supported = (
+                    'cancel_automatic_search' in commands
+                )
                 reference_acceptance_supported = (
                     'accept_alignment_reference' in commands
+                )
+                manual_reference_supported = (
+                    'save_current_alignment_reference' in commands
                 )
                 point_supported = 'apply_controller_point' in commands
                 manual_point_selection_supported = 'select_manual_point' in commands
@@ -83,11 +89,29 @@ def bind(api):
                         'max_evaluations': 16,
                         'max_cycles': 2,
                         'samples': 3,
+                        'adaptive_learning': True,
+                        'adaptive_min_step': 0.125,
+                        'adaptive_backoff': 0.5,
+                        'adaptive_growth': 1.15,
+                        'point_step_limits': {},
+                        'point_probe_repetitions': {},
+                        'aperture_sweep_enabled': True,
+                        'aperture_sweep_positions': 4,
+                        'aperture_cycle_count': 2,
+                        'aperture_samples': 1,
+                        'aperture_drift_weight': 0.5,
+                        'group_plateau_probe_limit': 5,
+                        'group_plateau_min_improvement_pct': 5.0,
+                        'stagnation_pass_limit': 5,
+                        'stagnation_min_improvement_pct': 5.0,
                     },
                 )
                 search_history = read_optional_json('automatic_search_history', [])
                 if not isinstance(search_history, list):
                     search_history = []
+                adaptive_search_model = read_optional_json(
+                    'adaptive_search_model_json', {}
+                )
                 alignment_reference = read_optional_json(
                     'alignment_reference_json', {}
                 )
@@ -493,6 +517,7 @@ def bind(api):
                         'progress': api.make_json_safe(search_progress),
                         'config': api.make_json_safe(search_config),
                         'history': api.make_json_safe(search_history),
+                        'adaptive_model': api.make_json_safe(adaptive_search_model),
                         'reference': api.make_json_safe(alignment_reference),
                         'reference_revision': alignment_reference_revision,
                         'pending_reference': api.make_json_safe(
@@ -508,8 +533,14 @@ def bind(api):
                         'automatic_search': automatic_supported,
                         'pause_search': pause_supported,
                         'resume_search': resume_supported,
+                        'cancel_search_keep_current': (
+                            cancel_keep_current_supported
+                        ),
                         'accept_alignment_reference': (
                             reference_acceptance_supported
+                        ),
+                        'save_current_alignment_reference': (
+                            manual_reference_supported
                         ),
                         'apply_point': point_supported,
                         'manual_point_selection': manual_point_selection_supported,

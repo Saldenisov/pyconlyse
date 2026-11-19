@@ -1,0 +1,41 @@
+{
+  "schema": "v0-tango-raw-profile-v1",
+  "profile_version": "v0-andor-uncommissioned-2026-10-19",
+  "commissioned": false,
+  "expected_config_fingerprint": null,
+  "expected_sample_dtype": null,
+  "commissioning_status": "unvalidated_for_andor; legacy threshold is not an Andor ROI/ADC calibration",
+  "background_level": 560000,
+  "background_level_origin": {
+    "source_path": "C:/dev/TRANCON/settings/settingsDetector.ini",
+    "source_sha256": "d260a09db330fad6696bc810246adbc0184ae63d59d417b889e81671782ca0cc",
+    "section": "CCD_camera",
+    "key": "BG_level",
+    "value_type": "I32",
+    "automatic_calibration": false
+  },
+  "source_references": ["TRANCON clean_both_channels: detector-II sequential SGL sum < SGL(BG_level); ordered physical triplets"],
+  "classifier_version": "trancon-clean-both-channels-sgl-v1",
+  "processing_mode": "fixed",
+  "all_cycles": false,
+  "frames_per_cycle": 3,
+  "tracks": ["detector_I", "detector_II"],
+  "move_tolerance_mm": 0.0005,
+  "settled_samples": 2,
+  "move_timeout_s": 60.0,
+  "order_timeout_s": 60.0,
+  "poll_interval_s": 0.02,
+  "max_rejected_cycles": 20,
+  "camera_admission": {
+    "external_trigger": true,
+    "track_count": 2,
+    "parameter_writes": false,
+    "packet_schema": "andor-v0-raw-order-v1"
+  },
+  "filters": {
+    "version": "trancon-detector-filters-v1",
+    "repump": {"enabled": false},
+    "nonfinite": {"enabled": false},
+    "similarity": {"enabled": false}
+  }
+}

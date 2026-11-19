@@ -1,4 +1,4 @@
-"""DAQmx and PSP acquisition, history and writes."""
+"""device api acquisition operations."""
 
 
 def bind(api):
@@ -11,6 +11,8 @@ def bind(api):
         attr_candidates = [
             "latest_values_json",
             "LatestValuesJson",
+            "snapshot_json",
+            "SnapshotJson",
         ]
 
         for command_name in command_candidates:
@@ -27,6 +29,12 @@ def bind(api):
                 raw = device.read_attribute(attr_name).value
                 payload = api._safe_json_loads(raw, default={})
                 if isinstance(payload, dict):
+                    if attr_name.lower() == "snapshot_json" and "data" not in payload:
+                        return {
+                            "timestamp": api.time.time(),
+                            "source": "direct",
+                            "data": payload,
+                        }
                     return payload
             except Exception:
                 pass
@@ -44,12 +52,55 @@ def bind(api):
 
         channels = []
         for channel_name, channel_value in data.items():
+            if isinstance(channel_value, dict) and (
+                "value" in channel_value or "kind" in channel_value
+            ):
+                details = api.make_json_safe(channel_value)
+                kind = str(details.get("kind", details.get("type", "")) or "")
+                item = {
+                    "name": str(channel_name),
+                    "value": api._to_scalar_value(details.get("value")),
+                    "kind": kind,
+                    "physical_channel": str(details.get("channel", "") or ""),
+                    "counter": str(details.get("counter", "") or ""),
+                    "unit": str(details.get("unit", "") or ""),
+                    "alarm": bool(details.get("alarm", False)),
+                    "value_known": bool(details.get("value_known", True)),
+                    "writable": kind == "DigitalOut",
+                    "raw_value": api._to_scalar_value(details.get("raw_value")),
+                    "multiplier": api._to_scalar_value(details.get("multiplier", 1.0)),
+                    "limit_alarm_min": api._to_scalar_value(details.get("limit_alarm_min")),
+                    "limit_alarm_max": api._to_scalar_value(details.get("limit_alarm_max")),
+                }
+                if details.get("error"):
+                    item["error"] = str(details["error"])
+                channels.append(item)
+                continue
+
             channels.append({
                 "name": str(channel_name),
                 "value": api._to_scalar_value(channel_value),
+                "kind": "",
+                "physical_channel": "",
+                "counter": "",
+                "unit": "",
+                "alarm": False,
+                "value_known": True,
+                "writable": False,
             })
-        channels.sort(key=lambda item: item["name"])
         return channels
+
+
+    def _read_daqmx_device_info(device):
+        for attr_name in ("device_info_json", "DeviceInfoJson"):
+            try:
+                raw = device.read_attribute(attr_name).value
+                payload = api._safe_json_loads(raw, default={})
+                if isinstance(payload, dict):
+                    return payload
+            except Exception:
+                pass
+        return {}
 
 
     def _normalize_psp_group(group_name):
@@ -229,6 +280,8 @@ def bind(api):
                 return device.command_inout(command_name, json_payload_name_value)
             if command_variant == "set_channel_value_json":
                 return device.command_inout(command_name, json_payload_channel_value)
+            if command_variant in {"write_digital_output", "write_channel"}:
+                return device.command_inout(command_name, [channel, str(scalar_value)])
             if command_variant == "write_variable":
                 return device.command_inout(command_name, [channel, scalar_value])
             if command_variant == "set_variable_value":
@@ -262,6 +315,12 @@ def bind(api):
                 return device.command_inout(cmd, [channel, scalar_value])
             except Exception:
                 return device.command_inout(cmd, eq_payload)
+
+        for direct_command in ("write_digital_output", "write_channel"):
+            if direct_command in commands:
+                return device.command_inout(
+                    commands[direct_command], [channel, str(scalar_value)]
+                )
 
         raise Exception(
             "Device does not expose a supported write command "
@@ -422,6 +481,7 @@ def bind(api):
             device = api.DeviceManager.get_device(device_name)
             payload = api._read_daqmx_latest_payload(device)
             channels = api._normalize_daqmx_channels(payload)
+            device_info = api._read_daqmx_device_info(device)
 
             return api.jsonify({
                 'device': device_name,
@@ -429,6 +489,7 @@ def bind(api):
                 'latest': payload,
                 'channels': channels,
                 'channel_count': len(channels),
+                'device_info': device_info,
                 'success': True,
             })
         except Exception as e:
@@ -511,8 +572,57 @@ def bind(api):
         except Exception as e:
             return api.jsonify({'error': str(e), 'success': False}), 500
 
+
+    def reset_daqmx_counter(device_name):
+        """Reset one counter exposed by the direct physical-card DAQmx server."""
+        try:
+            api._maybe_require_auth()
+            data = api._mutation_payload(required=('channel',))
+            if data is None or set(data) - {'channel', 'command_variant'}:
+                return api.jsonify({'error': 'channel is required', 'success': False}), 400
+            channel = data.get('channel')
+            if not isinstance(channel, str) or not channel.strip():
+                return api.jsonify({'error': 'channel is required', 'success': False}), 400
+
+            command_variant = api._command_variant(data, api._DAQMX_RESET_COMMANDS)
+            if api.authorization_required() and command_variant is None:
+                return api.jsonify({'error': 'command_variant is required', 'success': False}), 400
+            if command_variant is None and data.get('command_variant') is not None:
+                return api.jsonify({'error': 'command_variant is invalid', 'success': False}), 400
+            command_name = command_variant or 'reset_counter'
+            blocked = api.require_http_hardware(
+                action='reset',
+                targets=[{'device': str(device_name), 'command': command_name}],
+                args={'channel': channel.strip(), 'command_variant': command_name},
+                route_id='daqmx.reset',
+                wrapper_fields={'channel', 'command_variant'},
+            )
+            if blocked is not None:
+                return blocked
+
+            device = api.DeviceManager.get_device(device_name)
+            commands = api._list_device_commands_lower(device)
+            resolved_command = commands.get(command_name.lower())
+            if not resolved_command:
+                return api.jsonify({
+                    'error': 'Device does not support counter reset',
+                    'success': False,
+                }), 400
+            result = device.command_inout(resolved_command, channel.strip())
+            return api.jsonify({
+                'device': device_name,
+                'channel': channel.strip(),
+                'result': api.make_json_safe(result),
+                'success': True,
+            })
+        except api.AuthorizationError as exc:
+            return api._authorization_error_response(exc)
+        except Exception as e:
+            return api.jsonify({'error': str(e), 'success': False}), 500
+
     api._read_daqmx_latest_payload = _read_daqmx_latest_payload
     api._normalize_daqmx_channels = _normalize_daqmx_channels
+    api._read_daqmx_device_info = _read_daqmx_device_info
     api._normalize_psp_group = _normalize_psp_group
     api._parse_psp_payload = _parse_psp_payload
     api._normalize_psp_entry = _normalize_psp_entry
@@ -527,3 +637,4 @@ def bind(api):
     api.get_daqmx_latest = get_daqmx_latest
     api.get_daqmx_history = get_daqmx_history
     api.write_daqmx_channel = write_daqmx_channel
+    api.reset_daqmx_counter = reset_daqmx_counter

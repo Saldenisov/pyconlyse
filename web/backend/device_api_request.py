@@ -1,4 +1,4 @@
-"""Device request parsing, authorization errors and mutation validation."""
+"""device api request operations."""
 
 
 def bind(api):

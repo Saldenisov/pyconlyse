@@ -1,4 +1,4 @@
-"""Camera and spectrograph endpoints."""
+"""device api optics operations."""
 
 
 def bind(api):
@@ -293,6 +293,10 @@ def bind(api):
     def get_camera_image(device_name):
         """Get the last captured image from camera"""
         try:
+            include_contours = str(api.request.args.get('contours', '')).lower() in (
+                '1', 'true', 'yes', 'on'
+            )
+            contour_settings = None
             with api.DeviceManager.operation_lock(device_name):
                 device = api.DeviceManager.get_device(device_name)
                 # DS_CAMERA_CCD.image starts grabbing when acquisition is stopped.
@@ -318,9 +322,51 @@ def bind(api):
                 except Exception:
                     pass
 
+                if include_contours:
+                    contour_settings = {
+                        'threshold': float(
+                            device.read_attribute('center_gravity_threshold').value
+                        ),
+                        'width': int(device.read_attribute('width').value),
+                        'height': int(device.read_attribute('height').value),
+                    }
+
+            contours = []
+            contour_error = ''
+            contour_profile = None
+            if include_contours and contour_settings:
+                try:
+                    from DeviceServers.control.laser_pointing.beam_metrics import (
+                        beam_threshold_contours,
+                        camera_contour_profile,
+                    )
+
+                    contour_profile = camera_contour_profile(
+                        device_name, contour_settings['threshold']
+                    )
+                    fitted = beam_threshold_contours(
+                        image_data,
+                        **contour_profile,
+                        width=contour_settings['width'],
+                        height=contour_settings['height'],
+                    )
+                    contours = [
+                        {
+                            key: value
+                            for key, value in contour.items()
+                            if key != 'points'
+                        }
+                        for contour in fitted
+                    ]
+                except Exception as error:
+                    contour_error = str(error)
+
             return api.jsonify({
                 'image': api.make_json_safe(image_data),
                 'cg_position': cg_position,
+                'contours': api.make_json_safe(contours),
+                'contour_profile': api.make_json_safe(contour_profile),
+                'contour_error': contour_error,
                 'timestamp': image_attr.time.tv_sec if hasattr(image_attr, 'time') else None,
                 'success': True
             })

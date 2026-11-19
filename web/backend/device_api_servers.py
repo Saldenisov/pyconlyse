@@ -1,4 +1,4 @@
-"""Starter diagnostics, device catalog and server control."""
+"""device api servers operations."""
 
 
 def bind(api):

@@ -1,4 +1,4 @@
-"""V0 measurement data paths, file publishing and data endpoints."""
+"""pump probe v0 api files operations."""
 
 
 def bind(api):
@@ -184,14 +184,78 @@ def bind(api):
             payload = api.request.get_json(silent=True) or {}
             path = payload.get("path") or ""
             normalized, file_payload = api._read_data_file(path)
-            suffix = api._data_file_suffix(normalized)
-            if suffix == ".dat":
-                return api.jsonify(api.parse_dat_payload(normalized, file_payload))
-            if suffix == ".zip":
-                return api.jsonify(api.parse_zip_payload(normalized, file_payload))
-            if suffix in {".h5", ".hdf5"}:
-                return api.jsonify(api.parse_h5_payload(normalized, file_payload))
-            raise ValueError("Only .dat, .zip, and V0 .h5 files can be loaded")
+            return api.jsonify(api.load_payload(normalized, file_payload))
+        except Exception as exc:
+            return api.jsonify({"success": False, "error": str(exc)}), 400
+
+
+    def pump_probe_data_treat():
+        """Replay a correction recipe from source; never write acquisition files."""
+        try:
+            payload = api.request.get_json(silent=True) or {}
+            if payload.get("source_spec") is not None:
+                spec = payload["source_spec"]
+                sources = api._derived_sources(spec)
+                dataset, preview = api.treat_derived_dataset(
+                    sources, spec["method"], payload.get("operations", []), payload.get("source_sha256"),
+                )
+                if payload.get("path") != preview["path"]:
+                    raise ValueError("Derived source identity changed; recreate the dataset")
+            else:
+                normalized, file_payload = api._read_data_file(payload.get("path") or "")
+                dataset, preview = api.treat_dataset(
+                    normalized, file_payload, payload.get("operations", []), payload.get("source_sha256"),
+                )
+            return api._treatment_response(dataset, preview, payload.get("format"))
+        except Exception as exc:
+            return api.jsonify({"success": False, "error": str(exc)}), 400
+
+
+    def _derived_sources(spec):
+        """Resolve every original file within the data root and verify its bytes."""
+        if (not isinstance(spec, dict) or set(spec) != {"kind", "method", "sources"}
+                or spec["kind"] != "derived" or spec["method"] not in {"average", "merge"}):
+            raise ValueError("Invalid derived source specification")
+        entries = spec["sources"]
+        if not isinstance(entries, list) or not 2 <= len(entries) <= 32:
+            raise ValueError("Select 2..32 source datasets")
+        sources = []
+        for entry in entries:
+            if (not isinstance(entry, dict) or set(entry) != {"path", "source_sha256"}
+                    or not isinstance(entry["path"], str) or not isinstance(entry["source_sha256"], str)):
+                raise ValueError("Each source requires a path and source_sha256")
+            normalized, file_payload = api._read_data_file(entry["path"])
+            if api.hashlib.sha256(file_payload).hexdigest() != entry["source_sha256"]:
+                raise ValueError("Source file changed; reload before deriving or applying corrections")
+            sources.append((normalized, file_payload))
+        return sources
+
+
+    def _treatment_response(dataset, preview, output_format):
+        if output_format == "dat":
+            response = api.Response(api.export_dat(dataset), mimetype="text/tab-separated-values")
+            response.headers["Content-Disposition"] = 'attachment; filename="v0-corrected.dat"'
+            return response
+        if output_format not in {None, "json"}:
+            raise ValueError("Unsupported correction output format")
+        return api.jsonify(preview)
+
+
+    def pump_probe_data_derive():
+        """Build an explicitly selected multi-file OD dataset without changing RAW."""
+        try:
+            payload = api.request.get_json(silent=True) or {}
+            spec = {"kind": "derived", "method": payload.get("method"), "sources": payload.get("sources")}
+            sources = api._derived_sources(spec)
+            dataset, preview = api.derive_dataset(sources, spec["method"])
+            operations = payload.get("operations", [])
+            if not isinstance(operations, list):
+                raise ValueError("Recipe must be a list with at most 32 operations")
+            if operations:
+                dataset, preview = api.treat_derived_dataset(
+                    sources, spec["method"], operations, preview["source_sha256"],
+                )
+            return api._treatment_response(dataset, preview, payload.get("format"))
         except Exception as exc:
             return api.jsonify({"success": False, "error": str(exc)}), 400
 
@@ -210,3 +274,7 @@ def bind(api):
     api.pump_probe_data_list = pump_probe_data_list
     api.pump_probe_data_create_folder = pump_probe_data_create_folder
     api.pump_probe_data_load = pump_probe_data_load
+    api.pump_probe_data_treat = pump_probe_data_treat
+    api._derived_sources = _derived_sources
+    api._treatment_response = _treatment_response
+    api.pump_probe_data_derive = pump_probe_data_derive
