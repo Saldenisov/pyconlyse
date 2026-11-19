@@ -11,6 +11,8 @@ include =
     utilities/dataio/ascii_opener.py
     utilities/dataio/h5_opener.py
     utilities/dataio/hamamatsu_file_opener.py
+    utilities/dataio/hamamatsu_his_calibration.py
+    utilities/dataio/vd2_paired_od.py
     utilities/dataio/opener.py
     web/backend/device_api.py
     web/backend/device_api_*.py

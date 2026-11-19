@@ -70,7 +70,7 @@ def bind(api):
         try:
             source_path = api._ensure_within_allowed_root(str(file_path))
             conversion = api._convert_source_to_h5(source_path)
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             return api._error(str(exc), session_id)
 
         response_payload = api._session_payload(session_id)

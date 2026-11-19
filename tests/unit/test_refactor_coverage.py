@@ -63,6 +63,8 @@ class TestCoverageGate(unittest.TestCase):
                 "utilities/dataio/ascii_opener.py": 55.0,
                 "utilities/dataio/h5_opener.py": 70.0,
                 "utilities/dataio/hamamatsu_file_opener.py": 55.0,
+                "utilities/dataio/hamamatsu_his_calibration.py": 80.0,
+                "utilities/dataio/vd2_paired_od.py": 80.0,
                 "utilities/dataio/opener.py": 75.0,
             },
             {

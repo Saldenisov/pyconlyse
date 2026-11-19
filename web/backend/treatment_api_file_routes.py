@@ -43,7 +43,7 @@ def bind(api):
                 source_path=str(cached["source_path"]),
             )
             api.treatment_service.reset_runtime(session_id)
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             return api._error(str(exc), session_id)
 
         response_payload = api._session_payload(session_id)
@@ -71,7 +71,7 @@ def bind(api):
                 source_path=str(cached["source_path"]),
             )
             api.treatment_service.reset_runtime(session_id)
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             return api._error(str(exc), session_id)
 
         response_payload = api._session_payload(session_id)

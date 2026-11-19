@@ -3,6 +3,7 @@
 import json
 import sys
 import time
+from datetime import date
 from pathlib import Path
 from threading import Event, Lock
 
@@ -18,6 +19,16 @@ import treatment_api as treatment_api_module
 from folder_api import folder_api
 from treatment_api import TreatmentQueueStore, session_store, treatment_api
 from treatment_manifest import TREATMENT_MANIFEST_FILE_NAME, TREATMENT_MANIFEST_FORMAT
+
+
+@pytest.mark.parametrize("folder", [
+    "E:/DATA_VD2/project/sample",
+    "smb://Everest/e/DATA_VD2/project/sample",
+])
+def test_batch_output_name_includes_processing_date(folder):
+    assert treatment_api_module._dated_save_file_name_for_folder(
+        folder, on_date=date(2026, 1, 27),
+    ) == "sample_20260127.dat"
 
 
 def test_allowed_root_treats_windows_drive_paths_as_case_insensitive():
@@ -81,6 +92,7 @@ def _ready_session(test_client, tmp_path, headers, exp_type="ABS+BASE+NOISE"):
         "/api/treatment/session/config",
         json={
             "exp_type": exp_type,
+            "calc_mode": "averaged",
             "save_folder": str(tmp_path),
             "save_file_name": "result.dat",
         },
@@ -259,7 +271,7 @@ def test_standard_folder_queue_captures_destructive_vd2_recipe(queue_client):
         "angle_threshold": 1.5,
         "surface_threshold": 7.0,
     }
-    assert recipe["output"]["path"] == str(tmp_path / "12893-water_600_1us-x0.dat")
+    assert recipe["output"]["path"] == str(tmp_path / treatment_api_module._dated_save_file_name_for_folder(str(folder)))
     assert recipe["output"]["allow_overwrite"] is True
     assert recipe["provenance"]["source_his_policy"] == "delete_after_verified_h5"
 
@@ -302,8 +314,8 @@ def test_folder_queue_recipe_freezes_every_action_variant(
         "surface_threshold": 1.0,
     }
     if calculate:
-        assert recipe["output"]["save_file_name"] == f"{folder.name}.dat"
-        assert recipe["output"]["path"] == str(tmp_path / f"{folder.name}.dat")
+        assert recipe["output"]["save_file_name"] == treatment_api_module._dated_save_file_name_for_folder(str(folder))
+        assert recipe["output"]["path"] == str(tmp_path / treatment_api_module._dated_save_file_name_for_folder(str(folder)))
         assert recipe["output"]["archive_existing"] is True
     else:
         assert recipe["output"] == {}
@@ -455,11 +467,13 @@ def test_standard_folder_queue_archives_existing_dat_before_saving(queue_client,
     test_client, tmp_path, headers = queue_client
     folder = tmp_path / "12895-water_600_1us-x0"
     folder.mkdir()
+    output_name = treatment_api_module._dated_save_file_name_for_folder(str(folder))
+    output_stem = Path(output_name).stem
     (folder / "ABS12895.his").write_bytes(b"abs")
     (folder / "BASE12895.his").write_bytes(b"base")
-    output_path = tmp_path / "12895-water_600_1us-x0.dat"
+    output_path = tmp_path / output_name
     output_path.write_text("previous output", encoding="utf-8")
-    prior_backup = tmp_path / "12895-water_600_1us-x0_old1_1.dat"
+    prior_backup = tmp_path / f"{output_stem}_old1_1.dat"
     prior_backup.write_text("older output", encoding="utf-8")
 
     monkeypatch.setattr(
@@ -496,7 +510,7 @@ def test_standard_folder_queue_archives_existing_dat_before_saving(queue_client,
     assert snapshot["jobs"][0]["status"] == "completed"
     assert output_path.read_text(encoding="utf-8") == "new output"
     assert prior_backup.read_text(encoding="utf-8") == "older output"
-    archived_path = tmp_path / "12895-water_600_1us-x0_old1_2.dat"
+    archived_path = tmp_path / f"{output_stem}_old1_2.dat"
     assert archived_path.read_text(encoding="utf-8") == "previous output"
     assert snapshot["jobs"][0]["saved"]["archived_output_path"] == str(archived_path)
 
@@ -507,6 +521,7 @@ def test_standard_folder_queue_runs_folder_workflow_then_saves_dat(
     test_client, tmp_path, headers = queue_client
     folder = tmp_path / "12894-water_600_1us-x0"
     folder.mkdir()
+    output_name = treatment_api_module._dated_save_file_name_for_folder(str(folder))
     (folder / "ABS12894.his").write_bytes(b"abs")
     (folder / "BASE12894.his").write_bytes(b"base")
     calls = []
@@ -548,10 +563,11 @@ def test_standard_folder_queue_runs_folder_workflow_then_saves_dat(
         time.sleep(0.005)
         snapshot = treatment_api_module.treatment_queue_store.snapshot("queue-contract")
 
-    assert calls == [("queue-contract", snapshot["jobs"][0]["recipe"]["folder_set"])]
+    expected_payload = {**snapshot["jobs"][0]["recipe"]["folder_set"], "_preserve_selected_folder": True}
+    assert calls == [("queue-contract", expected_payload)]
     assert snapshot["jobs"][0]["status"] == "completed"
     assert snapshot["jobs"][0]["saved"]["save_path"] == str(
-        tmp_path / "12894-water_600_1us-x0.dat"
+        tmp_path / output_name
     )
     manifest_path = tmp_path / TREATMENT_MANIFEST_FILE_NAME
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -559,7 +575,7 @@ def test_standard_folder_queue_runs_folder_workflow_then_saves_dat(
     assert manifest["format_version"] == 1
     assert manifest["dat_files"] == [
         {
-            "dat_file": "12894-water_600_1us-x0.dat",
+            "dat_file": output_name,
             "saved_at": manifest["dat_files"][0]["saved_at"],
             "workflow": {
                 "kind": "standard_folder_set",
@@ -570,12 +586,13 @@ def test_standard_folder_queue_runs_folder_workflow_then_saves_dat(
             "session": {
                 "experiment_type": "ABS+BASE+NOISE",
                 "calculation_mode": "averaged",
+                "spectral_reference": None,
                 "first_map_with_electrons": True,
                 "source_folder": str(folder),
             },
             "inputs": {},
             "processing": {"conversions": {}, "cleaning": {}},
-            "result": {"save_path": str(tmp_path / "12894-water_600_1us-x0.dat")},
+            "result": {"save_path": str(tmp_path / output_name)},
         }
     ]
     assert snapshot["jobs"][0]["saved"]["manifest_path"] == str(manifest_path)

@@ -6,6 +6,39 @@ remain valid on Windows, where chmod does not express the service ACL.
 """
 
 from pathlib import Path
+import os
+import stat
+
+
+def create_authorization_symlink(monkeypatch, link, target):
+    """Use a real link, or emulate its lstat when Windows denies creation."""
+    try:
+        link.symlink_to(target)
+        return
+    except OSError as exc:
+        if getattr(exc, "winerror", None) != 1314:
+            raise
+
+    # The interactive Windows account can lack SeCreateSymbolicLinkPrivilege.
+    # Valid target content makes the test fail if the authorization gate follows
+    # the link instead of rejecting its file type before reading.
+    link.write_bytes(target.read_bytes())
+    actual_lstat = os.lstat
+    actual_is_symlink = Path.is_symlink
+
+    def symlink_lstat(path, *args, **kwargs):
+        result = actual_lstat(path, *args, **kwargs)
+        if Path(path) == link:
+            values = list(result)
+            values[0] = stat.S_IFLNK | stat.S_IMODE(result.st_mode)
+            return os.stat_result(values)
+        return result
+
+    monkeypatch.setattr(os, "lstat", symlink_lstat)
+    monkeypatch.setattr(
+        Path, "is_symlink",
+        lambda path: path == link or actual_is_symlink(path),
+    )
 
 
 def simulate_hardware_authorization_service_acl(

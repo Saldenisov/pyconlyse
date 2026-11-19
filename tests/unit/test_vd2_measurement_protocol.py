@@ -1,5 +1,8 @@
 import sys
 from pathlib import Path
+from threading import Event
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,9 +58,80 @@ def test_phase_protocol_accepts_legacy_brew_name_as_bruit():
     protocol = Vd2MeasurementProtocol(FakeProxy)
 
     state = protocol.start(phase="brew", frames_per_his=1, run_name="legacy")
+    protocol.wait(1)
 
     assert state["phase"] == "BRUIT"
     assert state["his_path"].endswith(r"legacy\BRUIT.his")
+
+
+def test_failed_preflight_releases_ownership_and_retains_completed_job():
+    proxy = FakeProxy()
+
+    def preflight(request):
+        if request.run_name == "unwritable":
+            raise OSError("output folder is not writable")
+
+    protocol = Vd2MeasurementProtocol(lambda: proxy, artifact_preflight=preflight)
+    first = protocol.start(phase="BASE", frames_per_his=1, run_name="first")
+    protocol.wait(1)
+    calls = list(proxy.calls)
+
+    with pytest.raises(OSError, match="not writable"):
+        protocol.start(phase="BASE", frames_per_his=1, run_name="unwritable")
+
+    assert proxy.calls == calls
+    status = protocol.status()
+    assert status["job_id"] == first["job_id"]
+    assert status["status"] == "completed"
+    assert not status["acquisition_active"]
+    protocol.start(phase="BASE", frames_per_his=1, run_name="retry")
+    protocol.wait(1)
+    assert protocol.status()["status"] == "completed"
+
+
+def test_overlapping_start_and_failed_processing_release_camera():
+    processing = Event()
+    release = Event()
+
+    def failed_processing(request):
+        processing.set()
+        assert release.wait(2)
+        raise ValueError("H5 conversion interrupted")
+
+    protocol = Vd2MeasurementProtocol(FakeProxy, sequence_processor=failed_processing,
+                                      max_pending_processing=1)
+    protocol.start(phase="BASE", frames_per_his=1, run_name="first")
+    try:
+        assert processing.wait(1)
+        with pytest.raises(Vd2ProtocolError, match="queue is full"):
+            protocol.start(phase="BASE", frames_per_his=1, run_name="overlap")
+        assert protocol.status()["queue_full"]
+    finally:
+        release.set()
+        protocol.wait(1)
+
+    status = protocol.status()
+    assert status["status"] == "failed"
+    assert status["error"] == "H5 conversion interrupted"
+    assert not status["queue_full"]
+    assert not status["acquisition_active"]
+
+
+@pytest.mark.parametrize("changes", [
+    {"phase": "unknown"},
+    {"frames_per_his": "invalid"},
+    {"frames_per_his": 0},
+    {"sample_description": "x" * 4001},
+    {"output_root": "relative/folder"},
+])
+def test_invalid_request_never_contacts_camera(changes):
+    calls = []
+    protocol = Vd2MeasurementProtocol(lambda: calls.append("camera"))
+    request = {"phase": "BASE", "frames_per_his": 1, "run_name": "sample", **changes}
+    with pytest.raises(Vd2ProtocolError):
+        protocol.start(**request)
+    assert calls == []
+    assert protocol.status()["status"] == "idle"
 
 
 def test_phase_protocol_rejects_invalid_run_name():

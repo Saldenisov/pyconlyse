@@ -21,6 +21,7 @@ import pytest
 
 import hardware_authorization
 from tests.web._hardware_authorization_test_support import (
+    create_authorization_symlink,
     simulate_hardware_authorization_service_acl,
 )
 from hardware_authorization import (
@@ -623,7 +624,7 @@ def test_bounded_optional_and_pattern_schemas_are_strict(tmp_path, schema):
     assert config.strict is True
 
 
-def test_malformed_oversized_and_symlink_policy_are_rejected(tmp_path):
+def test_malformed_and_oversized_policy_are_rejected(tmp_path):
     malformed = tmp_path / "bad.json"
     malformed.write_text("not-json", encoding="utf-8")
     with pytest.raises(AuthorizationError) as exc:
@@ -635,20 +636,23 @@ def test_malformed_oversized_and_symlink_policy_are_rejected(tmp_path):
     with pytest.raises(AuthorizationError):
         load_policy(oversized, strict=True)
 
-    target = tmp_path / "target.json"
-    target.write_text("{}", encoding="utf-8")
+
+def test_symlink_policy_is_rejected(tmp_path, monkeypatch):
+    config = write_contract(tmp_path)
+    assert load_policy(config.policy_path, strict=True)["version"] == 1
     link = tmp_path / "policy-link.json"
-    link.symlink_to(target)
-    with pytest.raises(AuthorizationError):
+    create_authorization_symlink(monkeypatch, link, config.policy_path)
+    with pytest.raises(AuthorizationError) as exc:
         load_policy(link, strict=True)
+    assert exc.value.status_code == 403
 
 
-def test_symlink_approval_is_rejected(tmp_path):
+def test_symlink_approval_is_rejected(tmp_path, monkeypatch):
     op = operation()
     config = write_contract(tmp_path, approval=None)
     target = tmp_path / "approval-target.json"
     target.write_text(json.dumps(approval(op)), encoding="utf-8")
-    (config.approval_dir / f"{NONCE}.json").symlink_to(target)
+    create_authorization_symlink(monkeypatch, config.approval_dir / f"{NONCE}.json", target)
     with pytest.raises(AuthorizationError) as exc:
         authorize_operation(config, subject="alice", role="operator", operation=op, nonce=NONCE)
     assert exc.value.status_code == 428

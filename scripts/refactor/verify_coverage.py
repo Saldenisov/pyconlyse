@@ -22,6 +22,8 @@ MINIMUM_MODULE_COVERAGE = {
     "utilities/dataio/ascii_opener.py": 55.0,
     "utilities/dataio/h5_opener.py": 70.0,
     "utilities/dataio/hamamatsu_file_opener.py": 55.0,
+    "utilities/dataio/hamamatsu_his_calibration.py": 80.0,
+    "utilities/dataio/vd2_paired_od.py": 80.0,
     "utilities/dataio/opener.py": 75.0,
     "web/backend/device_api.py": 40.0,
     "web/backend/device_catalog_service.py": 100.0,
