@@ -132,16 +132,35 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
     name = "vd2/experiment/controller"
     events = []
     authorization_required = False
+    protocol_phase = "idle"
 
     class Coordinator:
         prepared = False
+        running = False
+        phase = "live"
+        reject_stop = False
+        reject_shutter = False
+        reject_focus = False
+        mode = "Operate"
+        optics = {"streak_shutter": "Open", "spectrograph_shutter": "Open"}
 
         def command_inout(self, command, *args):
             if command == "GetState":
-                return json.dumps({"state": "ON", "prepared": self.prepared, "time_range": "1 us",
-                                   "error": "", "frames": 0, "trigger_rate_hz": 5})
+                return json.dumps({"state": "RUNNING" if self.running else "ON", "phase": self.phase,
+                                   "prepared": self.prepared, "time_range": "1 us", "optics": self.optics,
+                                   "values": {"streak_mode": self.mode}, "error": "", "frames": 0, "trigger_rate_hz": 5})
             events.append((command, *args))
-            self.prepared = command != "Unprepare"
+            if command == "StopLive" and not self.reject_stop:
+                self.running = False
+            if command in {"PrepareStandard", "PrepareDarkCheckout", "Unprepare"}:
+                self.prepared = command != "Unprepare"
+            if command in {"SetStreakShutter", "SetSpectrographShutter"}:
+                value = "Open" if self.reject_shutter else args[0]
+                self.optics["streak_shutter" if command == "SetStreakShutter" else "spectrograph_shutter"] = value
+                return value
+            if command == "SetStreakMode":
+                self.mode = "Operate" if self.reject_focus else args[0]
+                return self.mode
 
         def set_timeout_millis(self, timeout):
             pass
@@ -189,7 +208,8 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
         KYMERA_DEVICE="kymera/test",
         DeviceProxy=lambda device: {name: coordinator, "kymera/test": kymera}[device],
         _initialize_equipment=initialize, _shutdown_equipment=shutdown,
-        _protocol_hardware_phase=lambda: "idle", _start_lifecycle=start_lifecycle,
+        _protocol_hardware_phase=lambda: protocol_phase, _start_lifecycle=start_lifecycle,
+        _progress=lambda steps, message: None,
         tango_optics=vd2_tango_optics,
         _control_error=str,
     ))
@@ -202,12 +222,15 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
     assert client.post("/vd2/deinitialize?background=1", json={}).status_code == 202
     assert events == [("prepare", {"restore_mode": "alignment"}),
                       ("power verified", False), ("Kymera shutter", "Closed"),
+                      ("SetStreakShutter", "Closed"), ("SetSpectrographShutter", "Closed"),
                       ("PrepareStandard",), ("SetTimeRange", "1 us"),
+                      ("SetStreakMode", "Focus"),
                       ("shutdown", None), ("Unprepare",), ("camera power off",)]
     events.clear()
     assert client.post("/vd2/initialize?background=1", json={"restore_mode": "dark"}).status_code == 202
     assert events == [("prepare", {"restore_mode": "dark"}), ("power verified", True),
-                      ("SetSpectrographShutter", "Closed"), ("PrepareDarkCheckout",)]
+                      ("SetStreakShutter", "Closed"), ("SetSpectrographShutter", "Closed"),
+                      ("PrepareDarkCheckout",), ("SetStreakMode", "Focus")]
     events.clear()
     assert client.post("/vd2/initialize?background=1", json={"restore_mode": "point"}).status_code == 400
     authorization_required = True
@@ -222,3 +245,47 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
     assert "did not confirm Closed" in failed.json["error"]
     assert events == [("prepare", {"restore_mode": "default"}),
                       ("power verified", False), ("Kymera shutter", "Closed")]
+
+    kymera.accept_write = True
+    events.clear()
+    coordinator.running = True
+    result = client.post("/vd2/initialize?background=1", json={})
+    assert result.status_code == 202
+    assert result.json["result"]["device"]["values"]["streak_mode"] == "Focus"
+    assert events[1:5] == [("StopLive",), ("SetStreakShutter", "Closed"),
+                           ("SetSpectrographShutter", "Closed"), ("SetStreakMode", "Focus")]
+    assert events.index(("power verified", False)) > events.index(("StopLive",))
+
+    for phase in ("warming", "measurement_ready"):
+        events.clear()
+        coordinator.running = True
+        coordinator.phase = phase
+        assert client.post("/vd2/initialize?background=1", json={}).status_code == 503
+        assert events == [("prepare", {"restore_mode": "default"})]
+
+    events.clear()
+    protocol_phase = "acquiring"
+    coordinator.phase = "live"
+    assert client.post("/vd2/initialize?background=1", json={}).status_code == 503
+    assert events == [("prepare", {"restore_mode": "default"})]
+    protocol_phase = "idle"
+
+    events.clear()
+    coordinator.reject_stop = True
+    failed = client.post("/vd2/initialize?background=1", json={})
+    assert failed.status_code == 503 and "did not confirm stopped" in failed.json["error"]
+    assert events == [("prepare", {"restore_mode": "default"}), ("StopLive",)]
+    coordinator.reject_stop = False
+    coordinator.running = False
+
+    events.clear()
+    coordinator.reject_shutter = True
+    failed = client.post("/vd2/initialize?background=1", json={})
+    assert failed.status_code == 503 and "did not confirm both shutters closed" in failed.json["error"]
+    assert not any(event[0] == "PrepareStandard" for event in events)
+    coordinator.reject_shutter = False
+
+    events.clear()
+    coordinator.reject_focus = True
+    failed = client.post("/vd2/initialize?background=1", json={})
+    assert failed.status_code == 503 and "did not confirm Focus" in failed.json["error"]

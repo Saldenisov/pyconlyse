@@ -218,9 +218,9 @@ test('countdown shares the action line and uses server clock', async () => {
   show();
   await act(async () => { await Promise.resolve(); });
   expect(screen.getByRole('status')).toHaveTextContent('Waiting for camera power');
-  expect(screen.getByRole('timer')).toHaveTextContent('30 s remaining');
+  expect(screen.getByRole('timer', { name: 'Power-up wait' })).toHaveTextContent('30 s remaining');
   await act(async () => { jest.advanceTimersByTime(500); });
-  expect(screen.getByRole('timer')).toHaveTextContent('30 s remaining');
+  expect(screen.getByRole('timer', { name: 'Power-up wait' })).toHaveTextContent('30 s remaining');
 });
 
 test('accepted job replaces previous result while start request is in flight', async () => {

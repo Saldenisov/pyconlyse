@@ -61,11 +61,11 @@ export default function VD2PrepareChoice({onCancel, onConfirm}) {
             onChange={() => setSelected(key)} />
           <span>{label}<small>{saved
             ? `${saved.settings.time_range} · ${saved.settings.streak_mode} · ${new Date(saved.created_at).toLocaleString()}`
-            : key === 'alignment' ? '1 us · saved regions in this browser' : key === 'default' ? 'Keep current settings if already ready'
+            : key === 'alignment' ? '1 us · saved regions in this browser' : key === 'default' ? 'Keep current time range · finish in Focus'
               : key === 'dark' ? 'Focus · shutters closed · dark test recording' : 'No saved return point yet'}</small></span>
         </label>;
       })}
-      <p>Camera settings are verified after recovery. Acquisition stays stopped. Shutters, magnets and stages are not restored.</p>
+      <p>Live stops before preparation. Preparation finishes in Focus with both shutters closed. Magnets and stages are not moved.</p>
       <div className="experiment-confirmation-actions">
         <button ref={cancel} type="button" className="experiment-confirmation-cancel" onClick={onCancel}>Cancel</button>
         <button type="button" className="experiment-prepare-button" disabled={loading} onClick={confirm}>Prepare VD2</button>

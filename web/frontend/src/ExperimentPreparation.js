@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import { fetchWithHardwareApproval } from './api/csrfRequest';
 import VD2PrepareChoice from './components/VD2PrepareChoice';
+import { preparationElapsed, preparationPhase } from './experimentPreparationProgress';
 import './css/ExperimentPreparation.css';
 
 const EXPERIMENTS = {
@@ -258,10 +259,10 @@ const ExperimentPreparation = () => {
   }, [applyJob, experiment, restoring, starting]);
 
   useEffect(() => {
-    if (!job?.wait_until || !running) return undefined;
-    const timer = setInterval(() => setNow(Date.now()), 250);
+    if (!running) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [job?.wait_until, running]);
+  }, [running]);
 
   const run = useCallback(async (action, restoreChoice) => {
     if (requestActive.current || !available || latestJob.current?.status === 'running') return;
@@ -310,11 +311,12 @@ const ExperimentPreparation = () => {
     setAvailable(false);
     setSearchParams({ experiment: next });
   };
-  const remaining = Math.max(0, Math.ceil((job?.wait_until || 0) - clock.server - (now - clock.client) / 1000));
+  const serverNow = clock.server + (now - clock.client) / 1000;
+  const remaining = Math.max(0, Math.ceil((job?.wait_until || 0) - serverNow));
   const warnings = job?.result?.warnings || [];
   const message = connectionError || error || (restoring ? 'Reading saved operation…'
     : starting ? `${starting === 'shutdown' ? 'Starting safe shutdown' : 'Checking equipment'}…`
-    : job?.status === 'running' ? job.phase || 'Checking equipment…'
+    : job?.status === 'running' ? preparationPhase(job.phase)
     : job?.status === 'completed' ? [job.result?.message || job.phase || 'Operation completed.', ...warnings].join(' ')
     : 'Ready. Select Prepare or Unprepare.');
   const failed = Boolean(connectionError || error);
@@ -346,6 +348,7 @@ const ExperimentPreparation = () => {
         <p className={`experiment-current-action${failed ? ' is-error' : warnings.length ? ' is-warning' : ''}`}
           role={failed ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">
           {historical && <span className="experiment-history-label">Last operation · </span>}{message}
+          {job?.status === 'running' && !starting ? <span role="timer" aria-label="Operation elapsed time" aria-live="off"> · {preparationElapsed(job, serverNow)}</span> : null}
           {running && job?.wait_until && !failed ? <span role="timer" aria-label="Power-up wait"> · {remaining > 0 ? `${remaining} s remaining` : 'Checking power-up completion…'}</span> : null}
         </p>
       </section>

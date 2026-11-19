@@ -298,23 +298,51 @@ def install_vd2_coordinator_routes(api):
 
             if api._protocol_hardware_phase() in {"preparing", "acquiring", "saving", "processing"}:
                 raise RuntimeError("Stop the VD2 measurement before Prepare")
-            if status(coordinator)["acquisition_status"] == "busy":
-                raise RuntimeError("Stop Live before preparing VD2")
+
+            def close_shutters():
+                api._progress(steps, "Closing both shutters before preparation")
+                for command in ("SetStreakShutter", "SetSpectrographShutter"):
+                    if coordinator.command_inout(command, "Closed") != "Closed":
+                        raise RuntimeError("VD2 did not confirm both shutters closed; preparation stopped")
+                steps.append({"step": "VD2 shutters", "status": "both verified Closed"})
+
+            def focus_camera():
+                api._progress(steps, "Switching the streak camera to Focus")
+                if coordinator.command_inout("SetStreakMode", "Focus") != "Focus":
+                    raise RuntimeError("VD2 did not confirm Focus; preparation stopped")
+                steps.append({"step": "Streak camera mode", "status": "verified Focus"})
+
+            initial = status(coordinator)
+            if initial["acquisition_status"] == "busy":
+                if initial["coordinator"].get("phase") not in {"live", "waiting_for_trigger"}:
+                    raise RuntimeError("Stop the VD2 measurement before Prepare")
+                api._progress(steps, "Stopping Live before preparation")
+                coordinator.command_inout("StopLive")
+                stopped = status(coordinator)
+                if stopped["state"] != "ON" or stopped["acquisition_status"] != "idle":
+                    raise RuntimeError("VD2 Live did not confirm stopped; preparation stopped")
+                close_shutters()
+                focus_camera()
 
             def prepare_optics():
                 kymera = proxy(api.KYMERA_DEVICE, 10000)
                 shutter = api.tango_optics.prepare_direct_shutter(kymera)
                 steps.append({"step": "Kymera shutter", "status": f"verified {shutter}"})
+                close_shutters()
                 if mode == "dark":
-                    coordinator.command_inout("SetSpectrographShutter", "Closed")
                     coordinator.command_inout("PrepareDarkCheckout")
                 else:
                     coordinator.command_inout("PrepareStandard")
                 if mode == "alignment":
                     coordinator.command_inout("SetTimeRange", "1 us")
+                focus_camera()
                 result = status(coordinator)
-                if not result["coordinator"]["prepared"]:
+                if result["state"] != "ON" or not result["coordinator"]["prepared"]:
                     raise RuntimeError("Direct Tango optics did not confirm preparation")
+                if (result["values"].get("streak_mode") != "Focus"
+                        or any(result["values"].get(name) != "Closed"
+                               for name in ("streak_shutter", "spectrograph_shutter"))):
+                    raise RuntimeError("VD2 preparation did not verify Focus with both shutters closed")
                 steps.append({"step": "Direct Tango optics", "status": "prepared; DG645 in standby"})
                 return result
 
