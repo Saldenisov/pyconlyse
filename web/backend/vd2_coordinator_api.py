@@ -302,6 +302,9 @@ def install_vd2_coordinator_routes(api):
                 raise RuntimeError("Stop Live before preparing VD2")
 
             def prepare_optics():
+                kymera = proxy(api.KYMERA_DEVICE, 10000)
+                shutter = api.tango_optics.prepare_direct_shutter(kymera)
+                steps.append({"step": "Kymera shutter", "status": f"verified {shutter}"})
                 if mode == "dark":
                     coordinator.command_inout("SetSpectrographShutter", "Closed")
                     coordinator.command_inout("PrepareDarkCheckout")

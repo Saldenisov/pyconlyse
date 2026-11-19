@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from web.backend.vd2_coordinator_api import install_vd2_coordinator_routes
+from web.backend import vd2_tango_optics
 
 
 def test_web_live_and_optics_requests_use_coordinator_and_real_ccd_metadata():
@@ -147,6 +148,24 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
 
     coordinator = Coordinator()
 
+    class Kymera:
+        shutter = "External BNC"
+        accept_write = True
+
+        def set_timeout_millis(self, timeout):
+            pass
+
+        def read_attribute(self, name):
+            assert name == "shutter"
+            return SimpleNamespace(value=self.shutter)
+
+        def write_attribute(self, name, value):
+            events.append(("Kymera shutter", value))
+            if self.accept_write:
+                self.shutter = value
+
+    kymera = Kymera()
+
     def initialize(steps, *, prepare_optics, dark_checkout=False):
         events.append(("power verified", dark_checkout))
         return {"steps": steps, "device": prepare_optics()}
@@ -167,10 +186,11 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
         _serialized_vd2_mutation=lambda fn: fn, _mutation_payload=lambda fields: (request.json or {}, None),
         authorization_required=lambda: authorization_required,
         _exact_plan_required=lambda: (jsonify(success=False), 403),
-        DeviceProxy=lambda device: {name: coordinator}[device],
+        KYMERA_DEVICE="kymera/test",
+        DeviceProxy=lambda device: {name: coordinator, "kymera/test": kymera}[device],
         _initialize_equipment=initialize, _shutdown_equipment=shutdown,
         _protocol_hardware_phase=lambda: "idle", _start_lifecycle=start_lifecycle,
-        tango_optics=SimpleNamespace(VD2_GRATING_BLAZE_NM={3: 500}),
+        tango_optics=vd2_tango_optics,
         _control_error=str,
     ))
     app.register_blueprint(routes)
@@ -181,7 +201,8 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
     assert result.json["result"]["device"]["coordinator"]["prepared"]
     assert client.post("/vd2/deinitialize?background=1", json={}).status_code == 202
     assert events == [("prepare", {"restore_mode": "alignment"}),
-                      ("power verified", False), ("PrepareStandard",), ("SetTimeRange", "1 us"),
+                      ("power verified", False), ("Kymera shutter", "Closed"),
+                      ("PrepareStandard",), ("SetTimeRange", "1 us"),
                       ("shutdown", None), ("Unprepare",), ("camera power off",)]
     events.clear()
     assert client.post("/vd2/initialize?background=1", json={"restore_mode": "dark"}).status_code == 202
@@ -192,3 +213,12 @@ def test_direct_lifecycle_uses_shared_power_sequence_and_tango_optics():
     authorization_required = True
     assert client.post("/vd2/deinitialize?background=1", json={}).status_code == 403
     assert events == []
+
+    authorization_required = False
+    kymera.shutter = "External BNC"
+    kymera.accept_write = False
+    failed = client.post("/vd2/initialize?background=1", json={})
+    assert failed.status_code == 503
+    assert "did not confirm Closed" in failed.json["error"]
+    assert events == [("prepare", {"restore_mode": "default"}),
+                      ("power verified", False), ("Kymera shutter", "Closed")]

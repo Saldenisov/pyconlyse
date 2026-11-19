@@ -53,6 +53,19 @@ def _value(proxy, attribute):
     return proxy.read_attribute(attribute).value
 
 
+def prepare_direct_shutter(kymera):
+    """Resolve the SDK's external shutter default before VD2 takes control."""
+    shutter = _value(kymera, "shutter")
+    if shutter == "External BNC":
+        kymera.write_attribute("shutter", "Closed")
+        shutter = _value(kymera, "shutter")
+        if shutter != "Closed":
+            raise RuntimeError(f"Kymera shutter did not confirm Closed after leaving External BNC: {shutter!r}")
+    if shutter not in {"Closed", "Open"}:
+        raise RuntimeError(f"Kymera shutter state is unavailable: {shutter!r}")
+    return shutter
+
+
 def _proxy(api, device):
     proxy = api.DeviceProxy(device)
     proxy.set_timeout_millis(5000)
