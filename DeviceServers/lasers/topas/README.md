@@ -171,9 +171,9 @@ release directory and each source file was checked against a SHA-256 manifest.
 The existing Elysium2 production checkout had unrelated motor/startup edits;
 those files were retained.
 
-Both runs returned `ON`, `600 nm`, interaction `SH-SIG`, 12 motors, authorized
+Both initial context runs returned `ON`, `600 nm`, interaction `SH-SIG`, 12 motors, authorized
 caller, and shutter closed. Commands exercised an already-closed shutter and
-the unchanged calibrated `600 nm` setting. No test opened the shutter or selected
+the unchanged calibrated `600 nm` setting. Those tests did not open the shutter or select
 a different wavelength or interaction. Queue-submission round trips were
 `2.51 ms` from Everest and `1.97 ms` locally on Elysium2; these timings measure
 command acceptance, not optical motion or tuning completion.
@@ -195,6 +195,21 @@ unchanged `600 nm / SH-SIG` setting using both Enter and Set. Both submissions
 reached `accepted`, followed by fresh idle readback at `600 nm`, with the shutter
 still closed. This checks the Web-to-Tango path without testing a new optical
 setting or opening the laser shutter.
+
+### Shutter feedback correction and Electronics navigation
+
+Release `a0d9a4c05` was deployed to the permanent Elysium2 instance after the user
+reported a shutter readback error. The preceding close request had failed after
+31 ms although a subsequent fresh snapshot reported the shutter closed. The
+client now waits for matching feedback after its single write. Tests simulate
+delayed opening and closing, persistent mismatch, and unavailable feedback.
+
+With explicit user confirmation that the optical path was safe, the deployed
+Web panel opened the shutter once and closed it once. Both operations returned
+`accepted` with corresponding fresh readbacks and no uncertain outcome. The
+close operation took 134 ms from queue submission to confirmation. The shutter
+was left closed. Equipment's standalone TOPAS category was removed; browser
+validation opened TOPAS from the Electronics menu and confirmed live feedback.
 
 ## Protocol references
 
