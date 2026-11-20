@@ -13,6 +13,12 @@ is involved.
 - API: `http://127.0.0.1:8004/T21082/v0/PublicAPI` on Elysium2.
 - Initial readback on 2026-11-20: `600 nm`, `SH-SIG`, shutter closed,
   interlock closed, caller authorized, 12 motors.
+- Verified Python: `C:\Users\ECX-3100\.conda\envs\pyconlyse312\python.exe`.
+
+On this installation the normal GUI launch left the device server unavailable.
+Launching the existing signed WinTopas4 application using **Run as administrator**
+started its API server successfully in the interactive desktop session. The final
+vendor server is a child of WinTopas4, not of the diagnostic SSH process.
 
 The serial number in the API URL identifies the vendor's configured instance.
 It is not an independently measured USB serial number. Vendor `Wavelength`
@@ -28,6 +34,7 @@ reports the requested target while tuning; consult `is_tuning` and
 3. Register once, from the repository root:
 
    ```powershell
+   $env:TANGO_HOST = '10.20.30.202:10000'
    python -m DeviceServers.lasers.topas.add_ds_TOPAS --serial T21082
    ```
 
@@ -103,6 +110,27 @@ Initial hardware validation should read status, calibration ranges and motors
 before any change. A `200 OK` shutter response alone is insufficient: WinTopas4
 can silently ignore an opening request for safety reasons. This client requires
 matching shutter readback.
+
+### Hardware checks on 2026-11-20
+
+The committed implementation was tested with a real PyTango `DeviceTestContext`
+both on Everest and on Elysium2. The Elysium2 copy was extracted into a separate
+release directory and each source file was checked against a SHA-256 manifest.
+The existing Elysium2 production checkout had unrelated motor/startup edits;
+those files were retained.
+
+Both runs returned `ON`, `600 nm`, interaction `SH-SIG`, 12 motors, authorized
+caller, and shutter closed. Commands exercised an already-closed shutter and
+the unchanged calibrated `600 nm` setting. No test opened the shutter or selected
+a different wavelength or interaction. Queue-submission round trips were
+`2.51 ms` from Everest and `1.97 ms` locally on Elysium2; these timings measure
+command acceptance, not optical motion or tuning completion.
+
+Open-shutter interlock rejection, manual-action confirmation, stale telemetry,
+and uncertain write outcomes were exercised by software tests. The context
+servers were temporary and did not register devices in the production Tango
+database. Permanent Astor registration/startup remains a separate deployment
+step using the commands above.
 
 ## Protocol references
 
