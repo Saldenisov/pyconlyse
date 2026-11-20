@@ -79,7 +79,8 @@ fresh `ON` telemetry while the same vendor server stayed running.
 
 ## Web Equipment panel
 
-Open **Equipment → TOPAS** (`/topas`). The panel provides wavelength and
+Open **Equipment → Electronics → TOPAS** (`/topas`). TOPAS is also linked from
+the Electronics Controllers page. The panel provides wavelength and
 interaction selection, shutter control, output information, operator messages,
 and all installed motor readbacks with manual targets in physical units or
 steps. A target must satisfy configured travel and forbidden ranges; accepted
@@ -157,6 +158,10 @@ Initial hardware validation should read status, calibration ranges and motors
 before any change. A `200 OK` shutter response alone is insufficient: WinTopas4
 can silently ignore an opening request for safety reasons. This client requires
 matching shutter readback.
+The vendor acknowledges shutter commands before feedback necessarily changes.
+After one PUT, the client polls GET feedback for up to two seconds; it never
+repeats that PUT. Missing, invalid, or persistently mismatched feedback marks
+the command outcome uncertain instead of claiming successful motion.
 
 ### Hardware checks on 2026-11-20
 
@@ -179,12 +184,12 @@ servers were temporary and did not register devices in the production Tango
 database. The subsequent permanent instance and Web path use the same driver;
 the release was independently extracted and SHA-256 checked on Elysium2.
 
-At the Web-panel release, driver tests passed `31/31` and focused frontend tests
+At the Web-panel update, driver tests passed `34/34` and focused frontend tests
 passed `10/10`. The production frontend compiled with existing warnings in
 unrelated components. The deployment checks hashes of the complete live
 frontend input set before installing the bundle, retaining concurrent edits.
 
-Browser validation followed Equipment's TOPAS card, read all 12 installed
+Initial browser validation followed Equipment's TOPAS card, read all 12 installed
 motors, retained an edited wavelength draft across Refresh, and submitted the
 unchanged `600 nm / SH-SIG` setting using both Enter and Set. Both submissions
 reached `accepted`, followed by fresh idle readback at `600 nm`, with the shutter

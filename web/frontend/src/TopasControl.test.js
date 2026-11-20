@@ -94,10 +94,12 @@ test('saving and loading a wavelength only edits the draft without a hardware co
   expect(sendTopas).not.toHaveBeenCalled();
 });
 
-test('Equipment TOPAS card opens the dedicated control page', async () => {
+test('Equipment Electronics contains TOPAS and opens the dedicated control page', async () => {
   render(<MemoryRouter initialEntries={['/equipment']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
     <Routes><Route path="/equipment" element={<Equipment />} /><Route path="/topas" element={<TopasControl />} /></Routes>
   </MemoryRouter>);
-  fireEvent.click(screen.getByRole('heading', { name: 'TOPAS' }));
+  expect(screen.queryByRole('heading', { name: 'TOPAS' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('heading', { name: 'Electronics' }));
+  fireEvent.click(screen.getByRole('button', { name: 'TOPAS', exact: true }));
   await waitFor(() => expect(screen.getByRole('heading', { name: /TOPAS T21082/ })).toBeInTheDocument());
 });

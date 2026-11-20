@@ -108,7 +108,7 @@ def test_unauthorized_or_busy_tuning_never_writes(rig, section, key):
     assert writes(calls) == []
 
 
-def test_shutter_interlock_is_enforced_and_200_is_not_readback_confirmation(rig):
+def test_shutter_interlock_is_enforced_and_200_is_not_readback_confirmation(rig, monkeypatch):
     client, session, values, calls = rig
     values['/ShutterInterlock/State']['IsInterlockOpen'] = True
     with pytest.raises(TopasError, match='interlock'):
@@ -118,8 +118,47 @@ def test_shutter_interlock_is_enforced_and_200_is_not_readback_confirmation(rig)
     values['/ShutterInterlock/State']['IsInterlockOpen'] = False
     assert client.set_shutter(True) is True
     session.accept_shutter = False
-    with pytest.raises(TopasError, match='readback'):
+    clock = [0.]
+    monkeypatch.setattr('DeviceServers.lasers.topas.client.time.monotonic', lambda: clock[0])
+    monkeypatch.setattr('DeviceServers.lasers.topas.client.time.sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    calls.clear()
+    with pytest.raises(OutcomeUnknown, match='not confirmed within 2.0 s'):
         client.set_shutter(False)
+    assert clock[0] == pytest.approx(2)
+    assert writes(calls) == [('PUT', '/ShutterInterlock/OpenCloseShutter', False)]
+
+
+@pytest.mark.parametrize('opened', [True, False])
+def test_shutter_waits_for_delayed_feedback_without_repeating_write(rig, monkeypatch, opened):
+    client, session, values, calls = rig
+    session.accept_shutter = False
+    values['/ShutterInterlock/State']['IsShutterOpen'] = not opened
+    values['/ShutterInterlock/IsShutterOpen'] = not opened
+    elapsed = [0.]
+
+    def advance(seconds):
+        elapsed[0] += seconds
+        if elapsed[0] >= .3:
+            values['/ShutterInterlock/IsShutterOpen'] = opened
+
+    monkeypatch.setattr('DeviceServers.lasers.topas.client.time.monotonic', lambda: elapsed[0])
+    monkeypatch.setattr('DeviceServers.lasers.topas.client.time.sleep', advance)
+    assert client.set_shutter(opened) is opened
+    assert elapsed[0] == pytest.approx(.3)
+    assert writes(calls) == [('PUT', '/ShutterInterlock/OpenCloseShutter', opened)]
+
+
+def test_unavailable_shutter_feedback_latches_unknown_outcome_without_replay(rig):
+    client, session, values, calls = rig
+    session.accept_shutter = False
+    values['/ShutterInterlock/IsShutterOpen'] = requests.Timeout('feedback unavailable')
+    monitor = TopasMonitor(client)
+    monitor.refresh()
+    monitor.submit('set_shutter', True)
+    monitor.execute_pending()
+    assert monitor.snapshot()['outcome_unknown']
+    assert 'verification unavailable' in monitor.snapshot()['operation']['error']
+    assert writes(calls) == [('PUT', '/ShutterInterlock/OpenCloseShutter', True)]
 
 
 def test_manual_confirmation_does_not_restore_open_shutter(rig):

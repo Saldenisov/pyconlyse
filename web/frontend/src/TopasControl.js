@@ -112,7 +112,7 @@ export default function TopasControl() {
   };
   const failure = commandError || error || snapshot?.read_error || snapshot?.uncertain_operation?.error || (operation?.status === 'failed' ? operation.error : '');
   return <main className="topas-page">
-    <header className="topas-title"><div><Link to="/equipment">Equipment</Link><h1>TOPAS <span>{data?.serial_number || 'T21082'}</span></h1></div>
+      <header className="topas-title"><div><Link to="/electronics-clients">Equipment / Electronics</Link><h1>TOPAS <span>{data?.serial_number || 'T21082'}</span></h1></div>
       <div><span className={fresh ? 'topas-connected' : 'topas-warning'}>{fresh ? 'Connected' : snapshot ? 'Stale / unavailable' : 'Connecting…'}</span>
         <button type="button" onClick={() => setRefresh(v => v + 1)}>Refresh</button></div></header>
     <section className="topas-toolbar" aria-label="TOPAS controls">

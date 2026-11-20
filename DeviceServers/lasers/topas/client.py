@@ -1,6 +1,7 @@
 """Bounded WinTopas4 requests; no implicit hardware commands or write retries."""
 import math
 import re
+import time
 
 import requests
 
@@ -134,10 +135,27 @@ class TopasClient:
                        or state['output']['IsWaitingForUserAction']):
             raise TopasError('Cannot open shutter while interlock is open, tuning, or operator actions are pending')
         self._request('PUT', '/ShutterInterlock/OpenCloseShutter', opened)
-        actual = self._request('GET', '/ShutterInterlock/IsShutterOpen')
-        if type(actual) is not bool or actual != opened:
-            raise TopasError('TOPAS shutter change was not confirmed by readback')
-        return actual
+        # The vendor accepts the command before its shutter feedback changes.
+        # Poll feedback only; never replay the PUT while waiting for motion.
+        deadline = time.monotonic() + 2.0
+        while True:
+            try:
+                actual = self._request('GET', '/ShutterInterlock/IsShutterOpen')
+            except TopasError as exc:
+                raise OutcomeUnknown('TOPAS shutter verification unavailable after the command; '
+                                     'command was sent once; verify shutter before retrying') from exc
+            if type(actual) is not bool:
+                raise OutcomeUnknown('TOPAS returned invalid shutter readback after the command; '
+                                     'command was sent once; verify shutter before retrying')
+            if actual == opened:
+                return actual
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise OutcomeUnknown(
+                    f'TOPAS shutter readback is {"open" if actual else "closed"}; '
+                    f'requested {"open" if opened else "closed"} was not confirmed within 2.0 s. '
+                    'Command was sent once; check TOPAS interlock and shutter before retrying')
+            time.sleep(min(.1, remaining))
 
     def confirm_user_actions(self):
         state = self.read_core()
