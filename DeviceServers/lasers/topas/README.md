@@ -1,7 +1,8 @@
 # WinTopas4 / TOPAS Tango server
 
 `DS_TOPAS` controls a Light Conversion OPA through the installed Topas4 Server
-REST API. WinTopas4 remains usable alongside Tango. No USB driver replacement,
+REST API. The WinTopas4 GUI can stay closed; its Topas4 Server process must remain
+running. No USB driver replacement,
 motor calibration change, laser power control, homing, or vendor interlock bypass
 is involved.
 
@@ -18,7 +19,9 @@ is involved.
 On this installation the normal GUI launch left the device server unavailable.
 Launching the existing signed WinTopas4 application using **Run as administrator**
 started its API server successfully in the interactive desktop session. The final
-vendor server is a child of WinTopas4, not of the diagnostic SSH process.
+vendor server was started by WinTopas4 in the interactive desktop session and
+remained running after the GUI closed. It is independent of diagnostic SSH
+sessions. This does not establish automatic vendor-server startup after reboot.
 
 The serial number in the API URL identifies the vendor's configured instance.
 It is not an independently measured USB serial number. Vendor `Wavelength`
@@ -51,6 +54,50 @@ reports the requested target while tuning; consult `is_tuning` and
    or change wavelength. The vendor server must be started separately.
 
 Default Tango device: `manip/laser/topas_t21082`.
+
+### Elysium2 permanent Tango instance
+
+The instance was registered on 2026-11-20 as `DS_TOPAS/T21082`, host `elysium2`,
+mode 1, level 1. `tango/admin/elysium2` starts
+`C:\dev\pyconlyse\DeviceServers\DS_TOPAS.exe`. This small launcher reads
+`DS_TOPAS.runtime.json` beside the executable:
+
+```json
+{
+  "python": "C:\\Users\\ECX-3100\\.conda\\envs\\pyconlyse312\\python.exe",
+  "root": "C:\\dev\\pyconlyse-releases\\topas-718157345",
+  "tango_host": "10.20.30.202:10000"
+}
+```
+
+Compile `DS_TOPAS_launcher.cs` with the Windows .NET Framework C# compiler and
+`/reference:System.Web.Extensions.dll`. The launcher owns the Python process in
+a Windows job with `KILL_ON_JOB_CLOSE`, redirects logs to `DS_TOPAS.log`, and
+does not start or stop the vendor server. A Starter stop/start was checked:
+the old launcher and Python child both exited, then the replacement returned
+fresh `ON` telemetry while the same vendor server stayed running.
+
+## Web Equipment panel
+
+Open **Equipment → TOPAS** (`/topas`). The panel provides wavelength and
+interaction selection, shutter control, output information, operator messages,
+and all installed motor readbacks with manual targets in physical units or
+steps. A target must satisfy configured travel and forbidden ranges; accepted
+motor commands require matching target readback within one hardware quantum.
+No homing or calibration editing is added.
+
+Saved wavelengths are local browser drafts, not complete motor-calibration
+presets. Loading one does not move hardware; Set or Enter submits it. Draft
+edits survive telemetry refresh. Stale data are marked and disable motion.
+
+The panel uses the existing Web device API and its hardware-approval transport.
+`SubmitOperation` receives a unique request ID and an allowlisted command. The
+Tango monitor deduplicates IDs, so a retry in the generic Web transport does not
+repeat a hardware write. Background reads never enqueue writes.
+
+The frontend is deployed with new hashed assets and an updated index; existing
+hashed assets remain available to open tabs. No Web backend change or Web
+restart is needed for this panel.
 
 | Property | Default | Meaning |
 | --- | --- | --- |
@@ -129,8 +176,20 @@ command acceptance, not optical motion or tuning completion.
 Open-shutter interlock rejection, manual-action confirmation, stale telemetry,
 and uncertain write outcomes were exercised by software tests. The context
 servers were temporary and did not register devices in the production Tango
-database. Permanent Astor registration/startup remains a separate deployment
-step using the commands above.
+database. The subsequent permanent instance and Web path use the same driver;
+the release was independently extracted and SHA-256 checked on Elysium2.
+
+At the Web-panel release, driver tests passed `31/31` and focused frontend tests
+passed `10/10`. The production frontend compiled with existing warnings in
+unrelated components. The deployment checks hashes of the complete live
+frontend input set before installing the bundle, retaining concurrent edits.
+
+Browser validation followed Equipment's TOPAS card, read all 12 installed
+motors, retained an edited wavelength draft across Refresh, and submitted the
+unchanged `600 nm / SH-SIG` setting using both Enter and Set. Both submissions
+reached `accepted`, followed by fresh idle readback at `600 nm`, with the shutter
+still closed. This checks the Web-to-Tango path without testing a new optical
+setting or opening the laser shutter.
 
 ## Protocol references
 
