@@ -50,7 +50,8 @@ const Equipment = () => {
     { id: 6, label: "Vacuum", img: "/images/vacuum.png" },
     { id: 7, label: "Pumps", img: "/images/pumps.png" },
     { id: 8, label: "Laser Pointing", img: "/images/cameras.png" },
-    { id: 9, label: "Electronics", img: "/images/electronics.png" }
+    { id: 9, label: "Electronics", img: "/images/electronics.png" },
+    { id: 10, label: "TOPAS", img: "/images/electronics.png" }
   ];
 
   const updateWidget = (equipmentId) => {
@@ -78,6 +79,8 @@ const Equipment = () => {
     } else if (equipmentId === 8) {
       setStatusMessage("Open the two LaserPointing controllers and automatic alignment controls.");
       setShowLaserPointingModal(true);
+    } else if (equipmentId === 10) {
+      openRoute('/topas');
     } else if (equipmentId === 9) {
       setStatusMessage("Open Keysight waveform generators and SRS DG645 timing controllers.");
       setShowElectronicsModal(true);

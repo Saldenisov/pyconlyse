@@ -242,3 +242,40 @@ def test_ambiguous_write_results_are_not_treated_as_ordinary_rejection(rig, resu
     values['/Optical/WavelengthControl/SetWavelength'] = result
     with pytest.raises(OutcomeUnknown):
         client.set_wavelength(601)
+
+
+def test_web_request_id_is_deduplicated_before_and_after_execution(rig):
+    client, _, _, calls = rig
+    monitor = TopasMonitor(client)
+    monitor.refresh()
+    identifier = '1' * 32
+    assert monitor.submit('set_shutter', False, request_id=identifier) == identifier
+    assert monitor.submit('set_shutter', False, request_id=identifier) == identifier
+    with pytest.raises(ValueError, match='different arguments'):
+        monitor.submit('set_shutter', 0, request_id=identifier)
+    monitor.execute_pending()
+    assert monitor.submit('set_shutter', False, request_id=identifier) == identifier
+    monitor.execute_pending()
+    assert writes(calls) == [('PUT', '/ShutterInterlock/OpenCloseShutter', False)]
+
+
+@pytest.mark.parametrize('target,unit', [(2.5, 'units'), (250, 'steps')])
+def test_motor_target_requires_limits_and_matching_target_readback(rig, target, unit):
+    client, _, values, calls = rig
+    values['/Motors/AllProperties']['Motors'] = [{'Index': 1, 'MinimalPositionInUnits': 0,
+        'MaximalPositionInUnits': 10, 'MaximalPosition': 1000, 'Factor': 100, 'StepDivision': 0,
+        'Affix': 0, 'ForbiddenRanges': [{'IsEnabled': True, 'From': 4, 'To': 6}]}]
+    path = '/Motors/TargetPosition' + ('InUnits' if unit == 'units' else '') + '?id=1'
+    values[path] = target
+    assert client.set_motor_position(1, target, unit)['target'] == target
+    assert writes(calls) == [('PUT', path, target)]
+    calls.clear()
+    with pytest.raises(ValueError, match='forbidden'):
+        client.set_motor_position(1, 5 if unit == 'units' else 500, unit)
+    assert writes(calls) == []
+    values[path] = target + 1
+    with pytest.raises(TopasError, match='confirm the motor target'):
+        client.set_motor_position(1, target, unit)
+    if unit == 'units':
+        values[path] = target + .005
+        assert client.set_motor_position(1, target, unit)['target'] == target + .005

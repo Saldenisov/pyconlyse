@@ -6,6 +6,7 @@ import Home from './Home';
 import Dashboard from './Dashboard';
 import Settings from './Settings';
 import Equipment from './Equipment';
+import TopasControl from './TopasControl';
 import Elyse from "./Elyse";
 import DataTreatment from "./DataTreatment";
 import StandaMotorsExample from './StandaMotorsExample';
@@ -32,6 +33,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/equipment" element={<Equipment />} />
+          <Route path="/topas" element={<TopasControl />} />
           <Route path="/elyse" element={<Elyse />} />
           <Route path="/datatreatment" element={<DataTreatment />} />
           <Route path="/dashboard" element={<Dashboard />} />

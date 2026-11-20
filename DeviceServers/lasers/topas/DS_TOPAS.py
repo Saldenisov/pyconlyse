@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import sys
+from uuid import UUID
 
 from tango import AttrWriteType, DevState
 from tango.server import Device, attribute, command, device_property
@@ -181,6 +182,23 @@ class DS_TOPAS(Device):
     def ClearError(self):
         """Explicit acknowledgement only; never retries a hardware operation."""
         self._monitor().clear_error()
+
+    @command(dtype_in=str, dtype_out=str)
+    def SubmitOperation(self, value):
+        """Deduplicate a Web intent across transport retries, without replaying it."""
+        selection = json.loads(value)
+        if not isinstance(selection, dict) or set(selection) != {'request_id', 'command', 'arguments'}:
+            raise ValueError('Supply request_id, command and arguments')
+        request_id = UUID(selection['request_id']).hex
+        args = selection['arguments']
+        command = selection['command']
+        if not isinstance(args, list):
+            raise ValueError('Arguments must be an array')
+        arity = {'set_wavelength': (1, 2), 'set_shutter': (1,), 'set_motor_position': (3,),
+                 'confirm_user_actions': (0,), 'stop_motors': (0,)}
+        if command not in arity or len(args) not in arity[command]:
+            raise ValueError('Unsupported TOPAS operation or argument count')
+        return self._monitor().submit(command, *args, request_id=request_id)
 
 
 if __name__ == '__main__':

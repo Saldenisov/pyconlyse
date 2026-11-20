@@ -150,3 +150,36 @@ class TopasClient:
     def stop_motors(self):
         self._authorize(self.read_core())
         return self._request('POST', '/Motors/StopAll')
+
+    def set_motor_position(self, motor_id, position, units='units'):
+        if type(motor_id) is not int or motor_id < 0 or units not in {'units', 'steps'}:
+            raise ValueError('Supply a motor index and units or steps')
+        target = finite_number(position, 'Motor target')
+        state = self.read_snapshot()
+        self._authorize(state)
+        if state['output']['IsWavelengthSettingInProgress'] or state['output']['IsWaitingForUserAction']:
+            raise TopasError('Finish TOPAS wavelength setting before adjusting individual motors')
+        motor = next((v for v in state['motors'] if v.get('Index') == motor_id), None)
+        if motor is None or motor.get('IsFrozen') or motor.get('IsHoming'):
+            raise TopasError('TOPAS motor is unavailable, frozen or homing')
+        scale = finite_number(motor.get('Factor'), 'Motor unit scale') * 2 ** int(motor['StepDivision'])
+        if scale == 0:
+            raise TopasError('TOPAS motor has no valid unit conversion')
+        if units == 'steps':
+            if target != int(target) or not 0 <= target <= finite_number(motor.get('MaximalPosition'), 'Motor maximum'):
+                raise ValueError('Motor steps are outside the configured travel')
+            physical = target / scale + float(motor['Affix'])
+        else:
+            if not finite_number(motor.get('MinimalPositionInUnits'), 'Motor minimum') <= target <= finite_number(motor.get('MaximalPositionInUnits'), 'Motor maximum'):
+                raise ValueError('Motor target is outside the configured travel')
+            physical = target
+        for forbidden in motor.get('ForbiddenRanges', []):
+            if forbidden.get('IsEnabled') and float(forbidden['From']) <= physical <= float(forbidden['To']):
+                raise ValueError('Motor target is inside a vendor-configured forbidden range')
+        path = '/Motors/TargetPosition' + ('InUnits' if units == 'units' else '') + f'?id={motor_id}'
+        self._request('PUT', path, target)
+        actual = finite_number(self._request('GET', path), 'Motor target readback')
+        tolerance = abs(1 / scale) + 1e-9 if units == 'units' else .1
+        if not math.isclose(actual, target, rel_tol=0, abs_tol=tolerance):
+            raise TopasError('TOPAS did not confirm the motor target; inspect motor readback')
+        return {'motor_id': motor_id, 'target': actual, 'units': units}

@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--serial', required=True)
     parser.add_argument('--api-host', default='127.0.0.1')
     parser.add_argument('--api-port', type=int, default=8004)
+    parser.add_argument('--server-host', default=socket.gethostname().lower())
     args = parser.parse_args()
     client = TopasClient(args.api_host, args.api_port, args.serial)
     client.close()
@@ -34,7 +35,7 @@ def main():
         'timeout_s': 2.0, 'poll_interval_s': 1.0, 'stale_after_s': 5.0,
     })
     info = DbServerInfo()
-    info.name, info.host, info.mode, info.level = server, socket.getfqdn(), 1, 1
+    info.name, info.host, info.mode, info.level = server, args.server_host, 1, 1
     db.put_server_info(info)
     print(f'Registered {args.device_name} on {server}; vendor software and hardware were not started')
 

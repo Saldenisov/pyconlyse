@@ -1,6 +1,8 @@
 """One bounded worker owns REST I/O; Tango reads never wait on tuning or HTTP."""
 from copy import deepcopy
+from collections import OrderedDict
 import math
+import json
 from threading import Event, Lock, Thread
 import time
 from uuid import uuid4
@@ -24,6 +26,7 @@ class TopasMonitor:
         self.uncertain = False
         self.uncertain_operation = None
         self.thread = None
+        self.requests = OrderedDict()
 
     def start(self):
         self.thread = Thread(target=self._run, name='topas-rest', daemon=True)
@@ -45,7 +48,7 @@ class TopasMonitor:
             fresh = age is not None and age <= self.stale_after and not self.read_error
             return deepcopy({'data': self.data, 'age_s': age, 'fresh': fresh, 'received_at': self.received_at,
                              'read_error': self.read_error, 'operation': self.operation, 'outcome_unknown': self.uncertain,
-                             'uncertain_operation': self.uncertain_operation})
+                             'uncertain_operation': self.uncertain_operation, 'stale_after_s': self.stale_after})
 
     def require_fresh(self):
         snapshot = self.snapshot()
@@ -53,20 +56,28 @@ class TopasMonitor:
             raise TopasError(snapshot['read_error'] or 'TOPAS telemetry is unavailable or stale')
         return snapshot['data']
 
-    def submit(self, command, *args):
-        if command not in {'set_wavelength', 'set_shutter', 'confirm_user_actions', 'stop_motors'}:
+    def submit(self, command, *args, request_id=None):
+        if command not in {'set_wavelength', 'set_shutter', 'confirm_user_actions', 'stop_motors', 'set_motor_position'}:
             raise ValueError('Unsupported TOPAS operation')
+        signature = json.dumps([command, args], sort_keys=True, allow_nan=False)
         with self.lock:
+            if request_id is not None and request_id in self.requests:
+                if self.requests[request_id] != signature:
+                    raise ValueError('TOPAS request ID was reused with different arguments')
+                return request_id
             if self.stop_event.is_set():
                 raise TopasError('TOPAS REST worker is stopping')
             if self.pending or (self.operation and self.operation['status'] in {'queued', 'running'}):
                 raise TopasError('A TOPAS request is already pending; inspect operation_json')
             if self.uncertain and not (command == 'set_shutter' and args == (False,)) and command != 'stop_motors':
                 raise TopasError('Prior command outcome is unknown; verify TOPAS and explicitly acknowledge before retrying')
-            operation = {'id': uuid4().hex, 'command': command, 'arguments': args,
+            operation = {'id': request_id or uuid4().hex, 'command': command, 'arguments': args,
                          'status': 'queued', 'error': '', 'submitted_at': time.time()}
             self.operation = operation
             self.pending = (operation['id'], command, args)
+            self.requests[operation['id']] = signature
+            while len(self.requests) > 128:
+                self.requests.popitem(last=False)
         self.wake.set()
         return operation['id']
 
