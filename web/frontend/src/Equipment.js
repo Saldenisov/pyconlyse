@@ -79,7 +79,7 @@ const Equipment = () => {
       setStatusMessage("Open the two LaserPointing controllers and automatic alignment controls.");
       setShowLaserPointingModal(true);
     } else if (equipmentId === 9) {
-      setStatusMessage("Open Keysight waveform generators and SRS DG645 timing controllers.");
+      setStatusMessage("Open Keysight, SRS DG645, and TOPAS controls.");
       setShowElectronicsModal(true);
     } else {
       setStatusMessage(
@@ -221,11 +221,14 @@ const Equipment = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Electronics</h2>
             <p className="modal-description">
-              Keysight waveform generators and SRS DG645 digital delay generators.
+              Keysight waveform generators, SRS DG645 digital delay generators, and TOPAS.
             </p>
             <div className="modal-links">
               <button type="button" className="modal-link" onClick={() => openRoute("/electronics-clients")}>
                 Open Electronics Controllers
+              </button>
+              <button type="button" className="modal-link" onClick={() => openRoute("/topas")}>
+                TOPAS
               </button>
             </div>
             <button onClick={() => setShowElectronicsModal(false)} className="modal-close">Close</button>

@@ -65,6 +65,10 @@ const ElectronicsClients = ({ deviceOverride = null }) => {
         <Link className="electronics-back-link" to="/equipment">Back to Equipment</Link>
       </header>
 
+      <section className="electronics-selector">
+        <Link className="electronics-back-link" to="/topas">TOPAS · Wavelength, shutter, and motors</Link>
+      </section>
+
       {loading && <p>Discovering electronics device servers…</p>}
       {error && <div className="electronics-alert error"><strong>Error:</strong> {error}</div>}
       {!loading && !error && devices.length === 0 && <div className="electronics-alert">No Keysight or DG645 Tango devices were found.</div>}
