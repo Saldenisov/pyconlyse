@@ -99,7 +99,7 @@
 }
 
 .pp-layout { position: relative; grid-template-columns: 400px minmax(560px, 1fr); grid-template-rows: auto; }
-.pp-center-grid { aspect-ratio: auto; grid-template-rows: 280px 350px; }
+.pp-center-grid { aspect-ratio: auto; grid-template-rows: 280px 370px; }
 .pp-center-grid > .pp-panel { height: 280px; align-self: start; }
 .pp-current-monitor-window.pp-left-column {
   display: block;
@@ -158,5 +158,5 @@
   .pp-stage-panel-horizontal .pp-stage-readouts { grid-template-columns: 1fr; }
 }
 @media (max-width: 680px) {
-  .pp-center-grid { grid-template-columns: 1fr; grid-template-rows: repeat(3, 280px) 350px; }
+  .pp-center-grid { grid-template-columns: 1fr; grid-template-rows: repeat(3, 280px) 370px; }
 }
