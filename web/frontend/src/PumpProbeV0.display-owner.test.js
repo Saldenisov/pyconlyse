@@ -148,9 +148,11 @@ test('a late file load cannot replace the live display or retained file after st
     if (path === '/run') return acceptRun();
     return serverState;
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Files' }));
   fireEvent.click(screen.getByRole('button', { name: 'Load fixture' }));
   await waitFor(() => expect(finishLoad).toEqual(expect.any(Function)));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   await waitFor(() => expect(plot()).toEqual(livePlot));
   await act(async () => {
     finishLoad({ ...file, file_name: 'late.dat', heatmap: file.heatmap.map((row) => row.map(() => 999)) });
@@ -183,6 +185,7 @@ test('loading a RAW-only file leaves OD explicitly owned by live', async () => {
   pumpProbeRequest.mockImplementation(async (path) => path === '/data/load'
     ? { ...file, heatmap: undefined, channels: [{ key: 'raw', values: file.heatmap }] }
     : serverState);
+  fireEvent.click(screen.getByRole('button', { name: 'Files' }));
   fireEvent.click(screen.getByRole('button', { name: 'Load fixture' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Live OD' })).toHaveAttribute('aria-pressed', 'true'));
   expect(screen.getByRole('button', { name: 'File OD' })).toBeDisabled();

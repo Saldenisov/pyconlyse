@@ -9,6 +9,7 @@ import './css/PumpProbeV0.css';
 // Coordinates V0 state, API calls, and data selection. Panels live in pump-probe-v0/components.
 function PumpProbeV0() {
   const {
+    activeTab, setActiveTab, hardwareConfigReady, preparationJob,
     settings, setSettings, hardwareConfig, setHardwareConfig, deviceConfig,
     setDeviceConfig, deviceConfigKey, setDeviceConfigKey, samplePositionMm,
     setSamplePositionMm, sampleTargetMm, setSampleTargetMm, samplePositionsMm,
@@ -43,6 +44,7 @@ function PumpProbeV0() {
     visibleRawDataset, delays, heatmap, liveOd, currentIndex, activeCurrentIndex, running,
     handleRun,
   } = useV0Configuration({
+    hardwareConfigReady, setActiveTab,
     settings, setSettings, hardwareConfig, setHardwareConfig, deviceConfig,
     setDeviceConfig, samplePositionMm, setSamplePositionMm, sampleTargetMm,
     setSampleTargetMm, samplePositionsMm, setSamplePositionsMm, fallbackRun, backendState,
@@ -81,6 +83,7 @@ function PumpProbeV0() {
   });
 
   return renderV0Workspace({
+    activeTab, setActiveTab, hardwareConfigReady, preparationJob,
     settings, hardwareConfig, deviceConfig, setDeviceConfig, deviceConfigKey,
     setDeviceConfigKey, samplePositionsMm, setSamplePositionsMm, backendState,
     setBackendState, backendError, configurationError, actionError, runBusy,

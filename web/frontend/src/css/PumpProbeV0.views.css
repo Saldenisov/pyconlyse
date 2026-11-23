@@ -1,0 +1,63 @@
+.pp-current-monitor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pp-current-monitor-compact.pp-left-column {
+  grid-template-rows: repeat(2, minmax(200px, 1fr));
+  height: 460px;
+  align-self: start;
+}
+
+.pp-current-monitor-expanded {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: clamp(380px, 55vh, 620px);
+  width: 100%;
+}
+
+.pp-current-monitor .pp-panel-title {
+  min-height: 32px;
+  height: auto;
+  flex-wrap: wrap;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  box-sizing: border-box;
+}
+
+.pp-current-monitor .pp-panel-fill {
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-current-monitor .pp-plot {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.pp-current-monitor .pp-panel-toggle button {
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.pp-hardware-tools {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.pp-hardware-tools button {
+  padding: 7px 12px;
+  border: 1px solid #59636d;
+  border-radius: 4px;
+  background: #303740;
+  color: #d9dde4;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .pp-current-monitor-expanded {
+    grid-template-columns: 1fr;
+  }
+}

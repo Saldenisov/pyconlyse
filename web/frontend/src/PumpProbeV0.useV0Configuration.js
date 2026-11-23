@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { SAMPLE_STAGE_MIN_MM, SAMPLE_STAGE_MAX_MM, SAMPLE_STAGE_SPEED_MM_PER_SEC, pumpProbeRequest, clamp, parseDelayPointsText, settingsToApi, hardwareConfigToApi, hardwareConfigFromApi } from './pump-probe-v0/shared';
 
 export function useV0Configuration({
+  hardwareConfigReady, setActiveTab,
   settings, setSettings, hardwareConfig, setHardwareConfig, deviceConfig,
   setDeviceConfig, samplePositionMm, setSamplePositionMm, sampleTargetMm,
   setSampleTargetMm, samplePositionsMm, setSamplePositionsMm, fallbackRun, backendState,
@@ -37,6 +38,7 @@ export function useV0Configuration({
       setSpectraViewMode(payload.channels?.length ? 'raw' : 'current');
       setSelectedWavelengthRange(null); setSelectedDelayRange(null); setLocalIndex(0);
       setPlotRevision((value) => value + 1);
+      setActiveTab('acquisition');
     } catch (error) {
       if (epoch === odDisplayEpochRef.current && error.name !== 'AbortError') setDeriveError(error.message);
     } finally {
@@ -270,8 +272,9 @@ export function useV0Configuration({
   }, [queueConfiguration]);
 
   useEffect(() => {
+    if (!hardwareConfigReady) return;
     queueConfiguration(configurationPayload).catch(() => {});
-  }, [configurationPayload, queueConfiguration]);
+  }, [configurationPayload, hardwareConfigReady, queueConfiguration]);
 
   useEffect(() => {
     if (netioOpen) {

@@ -246,6 +246,7 @@ function DeviceConfigModal({
 
 function DataBrowserWindow({
   open,
+  embedded = false,
   sampleName,
   root,
   path,
@@ -268,7 +269,9 @@ function DataBrowserWindow({
   }
 
   return (
-    <section className="pp-data-window">
+    <section className={`pp-data-window${embedded ? ' pp-data-window-embedded' : ''}`}
+      role={embedded ? 'tabpanel' : undefined} id={embedded ? 'pp-view-files' : undefined}
+      aria-labelledby={embedded ? 'pp-tab-files' : undefined}>
       <div className="pp-device-modal-title">
         <span>Data</span>
         <button type="button" onClick={onClose}>Close</button>

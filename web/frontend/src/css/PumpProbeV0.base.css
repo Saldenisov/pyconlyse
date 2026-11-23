@@ -1,6 +1,6 @@
 .pp-page {
   min-height: calc(100vh - 58px);
-  padding: 16px;
+  padding: 8px;
   background: #1b2026;
   color: #d9dde4;
 }
@@ -9,9 +9,9 @@
   display: grid;
   grid-template-columns: minmax(210px, auto) minmax(360px, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  min-height: 92px;
-  padding: 10px 14px;
+  gap: 8px;
+  min-height: 66px;
+  padding: 6px 8px;
   border: 1px solid #48515b;
   background: #2b3037;
 }
@@ -19,7 +19,7 @@
 .pp-header h1 {
   margin: 0;
   color: #f1c84b;
-  font-size: 24px;
+  font-size: 19px;
   letter-spacing: 0;
   text-shadow: none;
 }
@@ -33,7 +33,7 @@
 .pp-run-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   justify-content: flex-end;
 }
 
@@ -71,9 +71,10 @@
 
 .pp-run-controls button,
 .pp-stage-actions button {
-  min-width: 78px;
-  height: 34px;
-  padding: 0 10px;
+  min-width: 58px;
+  height: 27px;
+  padding: 0 7px;
+  font-size: 12px;
   border: 1px solid #68727d;
   background: #343b44;
   color: #f5f7fa;
@@ -218,27 +219,70 @@
 }
 
 .pp-status-strip {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(110px, 1fr));
-  gap: 8px;
-  margin: 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 6px 0;
 }
 
 .pp-status-strip div {
-  min-height: 44px;
-  padding: 7px 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-height: 24px;
+  padding: 3px 7px;
   border: 1px solid #3f4953;
   background: #11151b;
   color: #f5f7fa;
-  font-size: 18px;
+  font-size: 12px;
 }
 
 .pp-status-strip span {
-  display: block;
-  margin-bottom: 2px;
+  margin: 0;
   color: #8d97a3;
-  font-size: 11px;
-  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.pp-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+  border-bottom: 1px solid #46515c;
+}
+
+.pp-view-tabs button {
+  padding: 5px 12px;
+  border: 1px solid #59636d;
+  border-radius: 3px 3px 0 0;
+  background: #252b32;
+  color: #d9dde4;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pp-view-tabs button[aria-selected="true"] {
+  border-color: #5098dc;
+  background: #253c51;
+  color: #fff;
+}
+
+.pp-data-window.pp-data-window-embedded {
+  position: static;
+  box-sizing: border-box;
+  width: 100%;
+  max-height: none;
+  box-shadow: none;
+}
+
+.pp-alignment-magnets {
+  max-width: 1100px;
+}
+
+.pp-preparation-progress,
+.pp-hw-init summary {
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .pp-api-error {
@@ -773,15 +817,4 @@
   display: block;
   color: #f5f7fa;
   font-weight: 700;
-}
-
-.pp-tango-row small,
-.pp-tango-row em {
-  display: block;
-  overflow: hidden;
-  color: #9fa8b3;
-  font-size: 10px;
-  font-style: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

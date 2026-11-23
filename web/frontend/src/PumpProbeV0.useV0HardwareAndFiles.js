@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_SAMPLE_POSITIONS_MM, API_BASE, pumpProbeRequest, compactHardwareError, fetchJsonWithRetry, buildSyntheticRun, DEFAULT_SETTINGS, DEFAULT_HARDWARE_CONFIG, DEFAULT_DEVICE_CONFIG, NETIO_POWER_CHANNELS, HARDWARE_TANGO_SERVERS, devicePath, normalizeNetioOutputs, activeDelayPoints } from './pump-probe-v0/shared';
+import { DEFAULT_SAMPLE_POSITIONS_MM, API_BASE, pumpProbeRequest, compactHardwareError, fetchJsonWithRetry, buildSyntheticRun, DEFAULT_SETTINGS, DEFAULT_HARDWARE_CONFIG, DEFAULT_DEVICE_CONFIG, NETIO_POWER_CHANNELS, HARDWARE_TANGO_SERVERS, devicePath, normalizeNetioOutputs, activeDelayPoints, hardwareConfigFromApi } from './pump-probe-v0/shared';
 
 export function useV0HardwareAndFiles() {
+  const [activeTab, setActiveTab] = useState('acquisition');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [hardwareConfig, setHardwareConfig] = useState(DEFAULT_HARDWARE_CONFIG);
+  const [hardwareConfigReady, setHardwareConfigReady] = useState(false);
+  const serverControlMode = useRef(null);
   const [deviceConfig, setDeviceConfig] = useState(DEFAULT_DEVICE_CONFIG);
   const [deviceConfigKey, setDeviceConfigKey] = useState(null);
   const [samplePositionMm, setSamplePositionMm] = useState(0);
@@ -38,6 +41,7 @@ export function useV0HardwareAndFiles() {
   const [tangoError, setTangoError] = useState('');
   const [hardwareInitStatus, setHardwareInitStatus] = useState(null);
   const [hardwareInitLoading, setHardwareInitLoading] = useState(false);
+  const [preparationJob, setPreparationJob] = useState(null);
   const [sampleName, setSampleName] = useState('');
   const [dataBrowserOpen, setDataBrowserOpen] = useState(false);
   const [dataRoot, setDataRoot] = useState('');
@@ -74,6 +78,28 @@ export function useV0HardwareAndFiles() {
     odDisplayEpochRef.current += 1;
     deriveControllerRef.current?.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    pumpProbeRequest('/hardware-config', { signal: controller.signal }).then(result => {
+      if (controller.signal.aborted) return;
+      const config = hardwareConfigFromApi(result.hardware_config || result);
+      serverControlMode.current = config.controlMode;
+      stateMutationRevisionRef.current += 1;
+      setHardwareConfig(config);
+      setHardwareConfigReady(true);
+    }).catch(error => {
+      if (!controller.signal.aborted) setConfigurationError(error.message);
+    });
+    return () => controller.abort();
+  }, []);
+
+  const reportedControlMode = backendState?.hardware_config?.control_mode;
+  useEffect(() => {
+    if (!hardwareConfigReady || !reportedControlMode || serverControlMode.current === reportedControlMode) return;
+    serverControlMode.current = reportedControlMode;
+    setHardwareConfig(current => ({ ...current, controlMode: reportedControlMode }));
+  }, [hardwareConfigReady, reportedControlMode]);
 
   const closeHardwareModal = useCallback(() => {
     setNetioOpen(false);
@@ -127,10 +153,14 @@ export function useV0HardwareAndFiles() {
   const runHardwareInitialization = useCallback(async (fix = true) => {
     setHardwareInitLoading(true);
     try {
-      const status = await pumpProbeRequest(fix ? '/hardware/initialize' : '/hardware/preflight', {
+      const status = await pumpProbeRequest(fix ? '/hardware/initialize?background=1' : '/hardware/preflight', {
         method: 'POST',
         body: JSON.stringify({}),
       });
+      if (status.job) {
+        setPreparationJob(status.job);
+        return status;
+      }
       setHardwareInitStatus(status);
       setBackendError(status.success ? '' : (status.recommendation || status.message || 'Hardware initialization failed'));
       await refreshState();
@@ -143,6 +173,30 @@ export function useV0HardwareAndFiles() {
       setHardwareInitLoading(false);
     }
   }, [refreshState]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer;
+    async function poll() {
+      try {
+        const result = await pumpProbeRequest('/lifecycle', { signal: controller.signal });
+        const job = result.job;
+        if (controller.signal.aborted || !job || job.operation !== 'prepare') return;
+        setPreparationJob(job);
+        if (job.status === 'completed' && job.result) setHardwareInitStatus(job.result);
+        if (['failed', 'interrupted'].includes(job.status)) {
+          setHardwareInitStatus({ success: false, message: job.error || job.phase,
+            checks: (job.steps || []).filter(step => step.label) });
+        }
+      } catch {
+        // Keep the last confirmed job while a temporary connection is retried.
+      } finally {
+        if (!controller.signal.aborted) timer = window.setTimeout(poll, 2000);
+      }
+    }
+    poll();
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, []);
 
   const loadNetioOutputs = useCallback(async () => {
     const deviceNames = [...new Set(NETIO_POWER_CHANNELS.map((channel) => channel.device))];
@@ -427,6 +481,7 @@ export function useV0HardwareAndFiles() {
       }
       setRawDataset(payload.channels?.length ? payload : null);
       setSpectraViewMode(payload.channels?.length ? 'raw' : 'current');
+      setActiveTab('acquisition');
     } catch (error) {
       if (loadEpoch === odDisplayEpochRef.current) setDataError(error.message);
     } finally {
@@ -446,6 +501,7 @@ export function useV0HardwareAndFiles() {
   };
 
   return {
+    activeTab, setActiveTab, hardwareConfigReady, preparationJob,
     settings, setSettings, hardwareConfig, setHardwareConfig, deviceConfig,
     setDeviceConfig, deviceConfigKey, setDeviceConfigKey, samplePositionMm,
     setSamplePositionMm, sampleTargetMm, setSampleTargetMm, samplePositionsMm,

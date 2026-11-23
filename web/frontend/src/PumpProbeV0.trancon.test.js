@@ -73,8 +73,8 @@ function selection() { return JSON.parse(screen.getByTestId('trancon-selection')
 function requests(path) { return pumpProbeRequest.mock.calls.filter(([value]) => value === path); }
 function body(call) { return JSON.parse(call[1].body); }
 function sourceOrder() {
-  return within(screen.getByRole('region', { name: 'Derived dataset sources' }))
-    .getAllByRole('listitem').map((item) => item.querySelector('[title]').getAttribute('title'));
+  return within(screen.getByRole('region', { name: 'Derived dataset sources', hidden: true }))
+    .getAllByRole('listitem', { hidden: true }).map((item) => item.querySelector('[title]').getAttribute('title'));
 }
 function derived(method, sources) {
   return { ...SOURCE_A, path: `derived:${method}`, file_name: `derived:${method}`,
@@ -91,6 +91,7 @@ async function openFiles() {
   await screen.findByRole('button', { name: 'Load source A' });
 }
 async function load(letter) {
+  await openFiles();
   fireEvent.click(screen.getByRole('button', { name: `Load source ${letter}` }));
   await waitFor(() => expect(heatmap().trace.z).toEqual(files[`${letter.toLowerCase()}.dat`].heatmap));
 }
@@ -98,6 +99,7 @@ async function readySources() {
   await openFiles();
   await load('A');
   await load('B');
+  fireEvent.click(screen.getByRole('tab', { name: 'Combine files' }));
 }
 
 beforeEach(() => {
@@ -136,6 +138,7 @@ test('Tango start binds the exact preview fingerprint before requesting hardware
   fireEvent.change(screen.getByRole('textbox', { name: 'Folder' }), { target: { value: 'new-run' } });
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(requests('/run')).toHaveLength(1));
+  expect(requests('/config').every(call => body(call).hardware_config.control_mode === 'tango')).toBe(true);
   expect(requests('/run/plan')).toHaveLength(1);
   const preview = requests('/run/plan')[0];
   expect(body(requests('/run')[0])).toEqual({ ...body(preview), plan_fingerprint: planReply.fingerprint });
@@ -195,6 +198,7 @@ test('a late derived reply after acknowledged Start cannot replace live or retai
   fireEvent.click(screen.getByRole('button', { name: 'Combine' }));
   await waitFor(() => expect(requests('/data/derive')).toHaveLength(1));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   await waitFor(() => expect(heatmap().trace.z).toEqual(LIVE.heatmap));
   expect(requests('/data/derive')[0][1].signal.aborted).toBe(true);
   await act(async () => { pending.resolve(derived('average', [])); });

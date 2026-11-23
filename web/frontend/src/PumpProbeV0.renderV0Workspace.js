@@ -1,9 +1,12 @@
+import CurrentMonitor from './pump-probe-v0/CurrentMonitor';
+import AlignmentPanel from './pump-probe-v0/AlignmentPanel';
 import TreatmentPanel from './pump-probe-v0/TreatmentPanel';
 import DerivedSourcePanel from './pump-probe-v0/DerivedSourcePanel';
 import { NETIO_POWER_CHANNELS, HARDWARE_TANGO_SERVERS, displayPathTail } from './pump-probe-v0/shared';
 import { PlotPanel, SampleStageControl, DeviceConfigModal, DataBrowserWindow, HardwareModal, PlotlyChart, HeatmapSelectorChart, StageControl, SettingsPanel } from './pump-probe-v0/components';
 
 export function renderV0Workspace({
+  activeTab, setActiveTab, hardwareConfigReady, preparationJob,
   settings, hardwareConfig, deviceConfig, setDeviceConfig, deviceConfigKey,
   setDeviceConfigKey, samplePositionsMm, setSamplePositionsMm, backendState,
   setBackendState, backendError, configurationError, actionError, runBusy,
@@ -35,6 +38,12 @@ export function renderV0Workspace({
   kineticsLayout, heatmapData, heatmapLayout, heatmapConfig, delayPreviewData,
   delayPreviewLayout, delayPreviewConfig, chartConfig, plotInteractionProps,
 }) {
+  const currentMonitorProps = {
+    spectraTitle, spectraData, spectraLayout, odSpectrumData, odSpectrumLayout,
+    chartConfig, plotInteractionProps, spectraViewMode,
+    onSpectraViewChange: setSpectraViewMode, hasRaw: Boolean(visibleRawDataset?.channels?.length),
+    realTime, onToggleRealTime: () => postAndRefresh('/realtime', { enabled: !realTime }),
+  };
   return (
     <main className="pp-page">
       <header className="pp-header">
@@ -54,34 +63,13 @@ export function renderV0Workspace({
         <div className="pp-run-controls">
           <button
             type="button"
-            className={`pp-device-pill ${netioAnyOn ? 'pp-device-powered' : ''}`}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setNetioOpen(true);
-            }}
-            onClick={() => setNetioOpen(true)}
-          >
-            Hardware
-          </button>
-          <button
-            type="button"
-            className={hardwareInitStatus?.success ? 'pp-action-ok' : ''}
-            disabled={hardwareInitLoading}
-            onClick={() => runHardwareInitialization(true)}
-            title="Check Tango servers, NETIO power, OWIS axes, DG645 recall 8, and DAQmx counter"
-          >
-            {hardwareInitLoading ? 'Init...' : 'Initialize HW'}
-          </button>
-          <button
-            type="button"
-            disabled={runBusy || backendState?.run?.status === 'stopping'}
+            disabled={!hardwareConfigReady || runBusy || backendState?.run?.status === 'stopping'}
             onClick={() => handleRun('new')}
           >
             {runBusy ? 'Preparing...' : running ? 'Stop' : backendState?.run?.status === 'stopping' ? 'Stopping...' : 'Start'}
           </button>
           {!running && backendState?.run?.resume_available && (
-            <button type="button" disabled={runBusy} onClick={() => handleRun('continue')}>Continue</button>
+            <button type="button" disabled={!hardwareConfigReady || runBusy} onClick={() => handleRun('continue')}>Continue</button>
           )}
           {(running || backendState?.run?.resume_available) && (
             <button type="button" onClick={() => postAndRefresh('/run', { running: false, run_action: 'cancel' })}>Cancel run</button>
@@ -100,15 +88,6 @@ export function renderV0Workspace({
           </button>
           <button type="button" onClick={() => postAndRefresh('/crystal/move')}>
             Move Crystal
-          </button>
-          <button
-            type="button"
-            className={realTime ? 'pp-action-warn' : ''}
-            onClick={() => {
-              postAndRefresh('/realtime', { enabled: !realTime });
-            }}
-          >
-            Real time {realTime ? 'on' : 'off'}
           </button>
           <button
             type="button"
@@ -140,7 +119,8 @@ export function renderV0Workspace({
             <button
               type="button"
               onClick={() => {
-                setDataBrowserOpen(true);
+              setActiveTab('files');
+              setDataBrowserOpen(true);
                 loadDataPath(dataSelectedPath || dataPath || dataRoot);
               }}
             >
@@ -152,6 +132,19 @@ export function renderV0Workspace({
           </div>
         </div>
       </header>
+
+      <nav className="pp-view-tabs" role="tablist" aria-label="V0 views">
+        {[['acquisition', 'Acquisition'], ['alignment', 'Alignment'], ['hardware', 'Hardware'], ['files', 'Files'], ['combine', 'Combine files']]
+          .map(([id, label]) => <button type="button" role="tab" id={`pp-tab-${id}`} key={id}
+            aria-selected={activeTab === id} aria-controls={`pp-view-${id}`}
+            onClick={() => {
+              setActiveTab(id);
+              if (id === 'files') {
+                setDataBrowserOpen(true);
+                loadDataPath(dataSelectedPath || dataPath || dataRoot);
+              }
+            }}>{label}</button>)}
+      </nav>
 
       <section className="pp-status-strip">
         <div><span>control</span>{activeControlMode}</div>
@@ -184,8 +177,25 @@ export function renderV0Workspace({
           {' '}Rejected cycles: {backendState?.run?.rejected_cycles || 0}.
         </div>
       ) : null}
-      {hardwareInitStatus ? (
-        <section className={`pp-hw-init ${hardwareInitStatus.success ? 'pp-hw-init-ok' : 'pp-hw-init-fail'}`}>
+      <div role="tabpanel" id="pp-view-hardware" aria-labelledby="pp-tab-hardware" hidden={activeTab !== 'hardware'}>
+        <div className="pp-hardware-tools">
+          <button
+            type="button"
+            className={`pp-device-pill ${netioAnyOn ? 'pp-device-powered' : ''}`}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setNetioOpen(true);
+            }}
+            onClick={() => setNetioOpen(true)}
+          >
+            PDU / Tango controls
+          </button>
+        </div>
+      {preparationJob?.status === 'running' && <div className="pp-preparation-progress" role="status">{preparationJob.phase}</div>}
+      {hardwareInitStatus && preparationJob?.status !== 'running' ? (
+        <details className={`pp-hw-init ${hardwareInitStatus.success ? 'pp-hw-init-ok' : 'pp-hw-init-fail'}`}>
+          <summary>{hardwareInitStatus.success ? 'V0 ready' : `V0 preparation incomplete · ${failedHardwareChecks.length} issues`}</summary>
           <div className="pp-hw-init-head">
             <strong>{hardwareInitStatus.message || (hardwareInitStatus.success ? 'Hardware initialized' : 'Hardware initialization failed')}</strong>
             <span>{failedHardwareChecks.length ? `${failedHardwareChecks.length} problem(s)` : 'all checks OK'}</span>
@@ -205,8 +215,10 @@ export function renderV0Workspace({
             ))}
           </div>
           {hardwareInitStatus.recommendation ? <p>{hardwareInitStatus.recommendation}</p> : null}
-        </section>
+        </details>
       ) : null}
+      </div>
+      <div role="tabpanel" id="pp-view-acquisition" aria-labelledby="pp-tab-acquisition" hidden={activeTab !== 'acquisition'}>
       <section className="pp-selection-strip">
         <div><span>wavelength range</span>{selectedWavelengthLabel}</div>
         <div><span>delay range</span>{selectedDelayLabel}</div>
@@ -222,59 +234,8 @@ export function renderV0Workspace({
         </button>
       </section>
 
-      <DerivedSourcePanel sources={derivedSources} busy={deriveBusy} error={deriveError}
-        onDerive={deriveDatasets}
-        onRemove={(index) => updateDerivedSources((current) => current.filter((_source, i) => i !== index))}
-        onClear={() => updateDerivedSources([])}
-        onMove={(index, offset) => updateDerivedSources((current) => {
-          const next = [...current]; const target = index + offset;
-          if (target >= 0 && target < next.length) [next[index], next[target]] = [next[target], next[index]];
-          return next;
-        })} />
       <section className="pp-layout">
-        <div className="pp-left-column">
-          <PlotPanel
-            title={spectraTitle}
-            className="pp-panel-fill"
-            actions={(
-              <div className="pp-panel-toggle">
-                <button
-                  type="button"
-                  className={spectraViewMode === 'current' ? 'pp-panel-toggle-active' : ''}
-                  onClick={() => setSpectraViewMode('current')}
-                >
-                  Current
-                </button>
-                <button
-                  type="button"
-                  className={spectraViewMode === 'raw' ? 'pp-panel-toggle-active' : ''}
-                  onClick={() => setSpectraViewMode('raw')}
-                  disabled={!visibleRawDataset?.channels?.length}
-                >
-                  Raw
-                </button>
-              </div>
-            )}
-          >
-            <PlotlyChart
-              className="pp-plot pp-plot-spectra"
-              data={spectraData}
-              layout={spectraLayout}
-              config={chartConfig}
-              {...plotInteractionProps}
-            />
-          </PlotPanel>
-
-          <PlotPanel title="Current OD" className="pp-panel-fill">
-            <PlotlyChart
-              className="pp-plot pp-plot-od"
-              data={odSpectrumData}
-              layout={odSpectrumLayout}
-              config={chartConfig}
-              {...plotInteractionProps}
-            />
-          </PlotPanel>
-        </div>
+        {activeTab === 'acquisition' && <CurrentMonitor {...currentMonitorProps} className="pp-left-column" />}
 
         <div className="pp-center-grid">
           <PlotPanel title={`OD heatmap · ${fileOdLoaded ? currentOdSource : 'Live'}`} className="pp-panel-fill" actions={(
@@ -445,6 +406,22 @@ export function renderV0Workspace({
           />
         </aside>
       </section>
+      </div>
+      {activeTab === 'alignment' && <div role="tabpanel" id="pp-view-alignment" aria-labelledby="pp-tab-alignment">
+        <AlignmentPanel><CurrentMonitor {...currentMonitorProps} variant="expanded" /></AlignmentPanel>
+      </div>}
+      <div role="tabpanel" id="pp-view-combine" aria-labelledby="pp-tab-combine" hidden={activeTab !== 'combine'}>
+        <DerivedSourcePanel sources={derivedSources} busy={deriveBusy} error={deriveError}
+          onDerive={deriveDatasets}
+          onRemove={index => updateDerivedSources(current => current.filter((_source, i) => i !== index))}
+          onClear={() => updateDerivedSources([])}
+          onMove={(index, offset) => updateDerivedSources(current => {
+            const next = [...current];
+            const target = index + offset;
+            if (target >= 0 && target < next.length) [next[index], next[target]] = [next[target], next[index]];
+            return next;
+          })} />
+      </div>
       {treatmentOpen && sourceOdDataset && (
         <TreatmentPanel key={`${sourceOdDataset.path}:${sourceOdDataset.source_sha256}`}
           source={sourceOdDataset} applied={loadedOdDataset}
@@ -496,7 +473,8 @@ export function renderV0Workspace({
         onRestartTango={(server) => controlTangoServer(server, 'restart')}
       />
       <DataBrowserWindow
-        open={dataBrowserOpen}
+        open={dataBrowserOpen && activeTab === 'files'}
+        embedded
         sampleName={sampleName}
         root={dataRoot}
         path={dataPath}
@@ -506,7 +484,7 @@ export function renderV0Workspace({
         error={dataError}
         selectedPath={dataSelectedPath}
         topPath={dataTopPath}
-        onClose={() => setDataBrowserOpen(false)}
+        onClose={() => { setDataBrowserOpen(false); setActiveTab('acquisition'); }}
         onRefresh={() => loadDataPath(dataPath || dataRoot)}
         onOpenPath={(pathValue) => loadDataPath(pathValue || dataRoot)}
         onSelectPath={setDataSelectedPath}
