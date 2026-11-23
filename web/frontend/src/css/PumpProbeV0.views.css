@@ -121,10 +121,13 @@
 .pp-sample-move-stack button, .pp-sample-marker-row button { height: 20px; font-size: 9px; padding: 0 4px; }
 .pp-sample-marker-row { gap: 3px; margin-top: 3px; }
 .pp-sample-marker-row button { flex: 1; min-width: 0; white-space: nowrap; }
-.pp-selection-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 0 0 5px; }
-.pp-selection-strip div { display: flex; align-items: baseline; gap: 5px; min-height: 0; padding: 0; border: 0; background: transparent; font-size: 11px; }
-.pp-selection-strip span { margin: 0; font-size: 10px; text-transform: none; }
-.pp-selection-strip button { min-height: 0; height: 21px; padding: 0 6px; font-size: 10px; font-weight: 400; }
+.pp-heatmap-panel { display: flex; flex-direction: column; }
+.pp-heatmap-panel > .pp-panel-title, .pp-heatmap-panel > .pp-panel-header-details { flex: none; }
+.pp-center-grid > .pp-heatmap-panel > .pp-plot { flex: 1; min-height: 0; height: auto; }
+.pp-heatmap-ranges { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; padding: 3px 6px; border-bottom: 1px solid #46515c; background: #252b32; line-height: 1.2; }
+.pp-heatmap-ranges div { display: flex; align-items: baseline; gap: 4px; min-width: 0; font-size: 10px; white-space: nowrap; }
+.pp-heatmap-ranges span { color: #8d97a3; font-size: 9px; }
+.pp-heatmap-ranges button { height: 19px; margin-left: auto; padding: 0 4px; border: 1px solid #59636d; background: #303740; color: #d9dde4; font-size: 9px; cursor: pointer; }
 .pp-current-monitor-window > .pp-settings-panel { height: auto; margin-top: 10px; }
 .pp-settings-panel .pp-panel-title { height: 25px; padding: 0 7px; font-size: 12px; flex: none; }
 .pp-scan-run-controls { justify-content: flex-start; padding: 5px 6px 0; gap: 3px; }

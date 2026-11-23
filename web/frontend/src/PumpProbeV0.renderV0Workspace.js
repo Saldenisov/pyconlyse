@@ -228,21 +228,6 @@ export function renderV0Workspace({
       ) : null}
       </div>
       <div role="tabpanel" id="pp-view-acquisition" aria-labelledby="pp-tab-acquisition" hidden={activeTab !== 'acquisition'}>
-      <section className="pp-selection-strip">
-        <div><span>wavelength range</span>{selectedWavelengthLabel}</div>
-        <div><span>delay range</span>{selectedDelayLabel}</div>
-        <button
-          type="button"
-          onClick={() => {
-            setSelectedWavelengthRange(null);
-            setSelectedDelayRange(null);
-            setPlotRevision((value) => value + 1);
-          }}
-        >
-          Clear ranges
-        </button>
-      </section>
-
       <section className="pp-layout">
         {activeTab === 'acquisition' && <MovableMonitor>
           <CurrentMonitor {...currentMonitorProps} />
@@ -263,7 +248,22 @@ export function renderV0Workspace({
         </MovableMonitor>}
 
         <div className="pp-center-grid">
-          <PlotPanel title={`OD heatmap · ${fileOdLoaded ? currentOdSource : 'Live'}`} className="pp-panel-fill" actions={(
+          <PlotPanel title={`OD heatmap · ${fileOdLoaded ? currentOdSource : 'Live'}`} className="pp-panel-fill pp-heatmap-panel" headerDetails={(
+            <div className="pp-heatmap-ranges">
+              <div><span>wavelength range</span>{selectedWavelengthLabel}</div>
+              <div><span>delay range</span>{selectedDelayLabel}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedWavelengthRange(null);
+                  setSelectedDelayRange(null);
+                  setPlotRevision((value) => value + 1);
+                }}
+              >
+                Clear ranges
+              </button>
+            </div>
+          )} actions={(
             <div className="pp-panel-toggle">
               {['live', 'file'].map((owner) => (
                 <button key={owner} type="button"

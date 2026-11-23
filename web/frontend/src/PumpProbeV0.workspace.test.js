@@ -11,7 +11,7 @@ jest.mock('./components/LaserPointingController', () => () => <div>Laser control
 jest.mock('./pump-probe-v0/components', () => {
   const Empty = () => null;
   return {
-    PlotPanel: ({ title, actions, children }) => <section><h2>{title}</h2>{actions}{children}</section>,
+    PlotPanel: ({ title, actions, headerDetails, children }) => <section><h2>{title}</h2>{actions}{headerDetails}{children}</section>,
     PlotlyChart: Empty, HeatmapSelectorChart: Empty, SampleStageControl: Empty,
     DeviceConfigModal: Empty, DataBrowserWindow: Empty,
     SettingsPanel: ({ runControls }) => <section aria-label="Scan settings">{runControls}</section>,

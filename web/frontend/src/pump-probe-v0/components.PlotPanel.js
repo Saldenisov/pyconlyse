@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import Plotly from 'plotly.js-dist';
 import { SAMPLE_STAGE_MIN_MM, SAMPLE_STAGE_MAX_MM, clamp, formatStageMm, formatBytes, displayPathTail, parseSamplePositionsText } from './shared';
 
-function PlotPanel({ title, children, className = '', actions = null }) {
+function PlotPanel({ title, children, className = '', actions = null, headerDetails = null }) {
   return (
     <section className={`pp-panel ${className}`.trim()}>
       <div className="pp-panel-title">
         <span>{title}</span>
         {actions ? <div className="pp-panel-actions">{actions}</div> : null}
       </div>
+      {headerDetails ? <div className="pp-panel-header-details">{headerDetails}</div> : null}
       {children}
     </section>
   );
