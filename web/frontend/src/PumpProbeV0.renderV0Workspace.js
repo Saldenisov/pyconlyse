@@ -1,6 +1,5 @@
 import MovableMonitor from './pump-probe-v0/MovableMonitor';
 import CurrentMonitor from './pump-probe-v0/CurrentMonitor';
-import DelayLineControl from './pump-probe-v0/DelayLineControl';
 import AlignmentPanel from './pump-probe-v0/AlignmentPanel';
 import TreatmentPanel from './pump-probe-v0/TreatmentPanel';
 import DerivedSourcePanel from './pump-probe-v0/DerivedSourcePanel';
@@ -392,10 +391,7 @@ export function renderV0Workspace({
       </section>
       </div>
       {activeTab === 'alignment' && <div role="tabpanel" id="pp-view-alignment" aria-labelledby="pp-tab-alignment">
-        <AlignmentPanel delayControl={<DelayLineControl positionMm={positionMm} targetMm={setPositionMm}
-          disabled={running || runBusy}
-          onMove={value => postAndRefresh('/stage/move', { position_mm: value })}
-          onStop={() => postAndRefresh('/stage/stop')} />}>
+        <AlignmentPanel>
           <CurrentMonitor {...currentMonitorProps} variant="expanded" />
           <StageControl
             orientation="horizontal"

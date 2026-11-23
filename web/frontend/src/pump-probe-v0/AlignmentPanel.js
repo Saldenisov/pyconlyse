@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ITestPSUClient from '../components/ITestPSUClient';
 import { resolveDeviceFamily } from '../utils/deviceFamily';
 
-export default function AlignmentPanel({ children, delayControl }) {
+export default function AlignmentPanel({ children }) {
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,6 @@ export default function AlignmentPanel({ children, delayControl }) {
   return <section className="pp-alignment" aria-label="V0 Alignment">
     <div className="pp-alignment-layout">
       <div className="pp-alignment-controls">
-        {delayControl}
         <div className="pp-alignment-magnets">
           <h2 className="pp-alignment-heading">iTest · V0</h2>
           {loading && <p role="status">Loading V0 iTest channels…</p>}

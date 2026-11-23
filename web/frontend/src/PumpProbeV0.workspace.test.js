@@ -59,6 +59,7 @@ test('Alignment shows iTest beside one enlarged monitor without acquisition stat
   expect(screen.queryByRole('region', { name: 'Delay line', exact: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Alignment', exact: true }));
   expect(screen.getByRole('heading', { name: 'iTest · V0' })).toBeVisible();
+  expect(screen.queryByRole('region', { name: 'OWIS delay line', exact: true })).not.toBeInTheDocument();
   expect(screen.queryByText('control')).not.toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: 'Current', exact: true })).not.toBeInTheDocument();
   const expanded = screen.getByRole('region', { name: 'Current spectra and OD' });
@@ -72,23 +73,4 @@ test('Alignment shows iTest beside one enlarged monitor without acquisition stat
   expect(monitor).toHaveClass('pp-current-monitor-compact');
   expect(within(monitor).getByRole('button', { name: 'Real time on' })).toBeVisible();
   expect(pumpProbeRequest.mock.calls.filter(([path]) => /hardware\/initialize|^\/run$/.test(path))).toHaveLength(0);
-});
-
-test('OWIS moves only an explicitly submitted millimetre target and keeps readback separate', async () => {
-  render(<PumpProbeV0 />);
-  fireEvent.click(screen.getByRole('tab', { name: 'Alignment', exact: true }));
-  const delay = screen.getByRole('region', { name: 'OWIS delay line' });
-  const target = within(delay).getByRole('spinbutton', { name: 'OWIS delay target mm' });
-  fireEvent.change(target, { target: { value: '-12.5' } });
-  expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/stage/move')).toHaveLength(0);
-  fireEvent.submit(target.closest('form'));
-  await waitFor(() => expect(within(delay).getByRole('button', { name: 'Move to position' })).toBeEnabled());
-  const moves = pumpProbeRequest.mock.calls.filter(([path]) => path === '/stage/move');
-  expect(moves).toHaveLength(1);
-  expect(JSON.parse(moves[0][1].body)).toEqual({ position_mm: -12.5 });
-  expect(within(delay).getByText('Current: 0.000 mm')).toBeVisible();
-  fireEvent.change(target, { target: { value: '1000' } });
-  fireEvent.submit(target.closest('form'));
-  expect(within(delay).getByRole('alert')).toHaveTextContent('between -900 and 100 mm');
-  expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/stage/move')).toHaveLength(1);
 });
