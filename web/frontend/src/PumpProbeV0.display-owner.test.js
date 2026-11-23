@@ -15,7 +15,8 @@ jest.mock('./pump-probe-v0/components', () => {
     HeatmapSelectorChart: ({ data }) => <pre data-testid="heatmap">{JSON.stringify({ x: data[0].x, y: data[0].y, z: data[0].z })}</pre>,
     PlotlyChart: Empty, SampleStageControl: Empty, DeviceConfigModal: Empty,
     HardwareModal: Empty, StageControl: Empty,
-    SettingsPanel: ({ onSettingChange }) => <div>
+    SettingsPanel: ({ onSettingChange, runControls }) => <div>
+      {runControls}
       <button onClick={() => onSettingChange('pointCount', 7)}>Set seven points</button>
       <button onClick={() => onSettingChange('pointCount', 9)}>Set nine points</button>
     </div>,
@@ -107,6 +108,7 @@ test('successful start selects live after acknowledgement and retains file previ
     if (path === '/run') return new Promise((resolve) => { acknowledge = (state) => { serverState = state; resolve(state); }; });
     return serverState;
   });
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(acknowledge).toEqual(expect.any(Function)));
   expect(plot()).toEqual(preview);
@@ -122,6 +124,7 @@ test('failed start retains file axes and preview', async () => {
   await loadFile();
   const preview = await previewFile();
   runFailure = new Error('Start rejected');
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await screen.findByText('Start rejected');
   expect(plot()).toEqual(preview);
@@ -132,6 +135,7 @@ test('a response without a running acknowledgement retains file display', async 
   render(<PumpProbeV0 />);
   await loadFile();
   runReply = { ...live, running: false };
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(pumpProbeRequest).toHaveBeenCalledWith('/run', expect.any(Object)));
   expect(plot()).toEqual(filePlot);
@@ -151,6 +155,7 @@ test('a late file load cannot replace the live display or retained file after st
   fireEvent.click(screen.getByRole('button', { name: 'Files' }));
   fireEvent.click(screen.getByRole('button', { name: 'Load fixture' }));
   await waitFor(() => expect(finishLoad).toEqual(expect.any(Function)));
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   await waitFor(() => expect(plot()).toEqual(livePlot));
@@ -168,6 +173,7 @@ test('a treatment callback captured before start cannot replace retained preview
   await loadFile();
   const preview = await previewFile();
   const finishPreview = mockLatePreview;
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(plot()).toEqual(livePlot));
   await act(async () => {
@@ -206,6 +212,7 @@ test('Start waits for the latest ACK across serialized in-flight config edits', 
   render(<PumpProbeV0 />);
   await loadFile();
   fireEvent.click(screen.getByRole('button', { name: 'Set seven points' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await act(async () => {});
   expect(configurations).toHaveLength(1);
@@ -237,12 +244,14 @@ test('configuration failure prevents Start and retains file preview; retry can r
   });
   fireEvent.click(screen.getByRole('button', { name: 'Set seven points' }));
   await screen.findByText('Configuration rejected');
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await act(async () => {});
   expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/run')).toHaveLength(0);
   expect(plot()).toEqual(preview);
   expect(screen.getByRole('button', { name: 'File OD' })).toHaveAttribute('aria-pressed', 'true');
   rejectConfiguration = false;
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(plot()).toEqual(livePlot));
   expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/run')).toHaveLength(1);
@@ -255,6 +264,7 @@ test('Start rechecks settings edited while folder creation is in flight', async 
   global.fetch.mockImplementation(async (_url, options) => options?.method === 'POST'
     ? new Promise((resolve) => { finishFolder = resolve; })
     : { ok: true, json: async () => ({ root: 'C:\\data', path: 'C:\\data', entries: [] }) });
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(finishFolder).toEqual(expect.any(Function)));
   let finishConfiguration;
@@ -291,7 +301,8 @@ test('pre-ACK state replies cannot undo a mutation; later state polls can report
     holdNextState = true;
     await act(async () => { jest.advanceTimersByTime(250); });
     expect(finishOldState).toEqual(expect.any(Function));
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }));
     await act(async () => {});
     expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
     await act(async () => { finishOldState(live); });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SAMPLE_STAGE_MIN_MM, SAMPLE_STAGE_MAX_MM, SAMPLE_STAGE_SPEED_MM_PER_SEC, pumpProbeRequest, clamp, parseDelayPointsText, settingsToApi, hardwareConfigToApi, hardwareConfigFromApi } from './pump-probe-v0/shared';
 
 export function useV0Configuration({
@@ -301,6 +301,7 @@ export function useV0Configuration({
   const currentIndex = fileOdLoaded ? localIndex : (backendState?.current_index ?? localIndex);
   const activeCurrentIndex = clamp(currentIndex, 0, Math.max(0, delays.length - 1));
   const running = backendState?.running ?? localRunning;
+  const [diagnosticDark, setDiagnosticDark] = useState(false);
   const handleRun = useCallback(async (action = 'new') => {
     if (runBusyRef.current) return;
     setActionError('');
@@ -319,9 +320,17 @@ export function useV0Configuration({
         ...(savePath ? { save_path: savePath } : {}), sample_name: sampleName,
       };
       if (configured?.control_mode === 'tango') {
+        if (diagnosticDark) {
+          const snapshot = await pumpProbeRequest('/commissioning/andor-snapshot', {
+            method: 'POST', body: JSON.stringify({ diagnostic_dark: true }),
+          });
+          payload.diagnostic_dark = true;
+          payload.diagnostic_snapshot_id = snapshot.diagnostic_snapshot_id;
+        }
         const preview = await pumpProbeRequest('/run/plan', { method: 'POST', body: JSON.stringify(payload) });
         setTangoRunPreview(preview);
-        if (!preview.commissioned) throw new Error('Tango RAW profile requires BG_level verification for the configured Andor readout.');
+        if (Boolean(preview.diagnostic_dark) !== diagnosticDark) throw new Error('Run mode changed; refresh the preview.');
+        if (!preview.commissioned && !preview.diagnostic_dark) throw new Error('Tango RAW profile requires BG_level verification for the configured Andor readout.');
         payload.plan_fingerprint = preview.fingerprint;
       }
       const startedState = await postAndRefresh('/run', payload);
@@ -334,13 +343,13 @@ export function useV0Configuration({
       }
     } catch (error) { setActionError(error.message); }
     finally { runBusyRef.current = false; setRunBusy(false); }
-  }, [awaitLatestConfiguration, backendState, createRunFolder, postAndRefresh, running, sampleName]);
+  }, [awaitLatestConfiguration, backendState, createRunFolder, postAndRefresh, running, sampleName, diagnosticDark]);
 
   return {
     deriveDatasets, handleSettingChange, handleDelayPointsLoad, handleHardwareModeChange,
     handleConfigLoad, handleConfigSave, moveSampleStage, setSampleMarker, stopSampleStage,
     treatmentRequestEpoch, displayedOdDataset, fileOdLoaded, liveWavelengths, wavelengths,
     visibleRawDataset, delays, heatmap, liveOd, currentIndex, activeCurrentIndex, running,
-    handleRun,
+    handleRun, diagnosticDark, setDiagnosticDark,
   };
 }

@@ -78,6 +78,7 @@ from pump_probe_v0_processing import TRANCON_GROUPS, TRANCON_FLOAT_LAYOUT as TRA
 from pump_probe_v0_tango import AcquisitionCancelled, RejectedCycle as RejectedCycle, TangoPacketError, TangoRawAdapter
 from pump_probe_v0_tango_plan import build_tango_plan, load_profile
 from pump_probe_v0_detector_filters import apply_detector_filters
+from pump_probe_v0_diagnostic import diagnostic_profile, retain_snapshot
 
 from treatment_network_path import (
     is_smb_path,

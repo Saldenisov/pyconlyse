@@ -23,7 +23,7 @@ jest.mock('./pump-probe-v0/components', () => {
     PlotlyChart: ({ className, data }) => className?.includes('pp-plot-spectra')
       ? <pre data-testid="trancon-spectra">{JSON.stringify(data)}</pre> : null,
     SampleStageControl: Empty, DeviceConfigModal: Empty, HardwareModal: Empty,
-    StageControl: Empty, SettingsPanel: Empty,
+    StageControl: Empty, SettingsPanel: ({ runControls }) => <div>{runControls}</div>,
     DataBrowserWindow: ({ open, onLoadFile }) => open ? <div>
       <button onClick={() => onLoadFile('a.dat')}>Load source A</button>
       <button onClick={() => onLoadFile('b.dat')}>Load source B</button>
@@ -136,6 +136,7 @@ test('Tango start binds the exact preview fingerprint before requesting hardware
   render(<PumpProbeV0 />);
   await openFiles();
   fireEvent.change(screen.getByRole('textbox', { name: 'Folder' }), { target: { value: 'new-run' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(requests('/run')).toHaveLength(1));
   expect(requests('/config').every(call => body(call).hardware_config.control_mode === 'tango')).toBe(true);
@@ -151,6 +152,7 @@ test('uncommissioned Tango profile leaves RAW start unissued and shows calibrati
   render(<PumpProbeV0 />);
   await openFiles();
   fireEvent.change(screen.getByRole('textbox', { name: 'Folder' }), { target: { value: 'new-run' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await screen.findByText('Tango RAW profile requires BG_level verification for the configured Andor readout.');
   expect(requests('/run')).toHaveLength(0);
@@ -197,6 +199,7 @@ test('a late derived reply after acknowledged Start cannot replace live or retai
   fireEvent.change(screen.getByRole('textbox', { name: 'Folder' }), { target: { value: 'new-run' } });
   fireEvent.click(screen.getByRole('button', { name: 'Combine' }));
   await waitFor(() => expect(requests('/data/derive')).toHaveLength(1));
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   await waitFor(() => expect(heatmap().trace.z).toEqual(LIVE.heatmap));
@@ -231,6 +234,7 @@ test('run rejection survives a successful state poll and retains file until expl
   await openFiles();
   await load('A');
   fireEvent.change(screen.getByRole('textbox', { name: 'Folder' }), { target: { value: 'new-run' } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await screen.findByText('Point commit rejected');
   const pollsAfterFailure = requests('/state').length;
@@ -239,6 +243,7 @@ test('run rejection survives a successful state poll and retains file until expl
   expect(heatmap().trace.z).toEqual(SOURCE_A.heatmap);
   expect(screen.getByRole('button', { name: 'File OD' })).toHaveAttribute('aria-pressed', 'true');
   rejectRun = false;
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
   await waitFor(() => expect(heatmap().trace.z).toEqual(LIVE.heatmap));
   expect(requests('/run')).toHaveLength(2);

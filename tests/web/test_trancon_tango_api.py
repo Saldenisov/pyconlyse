@@ -197,6 +197,40 @@ def finished(rig):
     return rig.controller.state()
 
 
+def test_explicit_dark_checkout_uses_normal_worker_and_keeps_scientific_start_blocked(rig):
+    from DeviceServers.cameras.andor.v0_orders import config_fingerprint
+    rig.profile['commissioned'] = False
+    rig.camera.make_cycles = lambda count, point: [np.full((3, 2, 2), 300., np.float32) for _ in range(count)]
+    configuration = {'width': 2, 'wavelengths': [500., 600.], 'trigger_mode': 'ext', 'track_count': 2}
+    rig.camera.config_fingerprint = config_fingerprint(configuration)
+    original = rig.camera.command_inout
+
+    def command(name, argument=None):
+        response = original(name, argument)
+        if name == 'V0Capabilities':
+            response = json.dumps({**json.loads(response), 'configuration': configuration})
+        return response
+
+    rig.camera.command_inout = command
+    rejected = rig.client.post('/api/pump-probe-v0/run', json=rig.payload)
+    assert rejected.status_code == 409
+    assert not rig.calls
+    snapshot = rig.client.post('/api/pump-probe-v0/commissioning/andor-snapshot', json={'diagnostic_dark': True})
+    assert snapshot.status_code == 200, snapshot.get_json()
+    rig.payload.update(diagnostic_dark=True, diagnostic_snapshot_id=snapshot.get_json()['diagnostic_snapshot_id'])
+    start(rig)
+    state = finished(rig)
+    assert state['run']['status'] == 'completed', state['run']
+    assert state['run']['artifacts']['frame_counts'] == [2, 2, 2]
+    assert rig.profile['commissioned'] is False
+    with h5py.File(rig.controller._run_artifacts['h5'], 'r') as handle:
+        assert bool(handle['metadata/diagnostic_dark'][()])
+        assert json.loads(handle['metadata/tango_profile_json'][()])['commissioned'] is False
+        assert np.isnan(handle['od'][...]).all()
+        assert len(handle['transport/accepted']) == 6
+    assert 'scpi_write' not in rig.calls and 'recall' not in rig.calls
+
+
 def test_full_point_batches_preserve_RAW_packets_order_repeated_delays_and_mean_logs(rig):
     start(rig)
     state = finished(rig)

@@ -28,7 +28,7 @@ export function renderV0Workspace({
   updateDerivedSources, deriveDatasets, handleSettingChange, handleDelayPointsLoad,
   handleHardwareModeChange, handleConfigLoad, handleConfigSave, moveSampleStage,
   setSampleMarker, stopSampleStage, treatmentRequestEpoch, fileOdLoaded,
-  visibleRawDataset, delays, activeCurrentIndex, running, handleRun, realTime,
+  visibleRawDataset, delays, activeCurrentIndex, running, handleRun, diagnosticDark, setDiagnosticDark, realTime,
   faradayClosed, electronState, positionMm, setPositionMm, activeControlMode, daqCounter,
   counterActive, counterRateHz, hardwareChecks, failedHardwareChecks,
   sampleDisplayPositionMm, sampleDisplayTargetMm, netioAnyOn, delayStats,
@@ -49,6 +49,10 @@ export function renderV0Workspace({
   const readinessLabel = preparationJob?.status === 'running' ? 'Preparing' : ready ? 'Ready' : 'Readiness not confirmed';
   const runControls = (
     <div className="pp-run-controls pp-scan-run-controls">
+      <label className="pp-dark-checkout" title="Explicit dark diagnostic: sequential test phases; OD is not a calibrated absorption measurement">
+        <input type="checkbox" checked={diagnosticDark} disabled={running || runBusy}
+          onChange={event => setDiagnosticDark(event.target.checked)} />Dark test
+      </label>
       <button
         type="button"
         disabled={!hardwareConfigReady || runBusy || backendState?.run?.status === 'stopping'}
@@ -182,7 +186,7 @@ export function renderV0Workspace({
       {activeControlMode === 'tango' && tangoRunPreview ? (
         <div className="pp-run-profile" role="status">
           RAW: track 1 → I, track 2 → II; BG_level = {tangoRunPreview.plan?.profile?.background_level};
-          {' '}{tangoRunPreview.commissioned ? 'profile verified' : 'profile requires verification'}.
+          {' '}{tangoRunPreview.diagnostic_dark ? 'Dark diagnostic · sequential test phases · OD not a physical absorption measurement' : tangoRunPreview.commissioned ? 'profile verified' : 'profile requires verification'}.
           {' '}Rejected cycles: {backendState?.run?.rejected_cycles || 0}.
         </div>
       ) : null}

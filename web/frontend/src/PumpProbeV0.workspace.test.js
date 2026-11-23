@@ -38,6 +38,36 @@ beforeEach(() => {
 });
 afterEach(() => { global.fetch = originalFetch; });
 
+test.each([false, true])('Dark test %s binds a fresh snapshot and preserves ordinary commissioning guard', async (dark) => {
+  const previous = pumpProbeRequest.getMockImplementation();
+  pumpProbeRequest.mockImplementation(async (path, options) => {
+    if (path === '/commissioning/andor-snapshot') return { diagnostic_snapshot_id: 'fresh-camera-token' };
+    if (path === '/run/plan') return { fingerprint: 'bound-plan', commissioned: false, diagnostic_dark: dark };
+    if (path === '/run') return { ...state, running: true };
+    return previous(path, options);
+  });
+  global.fetch.mockResolvedValue({ ok: true, json: async () => ({ root: 'test', path: 'test/folder', entries: [], devices: [] }) });
+  render(<PumpProbeV0 />);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start', exact: true })).toBeEnabled());
+  fireEvent.click(screen.getByRole('tab', { name: 'Files', exact: true }));
+  await waitFor(() => expect(global.fetch.mock.calls.some(([url]) => url.includes('/data/list'))).toBe(true));
+  fireEvent.click(screen.getByRole('tab', { name: 'Acquisition', exact: true }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Folder', exact: true }), { target: { value: 'dark-checkout' } });
+  if (dark) fireEvent.click(screen.getByRole('checkbox', { name: 'Dark test' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start', exact: true }));
+  await waitFor(() => expect(pumpProbeRequest.mock.calls.some(([path]) => path === '/run/plan')).toBe(true));
+  if (dark) {
+    await waitFor(() => expect(pumpProbeRequest.mock.calls.some(([path]) => path === '/run')).toBe(true));
+    const snapshot = pumpProbeRequest.mock.calls.find(([path]) => path === '/commissioning/andor-snapshot');
+    expect(JSON.parse(snapshot[1].body)).toEqual({ diagnostic_dark: true });
+    const request = pumpProbeRequest.mock.calls.find(([path]) => path === '/run');
+    expect(JSON.parse(request[1].body)).toMatchObject({ diagnostic_dark: true, diagnostic_snapshot_id: 'fresh-camera-token', plan_fingerprint: 'bound-plan' });
+  } else {
+    await waitFor(() => expect(screen.getByText(/Tango RAW profile requires BG_level/)).toBeVisible());
+    expect(pumpProbeRequest.mock.calls.some(([path]) => path === '/run' || path === '/commissioning/andor-snapshot')).toBe(false);
+  }
+});
+
 test('hardware readiness and PDU controls live in Hardware while run controls live in Scan settings', async () => {
   render(<PumpProbeV0 />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Start', exact: true })).toBeEnabled());

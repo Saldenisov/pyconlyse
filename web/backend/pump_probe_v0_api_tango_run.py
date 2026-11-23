@@ -19,7 +19,7 @@ def bind(api):
                 if not matches:
                     return False
                 if self._control_mode_locked() == "tango":
-                    profile = self._load_tango_profile_locked()
+                    profile = source["tango_profile"] if source.get("diagnostic_dark") else self._load_tango_profile_locked()
                     timing = api._load_dg645_recall_config(self._hardware_config["dg645_recall_config"])
                     timing_sha = api.hashlib.sha256(api.json.dumps(timing, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
                     return (source.get("mode") == "tango"
@@ -46,9 +46,11 @@ def bind(api):
                 action = payload.get("run_action", "new")
                 if action not in {"new", "continue", "overwrite"}:
                     raise ValueError("Tango start action must be new, continue, or overwrite")
-                profile = self._load_tango_profile_locked()
-                if require_commissioned and profile.get("commissioned") is not True:
+                profile = api.diagnostic_profile(self, payload, self._load_tango_profile_locked())
+                if require_commissioned and not profile.get("diagnostic_dark") and profile.get("commissioned") is not True:
                     raise api.TangoProfileNotCommissioned("Tango RAW profile is not commissioned: verify BG_level for the Andor ROI/readout and set commissioned=true in the server profile")
+                if profile.get("diagnostic_dark") and self._hardware_config.get("dg645_preflight_policy") != "verify_only":
+                    raise ValueError("Dark checkout requires prepared DG645 timing in verify_only mode; generator settings are retained")
                 checkpoint = None
                 if action == "continue":
                     if not self._resume_available_locked():

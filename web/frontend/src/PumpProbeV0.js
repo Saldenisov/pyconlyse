@@ -42,7 +42,7 @@ function PumpProbeV0() {
     handleConfigLoad, handleConfigSave, moveSampleStage, setSampleMarker, stopSampleStage,
     treatmentRequestEpoch, displayedOdDataset, fileOdLoaded, liveWavelengths, wavelengths,
     visibleRawDataset, delays, heatmap, liveOd, currentIndex, activeCurrentIndex, running,
-    handleRun,
+    handleRun, diagnosticDark, setDiagnosticDark,
   } = useV0Configuration({
     hardwareConfigReady, setActiveTab,
     settings, setSettings, hardwareConfig, setHardwareConfig, deviceConfig,
@@ -104,7 +104,7 @@ function PumpProbeV0() {
     updateDerivedSources, deriveDatasets, handleSettingChange, handleDelayPointsLoad,
     handleHardwareModeChange, handleConfigLoad, handleConfigSave, moveSampleStage,
     setSampleMarker, stopSampleStage, treatmentRequestEpoch, fileOdLoaded,
-    visibleRawDataset, delays, activeCurrentIndex, running, handleRun, realTime,
+    visibleRawDataset, delays, activeCurrentIndex, running, handleRun, diagnosticDark, setDiagnosticDark, realTime,
     faradayClosed, electronState, positionMm, setPositionMm, activeControlMode, daqCounter,
     counterActive, counterRateHz, hardwareChecks, failedHardwareChecks,
     sampleDisplayPositionMm, sampleDisplayTargetMm, netioAnyOn, delayStats,

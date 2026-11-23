@@ -1,4 +1,4 @@
-"""Streaming storage for emulator V0 pump-probe runs."""
+"""Streaming HDF5 storage for V0 pump-probe runs."""
 
 import hashlib
 import json
@@ -33,7 +33,7 @@ class V0EmulatorRunWriter:
     _shot_od = staticmethod(v0_shot_od)
 
     def __init__(self, wavelengths, delays, positions, shots_per_point, config, run_id=None,
-                 *, plan=None, parent_run_id=None):
+                 *, plan=None, parent_run_id=None, h5_directory=None):
         self.run_id = run_id or f"v0_{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex}"
         self.wavelengths = np.array(wavelengths, dtype=np.float64, copy=True)
         self.delays = np.array(delays, dtype=np.float64, copy=True)
@@ -59,14 +59,20 @@ class V0EmulatorRunWriter:
         self._events = []
         self._closed = False
         self._staging_dir = Path(tempfile.mkdtemp(prefix=f"pyconlyse-{self.run_id}-"))
-        self.h5_path = self._staging_dir / f"{self.run_id}.h5"
+        raw_dir = self._staging_dir if h5_directory is None else Path(h5_directory)
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        self._finished_h5_path = raw_dir / f"{self.run_id}.h5"
+        self.h5_path = (self._finished_h5_path if h5_directory is None else
+                        self._finished_h5_path.with_suffix(".h5.partial"))
+        if self._finished_h5_path.exists():
+            raise FileExistsError(self._finished_h5_path)
         self.dat_path = self._staging_dir / f"{self.run_id}.dat"
         self.manifest_path = self._staging_dir / f"{self.run_id}.jsonl"
         self._sums = np.zeros((len(self.delays), len(self.raw_groups), len(self.wavelengths)), dtype=np.float64)
         self._od_sums = np.zeros((len(self.delays), len(self.wavelengths)), dtype=np.float64)
         self._counts = np.zeros(len(self.delays), dtype=np.int32)
 
-        self._h5 = h5py.File(self.h5_path, "w")
+        self._h5 = h5py.File(self.h5_path, "x")
         self._h5.create_dataset(
             "raw_data",
             shape=(len(self.delays), len(self.raw_groups), self.shots_per_point, len(self.wavelengths)),
@@ -113,7 +119,7 @@ class V0EmulatorRunWriter:
         return value.decode("utf-8") if isinstance(value, bytes) else str(value)
 
     @classmethod
-    def resume_from(cls, source_h5, config, *, expected_plan, expected_wavelengths=None):
+    def resume_from(cls, source_h5, config, *, expected_plan, expected_wavelengths=None, h5_directory=None):
         """Seed a unique child run from acquired slots of a finalized stopped run.
 
         All schema/plan/count checks precede writer creation. RAW is streamed a
@@ -170,7 +176,7 @@ class V0EmulatorRunWriter:
             if not parent:
                 raise ValueError("Stopped run has no parent run identity")
             writer = cls(waves, delays, positions, expected_plan.shots_per_point, config,
-                         plan=expected_plan, parent_run_id=parent)
+                         plan=expected_plan, parent_run_id=parent, h5_directory=h5_directory)
             try:
                 for point, count in enumerate(counts):
                     for shot in range(int(count)):
@@ -189,8 +195,7 @@ class V0EmulatorRunWriter:
                               scan_plan_fingerprint=expected_plan.fingerprint)
                 writer._h5.flush()
             except Exception:
-                writer._h5.close()
-                writer._closed = True
+                writer.close()
                 raise
             return writer
 
@@ -278,11 +283,20 @@ class V0EmulatorRunWriter:
         self._h5.create_dataset("metadata/run_error", data=str(error), dtype=h5py.string_dtype("utf-8"))
         self._event("run_finished", status=status, error=str(error))
         self._h5.flush()
-        self._h5.close()
+        self.close()
+        if self.h5_path != self._finished_h5_path:
+            if self._finished_h5_path.exists():
+                raise FileExistsError(self._finished_h5_path)
+            self.h5_path.rename(self._finished_h5_path)
+            self.h5_path = self._finished_h5_path
         self._write_dat(od)
         self.manifest_path.write_text("\n".join(self._events) + "\n", encoding="utf-8")
-        self._closed = True
         return self.artifacts()
+
+    def close(self):
+        if not self._closed:
+            self._h5.close()
+            self._closed = True
 
     def _write_dat(self, od):
         matrix = np.empty((len(self.wavelengths) + 1, len(self.delays) + 1), dtype=np.float64)
@@ -335,17 +349,20 @@ class V0TangoRunWriter(V0EmulatorRunWriter):
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def __init__(self, wavelengths, delays, positions, shots_per_point, config, run_id=None,
-                 *, plan=None, parent_run_id=None):
+                 *, plan=None, parent_run_id=None, h5_directory=None):
         fingerprint = self.profile_fingerprint(config)
         if not isinstance(plan, ScanPlan):
             raise ValueError("Tango run requires an immutable scan plan")
         # Serialize before opening a file, detaching mutable caller mappings.
         frozen_config = json.loads(self._json(config))
         super().__init__(wavelengths, delays, positions, shots_per_point, frozen_config,
-                         run_id, plan=plan, parent_run_id=parent_run_id)
+                         run_id, plan=plan, parent_run_id=parent_run_id, h5_directory=h5_directory)
         self.tango_profile_fingerprint = fingerprint
         self._h5.create_dataset("metadata/tango_profile_fingerprint", data=fingerprint)
         self._h5.create_dataset("metadata/tango_profile_json", data=self._json(frozen_config["tango_profile"]))
+        if frozen_config["tango_profile"].get("diagnostic_dark"):
+            self._h5.create_dataset("metadata/diagnostic_dark", data=True)
+            self._h5.create_dataset("metadata/od_quality", data="diagnostic_only_not_physical_absorption")
         self._h5.create_group("transport/accepted")
         self._h5.create_group("transport/rejected")
         self._h5.create_group("transport/packets")
@@ -377,7 +394,7 @@ class V0TangoRunWriter(V0EmulatorRunWriter):
         return record
 
     def flush_transport(self):
-        """Durably flush the local journal before the camera order is released."""
+        """Durably flush the HDF5 journal before the camera order is released."""
         if self._closed:
             raise RuntimeError("Run writer is already closed")
         if self._h5.driver not in {"sec2", "windows"}:

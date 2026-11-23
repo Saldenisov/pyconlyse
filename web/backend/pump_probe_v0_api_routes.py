@@ -94,7 +94,7 @@ def bind(api):
                 raise ValueError("Run request must be an object")
             plan = api._emulator.prepare_tango_run(payload, require_commissioned=False)
             return api.jsonify({"success": True, "plan": plan.to_dict(), "fingerprint": plan.fingerprint,
-                            "commissioned": plan.profile["commissioned"],
+                            "commissioned": plan.profile["commissioned"], "diagnostic_dark": plan.profile.get("diagnostic_dark", False),
                             "authorization": {"route_id": "v0.run", "action": "v0.run", "method": "POST",
                                               "targets": plan.authorization_targets(), "args": plan.authorization_args()}})
         except Exception as exc:
@@ -104,8 +104,9 @@ def bind(api):
     def pump_probe_andor_snapshot():
         """One authorized readback, with no acquisition/parameter/axis commands."""
         payload = api.request.get_json(silent=True)
-        if (api.request.get_data(cache=True).strip() and not isinstance(payload, dict)) or (payload is not None and payload != {}):
+        if (api.request.get_data(cache=True).strip() and not isinstance(payload, dict)) or (payload is not None and (set(payload) - {"diagnostic_dark"} or ("diagnostic_dark" in payload and type(payload["diagnostic_dark"]) is not bool))):
             return api.jsonify({"success": False, "error": "Snapshot request must be an empty object"}), 400
+        diagnostic = bool((payload or {}).get("diagnostic_dark"))
         with api._emulator._lock:
             if (api._emulator._running or api._emulator._real_time or api._emulator._run_writer is not None
                     or api._emulator._tango_stop_event is not None or not api._emulator._tango_done_event.is_set()):
@@ -115,8 +116,10 @@ def bind(api):
                 return api.jsonify({"success": False, "error": "Select Tango mode before reading Andor configuration"}), 400
             device = config["andor_device"]
             args = {"andor_device": device, "readback": "V0Capabilities", "purpose": "BG_level_and_sampling_fingerprint"}
+            if diagnostic:
+                args["diagnostic_dark"] = True
             blocked = api.require_http_hardware("v0.andor-snapshot", [{"device": device, "command": "V0Capabilities"}], args,
-                                            route_id="v0.andor-snapshot", wrapper_fields=set())
+                                            route_id="v0.andor-snapshot", wrapper_fields={"diagnostic_dark"} if diagnostic else set())
             if blocked is not None:
                 return blocked
             try:
@@ -128,7 +131,8 @@ def bind(api):
                     raise ValueError("Andor does not expose the V0 RAW capability contract")
                 snapshot = {"schema": "v0-andor-capability-snapshot-v1", "device": device,
                             "captured_at_utc": api.datetime.now(api.timezone.utc).isoformat(), "capabilities": caps}
-                return api.jsonify({"success": True, "snapshot": snapshot})
+                extra = {"diagnostic_snapshot_id": api.retain_snapshot(api._emulator, caps)} if diagnostic else {}
+                return api.jsonify({"success": True, "snapshot": snapshot, **extra})
             except Exception as exc:
                 return api.jsonify({"success": False, "error": str(exc)}), 503
 
@@ -140,7 +144,7 @@ def bind(api):
                 raise ValueError("Run request must be an object")
             starting = payload.get("run_action") != "cancel" and bool(payload.get("running", True))
             if api._v0_tango_active(payload) and starting:
-                fields = {"running", "run_action", "save_path", "sample_name", "plan_fingerprint"}
+                fields = {"running", "run_action", "save_path", "sample_name", "plan_fingerprint", "diagnostic_dark", "diagnostic_snapshot_id"}
                 if set(payload) - fields:
                     raise ValueError("Unknown Tango run request field")
                 with api._emulator._lock:

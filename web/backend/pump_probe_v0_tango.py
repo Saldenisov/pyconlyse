@@ -139,7 +139,7 @@ class TangoBatch:
 
 
 def decode_tango_batch(encoded, *, order_id, run_id, point_index, acquisition_epoch,
-                       config_fingerprint, wavelengths, background_level, all_cycles=False,
+                       config_fingerprint, wavelengths, background_level, all_cycles=False, diagnostic_dark=False,
                        cycle_count=1):
     """Validate DevEncoded and retain the original compressed transport bytes."""
     if not isinstance(encoded, (tuple, list)) or len(encoded) != 2:
@@ -214,7 +214,15 @@ def decode_tango_batch(encoded, *, order_id, run_id, point_index, acquisition_ep
         for index in range(cycle_count):
             metadata = {**base, "packet_cycle_index": index, "frame_indices": frame_ids[3*index:3*index+3]}
             try:
-                groups, classification = classify_trancon_cycle(canonical_data[3*index:3*index+3], background_level, all_cycles)
+                triplet = canonical_data[3*index:3*index+3]
+                if diagnostic_dark:
+                    mapping = {"BG": 0, "I0": 1, "Ie": 2}
+                    groups = np.stack([triplet[0, 0], triplet[0, 1], triplet[2, 0], triplet[2, 1], triplet[1, 0], triplet[1, 1]])
+                    classification = {"version": "v0-dark-sequential-test-v1", "diagnostic_dark": True,
+                                      "physical_phases_verified": False,
+                                      "phase_mapping": {"detector_I": mapping, "detector_II": mapping}}
+                else:
+                    groups, classification = classify_trancon_cycle(triplet, background_level, all_cycles)
             except RejectedCycle as exc:
                 rejected.append(RejectedCycle(str(exc), packet, {**metadata, **exc.metadata}))
             else:
@@ -398,7 +406,7 @@ class TangoRawAdapter:
                         encoded, order_id=order, run_id=run_id, point_index=point_index,
                         acquisition_epoch=caps["acquisition_epoch"], config_fingerprint=caps["config_fingerprint"],
                         wavelengths=caps["wavelengths"], background_level=self.profile["background_level"],
-                        all_cycles=self.profile["all_cycles"],
+                        all_cycles=self.profile["all_cycles"], diagnostic_dark=self.profile.get("diagnostic_dark", False),
                         cycle_count=cycle_count,
                     )
                 self._check_cancel()

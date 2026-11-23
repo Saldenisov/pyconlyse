@@ -63,7 +63,7 @@ def validate_profile(profile, *, require_commissioned=False):
                "frames_per_cycle", "tracks", "classifier_version", "move_tolerance_mm",
                "settled_samples", "move_timeout_s", "order_timeout_s", "poll_interval_s",
                "max_rejected_cycles", "camera_admission", "filters", "processing_mode",
-               "expected_config_fingerprint", "expected_sample_dtype"}
+               "expected_config_fingerprint", "expected_sample_dtype", "diagnostic_dark", "diagnostic_configuration"}
     if set(result) - allowed:
         raise ValueError("Unknown detector profile field")
     if not isinstance(result.get("profile_version"), str) or not result["profile_version"].strip():
@@ -90,7 +90,13 @@ def validate_profile(profile, *, require_commissioned=False):
         raise ValueError("V0 Tango profile is not commissioned for the current Andor configuration")
     if type(result.get("frames_per_cycle")) is not int or result["frames_per_cycle"] != 3:
         raise ValueError("frames_per_cycle must be 3")
-    if result.get("tracks") != TRACKS or result.get("classifier_version") != CLASSIFIER_VERSION:
+    diagnostic = result.get("diagnostic_dark", False)
+    if type(diagnostic) is not bool:
+        raise ValueError("diagnostic_dark must be boolean")
+    if diagnostic and (result["commissioned"] or expected_config is None or not result["all_cycles"]):
+        raise ValueError("Dark diagnostic must remain uncommissioned and bind a camera fingerprint")
+    classifier = "v0-dark-sequential-test-v1" if diagnostic else CLASSIFIER_VERSION
+    if result.get("tracks") != TRACKS or result.get("classifier_version") != classifier:
         raise ValueError("Detector tracks/classifier version do not match the V0 source contract")
     for key in ("move_tolerance_mm", "move_timeout_s", "order_timeout_s"):
         result[key] = _positive(result.get(key), key)
@@ -280,4 +286,8 @@ def build_tango_plan(scan_plan, hardware_config, profile, dg645_recall,
         "checkpoint": saved, "checkpoint_sha256": _hash(saved) if saved is not None else None,
         "output_context": output,
     }
+    if p.get("diagnostic_dark"):
+        body.update(diagnostic_dark=True, od_quality="diagnostic_only_not_physical_absorption",
+                    phase_actuation="none; fixed sequential test mapping, not verified physical phases",
+                    invalid_triplet_policy="diagnostic_sequential_mapping")
     return TangoRunPlan(scan_plan, _canonical(p), _canonical(hardware), _canonical(dg645), _canonical(body))

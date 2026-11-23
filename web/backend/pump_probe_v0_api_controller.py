@@ -123,6 +123,8 @@ def bind(api):
                     "next_shot_index": staged.get("next_shot_index"),
                     "profile_fingerprint": staged.get("tango_profile_fingerprint"),
                     "camera_config_fingerprint": self._tango_camera_fingerprint,
+                    "diagnostic_dark": bool(self._tango_run_plan and self._tango_run_plan.profile.get("diagnostic_dark")),
+                    "tango_profile": self._tango_run_plan.profile if self._tango_run_plan is not None else None,
                     "dg645_sha256": self._tango_run_plan.to_dict()["dg645"]["source_sha256"] if self._tango_run_plan is not None and self._control_mode_locked() == "tango" else None,
                 } if status == "stopped" and staged.get("next_point_index") is not None else None)
                 self._run_artifacts = {
