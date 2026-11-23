@@ -51,17 +51,17 @@ function SampleStageControl({
         onOpenConfig('sampleStage');
       }}
     >
-      <div
-        className="pp-device-title"
-        onContextMenu={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onOpenConfig('sampleStage');
-        }}
-      >
-        Sample translation stage
-      </div>
       <div className="pp-sample-stage-row">
+        <div
+          className="pp-device-title"
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenConfig('sampleStage');
+          }}
+        >
+          Sample translation stage
+        </div>
         <label className="pp-sample-set">
           set/real mm
           <input
