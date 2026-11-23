@@ -1,5 +1,6 @@
 """Configuration defaults and physical constants for V0 pump-probe."""
 
+import os
 from pathlib import Path
 
 PIXELS = 512
@@ -73,6 +74,19 @@ V0_STANDA_DEVICES = (
     "manip/V0/OPA_Y",
     "manip/V0/TS_SC_m",
     "manip/V0/TS_OPA_m",
+)
+
+# The two auxiliary stages are physically disconnected in the current V0 setup.
+# Keep the inventory for ownership checks, but do not require unused equipment.
+# A configured laser-pointing dependency is still checked independently.
+V0_OPTIONAL_STANDA_DEVICES = (
+    "manip/V0/TS_SC_m",
+    "manip/V0/TS_OPA_m",
+    # Temporary development opt-out; ordinary preparation still requires DV04.
+    *(("manip/V0/DV04",) if os.environ.get("PYCONLYSE_V0_DEVELOPMENT_SKIP_DV04", "").strip() == "1" else ()),
+)
+V0_REQUIRED_STANDA_DEVICES = tuple(
+    device for device in V0_STANDA_DEVICES if device not in V0_OPTIONAL_STANDA_DEVICES
 )
 
 V0_CAMERA_DEVICES = (
