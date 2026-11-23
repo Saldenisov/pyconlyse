@@ -44,6 +44,7 @@ test('hardware readiness and PDU controls live in Hardware while Start stays in 
   fireEvent.click(screen.getByRole('button', { name: 'V0 Pump-Probe hardware status: Ready' }));
   const hardware = screen.getByRole('tabpanel', { name: 'Hardware', exact: true });
   expect(within(hardware).getByText('V0 ready')).toBeVisible();
+  expect(within(hardware).getByText('V0 ready').closest('details')).toHaveAttribute('open');
   fireEvent.click(within(hardware).getByRole('button', { name: 'PDU / Tango controls' }));
   expect(screen.getByText('PDU controls opened')).toBeVisible();
   expect(pumpProbeRequest.mock.calls.filter(([path]) => /hardware\/initialize|^\/run$/.test(path))).toHaveLength(0);

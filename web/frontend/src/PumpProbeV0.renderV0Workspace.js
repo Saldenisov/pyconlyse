@@ -199,7 +199,7 @@ export function renderV0Workspace({
         </div>
       {preparationJob?.status === 'running' && <div className="pp-preparation-progress" role="status">{preparationJob.phase}</div>}
       {hardwareInitStatus && preparationJob?.status !== 'running' ? (
-        <details className={`pp-hw-init ${hardwareInitStatus.success ? 'pp-hw-init-ok' : 'pp-hw-init-fail'}`}>
+        <details open={activeTab === 'hardware'} className={`pp-hw-init ${hardwareInitStatus.success ? 'pp-hw-init-ok' : 'pp-hw-init-fail'}`}>
           <summary>{hardwareInitStatus.success ? 'V0 ready' : `V0 preparation incomplete · ${failedHardwareChecks.length} issues`}</summary>
           <div className="pp-hw-init-head">
             <strong>{hardwareInitStatus.message || (hardwareInitStatus.success ? 'Hardware initialized' : 'Hardware initialization failed')}</strong>
