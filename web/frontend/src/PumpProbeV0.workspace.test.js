@@ -21,7 +21,7 @@ jest.mock('./pump-probe-v0/components', () => {
 const originalFetch = global.fetch;
 let state;
 beforeEach(() => {
-  state = { running: false, real_time: false, control_mode: 'tango',
+  state = { running: false, real_time: false, control_mode: 'tango', position_mm: 0, set_position_mm: 0,
     wavelengths: [500, 600], delays: [0, 1], heatmap: [[0, 0], [0, 0]], live_od: [0, 0],
     spectra: { signal: [1, 2], reference: [2, 3], background: [0, 0] } };
   pumpProbeRequest.mockReset();
@@ -29,6 +29,7 @@ beforeEach(() => {
     if (path === '/hardware-config') return { hardware_config: { control_mode: 'tango' } };
     if (path === '/lifecycle') return { job: { operation: 'prepare', status: 'completed', result: { success: true, checks: [] } } };
     if (path === '/realtime') state = { ...state, real_time: JSON.parse(options.body).enabled };
+    if (path === '/stage/move') state = { ...state, set_position_mm: JSON.parse(options.body).position_mm, stage_moving: true };
     return state;
   });
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ devices: [] }) });
@@ -40,7 +41,7 @@ test('hardware readiness and PDU controls live in Hardware while Start stays in 
   await waitFor(() => expect(screen.getByRole('button', { name: 'Start', exact: true })).toBeEnabled());
   expect(screen.queryByRole('button', { name: /Initialize H[WV]/ })).not.toBeInTheDocument();
   expect(screen.queryByText('V0 ready')).not.toBeVisible();
-  fireEvent.click(screen.getByRole('tab', { name: 'Hardware', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'V0 Pump-Probe hardware status: Ready' }));
   const hardware = screen.getByRole('tabpanel', { name: 'Hardware', exact: true });
   expect(within(hardware).getByText('V0 ready')).toBeVisible();
   fireEvent.click(within(hardware).getByRole('button', { name: 'PDU / Tango controls' }));
@@ -48,16 +49,15 @@ test('hardware readiness and PDU controls live in Hardware while Start stays in 
   expect(pumpProbeRequest.mock.calls.filter(([path]) => /hardware\/initialize|^\/run$/.test(path))).toHaveLength(0);
 });
 
-test('Alignment Current follows iTest and uses one enlarged monitor with the same realtime control', async () => {
+test('Alignment shows iTest beside one enlarged monitor without acquisition status and shares realtime state', async () => {
   render(<PumpProbeV0 />);
   const compact = screen.getByRole('region', { name: 'Current spectra and OD' });
   expect(compact).toHaveClass('pp-current-monitor-compact');
   expect(within(compact).getByRole('button', { name: 'Real time off' })).toBeVisible();
   fireEvent.click(screen.getByRole('tab', { name: 'Alignment', exact: true }));
-  const tabs = within(screen.getByRole('tablist', { name: 'V0 alignment controls' })).getAllByRole('tab');
-  expect(tabs[0]).toHaveTextContent('iTest');
-  expect(tabs[1]).toHaveTextContent('Current');
-  fireEvent.click(tabs[1]);
+  expect(screen.getByRole('heading', { name: 'iTest · V0' })).toBeVisible();
+  expect(screen.queryByText('control')).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: 'Current', exact: true })).not.toBeInTheDocument();
   const expanded = screen.getByRole('region', { name: 'Current spectra and OD' });
   expect(expanded).toHaveClass('pp-current-monitor-expanded');
   fireEvent.click(within(expanded).getByRole('button', { name: 'Real time off' }));
@@ -68,4 +68,23 @@ test('Alignment Current follows iTest and uses one enlarged monitor with the sam
   expect(monitor).toHaveClass('pp-current-monitor-compact');
   expect(within(monitor).getByRole('button', { name: 'Real time on' })).toBeVisible();
   expect(pumpProbeRequest.mock.calls.filter(([path]) => /hardware\/initialize|^\/run$/.test(path))).toHaveLength(0);
+});
+
+test('OWIS moves only an explicitly submitted millimetre target and keeps readback separate', async () => {
+  render(<PumpProbeV0 />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Alignment', exact: true }));
+  const delay = screen.getByRole('region', { name: 'OWIS delay line' });
+  const target = within(delay).getByRole('spinbutton', { name: 'OWIS delay target mm' });
+  fireEvent.change(target, { target: { value: '-12.5' } });
+  expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/stage/move')).toHaveLength(0);
+  fireEvent.submit(target.closest('form'));
+  await waitFor(() => expect(within(delay).getByRole('button', { name: 'Move to position' })).toBeEnabled());
+  const moves = pumpProbeRequest.mock.calls.filter(([path]) => path === '/stage/move');
+  expect(moves).toHaveLength(1);
+  expect(JSON.parse(moves[0][1].body)).toEqual({ position_mm: -12.5 });
+  expect(within(delay).getByText('Current: 0.000 mm')).toBeVisible();
+  fireEvent.change(target, { target: { value: '1000' } });
+  fireEvent.submit(target.closest('form'));
+  expect(within(delay).getByRole('alert')).toHaveTextContent('between -900 and 100 mm');
+  expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/stage/move')).toHaveLength(1);
 });

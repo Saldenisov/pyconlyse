@@ -14,12 +14,15 @@ export default function CurrentMonitor({
           onClick={() => onSpectraViewChange('current')}>Current</button>
         <button type="button" className={spectraViewMode === 'raw' ? 'pp-panel-toggle-active' : ''}
           onClick={() => onSpectraViewChange('raw')} disabled={!hasRaw}>Raw</button>
-        <button type="button" aria-pressed={realTime} className={realTime ? 'pp-action-warn' : ''}
-          onClick={onToggleRealTime}>Real time {realTime ? 'on' : 'off'}</button>
       </div>
     }>
-      <PlotlyChart className="pp-plot pp-plot-spectra" data={spectraData}
-        layout={spectraLayout} config={chartConfig} {...plotInteractionProps} />
+      <div className="pp-current-plot">
+        <PlotlyChart className="pp-plot pp-plot-spectra" data={spectraData}
+          layout={spectraLayout} config={chartConfig} {...plotInteractionProps} />
+        <button type="button" aria-pressed={realTime}
+          className={`pp-current-realtime ${realTime ? 'pp-action-warn' : ''}`}
+          onClick={onToggleRealTime}>Real time {realTime ? 'on' : 'off'}</button>
+      </div>
     </PlotPanel>
     <PlotPanel title="Current OD" className="pp-panel-fill">
       <PlotlyChart className="pp-plot pp-plot-od" data={odSpectrumData}

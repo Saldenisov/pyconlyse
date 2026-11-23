@@ -1,4 +1,5 @@
 import CurrentMonitor from './pump-probe-v0/CurrentMonitor';
+import DelayLineControl from './pump-probe-v0/DelayLineControl';
 import AlignmentPanel from './pump-probe-v0/AlignmentPanel';
 import TreatmentPanel from './pump-probe-v0/TreatmentPanel';
 import DerivedSourcePanel from './pump-probe-v0/DerivedSourcePanel';
@@ -44,11 +45,15 @@ export function renderV0Workspace({
     onSpectraViewChange: setSpectraViewMode, hasRaw: Boolean(visibleRawDataset?.channels?.length),
     realTime, onToggleRealTime: () => postAndRefresh('/realtime', { enabled: !realTime }),
   };
+  const ready = Boolean(hardwareInitStatus?.success && preparationJob?.status !== 'running' && !backendState?.hardware_error);
+  const readinessLabel = preparationJob?.status === 'running' ? 'Preparing' : ready ? 'Ready' : 'Readiness not confirmed';
   return (
     <main className="pp-page">
       <header className="pp-header">
         <div>
-          <h1>V0 Pump-Probe</h1>
+          <h1><button type="button" className={`pp-readiness-title ${ready ? 'is-ready' : 'is-not-ready'}`}
+            aria-label={`V0 Pump-Probe hardware status: ${readinessLabel}`} aria-controls="pp-view-hardware"
+            title={readinessLabel} onClick={() => setActiveTab('hardware')}>V0 Pump-Probe</button></h1>
           <div className="pp-subtitle">DLIII-V0 / Andor CCD / pulse radiolysis</div>
         </div>
         <SampleStageControl
@@ -146,7 +151,7 @@ export function renderV0Workspace({
             }}>{label}</button>)}
       </nav>
 
-      <section className="pp-status-strip">
+      {activeTab === 'acquisition' && <section className="pp-status-strip">
         <div><span>control</span>{activeControlMode}</div>
         <div><span>delay</span>{(delays[activeCurrentIndex] || 0).toFixed(2)} ps</div>
         <div><span>position</span>{positionMm.toFixed(3)} mm</div>
@@ -164,7 +169,7 @@ export function renderV0Workspace({
           {daqCounter.value ?? '-'} @ {counterRateHz.toFixed(2)} Hz
         </div>
         <div><span>run</span>{backendState?.run?.status || 'idle'}</div>
-      </section>
+      </section>}
       {[...new Set([configurationError, actionError, backendError].filter(Boolean))].map((message) => (
         <div className="pp-api-error" role="alert" key={message}>{message}</div>
       ))}
@@ -408,7 +413,12 @@ export function renderV0Workspace({
       </section>
       </div>
       {activeTab === 'alignment' && <div role="tabpanel" id="pp-view-alignment" aria-labelledby="pp-tab-alignment">
-        <AlignmentPanel><CurrentMonitor {...currentMonitorProps} variant="expanded" /></AlignmentPanel>
+        <AlignmentPanel delayControl={<DelayLineControl positionMm={positionMm} targetMm={setPositionMm}
+          disabled={running || runBusy}
+          onMove={value => postAndRefresh('/stage/move', { position_mm: value })}
+          onStop={() => postAndRefresh('/stage/stop')} />}>
+          <CurrentMonitor {...currentMonitorProps} variant="expanded" />
+        </AlignmentPanel>
       </div>}
       <div role="tabpanel" id="pp-view-combine" aria-labelledby="pp-tab-combine" hidden={activeTab !== 'combine'}>
         <DerivedSourcePanel sources={derivedSources} busy={deriveBusy} error={deriveError}

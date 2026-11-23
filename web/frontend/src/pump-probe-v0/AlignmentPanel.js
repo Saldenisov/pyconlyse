@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import ITestPSUClient from '../components/ITestPSUClient';
-import LaserPointingController from '../components/LaserPointingController';
 import { resolveDeviceFamily } from '../utils/deviceFamily';
 
-export default function AlignmentPanel({ children }) {
+export default function AlignmentPanel({ children, delayControl }) {
   const [devices, setDevices] = useState([]);
-  const [view, setView] = useState('magnets');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -34,19 +32,18 @@ export default function AlignmentPanel({ children }) {
   }, []);
 
   return <section className="pp-alignment" aria-label="V0 Alignment">
-    <div className="pp-view-tabs" role="tablist" aria-label="V0 alignment controls">
-      {[['magnets', 'iTest · V0'], ['current', 'Current'], ['laser1', 'Laser pointing 1'], ['laser2', 'Laser pointing 2']]
-        .map(([id, label]) => <button type="button" role="tab" key={id}
-          aria-selected={view === id} onClick={() => setView(id)}>{label}</button>)}
+    <div className="pp-alignment-layout">
+      <div className="pp-alignment-controls">
+        <div className="pp-alignment-magnets">
+          <h2 className="pp-alignment-heading">iTest · V0</h2>
+          {loading && <p role="status">Loading V0 iTest channels…</p>}
+          {error && <p role="alert">{error}</p>}
+          {!loading && !error && !devices.length && <p>No iTest device is registered.</p>}
+          {devices.map(name => <ITestPSUClient key={name} deviceName={name} fixedTab="V0" compact />)}
+        </div>
+        {delayControl}
+      </div>
+      <div className="pp-alignment-monitor">{children}</div>
     </div>
-    {view === 'magnets' && <div className="pp-alignment-magnets">
-      {loading && <p role="status">Loading V0 iTest channels…</p>}
-      {error && <p role="alert">{error}</p>}
-      {!loading && !error && !devices.length && <p>No iTest device is registered.</p>}
-      {devices.map(name => <ITestPSUClient key={name} deviceName={name} fixedTab="V0" compact />)}
-    </div>}
-    {view === 'current' && children}
-    {view === 'laser1' && <LaserPointingController deviceName="manip/V0/LaserPointing-Cam1" />}
-    {view === 'laser2' && <LaserPointingController deviceName="manip/V0/LaserPointing-Cam2" />}
   </section>;
 }
