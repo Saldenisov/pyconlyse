@@ -242,11 +242,25 @@ def decode_tango_cycle(encoded, **context):
     return batch.cycles[0]
 
 
+class _TangoStateLiteral(ast.NodeTransformer):
+    """Accept legacy DevState repr without evaluating device-supplied code."""
+    prefixes = {"DevState", "tango.DevState", "tango._tango.DevState", "PyTango.DevState"}
+    states = {"ON", "OFF", "CLOSE", "OPEN", "INSERT", "EXTRACT", "MOVING",
+              "STANDBY", "FAULT", "INIT", "RUNNING", "ALARM", "DISABLE", "UNKNOWN"}
+
+    def visit_Attribute(self, node):
+        prefix, name = ast.unparse(node).rsplit(".", 1)
+        if prefix in self.prefixes and name in self.states:
+            return ast.copy_location(ast.Constant(name), node)
+        return self.generic_visit(node)
+
+
 def _dict_attribute(value):
     if isinstance(value, dict):
         return value
     try:
-        parsed = ast.literal_eval(str(value))
+        tree = ast.parse(str(value), mode="eval")
+        parsed = ast.literal_eval(_TangoStateLiteral().visit(tree))
     except (ValueError, SyntaxError):
         raise ValueError("OWIS attribute is not a dictionary") from None
     if not isinstance(parsed, dict):

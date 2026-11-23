@@ -264,6 +264,40 @@ def commands(log, name):
     return [entry for entry in log if entry[1] == name]
 
 
+@pytest.mark.parametrize('prefix', ['DevState', 'tango.DevState', 'tango._tango.DevState', 'PyTango.DevState'])
+def test_legacy_owis_state_repr_preserves_motion_settle_contract(prefix):
+    value, camera, stage, stop, log = adapter()
+    original = stage.read_attribute
+
+    def read(name):
+        result = original(name)
+        result.value = str(result.value) if name == 'positions' else '{3: ' + prefix + '.ON}'
+        return result
+
+    stage.read_attribute = read
+    value.open()
+    assert value.move_to(1) == -1.
+    assert stage.position_reads == 2
+
+
+@pytest.mark.parametrize('expression', ['tango._tango.DevState.FAULT', 'tango._tango.DevState.OFF'])
+def test_legacy_owis_fault_and_off_remain_rejected(expression):
+    value, camera, stage, stop, log = adapter()
+    original = stage.read_attribute
+    stage.read_attribute = lambda name: (SimpleNamespace(value='{3: '+expression+'}') if name == 'states' else original(name))
+    value.open()
+    with pytest.raises(ValueError, match='not ready'):
+        value.move_to(0)
+
+
+@pytest.mark.parametrize('payload', ['{3: __import__("os").getcwd()}', '{3: arbitrary.DevState.ON}',
+                                  '{3: tango._tango.DevState.UNKNOWN_STATE}', '[tango._tango.DevState.ON]'])
+def test_owis_parser_rejects_executable_or_unknown_forms(payload):
+    from pump_probe_v0_tango import _dict_attribute
+    with pytest.raises(ValueError, match='not a dictionary'):
+        _dict_attribute(payload)
+
+
 def test_adapter_move_settle_batch_decode_then_explicit_ack_without_phase_commands():
     value, camera, stage, stop, log = adapter()
     np.testing.assert_array_equal(value.open(), WAVES)
