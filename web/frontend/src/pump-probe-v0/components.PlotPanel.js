@@ -24,7 +24,6 @@ function SampleStageControl({
   onOpenConfig,
 }) {
   const [draftMm, setDraftMm] = useState(targetMm);
-  const percent = ((positionMm - SAMPLE_STAGE_MIN_MM) / (SAMPLE_STAGE_MAX_MM - SAMPLE_STAGE_MIN_MM)) * 100;
 
   useEffect(() => {
     setDraftMm(targetMm);
@@ -63,35 +62,11 @@ function SampleStageControl({
         Sample translation stage
       </div>
       <div className="pp-sample-stage-row">
-        <div className="pp-sample-rail">
-          <div className="pp-sample-scale">
-            <span>{SAMPLE_STAGE_MIN_MM}</span>
-            <span>{SAMPLE_STAGE_MAX_MM} mm</span>
-          </div>
-          <div
-            className="pp-sample-carriage"
-            style={{ left: `${clamp(percent, 0, 100)}%` }}
-          />
-          {positions.map((marker, index) => (
-            <button
-              key={index}
-              type="button"
-              className="pp-sample-marker"
-              style={{ left: `${((marker - SAMPLE_STAGE_MIN_MM) / (SAMPLE_STAGE_MAX_MM - SAMPLE_STAGE_MIN_MM)) * 100}%` }}
-              title={`P${index + 1}: ${formatStageMm(marker)} mm`}
-              onClick={() => moveTo(marker)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onMarkerMove(index, positionMm);
-              }}
-            />
-          ))}
-        </div>
         <label className="pp-sample-set">
           set/real mm
           <input
             type="text"
+            aria-label="Sample stage target/current mm"
             value={`${formatStageMm(draftMm)}/${formatStageMm(positionMm)}`}
             onChange={(event) => handleSetRealChange(event.target.value)}
           />

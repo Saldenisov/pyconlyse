@@ -13,7 +13,8 @@ jest.mock('./pump-probe-v0/components', () => {
   return {
     PlotPanel: ({ title, actions, children }) => <section><h2>{title}</h2>{actions}{children}</section>,
     PlotlyChart: Empty, HeatmapSelectorChart: Empty, SampleStageControl: Empty,
-    DeviceConfigModal: Empty, DataBrowserWindow: Empty, SettingsPanel: Empty,
+    DeviceConfigModal: Empty, DataBrowserWindow: Empty,
+    SettingsPanel: ({ runControls }) => <section aria-label="Scan settings">{runControls}</section>,
     StageControl: ({ orientation }) => <section aria-label="Delay line" className={`pp-stage-panel-${orientation}`}>Graphical delay line</section>,
     HardwareModal: ({ open }) => open ? <div>PDU controls opened</div> : null,
   };
@@ -37,9 +38,14 @@ beforeEach(() => {
 });
 afterEach(() => { global.fetch = originalFetch; });
 
-test('hardware readiness and PDU controls live in Hardware while Start stays in the header', async () => {
+test('hardware readiness and PDU controls live in Hardware while run controls live in Scan settings', async () => {
   render(<PumpProbeV0 />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Start', exact: true })).toBeEnabled());
+  const scan = screen.getByRole('region', { name: 'Scan settings' });
+  expect(within(scan).getByRole('button', { name: 'Start', exact: true })).toBeVisible();
+  expect(within(scan).getByRole('button', { name: 'Faraday closed' })).toBeVisible();
+  expect(within(scan).getByRole('button', { name: 'Move Crystal' })).toBeVisible();
+  expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Start', exact: true })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Initialize H[WV]/ })).not.toBeInTheDocument();
   expect(screen.queryByText('V0 ready')).not.toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'V0 Pump-Probe hardware status: Ready' }));
@@ -73,4 +79,17 @@ test('Alignment shows iTest beside one enlarged monitor without acquisition stat
   expect(monitor).toHaveClass('pp-current-monitor-compact');
   expect(within(monitor).getByRole('button', { name: 'Real time on' })).toBeVisible();
   expect(pumpProbeRequest.mock.calls.filter(([path]) => /hardware\/initialize|^\/run$/.test(path))).toHaveLength(0);
+});
+
+
+test('relocated Faraday and crystal controls retain their existing requests', async () => {
+  render(<PumpProbeV0 />);
+  const scan = screen.getByRole('region', { name: 'Scan settings' });
+  await waitFor(() => expect(within(scan).getByRole('button', { name: 'Start', exact: true })).toBeEnabled());
+  fireEvent.click(within(scan).getByRole('button', { name: 'Faraday closed' }));
+  await waitFor(() => expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/faraday')).toHaveLength(1));
+  const [, options] = pumpProbeRequest.mock.calls.find(([path]) => path === '/faraday');
+  expect(JSON.parse(options.body)).toEqual({ closed: false });
+  fireEvent.click(within(scan).getByRole('button', { name: 'Move Crystal' }));
+  await waitFor(() => expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/crystal/move')).toHaveLength(1));
 });

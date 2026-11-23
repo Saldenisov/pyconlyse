@@ -485,6 +485,7 @@ function StageControl({
 }
 
 function SettingsPanel({
+  runControls = null,
   settings,
   hardwareConfig,
   onSettingChange,
@@ -497,6 +498,7 @@ function SettingsPanel({
   onConfigLoad,
   onConfigSave,
 }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
   const delayFileInputRef = useRef(null);
   const configFileInputRef = useRef(null);
 
@@ -511,8 +513,9 @@ function SettingsPanel({
   };
 
   return (
-    <section className="pp-settings-panel">
+    <section className="pp-settings-panel" aria-label="Scan settings">
       <div className="pp-panel-title">Scan settings</div>
+      {runControls}
       <div className="pp-settings-grid">
         <label>
           OZ, ps
@@ -615,14 +618,17 @@ function SettingsPanel({
           onChange={(event) => readTextFile(event, onConfigLoad)}
         />
       </div>
-      <div className="pp-delay-preview">
-        <PlotlyChart
+      <details className="pp-delay-preview-details" onToggle={(event) => setPreviewOpen(event.currentTarget.open)}>
+        <summary>Delay preview</summary>
+        <div className="pp-delay-preview">
+          {previewOpen && <PlotlyChart
           className="pp-plot pp-plot-delay-preview"
           data={delayPreviewData}
           layout={delayPreviewLayout}
           config={delayPreviewConfig}
-        />
-      </div>
+          />}
+        </div>
+      </details>
     </section>
   );
 }

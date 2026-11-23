@@ -47,6 +47,48 @@ export function renderV0Workspace({
   };
   const ready = Boolean(hardwareInitStatus?.success && preparationJob?.status !== 'running' && !backendState?.hardware_error);
   const readinessLabel = preparationJob?.status === 'running' ? 'Preparing' : ready ? 'Ready' : 'Readiness not confirmed';
+  const runControls = (
+    <div className="pp-run-controls pp-scan-run-controls">
+      <button
+        type="button"
+        disabled={!hardwareConfigReady || runBusy || backendState?.run?.status === 'stopping'}
+        onClick={() => handleRun('new')}
+      >
+        {runBusy ? 'Preparing...' : running ? 'Stop' : backendState?.run?.status === 'stopping' ? 'Stopping...' : 'Start'}
+      </button>
+      {!running && backendState?.run?.resume_available && (
+        <button type="button" disabled={!hardwareConfigReady || runBusy} onClick={() => handleRun('continue')}>Continue</button>
+      )}
+      {(running || backendState?.run?.resume_available) && (
+        <button type="button" onClick={() => postAndRefresh('/run', { running: false, run_action: 'cancel' })}>Cancel run</button>
+      )}
+      <button
+        type="button"
+        className={faradayClosed ? 'pp-action-ok' : 'pp-action-warn'}
+        onClick={() => {
+          const nextClosed = !faradayClosed;
+          setLocalFaradayClosed(nextClosed);
+          setLocalElectronState(nextClosed ? 'OFF' : 'ON');
+          postAndRefresh('/faraday', { closed: nextClosed });
+        }}
+      >
+        Faraday {faradayClosed ? 'closed' : 'open'}
+      </button>
+      <button type="button" onClick={() => postAndRefresh('/crystal/move')}>
+        Move Crystal
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setLocalIndex(0);
+          setLocalElectronState('OFF');
+          postAndRefresh('/reset');
+        }}
+      >
+        Reset
+      </button>
+    </div>
+  );
   return (
     <main className="pp-page">
       <header className="pp-header">
@@ -65,45 +107,7 @@ export function renderV0Workspace({
           onMarkerMove={setSampleMarker}
           onOpenConfig={setDeviceConfigKey}
         />
-        <div className="pp-run-controls">
-          <button
-            type="button"
-            disabled={!hardwareConfigReady || runBusy || backendState?.run?.status === 'stopping'}
-            onClick={() => handleRun('new')}
-          >
-            {runBusy ? 'Preparing...' : running ? 'Stop' : backendState?.run?.status === 'stopping' ? 'Stopping...' : 'Start'}
-          </button>
-          {!running && backendState?.run?.resume_available && (
-            <button type="button" disabled={!hardwareConfigReady || runBusy} onClick={() => handleRun('continue')}>Continue</button>
-          )}
-          {(running || backendState?.run?.resume_available) && (
-            <button type="button" onClick={() => postAndRefresh('/run', { running: false, run_action: 'cancel' })}>Cancel run</button>
-          )}
-          <button
-            type="button"
-            className={faradayClosed ? 'pp-action-ok' : 'pp-action-warn'}
-            onClick={() => {
-              const nextClosed = !faradayClosed;
-              setLocalFaradayClosed(nextClosed);
-              setLocalElectronState(nextClosed ? 'OFF' : 'ON');
-              postAndRefresh('/faraday', { closed: nextClosed });
-            }}
-          >
-            Faraday {faradayClosed ? 'closed' : 'open'}
-          </button>
-          <button type="button" onClick={() => postAndRefresh('/crystal/move')}>
-            Move Crystal
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setLocalIndex(0);
-              setLocalElectronState('OFF');
-              postAndRefresh('/reset');
-            }}
-          >
-            Reset
-          </button>
+        <div className="pp-header-files">
           <div className="pp-data-strip">
             <div className="pp-data-fields">
               <input
@@ -373,6 +377,7 @@ export function renderV0Workspace({
           </PlotPanel>
 
           <SettingsPanel
+            runControls={runControls}
             settings={settings}
             hardwareConfig={hardwareConfig}
             onSettingChange={handleSettingChange}
