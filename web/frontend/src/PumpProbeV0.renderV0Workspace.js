@@ -244,7 +244,23 @@ export function renderV0Workspace({
       </section>
 
       <section className="pp-layout">
-        {activeTab === 'acquisition' && <MovableMonitor><CurrentMonitor {...currentMonitorProps} /></MovableMonitor>}
+        {activeTab === 'acquisition' && <MovableMonitor>
+          <CurrentMonitor {...currentMonitorProps} />
+          <SettingsPanel
+            runControls={runControls}
+            settings={settings}
+            hardwareConfig={hardwareConfig}
+            onSettingChange={handleSettingChange}
+            onHardwareModeChange={handleHardwareModeChange}
+            delayStats={delayStats}
+            delayPreviewData={delayPreviewData}
+            delayPreviewLayout={delayPreviewLayout}
+            delayPreviewConfig={delayPreviewConfig}
+            onDelayPointsLoad={handleDelayPointsLoad}
+            onConfigLoad={handleConfigLoad}
+            onConfigSave={handleConfigSave}
+          />
+        </MovableMonitor>}
 
         <div className="pp-center-grid">
           <PlotPanel title={`OD heatmap · ${fileOdLoaded ? currentOdSource : 'Live'}`} className="pp-panel-fill" actions={(
@@ -375,24 +391,7 @@ export function renderV0Workspace({
               </div>
             </div>
           </PlotPanel>
-
-          <SettingsPanel
-            runControls={runControls}
-            settings={settings}
-            hardwareConfig={hardwareConfig}
-            onSettingChange={handleSettingChange}
-            onHardwareModeChange={handleHardwareModeChange}
-            delayStats={delayStats}
-            delayPreviewData={delayPreviewData}
-            delayPreviewLayout={delayPreviewLayout}
-            delayPreviewConfig={delayPreviewConfig}
-            onDelayPointsLoad={handleDelayPointsLoad}
-            onConfigLoad={handleConfigLoad}
-            onConfigSave={handleConfigSave}
-          />
         </div>
-
-
       </section>
       </div>
       {activeTab === 'alignment' && <div role="tabpanel" id="pp-view-alignment" aria-labelledby="pp-tab-alignment">

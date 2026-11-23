@@ -125,7 +125,7 @@
 .pp-selection-strip div { display: flex; align-items: baseline; gap: 5px; min-height: 0; padding: 0; border: 0; background: transparent; font-size: 11px; }
 .pp-selection-strip span { margin: 0; font-size: 10px; text-transform: none; }
 .pp-selection-strip button { min-height: 0; height: 21px; padding: 0 6px; font-size: 10px; font-weight: 400; }
-.pp-center-grid > .pp-settings-panel { height: auto; align-self: start; }
+.pp-current-monitor-window > .pp-settings-panel { height: auto; margin-top: 10px; }
 .pp-settings-panel .pp-panel-title { height: 25px; padding: 0 7px; font-size: 12px; flex: none; }
 .pp-scan-run-controls { justify-content: flex-start; padding: 5px 6px 0; gap: 3px; }
 .pp-scan-run-controls button { min-width: 0; height: 23px; padding: 0 6px; font-size: 10px; }
