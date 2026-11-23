@@ -34,6 +34,7 @@ export default function AlignmentPanel({ children, delayControl }) {
   return <section className="pp-alignment" aria-label="V0 Alignment">
     <div className="pp-alignment-layout">
       <div className="pp-alignment-controls">
+        {delayControl}
         <div className="pp-alignment-magnets">
           <h2 className="pp-alignment-heading">iTest · V0</h2>
           {loading && <p role="status">Loading V0 iTest channels…</p>}
@@ -41,7 +42,6 @@ export default function AlignmentPanel({ children, delayControl }) {
           {!loading && !error && !devices.length && <p>No iTest device is registered.</p>}
           {devices.map(name => <ITestPSUClient key={name} deviceName={name} fixedTab="V0" compact />)}
         </div>
-        {delayControl}
       </div>
       <div className="pp-alignment-monitor">{children}</div>
     </div>
