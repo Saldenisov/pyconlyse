@@ -42,6 +42,8 @@
 }
 
 .pp-current-plot .pp-plot, .pp-current-od-plot .pp-plot { height: 100%; }
+.pp-current-monitor-compact .pp-current-plot,
+.pp-current-monitor-compact .pp-current-od-plot { aspect-ratio: 2 / 1; }
 .pp-current-plot .modebar { top: 35px !important; }
 .pp-current-realtime {
   position: absolute;
@@ -96,13 +98,15 @@
   cursor: pointer;
 }
 
-.pp-layout { position: relative; grid-template-columns: 260px minmax(560px, 1fr); grid-template-rows: minmax(920px, auto); }
+.pp-layout { position: relative; grid-template-columns: 400px minmax(560px, 1fr); grid-template-rows: auto; }
+.pp-center-grid { aspect-ratio: auto; grid-template-rows: 280px 350px; }
+.pp-center-grid > .pp-panel { height: 280px; align-self: start; }
 .pp-current-monitor-window.pp-left-column {
   display: block;
   position: relative;
   align-self: start;
   height: max-content;
-  max-width: none;
+  max-width: calc(100vw - 32px);
   z-index: 4;
 }
 .pp-current-window-tools { display: flex; height: 25px; gap: 3px; margin-bottom: 4px; }
@@ -141,8 +145,10 @@
 .pp-stage-panel-horizontal .pp-stage-stop { grid-column: auto; }
 .pp-stage-panel-horizontal .pp-stage-scale { padding: 0 52px 5px; font-size: 10px; }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .pp-layout { grid-template-columns: 1fr; grid-template-rows: auto; }
+}
+@media (max-width: 900px) {
   .pp-alignment-layout { grid-template-columns: 1fr; }
   .pp-current-monitor-expanded {
     grid-template-columns: 1fr;
@@ -150,4 +156,7 @@
 }
 @media (max-width: 560px) {
   .pp-stage-panel-horizontal .pp-stage-readouts { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .pp-center-grid { grid-template-columns: 1fr; grid-template-rows: repeat(3, 280px) 350px; }
 }

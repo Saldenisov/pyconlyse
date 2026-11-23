@@ -1,13 +1,16 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
-const KEY = 'v0.current-monitor-layout.v1';
-const initial = { width: 260, x: 0, y: 0 };
+const KEY = 'v0.current-monitor-layout.v2';
+const initial = { width: 400, x: 0, y: 0 };
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 function loadLayout() {
   try {
-    const value = JSON.parse(localStorage.getItem(KEY));
+    const saved = JSON.parse(localStorage.getItem(KEY));
+    const previous = saved ? null : JSON.parse(localStorage.getItem('v0.current-monitor-layout.v1'));
+    const value = saved || previous;
     if (value && ['width', 'x', 'y'].every(key => Number.isFinite(value[key]))) {
-      return { width: clamp(value.width, 210, 400), x: Math.max(0, value.x), y: Math.max(0, value.y) };
+      return { width: saved ? clamp(value.width, 210, 600) : Math.max(initial.width, clamp(value.width, 210, 600)),
+        x: Math.max(0, value.x), y: Math.max(0, value.y) };
     }
   } catch (_) { /* Layout preferences must not prevent displaying data. */ }
   return initial;
@@ -49,8 +52,9 @@ export default function MovableMonitor({ children }) {
     if (!start || event.pointerId !== start.pointerId) return;
     const dx = event.clientX - start.clientX;
     const dy = event.clientY - start.clientY;
-    const width = start.kind === 'resize' ? clamp(start.layout.width + dx, 210, Math.min(400, start.bounds.width)) : start.layout.width;
-    const height = start.height + 2 * (width - start.layout.width);
+    const width = start.kind === 'resize' ? clamp(start.layout.width + dx, 210, Math.min(600, start.bounds.width)) : start.layout.width;
+    // Two plots at 2:1 add one pixel of total height per pixel of width.
+    const height = start.height + width - start.layout.width;
     update({ width,
       x: clamp(start.layout.x + (start.kind === 'move' ? dx : 0), 0, Math.max(0, start.bounds.width - width)),
       y: clamp(start.layout.y + (start.kind === 'move' ? dy : 0), 0, Math.max(0, start.bounds.height - height)) });
@@ -63,9 +67,9 @@ export default function MovableMonitor({ children }) {
     const bounds = panel.current.parentElement.getBoundingClientRect();
     const step = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -10 : 10;
     if (kind === 'resize') {
-      const width = clamp(value.width + step, 210, Math.min(400, bounds.width || 400));
+      const width = clamp(value.width + step, 210, Math.min(600, bounds.width || 600));
       update({ width, x: clamp(value.x, 0, Math.max(0, bounds.width - width)),
-        y: clamp(value.y, 0, Math.max(0, bounds.height - panel.current.offsetHeight - 2 * (width - value.width))) });
+        y: clamp(value.y, 0, Math.max(0, bounds.height - panel.current.offsetHeight - (width - value.width))) });
     }
     else update({ ...value,
       x: clamp(value.x + (['ArrowLeft', 'ArrowRight'].includes(event.key) ? step : 0), 0, Math.max(0, bounds.width - value.width)),
