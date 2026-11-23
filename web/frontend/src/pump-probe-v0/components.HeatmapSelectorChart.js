@@ -281,6 +281,7 @@ function HeatmapSelectorChart({
 }
 
 function StageControl({
+  orientation = 'vertical',
   positionMm,
   setPositionMm,
   stepPs,
@@ -295,7 +296,8 @@ function StageControl({
   const [draftPositionMm, setDraftPositionMm] = useState(positionMm);
   const [hasPendingMove, setHasPendingMove] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const carriagePercent = ((STAGE_MAX_MM - draftPositionMm) / (STAGE_MAX_MM - STAGE_MIN_MM)) * 100;
+  const horizontal = orientation === 'horizontal';
+  const carriagePercent = ((horizontal ? draftPositionMm - STAGE_MIN_MM : STAGE_MAX_MM - draftPositionMm) / (STAGE_MAX_MM - STAGE_MIN_MM)) * 100;
   const stageMoving = Math.abs(setPositionMm - positionMm) > 0.005;
 
   useEffect(() => {
@@ -319,8 +321,11 @@ function StageControl({
       return null;
     }
     const rect = rail.getBoundingClientRect();
-    const ratio = clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
-    return STAGE_MAX_MM - ratio * (STAGE_MAX_MM - STAGE_MIN_MM);
+    const ratio = horizontal
+      ? clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1)
+      : clamp((event.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
+    return horizontal ? STAGE_MIN_MM + ratio * (STAGE_MAX_MM - STAGE_MIN_MM)
+      : STAGE_MAX_MM - ratio * (STAGE_MAX_MM - STAGE_MIN_MM);
   };
   const beginDrag = (event) => {
     if (event.button !== 0) {
@@ -372,7 +377,8 @@ function StageControl({
 
   return (
     <section
-      className="pp-stage-panel"
+      className={`pp-stage-panel ${horizontal ? 'pp-stage-panel-horizontal' : ''}`.trim()}
+      aria-label="Delay line"
       onContextMenu={(event) => {
         event.preventDefault();
         onOpenConfig('delayLine');
@@ -425,11 +431,11 @@ function StageControl({
           onPointerCancel={finishDrag}
         >
           {Array.from({ length: 17 }, (_value, index) => (
-            <span key={index} className="pp-stage-bolt" style={{ top: `${5 + index * 5.6}%` }} />
+            <span key={index} className="pp-stage-bolt" style={{ [horizontal ? 'left' : 'top']: `${5 + index * 5.6}%` }} />
           ))}
           <div
             className={`pp-stage-carriage ${hasPendingMove ? 'pp-stage-carriage-pending' : ''}`.trim()}
-            style={{ top: `${clamp(carriagePercent, 0, 100)}%` }}
+            style={{ [horizontal ? 'left' : 'top']: `${clamp(carriagePercent, 0, 100)}%` }}
             onPointerDown={beginDrag}
             onPointerMove={updateDrag}
             onPointerUp={finishDrag}
@@ -471,8 +477,8 @@ function StageControl({
         </button>
       </div>
       <div className="pp-stage-scale">
-        <span>{STAGE_MAX_MM} mm</span>
-        <span>{STAGE_MIN_MM} mm</span>
+        <span>{horizontal ? STAGE_MIN_MM : STAGE_MAX_MM} mm</span>
+        <span>{horizontal ? STAGE_MAX_MM : STAGE_MIN_MM} mm</span>
       </div>
     </section>
   );

@@ -1,3 +1,4 @@
+import MovableMonitor from './pump-probe-v0/MovableMonitor';
 import CurrentMonitor from './pump-probe-v0/CurrentMonitor';
 import DelayLineControl from './pump-probe-v0/DelayLineControl';
 import AlignmentPanel from './pump-probe-v0/AlignmentPanel';
@@ -240,7 +241,7 @@ export function renderV0Workspace({
       </section>
 
       <section className="pp-layout">
-        {activeTab === 'acquisition' && <CurrentMonitor {...currentMonitorProps} className="pp-left-column" />}
+        {activeTab === 'acquisition' && <MovableMonitor><CurrentMonitor {...currentMonitorProps} /></MovableMonitor>}
 
         <div className="pp-center-grid">
           <PlotPanel title={`OD heatmap · ${fileOdLoaded ? currentOdSource : 'Live'}`} className="pp-panel-fill" actions={(
@@ -387,8 +388,17 @@ export function renderV0Workspace({
           />
         </div>
 
-        <aside className="pp-right-column">
+
+      </section>
+      </div>
+      {activeTab === 'alignment' && <div role="tabpanel" id="pp-view-alignment" aria-labelledby="pp-tab-alignment">
+        <AlignmentPanel delayControl={<DelayLineControl positionMm={positionMm} targetMm={setPositionMm}
+          disabled={running || runBusy}
+          onMove={value => postAndRefresh('/stage/move', { position_mm: value })}
+          onStop={() => postAndRefresh('/stage/stop')} />}>
+          <CurrentMonitor {...currentMonitorProps} variant="expanded" />
           <StageControl
+            orientation="horizontal"
             positionMm={positionMm}
             setPositionMm={setPositionMm}
             stepPs={stepPs}
@@ -409,15 +419,6 @@ export function renderV0Workspace({
             onZeroChange={setZeroMm}
             onOpenConfig={setDeviceConfigKey}
           />
-        </aside>
-      </section>
-      </div>
-      {activeTab === 'alignment' && <div role="tabpanel" id="pp-view-alignment" aria-labelledby="pp-tab-alignment">
-        <AlignmentPanel delayControl={<DelayLineControl positionMm={positionMm} targetMm={setPositionMm}
-          disabled={running || runBusy}
-          onMove={value => postAndRefresh('/stage/move', { position_mm: value })}
-          onStop={() => postAndRefresh('/stage/stop')} />}>
-          <CurrentMonitor {...currentMonitorProps} variant="expanded" />
         </AlignmentPanel>
       </div>}
       <div role="tabpanel" id="pp-view-combine" aria-labelledby="pp-tab-combine" hidden={activeTab !== 'combine'}>

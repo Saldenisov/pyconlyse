@@ -13,7 +13,8 @@ jest.mock('./pump-probe-v0/components', () => {
   return {
     PlotPanel: ({ title, actions, children }) => <section><h2>{title}</h2>{actions}{children}</section>,
     PlotlyChart: Empty, HeatmapSelectorChart: Empty, SampleStageControl: Empty,
-    DeviceConfigModal: Empty, DataBrowserWindow: Empty, StageControl: Empty, SettingsPanel: Empty,
+    DeviceConfigModal: Empty, DataBrowserWindow: Empty, SettingsPanel: Empty,
+    StageControl: ({ orientation }) => <section aria-label="Delay line" className={`pp-stage-panel-${orientation}`}>Graphical delay line</section>,
     HardwareModal: ({ open }) => open ? <div>PDU controls opened</div> : null,
   };
 });
@@ -55,12 +56,14 @@ test('Alignment shows iTest beside one enlarged monitor without acquisition stat
   const compact = screen.getByRole('region', { name: 'Current spectra and OD' });
   expect(compact).toHaveClass('pp-current-monitor-compact');
   expect(within(compact).getByRole('button', { name: 'Real time off' })).toBeVisible();
+  expect(screen.queryByRole('region', { name: 'Delay line', exact: true })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Alignment', exact: true }));
   expect(screen.getByRole('heading', { name: 'iTest · V0' })).toBeVisible();
   expect(screen.queryByText('control')).not.toBeInTheDocument();
   expect(screen.queryByRole('tab', { name: 'Current', exact: true })).not.toBeInTheDocument();
   const expanded = screen.getByRole('region', { name: 'Current spectra and OD' });
   expect(expanded).toHaveClass('pp-current-monitor-expanded');
+  expect(screen.getByRole('region', { name: 'Delay line', exact: true })).toHaveClass('pp-stage-panel-horizontal');
   fireEvent.click(within(expanded).getByRole('button', { name: 'Real time off' }));
   await waitFor(() => expect(within(expanded).getByRole('button', { name: 'Real time on' })).toHaveAttribute('aria-pressed', 'true'));
   expect(pumpProbeRequest.mock.calls.filter(([path]) => path === '/realtime')).toHaveLength(1);

@@ -25,8 +25,10 @@ export default function CurrentMonitor({
       </div>
     </PlotPanel>
     <PlotPanel title="Current OD" className="pp-panel-fill">
-      <PlotlyChart className="pp-plot pp-plot-od" data={odSpectrumData}
-        layout={odSpectrumLayout} config={chartConfig} {...plotInteractionProps} />
+      <div className="pp-current-od-plot">
+        <PlotlyChart className="pp-plot pp-plot-od" data={odSpectrumData}
+          layout={odSpectrumLayout} config={chartConfig} {...plotInteractionProps} />
+      </div>
     </PlotPanel>
   </section>;
 }

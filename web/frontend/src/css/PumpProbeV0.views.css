@@ -4,15 +4,11 @@
   min-width: 0;
 }
 
-.pp-current-monitor-compact.pp-left-column {
-  grid-template-rows: repeat(2, minmax(200px, 1fr));
-  height: 460px;
-  align-self: start;
-}
+.pp-current-monitor-compact { width: 100%; }
 
 .pp-current-monitor-expanded {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: clamp(380px, 55vh, 620px);
+  grid-auto-rows: auto;
   width: 100%;
 }
 
@@ -28,6 +24,7 @@
 .pp-current-monitor .pp-panel-fill {
   display: flex;
   flex-direction: column;
+  height: auto;
 }
 
 .pp-current-monitor .pp-plot {
@@ -36,13 +33,15 @@
   height: auto;
 }
 
-.pp-current-plot {
-  flex: 1;
+.pp-current-plot, .pp-current-od-plot {
+  flex: none;
   position: relative;
+  width: 100%;
+  aspect-ratio: 1;
   min-height: 0;
 }
 
-.pp-current-plot .pp-plot { height: 100%; }
+.pp-current-plot .pp-plot, .pp-current-od-plot .pp-plot { height: 100%; }
 .pp-current-plot .modebar { top: 35px !important; }
 .pp-current-realtime {
   position: absolute;
@@ -106,7 +105,42 @@
   cursor: pointer;
 }
 
+.pp-layout { position: relative; grid-template-columns: 260px minmax(560px, 1fr); grid-template-rows: minmax(920px, auto); }
+.pp-current-monitor-window.pp-left-column {
+  display: block;
+  position: relative;
+  align-self: start;
+  height: max-content;
+  max-width: none;
+  z-index: 4;
+}
+.pp-current-window-tools { display: flex; height: 25px; gap: 3px; margin-bottom: 4px; }
+.pp-current-window-tools button, .pp-current-resize {
+  border: 1px solid #59636d; border-radius: 3px; background: #303740; color: #c6d1dc;
+  padding: 2px 6px; font-size: 11px;
+}
+.pp-current-window-tools .pp-current-drag { flex: 1; text-align: left; cursor: grab; touch-action: none; }
+.pp-current-window-tools .pp-current-drag:active { cursor: grabbing; }
+.pp-current-resize { position: absolute; right: -5px; bottom: -5px; cursor: ew-resize; touch-action: none; }
+.pp-stage-panel-horizontal { height: auto; margin-top: 10px; }
+.pp-stage-panel-horizontal .pp-stage-readouts { grid-template-columns: minmax(150px, 1.5fr) 1fr 1fr; padding: 8px; }
+.pp-stage-panel-horizontal .pp-stage { flex: none; height: 96px; padding: 8px 74px; box-sizing: border-box; }
+.pp-stage-panel-horizontal .pp-stage-rail {
+  width: 100%; height: 80px; min-height: 0; box-sizing: border-box;
+  border-left: 0; border-right: 0; border-top: 8px solid #6e7780; border-bottom: 8px solid #6e7780;
+}
+.pp-stage-panel-horizontal .pp-stage-rail::before,
+.pp-stage-panel-horizontal .pp-stage-rail::after { left: 0; right: 0; width: auto; height: 3px; }
+.pp-stage-panel-horizontal .pp-stage-rail::before { top: 13px; bottom: auto; }
+.pp-stage-panel-horizontal .pp-stage-rail::after { top: auto; bottom: 13px; }
+.pp-stage-panel-horizontal .pp-stage-bolt { top: -6px; box-shadow: 0 70px 0 #d8bc75, 0 70px 0 1px #5b543e; }
+.pp-stage-panel-horizontal .pp-stage-carriage { top: 50%; }
+.pp-stage-panel-horizontal .pp-stage-actions { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding: 8px; }
+.pp-stage-panel-horizontal .pp-stage-stop { grid-column: auto; }
+.pp-stage-panel-horizontal .pp-stage-scale { padding: 0 74px 8px; }
+
 @media (max-width: 900px) {
+  .pp-layout { grid-template-columns: 1fr; grid-template-rows: auto; }
   .pp-alignment-layout { grid-template-columns: 1fr; }
   .pp-current-monitor-expanded {
     grid-template-columns: 1fr;
