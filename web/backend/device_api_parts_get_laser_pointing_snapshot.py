@@ -508,6 +508,7 @@ def _bind_device_api_parts_get_laser_pointing_snapshot(api):
                         ),
                         'session_event_count': alignment_session_event_count,
                     },
+                    'alignment_mode': read_optional_text('alignment_mode', ''),
                     'pair_initialization': api.make_json_safe(pair_initialization),
                     'capabilities': {
                         'automatic_search': automatic_supported,
@@ -526,6 +527,7 @@ def _bind_device_api_parts_get_laser_pointing_snapshot(api):
                         'manual_point_selection': manual_point_selection_supported,
                         'initialize_active_pair': pair_initialization_supported,
                         'interlocked_motion': interlocked_motion_supported,
+                        'manual_alignment_motion': 'move_manual_actuator' in commands,
                     },
                     'active_point': active_point,
                     'active_actuator_group': active_actuator_group,

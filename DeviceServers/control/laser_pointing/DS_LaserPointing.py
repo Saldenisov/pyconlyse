@@ -139,6 +139,7 @@ class DS_LaserPointing(DS_ControlPosition):
         "select_manual_point": [DevState.ON],
         "initialize_active_pair": [DevState.ON],
         "move_active_actuator": [DevState.ON],
+        "move_manual_actuator": [DevState.ON],
         **DS_ControlPosition.RULES,
     }
     _version_ = "0.2"
@@ -194,6 +195,7 @@ class DS_LaserPointing(DS_ControlPosition):
         self._search_pause = Event()
         self._search_thread: Optional[Thread] = None
         self._point_application_thread: Optional[Thread] = None
+        self._manual_motion_active = False
         self._unconfirmed_axis_stop = None
         self._search_status = "idle"
         self._search_progress: Dict = {}
@@ -258,6 +260,16 @@ class DS_LaserPointing(DS_ControlPosition):
     turn_on_local = _laser_pointing_methods_find_device["turn_on_local"]
 
     turn_off_local = _laser_pointing_methods_find_device["turn_off_local"]
+
+    @attribute(label="Alignment operating mode", dtype=str, access=AttrWriteType.READ)
+    def alignment_mode(self):
+        """Report which workflow owns the controller, independently of client tabs."""
+        if self._search_is_running() or self._alignment_acceptance_is_pending():
+            return "automatic"
+        if (getattr(self, "_manual_motion_active", False)
+                or self._point_application_is_running()):
+            return "manual"
+        return "idle"
 
     @attribute(
         label="Automatic search status",
@@ -516,7 +528,13 @@ class DS_LaserPointing(DS_ControlPosition):
         }
         self._search_stop.set()
         self._search_pause.clear()
-        self._record_alignment_event("cancel_keep_current_requested")
+        if self._search_is_running():
+            self._record_alignment_event("cancel_keep_current_requested")
+        else:
+            self._record_alignment_event(
+                "point_cancel_requested", source="manual", session_id=str(uuid4()),
+                point=self._search_progress.get("point", ""),
+            )
         return 0
 
     @command(
@@ -681,6 +699,13 @@ class DS_LaserPointing(DS_ControlPosition):
         dtype_out=int,
         doc_in='JSON object with an actuator "role" and absolute "target".',
     ))(_laser_pointing_methods_find_device["move_active_actuator"])
+
+    _move_operator_actuator = _laser_pointing_methods_find_device["_move_operator_actuator"]
+
+    @command(dtype_in=str, dtype_out=int)
+    def move_manual_actuator(self, request):
+        """Move a registered Standa axis from the manual controls."""
+        return self._move_operator_actuator(request, require_active_point=False)
 
     # Backward compatibility for existing clients and scripts.
     @command(dtype_in=str, dtype_out=int)

@@ -177,6 +177,14 @@ const LaserPointingController = ({ deviceName }) => {
       setError(`${actuator.role} is not ready for movement.`);
       return;
     }
+    if (snapshot?.capabilities?.manual_alignment_motion) {
+      await execute(
+        'move_manual_actuator',
+        JSON.stringify({ role: actuator.role, target: Number(target) }),
+        `Moving ${actuator.role}`
+      );
+      return;
+    }
     await executeDeviceCommand(
       actuator.device,
       'move_axis_abs',
@@ -241,6 +249,15 @@ const LaserPointingController = ({ deviceName }) => {
   const pendingReference = snapshot?.automatic_search?.pending_reference || {};
   const hasAcceptedReference = Object.keys(acceptedReference).length > 0;
   const hasPendingReference = Object.keys(pendingReference).length > 0;
+  const mode = snapshot?.alignment_mode || (
+    pointApplying ? 'manual' : (running || hasPendingReference ? 'automatic' : 'idle')
+  );
+  const modeLabel = { manual: 'Manual alignment', automatic: 'Automatic alignment', idle: 'Idle' }[mode] || 'Unknown';
+  const manualActive = mode === 'manual';
+  const showSearchDiagnostics = mode === 'automatic' || (!manualActive && activeTab === 'automatic');
+  const referenceSource = acceptedReference.source
+    || (acceptedReference.manual_reference === true ? 'manual'
+      : typeof acceptedReference.converged === 'boolean' ? 'automatic' : '');
   const referenceRevision = snapshot?.automatic_search?.reference_revision || 0;
   const roundnessTolerance = finiteNumber(config?.roundness_tolerance_pct) ?? 7;
   const centeringMode = config?.alignment_objective === 'centering';
@@ -267,6 +284,7 @@ const LaserPointingController = ({ deviceName }) => {
     || running
     || hasPendingReference
     || pointApplying
+    || manualActive
     || axisStopUnconfirmed
     || !snapshot?.capabilities?.interlocked_motion;
   const pointControlsDisabled = controlsDisabled || !snapshot?.capabilities?.apply_point;
@@ -411,8 +429,8 @@ const LaserPointingController = ({ deviceName }) => {
           <h2>{deviceName.split('/').pop()}</h2>
           <span>{deviceName}</span>
         </div>
-        <div className={`laser-search-badge status-${searchStatus.split(':')[0]}`}>
-          {searchStatus}
+        <div className={`laser-search-badge status-${searchStatus.split(':')[0]}`} role="status" aria-label="Current alignment mode">
+          {modeLabel}{mode === 'automatic' ? ` · ${searchStatus}` : ''}
         </div>
       </header>
 
@@ -492,11 +510,11 @@ const LaserPointingController = ({ deviceName }) => {
           enabled={snapshot.camera?.grabbing ?? !['OFF', 'FAULT', 'UNKNOWN'].includes(
             String(snapshot.camera?.state || 'UNKNOWN').toUpperCase()
           )}
-          history={convergenceHistory}
-          progress={progress}
+          history={showSearchDiagnostics ? convergenceHistory : []}
+          progress={showSearchDiagnostics || pointApplying || axisStopUnconfirmed ? progress : {}}
           tolerance={centroidGuidePx}
           hasTranslation={hasTranslation}
-          showAutomaticContours={['running', 'pausing', 'paused'].includes(searchStatus)}
+          showAutomaticContours={mode === 'automatic' && ['running', 'pausing', 'paused'].includes(searchStatus)}
           onRefresh={loadSnapshot}
         />
 
@@ -586,7 +604,7 @@ const LaserPointingController = ({ deviceName }) => {
                 </div>
               )}
               <div className="laser-search-actions">
-                <button type="button" className="start" onClick={startSearch} disabled={Boolean(busy) || running || pointApplying || axisStopUnconfirmed || hasPendingReference || !snapshot.camera?.centroid_valid || !snapshot.capabilities?.automatic_search}>
+                <button type="button" className="start" onClick={startSearch} disabled={Boolean(busy) || running || pointApplying || manualActive || axisStopUnconfirmed || hasPendingReference || !snapshot.camera?.centroid_valid || !snapshot.capabilities?.automatic_search}>
                   Start automatic search
                 </button>
                 {!paused ? (
@@ -634,28 +652,11 @@ const LaserPointingController = ({ deviceName }) => {
                   </button>
                 </div>
               )}
-              {!running && !hasPendingReference && (
-                <div className="laser-reference-card" aria-label="Save current alignment reference">
-                  <strong>Current manual alignment</strong>
-                  <span>Store the present actuator and optical state as tomorrow's reference.</span>
-                  <button
-                    type="button"
-                    onClick={() => execute(
-                      'save_current_alignment_reference',
-                      JSON.stringify({ client: 'web' }),
-                      'Saving current manual alignment'
-                    )}
-                    disabled={Boolean(busy) || !snapshot.capabilities?.save_current_alignment_reference}
-                  >
-                    Save current manual alignment as next-day reference
-                  </button>
-                </div>
-              )}
               <div className="laser-reference-card" aria-label="Accepted alignment reference">
                 <strong>Stored reference</strong>
                 {hasAcceptedReference ? (
                   <span>
-                    Revision {referenceRevision} · {acceptedReference.accepted_at_utc || 'saved'} · {' '}
+                    Revision {referenceRevision} · {referenceSource === 'manual' ? 'Manual' : referenceSource === 'automatic' ? 'Automatic' : 'Source unknown'} · {acceptedReference.accepted_at_utc || 'saved'} · {' '}
                     {Object.entries(acceptedReference.actuators || {}).map(
                       ([role, state]) => `${role} ${Number(state.position).toFixed(3)}`
                     ).join(', ')}
@@ -683,6 +684,21 @@ const LaserPointingController = ({ deviceName }) => {
 
         {activeTab === 'manual' && (
           <div className="laser-manual-tab" role="tabpanel" aria-label="Manual hardware controls">
+          <div className="laser-reference-card" aria-label="Save current alignment reference">
+            <strong>Current manual alignment</strong>
+            <span>Store the present actuator and optical state as tomorrow's reference.</span>
+            <button
+              type="button"
+              onClick={() => execute(
+                'save_current_alignment_reference',
+                JSON.stringify({ client: 'web' }),
+                'Saving current manual alignment'
+              )}
+              disabled={controlsDisabled || !snapshot.capabilities?.save_current_alignment_reference}
+            >
+              Save current manual alignment as next-day reference
+            </button>
+          </div>
           <section className="laser-panel">
             <div className="laser-section-heading">
               <strong>Standa alignment mounts</strong>

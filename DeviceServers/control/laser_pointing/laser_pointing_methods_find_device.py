@@ -102,6 +102,7 @@ def _bind_laser_pointing_methods_find_device(api):
         details = dict(details or {})
         reference = {
             **candidate,
+            "source": "manual" if candidate.get("manual_reference") else "automatic",
             "accepted_at_utc": self._utc_now(),
             "acceptance": details,
             "revision": len(self._alignment_reference_history) + 1,
@@ -124,7 +125,8 @@ def _bind_laser_pointing_methods_find_device(api):
             "accepted_at_utc": reference["accepted_at_utc"],
         }
         self._record_alignment_event(
-            "reference_accepted", revision=reference["revision"]
+            "reference_accepted", source=reference["source"],
+            session_id=reference["session_id"], revision=reference["revision"]
         )
         self._push_alignment_value(
             "alignment_reference_json", self.alignment_reference_json()
@@ -250,13 +252,10 @@ def _bind_laser_pointing_methods_find_device(api):
         return 0
 
     def move_active_actuator(self, request):
-        """Move one mount axis only when its optical point owns the pair.
+        """Move one mount axis only when its optical point owns the pair."""
+        return self._move_operator_actuator(request, require_active_point=True)
 
-        This is the authoritative interlock used by the web client.  A manual
-        move is refused until a numbered point has been applied successfully,
-        and roles from the inactive X/Y pair are never accepted.
-        """
-
+    def _move_operator_actuator(self, request, *, require_active_point):
         try:
             payload = api.json.loads(str(request))
         except (TypeError, ValueError, api.json.JSONDecodeError) as error:
@@ -280,17 +279,26 @@ def _bind_laser_pointing_methods_find_device(api):
                 raise RuntimeError(
                     "manual actuator movement is locked while applying an optical point"
                 )
-            active_group = api.optical_point_group(self._active_point)
-            if active_group == 0:
-                raise RuntimeError(
-                    "select optical point 1-3 or 4-6 before moving an alignment mount"
+            if require_active_point:
+                active_group = api.optical_point_group(self._active_point)
+                if active_group == 0:
+                    raise RuntimeError(
+                        "select optical point 1-3 or 4-6 before moving an alignment mount"
+                    )
+                group_name, allowed_roles = self._actuator_group_entry(active_group)
+                if role not in allowed_roles:
+                    raise RuntimeError(
+                        f"{role or 'requested actuator'} is locked; {group_name} is active "
+                        f"for {self._active_point}"
+                    )
+            else:
+                registered = any(
+                    role in self._actuator_group_entry(index)[1]
+                    for index in range(1, len(self.pid_groups) + 1)
                 )
-            group_name, allowed_roles = self._actuator_group_entry(active_group)
-            if role not in allowed_roles:
-                raise RuntimeError(
-                    f"{role or 'requested actuator'} is locked; {group_name} is active "
-                    f"for {self._active_point}"
-                )
+                if not registered:
+                    raise ValueError(f"{role or 'requested actuator'} is not a registered alignment mount")
+                allowed_roles = (role,)
             unavailable = []
             for allowed_role in allowed_roles:
                 lifecycle = self._actuator_lifecycle(
@@ -300,11 +308,28 @@ def _bind_laser_pointing_methods_find_device(api):
                     unavailable.append(allowed_role)
             if unavailable:
                 raise RuntimeError(
-                    f"Standa pair {active_group} is not initialised; unavailable axes: "
+                    "Standa motion unavailable; axes not initialised: "
                     + ", ".join(unavailable)
                 )
+            self._require_confirmed_axis_stop()
+            self._search_stop.clear()
             config = dict(self._search_config)
-            self._move_single_axis(self._device_for_role(role), target, config)
+            session_id = str(api.uuid4())
+            self._manual_motion_active = True
+            motion_error = None
+            try:
+                self._move_single_axis(self._device_for_role(role), target, config)
+            except Exception as error:
+                motion_error = str(error)
+                raise
+            finally:
+                self._manual_motion_active = False
+                self._record_alignment_event(
+                    "manual_move", source="manual", session_id=session_id,
+                    point=self._active_point, role=role, requested_position=target,
+                    outcome="failed" if motion_error is not None else "completed",
+                    error=motion_error,
+                )
         return 0
 
     def _search_is_running(self) -> bool:
@@ -382,6 +407,7 @@ def _bind_laser_pointing_methods_find_device(api):
     def _record_alignment_event(self, event_type: str, **details):
         event = {
             "event_type": str(event_type),
+            "source": "automatic",
             "session_id": getattr(self, "_search_session_id", ""),
             "status": getattr(self, "_search_status", "idle"),
             "recorded_at_utc": self._utc_now(),
@@ -577,6 +603,7 @@ def _bind_laser_pointing_methods_find_device(api):
         "_point_application_worker": _point_application_worker,
         "initialize_active_pair": initialize_active_pair,
         "move_active_actuator": move_active_actuator,
+        "_move_operator_actuator": _move_operator_actuator,
         "_search_is_running": _search_is_running,
         "_point_application_is_running": _point_application_is_running,
         "_utc_now": _utc_now,

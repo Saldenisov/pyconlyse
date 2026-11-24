@@ -34,6 +34,52 @@ def test_optical_point_group_enforces_diaphragm_mount_pair(point_name, expected_
     assert optical_point_group(point_name) == expected_group
 
 
+def test_manual_moves_use_their_own_session_and_restore_idle_mode():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_lock = Lock()
+    controller._search_stop = Event()
+    controller._search_stop.set()
+    controller._search_thread = controller._point_application_thread = None
+    controller._search_session_id = "previous-auto-session"
+    controller._alignment_pending_reference = {}
+    controller._search_config = {}
+    controller._active_point = "point3"
+    controller.pid_groups = {"near": ("point1", "point3")}
+    controller._actuator_group_entry = lambda _: ("near", ("X", "Y"))
+    controller._actuator_lifecycle = lambda _: {"ready": True}
+    controller._device_for_role = lambda role: role
+    controller._persist_alignment_properties = lambda _: None
+    controller._push_alignment_value = lambda *_: None
+
+    def move(device, target, _config):
+        assert device == "X" and target == 4.0
+        assert controller.alignment_mode() == "manual"
+        assert not controller._search_stop.is_set()
+
+    controller._move_single_axis = move
+    assert controller.alignment_mode() == "idle"
+    assert controller.move_active_actuator('{"role":"X","target":4}') == 0
+    event = json.loads(controller._alignment_event_json)
+    assert event["source"] == "manual"
+    assert event["session_id"] != controller._search_session_id
+    assert event["point"] == "point3"
+    assert controller.alignment_mode() == "idle"
+
+    controller._active_point = ""
+    assert controller.move_manual_actuator('{"role":"X","target":4}') == 0
+    direct_event = json.loads(controller._alignment_event_json)
+    assert direct_event["source"] == "manual"
+    assert direct_event["session_id"] != event["session_id"]
+    assert direct_event["role"] == "X"
+    with pytest.raises(ValueError, match="registered alignment mount"):
+        controller.move_manual_actuator('{"role":"Camera","target":4}')
+
+    controller._alignment_pending_reference = {"session_id": "previous-auto-session"}
+    assert controller.alignment_mode() == "automatic"
+    with pytest.raises(RuntimeError, match="pending|accept"):
+        controller.move_manual_actuator('{"role":"X","target":4}')
+
+
 class _InitializableAxis:
     def __init__(self, name, events, succeeds=True):
         self.name = name
@@ -630,7 +676,7 @@ def test_cancel_point_stops_and_verifies_owis_before_releasing_lock(stop_failure
     }
     controller._search_config = DS_LaserPointing._normalise_search_config({})
     controller._ensure_point_optics_ready = lambda *_: None
-    controller._record_alignment_event = lambda *_: None
+    controller._record_alignment_event = lambda *_args, **_details: None
     controller.error = lambda *_: None
     controller._move_single_axis = lambda *_: pytest.fail("Optics moved after cancel")
 

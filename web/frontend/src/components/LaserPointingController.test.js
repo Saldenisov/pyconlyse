@@ -19,6 +19,30 @@ import LaserPointingController, {
 } from './LaserPointingController';
 
 describe('LaserPointing optical point presentation', () => {
+  test('alignment mode follows the controller even in the other tab', async () => {
+    const snapshot = {
+      device: 'manip/V0/LaserPointing-Cam2',
+      rules: {}, groups: {}, camera: { state: 'OFF' },
+      capabilities: { interlocked_motion: true, save_current_alignment_reference: true },
+      alignment_mode: 'automatic',
+      automatic_search: { status: 'paused', progress: {} },
+    };
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async () => ({
+      ok: true, json: async () => ({ success: true, snapshot }),
+    }));
+    try {
+      render(<LaserPointingController deviceName={snapshot.device} />);
+      const mode = await screen.findByRole('status', { name: 'Current alignment mode' });
+      expect(mode).toHaveTextContent('Automatic alignment · paused');
+      fireEvent.click(screen.getByRole('tab', { name: 'Manual' }));
+      expect(mode).toHaveTextContent('Automatic alignment · paused');
+      expect(screen.getByRole('button', { name: 'Save current manual alignment as next-day reference' })).toBeDisabled();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
   test('preset cancellation keeps new requests locked until the stop completes', async () => {
     const snapshot = {
       device: 'manip/V0/LaserPointing-Cam2',
@@ -581,6 +605,7 @@ describe('LaserPointing optical point presentation', () => {
         manual_point_selection: true,
         initialize_active_pair: true,
         interlocked_motion: true,
+        manual_alignment_motion: true,
       },
       automatic_search: {
         status: 'idle',
@@ -701,9 +726,13 @@ describe('LaserPointing optical point presentation', () => {
     expect(screen.getByLabelText('Accepted alignment reference')).toHaveTextContent('Revision 1');
     expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel + restore' })).toBeDisabled();
-    expect(screen.getByRole('button', {
+    expect(screen.queryByRole('button', {
       name: 'Save current manual alignment as next-day reference',
-    })).toBeEnabled();
+    })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Manual' }));
+    await waitFor(() => expect(screen.getByRole('button', {
+      name: 'Save current manual alignment as next-day reference',
+    })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', {
       name: 'Save current manual alignment as next-day reference',
     }));
@@ -714,6 +743,7 @@ describe('LaserPointing optical point presentation', () => {
         body: JSON.stringify({ args: JSON.stringify({ client: 'web' }) }),
       })
     ));
+    fireEvent.click(screen.getByRole('tab', { name: 'Automatic' }));
     expect(screen.queryByText('Standa alignment mounts')).not.toBeInTheDocument();
     expect(screen.getByText('Optical points')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Working / open beam' })).toHaveAttribute(
@@ -759,10 +789,10 @@ describe('LaserPointing optical point presentation', () => {
     fireEvent.change(standaStep, { target: { value: '0.5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Increase ActuatorX1 by 0.5' }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
-      '/api/device/manip%2FV0%2Fx1/command/move_axis_abs',
+      '/api/device/manip%2FV0%2FLaserPointing-Cam2/command/move_manual_actuator',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ args: 2 }),
+        body: JSON.stringify({ args: JSON.stringify({ role: 'ActuatorX1', target: 2 }) }),
       })
     ));
 

@@ -665,7 +665,13 @@ def _bind_laser_pointing_methods_optimise_group(api):
                           raw_position_before=actual, position_after=after,
                           physical_motion_commanded=False)
             self._search_progress['full_open_endpoint_calibration'] = record
-            self._record_alignment_event('full_open_endpoint_calibrated', **record)
+            automatic = self._search_is_running()
+            self._record_alignment_event(
+                'full_open_endpoint_calibrated',
+                source="automatic" if automatic else "manual",
+                session_id=self._search_session_id if automatic else str(api.uuid4()),
+                **record,
+            )
         return True
 
     def _wait_for_axis_target(self, device, axis, target, config):

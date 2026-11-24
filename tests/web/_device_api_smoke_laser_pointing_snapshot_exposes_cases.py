@@ -46,6 +46,7 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
                 "Translation stages": "TranslationStage1",
             }),
             "automatic_search_status": "running",
+            "alignment_mode": "automatic",
             "automatic_search_progress": json.dumps({
                 "phase": "measuring",
                 "roundness_error_pct": 3.2,
@@ -99,6 +100,7 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
         "select_manual_point",
         "initialize_active_pair",
         "move_active_actuator",
+        "move_manual_actuator",
     ]
     devices[controller_name] = controller
     devices[camera_name] = FakeDevice(
@@ -183,7 +185,9 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
 
     assert response.status_code == 200
     snapshot = payload["snapshot"]
+    assert snapshot["alignment_mode"] == "automatic"
     assert snapshot["capabilities"]["interlocked_motion"] is True
+    assert snapshot["capabilities"]["manual_alignment_motion"] is True
     assert snapshot["capabilities"]["manual_point_selection"] is True
     assert snapshot["capabilities"]["initialize_active_pair"] is True
     assert snapshot["capabilities"]["pause_search"] is True
