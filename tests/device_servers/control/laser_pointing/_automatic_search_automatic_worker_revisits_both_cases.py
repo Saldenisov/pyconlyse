@@ -511,6 +511,7 @@ def test_non_timeout_move_exception_is_not_hidden():
             raise RuntimeError("controller rejected target")
 
     controller = object.__new__(DS_LaserPointing)
+    controller._search_stop = Event()
 
     with pytest.raises(RuntimeError, match="controller rejected target"):
         DS_LaserPointing._move_single_axis(

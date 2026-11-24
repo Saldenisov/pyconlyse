@@ -269,19 +269,10 @@ def _bind_laser_pointing_methods_adaptive_direction_order(api):
                 cycle=int(config.get("aperture_cycle_count", 2)),
             )
         finally:
-            # Never leave the iris at an intermediate/open sweep position.
-            # Clear cancellation only around this one bounded safety move.
-            if abs(float(current_value) - closed_value) > 1.0e-9:
-                cancelled = self._search_stop.is_set()
-                if cancelled:
-                    self._search_stop.clear()
-                try:
+            if not self._search_stop.is_set():
+                if abs(float(current_value) - closed_value) > 1.0e-9:
                     self._move_single_axis(device, closed_value, config)
-                    current_value = closed_value
-                finally:
-                    if cancelled:
-                        self._search_stop.set()
-            self._active_point = target_point
+                self._active_point = target_point
 
         centres = api.np.asarray(
             [record["centroid"] for record in records], dtype=float
@@ -451,13 +442,9 @@ def _bind_laser_pointing_methods_adaptive_direction_order(api):
                 step_limit=lambda: self._adaptive_step_limit(group_name, target_point, float(motor_step), config),
             )
         except (api.SearchCancelled, api.CenteringSearchCancelled):
-            if not getattr(self, "_restore_on_cancel", True):
-                self._search_stop.clear()
-                try:
-                    move(retained)
-                finally:
-                    self._search_stop.set()
             raise api.SearchCancelled()
+        except api.AxisStopUnconfirmed:
+            raise
         except Exception:
             move(retained)
             raise

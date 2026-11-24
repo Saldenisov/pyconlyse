@@ -281,26 +281,7 @@ def _bind_laser_pointing_methods_optimise_group(api):
                     group_name, target_point, actuator_roles
                 ),
             )
-        except api.SearchCancelled:
-            # Cancel+restore is handled by the worker's complete baseline
-            # restoration. Plain Cancel instead retains the latest position
-            # with a valid beam measurement, never an interrupted probe.
-            if getattr(self, "_restore_on_cancel", True) is False:
-                self._search_stop.clear()
-                try:
-                    self._search_progress = {
-                        **self._search_progress,
-                        "phase": "retaining_last_measured_good_position",
-                        "message": (
-                            "Cancel requested; retaining latest measured-good "
-                            f"{group_name} position {best_visible_position}"
-                        ),
-                    }
-                    self._move_pair(
-                        actuator_devices, best_visible_position, config
-                    )
-                finally:
-                    self._search_stop.set()
+        except (api.SearchCancelled, api.AxisStopUnconfirmed):
             raise
         except Exception as search_error:
             # A probe can move the spot outside the usable optical path. Never
@@ -481,6 +462,13 @@ def _bind_laser_pointing_methods_optimise_group(api):
             )
 
     def _move_single_axis(self, device, target: float, config):
+        self._raise_if_cancelled()
+        if self._calibrate_full_open_endpoint(device, target, config):
+            return
+        endpoint_required = (float(target) == 100.0
+                             and self._full_open_endpoint_definition(
+                                 device, working=config.get("_working_point", False)
+                             ) is not None)
         command_timed_out = False
         try:
             result = device.move_axis_abs(float(target))
@@ -516,12 +504,16 @@ def _bind_laser_pointing_methods_optimise_group(api):
                 abs(last_actual - target) <= config["position_tolerance"]
                 and "MOVING" not in state
             ):
+                if endpoint_required and not self._calibrate_full_open_endpoint(device, target, config):
+                    raise RuntimeError("Configured full-open endpoint is not confirmed")
                 return
             # Mono-axis move_axis_abs returns only after the child command has
             # stopped.  Waiting for the full automatic-search timeout after a
             # stopped readback mismatch hides the real failure and blocks the
             # controller's Tango monitor for minutes.
             if "MOVING" not in state:
+                if endpoint_required and self._calibrate_full_open_endpoint(device, target, config):
+                    return
                 raise RuntimeError(
                     f"motor stopped at {last_actual}, expected {target}"
                 )
@@ -552,6 +544,8 @@ def _bind_laser_pointing_methods_optimise_group(api):
         return position, state
 
     def _move_multi_axis(self, device, value, config):
+        self._raise_if_cancelled()
+        self._require_confirmed_axis_stop()
         axis = int(value[0])
         target = float(value[1])
         # Multi-axis OWIS servers expose move_axis as a DevVarDoubleArray.
@@ -568,9 +562,113 @@ def _bind_laser_pointing_methods_optimise_group(api):
                 raise
         else:
             command_error = self._command_error(result)
-            if command_error:
+            if command_error and not self._is_command_timeout(command_error):
                 raise RuntimeError(command_error)
 
+        try:
+            self._wait_for_axis_target(device, axis, target, config)
+        except Exception:
+            # The move has been submitted. Finish stopping this axis before
+            # releasing the preset/search worker or starting a restore.
+            self._stop_and_verify_axis(device, axis)
+            raise
+
+    def _state_is_moving(state) -> bool:
+        try:
+            return int(state) == int(api.DevState.MOVING)
+        except (TypeError, ValueError):
+            return "MOVING" in str(state).upper()
+
+    def _is_flipper_role(role) -> bool:
+        normalized_role = str(role).lower()
+        return "shutter" in normalized_role or "flipper" in normalized_role
+
+    def _full_open_endpoint_definition(self, device, *, working=False):
+        definitions = api.json.loads(getattr(self, 'full_open_endpoint_calibrations', '{}') or '{}')
+        if not isinstance(definitions, dict):
+            raise ValueError('full_open_endpoint_calibrations must be a JSON object')
+        if working:
+            # These V0 irises use the RIGHT limit switch at full opening.
+            # The same physical iris has different roles in Cam1 and Cam2.
+            full_open_devices = {
+                "elyse/motorized_devices/de1", "manip/v0/dv01",
+                "manip/v0/dv02", "manip/v0/dv03",
+            }
+            for role, name in getattr(self, "ds_dict", {}).items():
+                if isinstance(name, str) and name.lower() in full_open_devices:
+                    definitions.setdefault(role, {"endpoint": "RIGHT"})
+        for role, definition in definitions.items():
+            if 'diaphragm' not in str(role).lower() or role not in self.ds_dict:
+                continue
+            if self._device_for_role(role) is not device:
+                continue
+            if not isinstance(definition, dict) or definition.get('endpoint') not in ('RIGHT','LEFT'):
+                raise ValueError(f'Invalid full-open endpoint definition for {role}')
+            nominal = float(definition.get('position', 100.))
+            window = float(definition.get('max_counter_error', 5.))
+            if nominal != 100. or not api.isfinite(window) or not 0 < window <= 5.:
+                raise ValueError(f'Invalid full-open counter calibration window for {role}')
+            return {'role': role, 'position': nominal, 'endpoint': definition['endpoint'],
+                    'max_counter_error': window}
+        return None
+
+    def _fresh_endpoint_state(device):
+        # Standa updates its endpoint attribute from the native status sample.
+        # Refresh that sample before bypassing the Taurus polling cache.
+        result = device.get_controller_status()
+        error = api.DS_LaserPointing._command_error(result)
+        if error:
+            raise RuntimeError(f'Could not refresh physical endpoint: {error}')
+        try:
+            proxy = device.getDeviceProxy()
+        except AttributeError:
+            return str(device.endpoint_state).upper()
+        original = proxy.get_source()
+        direct = getattr(type(original), 'DEV', None)
+        if direct is None:
+            raise RuntimeError('Endpoint proxy does not expose a direct-read source')
+        try:
+            proxy.set_source(direct)
+            return str(proxy.read_attribute('endpoint_state').value).upper()
+        finally:
+            proxy.set_source(original)
+
+    def _calibrate_full_open_endpoint(self, device, target, config):
+        if float(target) != 100.:
+            return False
+        definition = self._full_open_endpoint_definition(
+            device, working=config.get("_working_point", False)
+        )
+        if definition is None:
+            return False
+        actual, state = self._fresh_position_and_state(device)
+        if state != 'ON':
+            return False
+        endpoint = self._fresh_endpoint_state(device)
+        actual, state = self._fresh_position_and_state(device)
+        if state != 'ON' or endpoint != definition['endpoint']:
+            return False
+        nominal = definition['position']
+        if not api.isfinite(actual) or abs(actual-nominal) > definition['max_counter_error']:
+            raise RuntimeError(f"Full-open endpoint counter {actual} is outside its calibration window")
+        if actual != nominal:
+            self._raise_if_cancelled()
+            result = device.define_position(nominal)  # Counter definition only; no movement/homing.
+            error = self._command_error(result)
+            if error:
+                raise RuntimeError(f'Full-open counter definition failed: {error}')
+            after, after_state = self._fresh_position_and_state(device)
+            if (after_state != 'ON' or abs(after-nominal) > .01
+                    or self._fresh_endpoint_state(device) != endpoint):
+                raise RuntimeError('Full-open counter definition could not be verified')
+            record = dict(role=definition['role'], endpoint=endpoint,
+                          raw_position_before=actual, position_after=after,
+                          physical_motion_commanded=False)
+            self._search_progress['full_open_endpoint_calibration'] = record
+            self._record_alignment_event('full_open_endpoint_calibrated', **record)
+        return True
+
+    def _wait_for_axis_target(self, device, axis, target, config):
         deadline = api.monotonic() + config["motion_timeout_s"]
         stable = 0
         last_actual = None
@@ -608,17 +706,78 @@ def _bind_laser_pointing_methods_optimise_group(api):
             f"last transient read error was {last_read_error or 'none'}"
         )
 
-    def _state_is_moving(state) -> bool:
+    def _stop_and_verify_axis(self, device, axis):
+        self._unconfirmed_axis_stop = (device, axis)
         try:
-            return int(state) == int(api.DevState.MOVING)
-        except (TypeError, ValueError):
-            return "MOVING" in str(state).upper()
+            command_error = self._command_error(device.stop_axis(axis))
+            if command_error:
+                raise RuntimeError(command_error)
 
-    def _is_flipper_role(role) -> bool:
-        normalized_role = str(role).lower()
-        return "shutter" in normalized_role or "flipper" in normalized_role
+            # PS90 can report ON during motion. Require fresh, stable positions
+            # after the acknowledged stop, even when the status is already ON.
+            previous = None
+            stable = 0
+            deadline = api.monotonic() + 3.0
+            while api.monotonic() < deadline:
+                state = device.get_status_axis(axis)
+                position = float(device.read_position_axis(axis))
+                if (state in (api.DevState.ON, api.DevState.STANDBY, api.DevState.OFF)
+                        and api.isfinite(position) and previous is not None
+                        and abs(position - previous) <= 0.002):
+                    stable += 1
+                    if stable >= 2:
+                        self._unconfirmed_axis_stop = None
+                        return
+                else:
+                    stable = 0
+                previous = position
+                api.sleep(0.2)
+            raise RuntimeError("position did not settle after Stop")
+        except Exception as error:
+            raise api.AxisStopUnconfirmed(
+                f"OWIS axis {axis} stop could not be confirmed: {error}"
+            ) from error
+
+    def _require_confirmed_axis_stop(self):
+        if getattr(self, "_unconfirmed_axis_stop", None):
+            raise api.AxisStopUnconfirmed("Confirm the OWIS stop before starting another optical move")
+
+    def _publish_axis_stop_error(self, error):
+        self._active_point = ""
+        self._search_status = "axis stop unconfirmed"
+        self._search_progress = {
+            "phase": "axis_stop_unconfirmed", "message": str(error),
+        }
+        self._actuator_initialization_status = {
+            "phase": "axis_stop_unconfirmed", "group": 0, "message": str(error),
+        }
+        self.error(str(error))
+
+    def _retry_axis_stop(self):
+        try:
+            self._stop_and_verify_axis(*self._unconfirmed_axis_stop)
+        except api.AxisStopUnconfirmed as error:
+            self._publish_axis_stop_error(error)
+        else:
+            self._search_status = "cancelled; current alignment kept"
+            self._search_progress = {
+                "phase": "cancelled_keep_current", "message": "OWIS axis stopped",
+            }
+            self._actuator_initialization_status = {
+                "phase": "point_application_cancelled", "group": 0,
+                "message": "OWIS axis stopped; select an optical point to use the mounts",
+            }
+
 
     return {
+        "_full_open_endpoint_definition": _full_open_endpoint_definition,
+        "_fresh_endpoint_state": _fresh_endpoint_state,
+        "_calibrate_full_open_endpoint": _calibrate_full_open_endpoint,
+        "_wait_for_axis_target": _wait_for_axis_target,
+        "_stop_and_verify_axis": _stop_and_verify_axis,
+        "_require_confirmed_axis_stop": _require_confirmed_axis_stop,
+        "_publish_axis_stop_error": _publish_axis_stop_error,
+        "_retry_axis_stop": _retry_axis_stop,
         "_optimise_group": _optimise_group,
         "_actuator_roles_for_group": _actuator_roles_for_group,
         "_actuator_group_entry": _actuator_group_entry,

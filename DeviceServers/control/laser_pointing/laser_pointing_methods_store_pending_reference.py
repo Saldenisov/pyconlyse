@@ -23,6 +23,8 @@ def _bind_laser_pointing_methods_store_pending_reference(api):
         try:
             self._restore_alignment_state(baseline, config)
             self._clear_pending_reference()
+        except api.AxisStopUnconfirmed as error:
+            self._publish_axis_stop_error(error)
         except Exception as error:
             self._search_status = f"restore failed: {error}"
             self._search_progress = {
@@ -413,6 +415,8 @@ def _bind_laser_pointing_methods_store_pending_reference(api):
             if self._restore_on_cancel:
                 try:
                     self._restore_alignment_state(self._search_initial_state, config)
+                except api.AxisStopUnconfirmed as error:
+                    self._publish_axis_stop_error(error)
                 except Exception as restore_error:
                     self._search_progress = {
                         "phase": "restore_failed",
@@ -429,17 +433,23 @@ def _bind_laser_pointing_methods_store_pending_reference(api):
                         f"its initial state: {restore_error}"
                     )
             else:
+                self._active_point = ""
+                self._actuator_initialization_status = {
+                    "phase": "point_application_cancelled", "group": 0,
+                    "message": "Search stopped; select an optical point to use the mounts",
+                }
                 self._search_progress = {
                     "phase": "cancelled_keep_current",
                     "results": results,
                     "session_id": self._search_session_id,
                     "message": (
-                        "Automatic search stopped; latest measured-good "
-                        "alignment is kept"
+                        "Automatic search stopped at the current positions"
                     ),
                 }
                 self._search_status = "cancelled; current alignment kept"
                 self._record_alignment_event("search_cancelled_keep_current")
+        except api.AxisStopUnconfirmed as error:
+            self._publish_axis_stop_error(error)
         except api.LaserNotVisible as error:
             self._search_progress = {
                 "phase": "laser_not_visible",

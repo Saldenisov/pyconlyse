@@ -1,7 +1,7 @@
 import json
 from enum import Enum
 from math import hypot
-from threading import Event, Lock, Thread
+from threading import Barrier, Event, Lock, Thread
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +11,7 @@ from DeviceServers.control.laser_pointing.automatic_search import (
     optical_point_group,
 )
 from DeviceServers.control.laser_pointing.DS_LaserPointing import (
+    AxisStopUnconfirmed,
     DS_LaserPointing,
     LaserNotVisible,
     SearchCancelled,
@@ -221,7 +222,7 @@ def test_numbered_point_attempts_all_diaphragms_before_reporting_failure():
     ]
 
 
-def test_working_point_sets_waveplate_then_forces_every_diaphragm_open():
+def test_working_point_moves_waveplate_and_all_diaphragms_concurrently():
     controller = object.__new__(DS_LaserPointing)
     controller.ds_dict = {
         "MainLaserDiaphragm1": "main",
@@ -241,18 +242,22 @@ def test_working_point_sets_waveplate_then_forces_every_diaphragm_open():
     controller._raise_if_cancelled = lambda: None
     controller._device_for_role = lambda role: role
     events = []
-    controller._move_single_axis = (
-        lambda device, target, _config: events.append((device, target))
-    )
+    moving = Barrier(4)
+
+    def move(device, target, _config):
+        moving.wait(timeout=2)
+        events.append((device, target))
+
+    controller._move_single_axis = move
 
     DS_LaserPointing._apply_point(controller, "working", {})
 
-    assert events == [
+    assert set(events) == {
         ("HalfWavePlate1", 20.5),
         ("MainLaserDiaphragm1", 100.0),
         ("CrimpingDiaphragm1", 100.0),
         ("CrimpingDiaphragm2", 100.0),
-    ]
+    }
     assert controller._active_point == "working"
 
 
@@ -309,13 +314,13 @@ def test_working_point_attempts_all_diaphragms_when_one_fails():
 
     controller._move_single_axis = move
 
-    with pytest.raises(RuntimeError, match="after attempting all"):
+    with pytest.raises(RuntimeError, match="CrimpingDiaphragm1: jammed"):
         DS_LaserPointing._apply_point(controller, "working", {})
 
-    assert events == [
+    assert set(events) == {
         ("CrimpingDiaphragm1", 100.0),
         ("CrimpingDiaphragm2", 100.0),
-    ]
+    }
     assert controller._active_point == ""
 
 
@@ -431,7 +436,7 @@ def test_numbered_points_preserve_route_and_working_lowers_all_shutters(
         assert flipper.commanded_flipper_state == "DOWN_CLEAR"
 
 
-def test_cam2_applies_waveplate_then_working_optics_then_lowers_shutters():
+def test_cam2_confirms_all_working_optics_before_lowering_shutters():
     events = []
 
     class Flipper:
@@ -471,28 +476,28 @@ def test_cam2_applies_waveplate_then_working_optics_then_lowers_shutters():
     }
     flippers = {role: Flipper(role) for role in ("Shutter1", "Shutter2")}
     controller._device_for_role = lambda role: flippers.get(role, role)
-    controller._move_single_axis = (
-        lambda device, target, _config: events.append((device, target))
-    )
-    controller._move_multi_axis = (
-        lambda device, target, _config: events.append((device, target))
-    )
+    both_axis_types_moving = Barrier(6)
+
+    def move(device, target, _config):
+        both_axis_types_moving.wait(timeout=2)
+        events.append((device, target))
+
+    controller._move_single_axis = controller._move_multi_axis = move
     controller._raise_if_cancelled = lambda: None
     controller._active_point = "point6"
     controller._actuator_initialization_status = {}
 
     DS_LaserPointing._apply_point(controller, "working", {})
 
-    assert events == [
+    assert set(events[:-2]) == {
         ("HalfWavePlate1", 20.5),
         ("MainLaserDiaphragm1", 100.0),
         ("MainLaserDiaphragm2", 100.0),
         ("CrimpingDiaphragm1", 100.0),
         ("CrimpingDiaphragm2", 100.0),
         ("TranslationStage1", (3, 0.0)),
-        ("Shutter1", 1.0),
-        ("Shutter2", 1.0),
-    ]
+    }
+    assert events[-2:] == [("Shutter1", 1.0), ("Shutter2", 1.0)]
     assert controller._active_point == "working"
 
 
@@ -608,6 +613,81 @@ def test_multi_axis_point_move_retries_transient_owis_read_timeout():
     )
 
     assert owis.status_calls == 2
+
+
+@pytest.mark.parametrize("stop_failure", [False, True])
+def test_cancel_point_stops_and_verifies_owis_before_releasing_lock(stop_failure):
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_lock = Lock()
+    controller._search_stop, controller._search_pause = Event(), Event()
+    controller._search_thread = controller._point_application_thread = None
+    controller._search_status = "idle"
+    controller._search_progress = {}
+    controller._alignment_pending_reference = {}
+    controller._active_point = "point5"
+    controller.controller_rules = {
+        "point3": {"TranslationStage1": [3, 0.0], "HalfWavePlate1": 20.5},
+    }
+    controller._search_config = DS_LaserPointing._normalise_search_config({})
+    controller._ensure_point_optics_ready = lambda *_: None
+    controller._record_alignment_event = lambda *_: None
+    controller.error = lambda *_: None
+    controller._move_single_axis = lambda *_: pytest.fail("Optics moved after cancel")
+
+    class Owis:
+        def __init__(self):
+            self.entered, self.stopping, self.release = Event(), Event(), Event()
+            self.events = []
+            self.fail = stop_failure
+
+        def move_axis(self, args):
+            self.events.append(("move", args))
+            self.entered.set()
+            return "0"
+
+        def stop_axis(self, axis):
+            self.events.append(("stop", axis))
+            self.stopping.set()
+            assert self.release.wait(2)
+            return "controller rejected stop" if self.fail else "0"
+
+        def get_status_axis(self, _axis):
+            return 0  # ON even while moving.
+
+        def read_position_axis(self, axis):
+            self.events.append(("read", axis))
+            return -300.0
+
+    owis = Owis()
+    controller._device_for_role = lambda _role: owis
+    assert controller.apply_controller_point("point3") == 0
+    try:
+        assert owis.entered.wait(1)
+        assert controller.cancel_automatic_search() == 0
+        assert owis.stopping.wait(1)
+        with pytest.raises(RuntimeError):
+            controller.apply_controller_point("point3")
+    finally:
+        owis.release.set()
+        controller._point_application_thread.join(3)
+    assert not controller._point_application_is_running()
+    assert controller._active_point == ""
+    assert owis.events[0] == ("move", [3.0, 0.0])
+    assert owis.events.count(("stop", 3)) == 1
+
+    if stop_failure:
+        assert controller._search_progress["phase"] == "axis_stop_unconfirmed"
+        with pytest.raises(AxisStopUnconfirmed):
+            controller.apply_controller_point("point3")
+        owis.fail = False
+        assert controller.cancel_automatic_search() == 0
+        controller._point_application_thread.join(3)
+        assert controller._search_progress["phase"] == "cancelled_keep_current"
+        assert owis.events.count(("stop", 3)) == 2
+    else:
+        assert controller._search_progress["phase"] == "manual_point_cancelled"
+    assert owis.events[-3:] == [("read", 3)] * 3
+    assert controller._unconfirmed_axis_stop is None
 
 
 def test_camera_verified_static_shutter_is_left_untouched_when_laser_is_visible():

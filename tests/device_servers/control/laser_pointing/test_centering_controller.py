@@ -129,7 +129,7 @@ def test_controller_retains_only_a_reconfirmed_candidate_not_cached_stage_minimu
                for v in c._search_history)
 
 
-def test_controller_cancellation_retains_last_confirmed_position():
+def test_controller_cancellation_does_not_return_to_the_last_confirmed_position():
     c = object.__new__(DS_LaserPointing)
     c.pid_groups = {"near": ("point1", "point3")}
     c.groups = {"Actuators 1": ("x", "y")}
@@ -153,7 +153,7 @@ def test_controller_cancellation_retains_last_confirmed_position():
     c._read_beam_shape = lambda: shape(2.)
     with pytest.raises(SearchCancelled):
         c._optimise_group("near", ("point1", "point3"), "sensitive", 1, .5, config(), {})
-    assert position == [0., 0.]
+    assert position == [0.5, 0.]
     assert c._search_stop.is_set()
 
 

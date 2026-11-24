@@ -95,26 +95,12 @@ def _bind_laser_pointing_methods_normalise_working_rule(api):
     def _apply_point(self, point_name: str, config: api.Dict):
         self._raise_if_cancelled()
         working_point = str(point_name).strip().lower() == "working"
-        # Route the selected camera before changing apertures or propagation
-        # plane. Each controller's registered rules specify the exact flipper
-        # combination; the topology cannot be derived from point number.
-        # Working is sequenced differently: wave plate first, remaining optics
-        # second, and shutters down only after every optical readback succeeds.
-        if not working_point:
-            self._command_route_flippers(point_name)
-        # Optical presets commonly contain several Standa-backed devices on
-        # the same host. Apply them deterministically so their Tango/libximc
-        # transactions cannot contend and leave a partial preset behind.
-        targets = [
-            (role, value)
-            for role, value in self.controller_rules[point_name].items()
-            if not self._is_flipper_role(role)
-        ]
+        targets = [(role, value) for role, value in self.controller_rules[point_name].items()
+                   if not self._is_flipper_role(role)]
         if working_point:
             # Working is the safe open-beam preset. Enforce 100% for every
             # configured diaphragm even if an older database rule is stale or
-            # omits one. The priority function below puts the registered
-            # wave-plate target first, then every remaining Working optic.
+            # omits one.
             configured_roles = list(getattr(self, "ds_dict", {}))
             diaphragm_roles = []
             for role in configured_roles + [role for role, _value in targets]:
@@ -142,85 +128,18 @@ def _bind_laser_pointing_methods_normalise_working_rule(api):
                     "could not apply Working: no registered working target for "
                     + ", ".join(missing_wave_plates)
                 )
-        # Numbered points set apertures before their translation plane.
-        # Working sets λ/2 first, all remaining optics second, and flippers
-        # separately at the end because their numeric position always reads zero.
-        def target_priority(item):
-            normalized_role = str(item[0]).lower()
-            if working_point and "halfwave" in normalized_role:
-                return 0
-            if "diaphragm" in normalized_role:
-                return 1 if working_point else 0
-            if "translation" in normalized_role:
-                return 2 if working_point else 1
-            return 3 if working_point else 2
-
-        targets.sort(key=target_priority)
-
-        deferred_errors = []
-        for role, value in targets:
-            self._raise_if_cancelled()
-            progress = getattr(self, "_search_progress", None)
-            if (getattr(self, "cgc", False) or working_point) and isinstance(
-                progress, dict
-            ):
-                progress.update({
-                    "phase": "applying_point",
-                    "point": point_name,
-                    "optical_role": role,
-                    "optical_target": value,
-                    "message": f"Moving optics to {point_name}: {role} -> {value}",
-                })
-            if (
-                config.get("_camera_verified_roles_validated")
-                and role in config.get("camera_verified_roles", [])
-            ):
-                self.info(
-                    f"Keeping {role} in its current position for {point_name}; "
-                    "the automatic measurement will verify the Basler centroid "
-                    "after the complete optical preset is applied."
-                )
-                continue
-            device = self._device_for_role(role)
-            try:
-                if isinstance(value, (list, tuple)) and len(value) == 2:
-                    self._move_multi_axis(device, value, config)
-                else:
-                    move_config = config
-                    numeric_value = float(value)
-                    if (
-                        "diaphragm" in str(role).lower()
-                        and numeric_value == 100.0
-                    ):
-                        # The percentage diaphragms mechanically stop just
-                        # below the nominal 100% coordinate (typically
-                        # 99.0-99.1%). Treat that readback as fully open while
-                        # retaining the tight tolerance for every other point.
-                        move_config = dict(config)
-                        move_config["position_tolerance"] = max(
-                            float(config.get("position_tolerance", 0.05)), 1.0
-                        )
-                    self._move_single_axis(device, numeric_value, move_config)
-            except Exception as error:
-                normalized_role = str(role).lower()
-                if "diaphragm" in normalized_role:
-                    deferred_errors.append(f"{role}: {error}")
-                    continue
-                raise RuntimeError(
-                    f"could not apply controller point {point_name}: {role}: {error}"
-                ) from error
-        if deferred_errors:
-            raise RuntimeError(
-                f"could not fully apply {point_name} after attempting all diaphragms: "
-                + "; ".join(deferred_errors)
-            )
         if working_point:
+            self._move_working_optics(targets, {**config, "_working_point": True})
             # The flipper server publishes DOWN_CLEAR only after the physical
             # movement has completed. _command_route_flippers reads it back
             # directly and refuses to publish Working on any mismatch.
             self._command_route_flippers(point_name, force_down=True)
+        else:
+            self._command_route_flippers(point_name)
+            self._move_numbered_point_optics(point_name, targets, config)
         # Publish the point only after every child has reached its readback.
         # Both clients use this as the source of truth for the mount interlock.
+        self._raise_if_cancelled()
         self._publish_active_point(point_name)
 
     def _publish_active_point(self, point_name: str):
@@ -444,7 +363,102 @@ def _bind_laser_pointing_methods_normalise_working_rule(api):
     def stop_opts(self):
         self.stop_automatic_search()
 
+    def _move_point_optic(self, role, device, value, config):
+        self._raise_if_cancelled()
+        if isinstance(value, (list, tuple)) and len(value) == 2:
+            self._move_multi_axis(device, value, config)
+            return
+        target = float(value)
+        if "diaphragm" in role.lower() and target == 100.0:
+            config = {**config, "position_tolerance": max(
+                float(config.get("position_tolerance", 0.05)), 1.0
+            )}
+        self._move_single_axis(device, target, config)
+
+    def _move_working_optics(self, targets, config):
+        by_device = {}
+        for role, value in targets:
+            device = self._device_for_role(role)
+            by_device.setdefault(id(device), []).append((role, device, value))
+        if not by_device:
+            return
+
+        def move_device(operations):
+            failures = []
+            for role, device, value in operations:
+                try:
+                    self._move_point_optic(role, device, value, config)
+                except (api.SearchCancelled, api.AxisStopUnconfirmed):
+                    raise
+                except Exception as error:
+                    failures.append(f"{role}: {error}")
+            return failures
+
+        progress = getattr(self, "_search_progress", None)
+        if isinstance(progress, dict):
+            progress.update({
+                "phase": "applying_point", "point": "working",
+                "message": "Moving Working optics in parallel",
+            })
+        failures = []
+        cancelled = False
+        with api.ThreadPoolExecutor(max_workers=min(8, len(by_device))) as executor:
+            futures = [executor.submit(move_device, items) for items in by_device.values()]
+            for future in api.as_completed(futures):
+                try:
+                    failures.extend(future.result())
+                except api.SearchCancelled:
+                    cancelled = True  # Join all other workers, including the OWIS stop.
+        if cancelled:
+            raise api.SearchCancelled()
+        self._raise_if_cancelled()
+        if failures:
+            raise RuntimeError("could not fully apply Working: " + "; ".join(failures))
+
+    def _move_numbered_point_optics(self, point_name, targets, config):
+        def priority(item):
+            role = item[0].lower()
+            return 0 if "diaphragm" in role else 1 if "translation" in role else 2
+
+        deferred_errors = []
+        for role, value in sorted(targets, key=priority):
+            self._raise_if_cancelled()
+            if getattr(self, "cgc", False):
+                self._search_progress.update({
+                    "phase": "applying_point", "point": point_name,
+                    "optical_role": role, "optical_target": value,
+                    "message": f"Moving optics to {point_name}: {role} -> {value}",
+                })
+            if (config.get("_camera_verified_roles_validated")
+                    and role in config.get("camera_verified_roles", [])):
+                self.info(
+                    f"Keeping {role} in its current position for {point_name}; "
+                    "the automatic measurement will verify the Basler centroid "
+                    "after the complete optical preset is applied."
+                )
+                continue
+            try:
+                self._move_point_optic(role, self._device_for_role(role), value, config)
+            except (api.SearchCancelled, api.AxisStopUnconfirmed):
+                raise
+            except Exception as error:
+                if "diaphragm" in role.lower():
+                    deferred_errors.append(f"{role}: {error}")
+                    continue
+                raise RuntimeError(
+                    f"could not apply controller point {point_name}: {role}: {error}"
+                ) from error
+        if deferred_errors:
+            raise RuntimeError(
+                f"could not fully apply {point_name} after attempting all diaphragms: "
+                + "; ".join(deferred_errors)
+            )
+
+
     return {
+        "_move_point_optic": _move_point_optic,
+        "_move_working_optics": _move_working_optics,
+        "_move_numbered_point_optics": _move_numbered_point_optics,
         "_normalise_working_rule": _normalise_working_rule,
         "_fresh_flipper_command_state": _fresh_flipper_command_state,
         "_command_route_flippers": _command_route_flippers,

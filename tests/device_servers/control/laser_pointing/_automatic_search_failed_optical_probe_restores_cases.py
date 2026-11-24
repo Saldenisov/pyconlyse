@@ -432,7 +432,7 @@ def test_plain_cancel_retains_last_measured_good_position(monkeypatch):
             {},
         )
 
-    assert position == [0.0, 0.0]
+    assert position == [4.0, -3.0]
     assert moves[-1] == (0.0, 0.0)
     assert controller._search_stop.is_set()
 

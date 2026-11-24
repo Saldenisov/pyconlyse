@@ -26,6 +26,7 @@ def _bind_laser_pointing_methods_find_device(api):
     def start_automatic_search(self, configuration=""):
         """Start a serialized worker and return immediately."""
         with self._search_lock:
+            self._require_confirmed_axis_stop()
             if self._search_is_running():
                 return -1
             if self._alignment_pending_reference:
@@ -137,7 +138,10 @@ def _bind_laser_pointing_methods_find_device(api):
     def _point_application_worker(self, point_name: str, config: api.Dict):
         try:
             self._apply_point(point_name, config)
+        except api.AxisStopUnconfirmed as error:
+            self._publish_axis_stop_error(error)
         except api.SearchCancelled:
+            self._search_status = "cancelled; current alignment kept"
             self._search_progress = {
                 "phase": "manual_point_cancelled",
                 "point": point_name,
@@ -149,6 +153,8 @@ def _bind_laser_pointing_methods_find_device(api):
                 "message": f"Applying {point_name} was cancelled; mounts remain locked",
             }
         except Exception as error:
+            if self._search_stop.is_set():
+                self._search_status = "point application failed"
             self._search_progress = {
                 "phase": "manual_point_error",
                 "point": point_name,

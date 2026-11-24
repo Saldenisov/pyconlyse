@@ -3,11 +3,12 @@ from sys import modules as _refactor_modules
 import json
 import hashlib
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from math import hypot as hypot
+from math import hypot as hypot, isfinite
 from pathlib import Path
 from threading import Event, Lock, Thread
-from time import monotonic
+from time import monotonic, sleep
 from typing import Dict, Optional, Sequence, Tuple, Union
 from uuid import uuid4
 from collections import deque
@@ -113,6 +114,10 @@ class SearchCancelled(RuntimeError):
     """Raised internally when cancellation occurs during a measurement."""
 
 
+class AxisStopUnconfirmed(RuntimeError):
+    """An OWIS stop failed or the stage did not settle."""
+
+
 class LaserNotVisible(RuntimeError):
     """Raised when Basler has no valid laser centroid."""
 
@@ -148,6 +153,25 @@ class DS_LaserPointing(DS_ControlPosition):
     alignment_pending_reference_property = device_property(dtype=str, default_value="{}")
     alignment_session_events_property = device_property(dtype=(str,), default_value=[])
     adaptive_search_model_property = device_property(dtype=str, default_value="{}")
+    full_open_endpoint_calibrations = device_property(
+        dtype=str, default_value="{}",
+        doc="Explicit diaphragm full-open endpoint and counter definitions.",
+    )
+
+    @command(dtype_in=str, dtype_out=str)
+    def calibrate_full_open_endpoint(self, role):
+        """Define a configured iris counter at its confirmed physical endpoint."""
+        self._require_confirmed_axis_stop()
+        if self._search_is_running() or self._point_application_is_running():
+            raise RuntimeError("Wait for the active optical operation to finish")
+        device = self._device_for_role(str(role))
+        if not self._calibrate_full_open_endpoint(device, 100.0, self._search_config):
+            raise RuntimeError("Configured full-open endpoint is not confirmed; no movement was commanded")
+        position, state = self._fresh_position_and_state(device)
+        return json.dumps({
+            "role": str(role), "position": position, "state": state,
+            "endpoint": self._fresh_endpoint_state(device), "physical_motion_commanded": False,
+        })
 
     def init_device(self):
         old_stop = getattr(self, "_search_stop", None)
@@ -170,6 +194,7 @@ class DS_LaserPointing(DS_ControlPosition):
         self._search_pause = Event()
         self._search_thread: Optional[Thread] = None
         self._point_application_thread: Optional[Thread] = None
+        self._unconfirmed_axis_stop = None
         self._search_status = "idle"
         self._search_progress: Dict = {}
         self._search_history = []
@@ -395,7 +420,8 @@ class DS_LaserPointing(DS_ControlPosition):
     def stop_automatic_search(self):
         """Cancel the search and asynchronously restore its captured baseline."""
 
-        if self._search_status in ("cancelling", "restoring"):
+        self._require_confirmed_axis_stop()
+        if self._search_status in ("cancelling", "restoring", "cancelling; keeping current"):
             return -1
         self._restore_on_cancel = True
         if self._alignment_pending_reference:
@@ -427,7 +453,7 @@ class DS_LaserPointing(DS_ControlPosition):
 
     @command(dtype_out=int)
     def cancel_automatic_search(self):
-        """Stop optimisation while retaining its latest measured-good state."""
+        """Stop the current search or point application at its current position."""
 
         if self._search_status in (
             "cancelling",
@@ -435,6 +461,21 @@ class DS_LaserPointing(DS_ControlPosition):
             "cancelling; keeping current",
         ):
             return -1
+        if getattr(self, "_unconfirmed_axis_stop", None):
+            if self._search_is_running() or self._point_application_is_running():
+                return -1
+            self._search_status = "cancelling; keeping current"
+            self._search_progress = {
+                **self._search_progress,
+                "phase": "cancelling_keep_current",
+                "message": "Retrying the OWIS stop and checking position readback",
+            }
+            self._point_application_thread = Thread(
+                target=self._retry_axis_stop, name=f"{self.device_name}-stop-axis", daemon=True,
+            )
+            self._point_application_thread.start()
+            return 0
+
         self._restore_on_cancel = False
         if self._alignment_pending_reference:
             retained_point = str(
@@ -464,19 +505,17 @@ class DS_LaserPointing(DS_ControlPosition):
                 "completed_alignment_kept_without_reference"
             )
             return 0
-        if not self._search_is_running():
+        if not (self._search_is_running() or self._point_application_is_running()):
             return -1
-        self._search_stop.set()
-        self._search_pause.clear()
         self.cgc = False
         self._search_status = "cancelling; keeping current"
         self._search_progress = {
             **self._search_progress,
             "phase": "cancelling_keep_current",
-            "message": (
-                "Stopping at the latest measured-good alignment; no restore"
-            ),
+            "message": "Stopping the current optical operation",
         }
+        self._search_stop.set()
+        self._search_pause.clear()
         self._record_alignment_event("cancel_keep_current_requested")
         return 0
 
@@ -562,6 +601,7 @@ class DS_LaserPointing(DS_ControlPosition):
             raise ValueError(f"unknown controller point: {point_name}")
 
         with self._search_lock:
+            self._require_confirmed_axis_stop()
             if self._search_is_running():
                 raise RuntimeError("cannot apply a point while automatic search is running")
             if self._alignment_acceptance_is_pending():
@@ -608,6 +648,7 @@ class DS_LaserPointing(DS_ControlPosition):
             raise ValueError("manual Standa control requires a numbered optical point")
 
         with self._search_lock:
+            self._require_confirmed_axis_stop()
             if self._search_is_running():
                 raise RuntimeError(
                     "cannot select a manual point while automatic search is running"
@@ -752,6 +793,14 @@ class DS_LaserPointing(DS_ControlPosition):
     _state_is_moving = (staticmethod)(_laser_pointing_methods_optimise_group["_state_is_moving"])
 
     _is_flipper_role = (staticmethod)(_laser_pointing_methods_optimise_group["_is_flipper_role"])
+    _full_open_endpoint_definition = _laser_pointing_methods_optimise_group["_full_open_endpoint_definition"]
+    _fresh_endpoint_state = staticmethod(_laser_pointing_methods_optimise_group["_fresh_endpoint_state"])
+    _calibrate_full_open_endpoint = _laser_pointing_methods_optimise_group["_calibrate_full_open_endpoint"]
+    _wait_for_axis_target = _laser_pointing_methods_optimise_group["_wait_for_axis_target"]
+    _stop_and_verify_axis = _laser_pointing_methods_optimise_group["_stop_and_verify_axis"]
+    _require_confirmed_axis_stop = _laser_pointing_methods_optimise_group["_require_confirmed_axis_stop"]
+    _publish_axis_stop_error = _laser_pointing_methods_optimise_group["_publish_axis_stop_error"]
+    _retry_axis_stop = _laser_pointing_methods_optimise_group["_retry_axis_stop"]
     del _laser_pointing_methods_optimise_group
 
     _laser_pointing_methods_normalise_working_rule = _bind_laser_pointing_methods_normalise_working_rule(_refactor_modules[__name__])
@@ -782,6 +831,9 @@ class DS_LaserPointing(DS_ControlPosition):
     execute_action = _laser_pointing_methods_normalise_working_rule["execute_action"]
 
     stop_opts = _laser_pointing_methods_normalise_working_rule["stop_opts"]
+    _move_point_optic = _laser_pointing_methods_normalise_working_rule["_move_point_optic"]
+    _move_working_optics = _laser_pointing_methods_normalise_working_rule["_move_working_optics"]
+    _move_numbered_point_optics = _laser_pointing_methods_normalise_working_rule["_move_numbered_point_optics"]
     del _laser_pointing_methods_normalise_working_rule
 
 
