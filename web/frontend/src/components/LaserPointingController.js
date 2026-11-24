@@ -231,7 +231,9 @@ const LaserPointingController = ({ deviceName }) => {
     'cancelling', 'restoring', 'cancelling; keeping current',
   ].includes(searchStatus);
   const progress = snapshot?.automatic_search?.progress || {};
-  const pointApplying = progress.phase === 'manual_point';
+  const pointApplying = progress.phase === 'manual_point'
+    || snapshot?.pair_initialization?.phase === 'point_applying';
+  const axisStopUnconfirmed = progress.phase === 'axis_stop_unconfirmed';
   const pointApplicationError = progress.phase === 'manual_point_error'
     ? progress.message : '';
   const convergenceHistory = snapshot?.automatic_search?.history || [];
@@ -265,8 +267,12 @@ const LaserPointingController = ({ deviceName }) => {
     || running
     || hasPendingReference
     || pointApplying
+    || axisStopUnconfirmed
     || !snapshot?.capabilities?.interlocked_motion;
   const pointControlsDisabled = controlsDisabled || !snapshot?.capabilities?.apply_point;
+  const cancelMotion = () => execute(
+    'cancel_automatic_search', undefined, 'Stopping and keeping current positions'
+  );
 
   useEffect(() => {
     if (!config) return;
@@ -413,6 +419,12 @@ const LaserPointingController = ({ deviceName }) => {
       {error && <div className="laser-error-banner">{error}</div>}
       {!error && pointApplicationError && (
         <div className="laser-error-banner">{pointApplicationError}</div>
+      )}
+      {axisStopUnconfirmed && <div className="laser-error-banner" role="alert">{progress.message}</div>}
+      {(pointApplying || axisStopUnconfirmed) && snapshot.capabilities?.cancel_search_keep_current && (
+        <button type="button" className="stop" onClick={cancelMotion} disabled={Boolean(busy) || cancelling}>
+          {axisStopUnconfirmed ? 'Retry axis stop' : 'Cancel point — keep current'}
+        </button>
       )}
       {cameraVisibilityWarning(snapshot.camera) && (
         <div
@@ -574,7 +586,7 @@ const LaserPointingController = ({ deviceName }) => {
                 </div>
               )}
               <div className="laser-search-actions">
-                <button type="button" className="start" onClick={startSearch} disabled={Boolean(busy) || running || hasPendingReference || !snapshot.camera?.centroid_valid || !snapshot.capabilities?.automatic_search}>
+                <button type="button" className="start" onClick={startSearch} disabled={Boolean(busy) || running || pointApplying || axisStopUnconfirmed || hasPendingReference || !snapshot.camera?.centroid_valid || !snapshot.capabilities?.automatic_search}>
                   Start automatic search
                 </button>
                 {!paused ? (
@@ -588,11 +600,7 @@ const LaserPointingController = ({ deviceName }) => {
                 )}
                 <button
                   type="button"
-                  onClick={() => execute(
-                    'cancel_automatic_search',
-                    undefined,
-                    'Stopping and keeping current alignment'
-                  )}
+                  onClick={cancelMotion}
                   disabled={Boolean(busy)
                     || (!running && !hasPendingReference)
                     || cancelling
@@ -600,7 +608,7 @@ const LaserPointingController = ({ deviceName }) => {
                 >
                   {hasPendingReference ? 'Keep current alignment' : 'Cancel — keep current'}
                 </button>
-                <button type="button" className="stop" onClick={() => execute('stop_automatic_search', undefined, 'Cancelling and restoring initial state')} disabled={Boolean(busy) || (!running && !hasPendingReference) || cancelling || !snapshot.capabilities?.automatic_search}>
+                <button type="button" className="stop" onClick={() => execute('stop_automatic_search', undefined, 'Cancelling and restoring initial state')} disabled={Boolean(busy) || (!running && !hasPendingReference) || cancelling || axisStopUnconfirmed || !snapshot.capabilities?.automatic_search}>
                   {hasPendingReference ? 'Discard and restore' : 'Cancel + restore'}
                 </button>
               </div>
@@ -699,9 +707,7 @@ const LaserPointingController = ({ deviceName }) => {
                     actuator={actuator}
                     active={active}
                     lockReason={lockReason}
-                    disabled={Boolean(busy)
-                      || running
-                      || pointApplying
+                    disabled={controlsDisabled
                       || actuatorVisualState(actuator) !== 'ready'
                       || actuator.move_supported === false}
                     onMove={moveActuator}
@@ -715,7 +721,7 @@ const LaserPointingController = ({ deviceName }) => {
             <ManualDevice
               key={hardware.role}
               hardware={hardware}
-              disabled={Boolean(busy) || running}
+              disabled={controlsDisabled}
               onMove={moveManualAxis}
             />
           ))}
@@ -738,7 +744,7 @@ const LaserPointingController = ({ deviceName }) => {
               <DiaphragmControl
                 key={diaphragm.role}
                 diaphragm={diaphragm}
-                disabled={Boolean(busy) || running}
+                disabled={controlsDisabled}
                 onMove={moveOtherDevice}
                 onStop={stopOtherDevice}
               />

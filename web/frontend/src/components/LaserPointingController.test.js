@@ -19,6 +19,39 @@ import LaserPointingController, {
 } from './LaserPointingController';
 
 describe('LaserPointing optical point presentation', () => {
+  test('preset cancellation keeps new requests locked until the stop completes', async () => {
+    const snapshot = {
+      device: 'manip/V0/LaserPointing-Cam2',
+      rules: { point3: { CrimpingDiaphragm1: 10, TranslationStage1: [3, 0] } },
+      groups: {}, camera: { state: 'OFF' },
+      capabilities: { apply_point: true, interlocked_motion: true, cancel_search_keep_current: true },
+      pair_initialization: { phase: 'point_applying' },
+      automatic_search: { status: 'idle', progress: { phase: 'applying_point' } },
+    };
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async (url) => {
+      if (url.endsWith('/command/cancel_automatic_search')) {
+        snapshot.pair_initialization.phase = 'point_application_cancelled';
+        snapshot.automatic_search.progress.phase = 'manual_point_cancelled';
+      }
+      return { ok: true, json: async () => ({ success: true, snapshot: JSON.parse(JSON.stringify(snapshot)) }) };
+    });
+    try {
+      render(<LaserPointingController deviceName={snapshot.device} />);
+      const cancel = await screen.findByRole('button', { name: 'Cancel point — keep current' });
+      const point = screen.getByRole('button', { name: /Point 3 Fine 10%/i });
+      expect(point).toBeDisabled();
+      fireEvent.click(cancel);
+      await waitFor(() => expect(point).toBeEnabled());
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/device/manip%2FV0%2FLaserPointing-Cam2/command/cancel_automatic_search',
+        expect.objectContaining({ method: 'POST' })
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
   test('centering is never inferred from percent-valued legacy roundness', () => {
     expect(centeringError({ centering_error_px: 0.25, roundness_error_pct: 25 })).toBe(0.25);
     expect(centeringError({ roundness_error_pct: 25, error_px: 25 })).toBeNull();
