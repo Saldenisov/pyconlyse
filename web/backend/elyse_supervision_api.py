@@ -2,7 +2,9 @@
 
 import json
 import math
+import os
 import sqlite3
+import time
 from pathlib import Path
 from threading import Lock
 
@@ -10,6 +12,7 @@ import elyse_supervision_service as service
 from elyse_supervision_business import BusinessBlocked, BusinessConflict, SupervisionBusiness
 from elyse_acq_transport import configured_acq
 from flask import Blueprint, current_app, jsonify, request
+from legacy.xp_acq_control.elyse_agent.supervision_clock import clock_signature, valid_nonce
 from mutation_auth import install_mutation_auth
 
 elyse_supervision_api = Blueprint(
@@ -32,6 +35,29 @@ def unavailable(error):
     return jsonify(
         error="Reconstruction data unavailable", execution_allowed=False
     ), 503
+
+
+@elyse_supervision_api.get("/clock")
+def supervision_clock():
+    """Sign a fresh, nonce-bound UTC sample for the SuperVision host."""
+    if request.remote_addr not in ("10.20.30.2", "127.0.0.1"):
+        return jsonify(error="SuperVision clock source unavailable"), 403
+    nonces = request.args.getlist("nonce")
+    if len(nonces) != 1 or not valid_nonce(nonces[0]):
+        return jsonify(error="Invalid SuperVision clock nonce"), 400
+    setting = "ELYSE_SUPERVISION_VI_READ_KEY_FILE"
+    path = current_app.config.get(setting, os.environ.get(setting))
+    try:
+        if not path or not Path(path).is_absolute():
+            raise ValueError("Clock key unavailable")
+        with open(path, "rb") as stream:
+            key = stream.read(4097).strip()
+        if not 32 <= len(key) <= 4096:
+            raise ValueError("Clock key unavailable")
+    except (ValueError, OSError):
+        return jsonify(error="SuperVision clock source unavailable"), 503
+    stamp = time.time_ns() // 1000000
+    return jsonify(nonce=nonces[0], utc_ms=stamp, signature=clock_signature(key, nonces[0], stamp))
 
 
 @elyse_supervision_api.get("")
