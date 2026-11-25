@@ -17,12 +17,14 @@ function telemetry() {
     snapshot: { receiver_session: 'workspace-session', received_this_process: 27, publications } }, failure: '', elapsed: 0 };
 }
 
-test.each([['direct', 'Voie directe', 11], ['deviated', 'Voie déviée', 9]])(
+test.each([['direct', 'Voie directe', 11], ['deviated', 'Voie déviée', 11]])(
   '%s line keeps native control blocks and no command authority', (line, title, rows) => {
     render(<BeamLinePanel line={line} telemetry={telemetry()} />);
     expect(screen.getByRole('region', { name: title, exact: true })).toBeInTheDocument();
-    expect(screen.getAllByRole('button')).toHaveLength(rows * 6);
-    screen.getAllByRole('button').forEach((button) => expect(button).toBeDisabled());
+    const buttons = screen.getAllByRole('button').filter((button) => button.tagName !== 'SUMMARY');
+    expect(buttons).toHaveLength(rows * 6);
+    buttons.forEach((button) => expect(button).toBeDisabled());
+    expect(screen.getByText('Aimants iTest')).toBeInTheDocument();
     expect(screen.getAllByRole('img')).toHaveLength(rows * 3);
     expect(screen.getAllByRole('status')).toHaveLength(rows * 2);
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();

@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { readBankField } from './elyseLiveProjection';
+import { useAcquisitionConnection } from './AcquisitionCommands';
+import ITestBeamLinePanel from './components/ITestBeamLinePanel';
 import workspace from './elyseSupervisionWorkspace.json';
 import synoptic from './assets/elyse-synoptique-original.png';
 import './SupervisionWorkspace.css';
 
 const EMPTY = { payload: null, failure: '', elapsed: 0 };
+const SHARED_CONTROLS = workspace.lines.direct.rows.filter((row) => ['Focale', 'Phase HF / Laser'].includes(row.label));
 
 export function lineValue(binding, telemetry = EMPTY) {
   return readBankField(telemetry.payload, binding.bank, binding.index, 'number', telemetry.elapsed, telemetry.failure);
@@ -58,11 +61,16 @@ function LineReading({ row, field, telemetry }) {
 
 export function BeamLinePanel({ line, telemetry = EMPTY }) {
   const definition = workspace.lines[line];
+  const { view, fresh } = useAcquisitionConnection();
+  const [itestOpen, setItestOpen] = useState(false);
+  const rows = line === 'direct' ? definition.rows : [...definition.rows, ...SHARED_CONTROLS.map((row) => ({
+    ...row, column: row.column + 1,
+  }))];
   const title = line === 'direct' ? 'Voie directe' : 'Voie déviée';
   return <section className="sup-line" aria-label={title}>
     <h2>{title}</h2>
     <div className="sup-line__viewport"><div className="sup-line__grid">
-      {[...definition.rows].sort((a, b) => a.row - b.row || a.column - b.column).map((row) => <section
+      {[...rows].sort((a, b) => a.row - b.row || a.column - b.column).map((row) => <section
         className={`sup-line__card${row.label.startsWith('Dipôle') ? ' sup-line__card--dipole' : row.unit === '°' ? ' sup-line__card--phase' : ''}`}
         key={row.uid} aria-label={row.label}
         style={{ gridColumn: row.column, gridRow: row.row }}>
@@ -84,6 +92,11 @@ export function BeamLinePanel({ line, telemetry = EMPTY }) {
           <LineCommand key={control.native_uid} row={row} control={control} />)}</div>
       </section>)}
     </div></div>
+    <details className="sup-line__itest" onToggle={(event) => setItestOpen(event.currentTarget.open)}>
+      <summary>Aimants iTest</summary>
+      {itestOpen && <ITestBeamLinePanel deviceName="elyse/pdu/itest" tab={line === 'direct' ? 'V0' : 'VD2'}
+        readOnly={!fresh || !view?.supervision_access?.unlocked} />}
+    </details>
   </section>;
 }
 

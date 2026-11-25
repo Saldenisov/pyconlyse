@@ -626,7 +626,7 @@ def test_owis_page_routes_smoke(monkeypatch):
 
 
 def test_itest_page_routes_smoke(monkeypatch):
-    client, _devices = _make_client(monkeypatch)
+    client, devices = _make_client(monkeypatch)
 
     ds_slots_response = client.get("/api/device/ds_itest_psu/power/itest/1/slots")
     ds_slots_payload = ds_slots_response.get_json()
@@ -647,6 +647,14 @@ def test_itest_page_routes_smoke(monkeypatch):
     assert all_slots_response.status_code == 200
     assert all_slots_payload["success"] is True
     assert all_slots_payload["ids"] == [11, 12]
+
+    path = "/api/device/itest/power/itest/1/all_slots?qualified=1"
+    assert client.get(path).get_json()["hardware_available"] is True
+    devices["power/itest/1"]._state = "FAULT"
+    assert client.get(path).get_json() == {
+        "success": True, "hardware_available": False, "hardware_state": "FAULT",
+    }
+    devices["power/itest/1"]._state = "ON"
 
     output_response = client.post(
         "/api/device/itest/power/itest/1/slot/11/output",

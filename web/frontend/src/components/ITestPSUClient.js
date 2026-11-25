@@ -16,6 +16,16 @@ function readCurrentStep(storageKey) {
   }
 }
 
+function readBeamLineOrder(storageKey) {
+  if (!storageKey) return [];
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(storageKey));
+    return Array.isArray(saved) ? saved.filter(Number.isInteger) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function fetchItestTabConfig(deviceName) {
   const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/tab_config`, {
     credentials: 'include'
@@ -28,8 +38,10 @@ async function fetchItestTabConfig(deviceName) {
   return response.json();
 }
 
-async function fetchItestSlotData(deviceName) {
-  const response = await fetch(`/api/device/itest/${deviceName}/all_slots`, {
+async function fetchItestSlotData(deviceName, qualified = false, signal) {
+  const query = qualified ? '?qualified=1' : '';
+  const response = await fetch(`/api/device/itest/${deviceName}/all_slots${query}`, {
+    signal,
     credentials: 'include'
   });
 
@@ -105,7 +117,7 @@ function normalizeTabConfigs(rawConfigs) {
   return normalized;
 }
 
-function SlotCurrentControl({ name, setpoint, limits, canStep, storageKey, onApply }) {
+function SlotCurrentControl({ name, setpoint, limits, canStep, storageKey, onApply, readOnly, beamline }) {
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState(() => readCurrentStep(storageKey));
@@ -113,7 +125,7 @@ function SlotCurrentControl({ name, setpoint, limits, canStep, storageKey, onApp
   const requestActive = useRef(false);
   const editor = useRef(null);
   const stepButton = useRef(null);
-  const inputValue = draft ?? setpoint.toFixed(3);
+  const inputValue = draft ?? (Number.isFinite(setpoint) ? setpoint.toFixed(3) : '');
 
   useEffect(() => {
     const syncStep = (event) => {
@@ -147,7 +159,7 @@ function SlotCurrentControl({ name, setpoint, limits, canStep, storageKey, onApp
   };
 
   const apply = async (value) => {
-    if (requestActive.current) return;
+    if (readOnly || requestActive.current) return;
     requestActive.current = true;
     setSaving(true);
     try {
@@ -175,8 +187,8 @@ function SlotCurrentControl({ name, setpoint, limits, canStep, storageKey, onApp
           min={limits.min}
           max={limits.max}
           value={inputValue}
-          readOnly={saving}
-          aria-label={`${name} current (A)`}
+          readOnly={saving || readOnly}
+          aria-label={beamline ? `${name} · consigne à régler (A)` : `${name} current (A)`}
           className="current-input"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -193,25 +205,29 @@ function SlotCurrentControl({ name, setpoint, limits, canStep, storageKey, onApp
           {[1, -1].map((direction) => {
             const target = nudge(direction);
             const action = direction === 1 ? 'Increase' : 'Decrease';
+            const label = beamline
+              ? `${direction === 1 ? 'Augmenter' : 'Diminuer'} la consigne · ${name}` : `${action} ${name} current`;
             return (
               <button key={direction} type="button"
-                aria-label={`${action} ${name} current`}
-                title={`${action} by ${currentStep} A · right-click to change step`}
-                disabled={saving || !canStep || target < limits.min || target > limits.max}
+                aria-label={label}
+                title={beamline ? `${label} (${currentStep} A)` : `${action} by ${currentStep} A · right-click to change step`}
+                disabled={readOnly || saving || !canStep || target < limits.min || target > limits.max}
                 onClick={() => { setStepMenuOpen(false); apply(target); }}>
-                {direction === 1 ? '▴' : '▾'}
+                {direction === 1 ? (beamline ? '>' : '▴') : (beamline ? '<' : '▾')}
               </button>
             );
           })}
         </div>
-        <button type="button" className="btn-set-current" disabled={saving} onClick={() => apply(inputValue)}>Set</button>
+        <button type="button" className="btn-set-current" disabled={saving || readOnly} onClick={() => apply(inputValue)}>
+          {beamline ? 'Régler' : 'Set'}
+        </button>
       </div>
       <div className="slot-limits">
-        <small>Limits: {limits.min}…{limits.max} A</small>
+        <small>{beamline ? 'Limites' : 'Limits'}: {limits.verified || !beamline ? `${limits.min}…${limits.max} A` : '—'}</small>
         <button ref={stepButton} type="button" className="itest-step-trigger"
-          aria-label={`${name} current step: ${currentStep} A`}
+          aria-label={beamline ? `${name} · pas : ${currentStep} A` : `${name} current step: ${currentStep} A`}
           aria-expanded={stepMenuOpen} onClick={() => setStepMenuOpen(!stepMenuOpen)}>
-          Step {currentStep} A
+          {beamline ? 'Pas' : 'Step'} {currentStep} A
         </button>
         {stepMenuOpen && (
           <div className="itest-step-menu" role="group" aria-label={`${name} current step options`}>
@@ -227,7 +243,7 @@ function SlotCurrentControl({ name, setpoint, limits, canStep, storageKey, onApp
   );
 }
 
-const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
+const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false, readOnly = false, beamline = false }) => {
   // Tab configuration
   const [selectedTab, setActiveTab] = useState('V0');
   const activeTab = fixedTab || selectedTab;
@@ -240,6 +256,9 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
   
   // Slot data arrays
   const [slotNames, setSlotNames] = useState([]);
+  const [configuredNames, setConfiguredNames] = useState({});
+  const [hardwareAvailable, setHardwareAvailable] = useState(false);
+  const commandsLocked = readOnly || (beamline && !hardwareAvailable);
   const [slotIds, setSlotIds] = useState([]);
   const [slotStates, setSlotStates] = useState([]);
   const [slotSetpoints, setSlotSetpoints] = useState({});
@@ -250,10 +269,55 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
   const [monitoring, setMonitoring] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const orderKey = beamline ? `pyconlyse.itest.beamline-order.${deviceName.toLowerCase()}.${activeTab}` : null;
+  const [slotOrder, setSlotOrder] = useState(() => readBeamLineOrder(orderKey));
+  const dragging = useRef(null);
+  const [dropTarget, setDropTarget] = useState(null);
   
   const socketRef = useRef(null);
 
   useEffect(() => {
+    if (!beamline || !deviceName) return undefined;
+    const controller = new AbortController();
+    let timer;
+    const loadConfig = async () => {
+      try {
+        const config = await fetchItestTabConfig(deviceName);
+        if (controller.signal.aborted) return;
+        setTabConfigs(normalizeTabConfigs(config.tab_configs));
+        setConfiguredNames(config.slot_names || {});
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err.message);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    const readSlots = async () => {
+      try {
+        const data = await fetchItestSlotData(deviceName, true, controller.signal);
+        if (!controller.signal.aborted) {
+          const normalized = normalizeItestSlotData(data);
+          setHardwareAvailable(data.hardware_available === true);
+          setSlotIds(normalized.ids);
+          setSlotNames(normalized.names);
+          setSlotStates(normalized.states);
+          setSlotSetpoints(normalized.setpoints);
+          setSlotMeasuredCurrents(normalized.measuredCurrents);
+          setSlotLimits(normalized.limits);
+        }
+      } catch {
+        if (!controller.signal.aborted) setHardwareAvailable(false);
+      } finally {
+        if (!controller.signal.aborted) timer = setTimeout(readSlots, 1000);
+      }
+    };
+    loadConfig();
+    readSlots();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [deviceName, beamline]);
+
+  useEffect(() => {
+    if (beamline) return undefined;
     let disposed = false;
 
     const loadInitialData = async () => {
@@ -341,7 +405,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
         setSlotNames(data.slots.map((slot) => slot.name));
         setSlotStates(data.slots.map((slot) => (slot.state ? 1 : 0)));
         setSlotSetpoints(Object.fromEntries(data.slots.map((slot) => [slot.id, slot.current_setpoint])));
-        setSlotMeasuredCurrents(data.slots.map((slot) => slot.current_measured || 0));
+        setSlotMeasuredCurrents(data.slots.map((slot) => slot.current_measured));
       });
 
       socket.on('device_error', (data) => {
@@ -361,7 +425,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
         socketRef.current = null;
       }
     };
-  }, [deviceName]);
+  }, [deviceName, beamline]);
 
   const fetchSlotData = async () => {
     try {
@@ -411,6 +475,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
   };
 
   const setSlotOutputState = async (slotId, state) => {
+    if (commandsLocked) return;
     try {
       const url = `/api/device/itest/${deviceName}/slot/${slotId}/output`;
       const response = await fetchWithHardwareApproval(url, {
@@ -421,7 +486,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
       });
       
       if (response.ok) {
-        await fetchSlotData();
+        if (!beamline) await fetchSlotData();
       } else {
         throw new Error(`Failed to set output state`);
       }
@@ -431,6 +496,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
   };
 
   const setSlotCurrent = async (slotId, inputValue) => {
+    if (commandsLocked) throw new Error('iTest controls are locked');
     const limits = slotLimits[slotId] || { min: -5.0, max: 15.0 };
     const value = typeof inputValue === 'string' && inputValue.trim() ? Number(inputValue) : inputValue;
     if (!Number.isFinite(value)) throw new Error('Please enter a valid number');
@@ -475,7 +541,22 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
   }
 
   const currentTabConfig = tabConfigs[activeTab] || { slots: [], defaults: {}, enabled: true };
-  const currentSlots = currentTabConfig.slots.filter(id => slotIds.includes(id));
+  const orderedSlots = beamline ? [...new Set([...slotOrder, ...currentTabConfig.slots])] : currentTabConfig.slots;
+  const currentSlots = orderedSlots.filter(id => currentTabConfig.slots.includes(id) && (beamline || slotIds.includes(id)));
+  const moveSlot = (source, target) => {
+    const from = orderedSlots.indexOf(source);
+    const to = orderedSlots.indexOf(target);
+    if (from < 0 || to < 0 || from === to) return;
+    const next = [...orderedSlots];
+    next.splice(from, 1);
+    next.splice(to, 0, source);
+    setSlotOrder(next);
+    try { window.localStorage.setItem(orderKey, JSON.stringify(next)); } catch { /* applied in memory */ }
+  };
+  const endDrag = () => {
+    dragging.current = null;
+    setDropTarget(null);
+  };
   const allCurrentSlotsEnabled =
     currentSlots.length > 0 &&
     currentSlots.every((id) => {
@@ -484,10 +565,12 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
     });
 
   return (
-    <div className={`itest-client${compact ? ' is-compact' : ''}`}>
+    <div className={`itest-client${compact ? ' is-compact' : ''}${beamline ? ' itest-beamline' : ''}`}>
       <div className="client-header">
-        <h2>iTest PSU: {deviceName}</h2>
-        <div className="connection-status">
+        <h2>{beamline ? `iTest · ${activeTab}` : `iTest PSU: ${deviceName}`}</h2>
+        {beamline ? <div className="connection-status" role="status">
+          {hardwareAvailable ? 'Télémétrie iTest active' : 'Télémétrie iTest indisponible'}
+        </div> : <div className="connection-status">
           <span className={`status ${connected ? 'connected' : 'disconnected'}`}>
             {connected ? '🟢 Connected' : '🔴 Disconnected'}
           </span>
@@ -498,7 +581,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
           >
             {monitoring ? 'Monitoring automatically' : 'Waiting for monitoring'}
           </span>
-        </div>
+        </div>}
       </div>
 
       {/* Tab navigation */}
@@ -517,7 +600,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
       {/* Tab controls */}
       {!compact && <div className="tab-controls">
         <button 
-          className="btn-load-defaults"
+          className="btn-load-defaults" disabled={readOnly}
           onClick={() => loadTabDefaults(activeTab)}
         >
           Load Defaults
@@ -525,7 +608,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
         <label className="toggle-all">
           <input 
             type="checkbox"
-            checked={allCurrentSlotsEnabled}
+            checked={allCurrentSlotsEnabled} disabled={readOnly}
             onChange={(e) => toggleTabOutputs(activeTab, e.target.checked)}
           />
           <span>Enable All Slots</span>
@@ -535,21 +618,77 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
       {error && (
         <div className="error-alert">
           <strong>Error:</strong> {error}
-          <button onClick={fetchSlotData}>Retry</button>
+          {!beamline && <button onClick={fetchSlotData}>Retry</button>}
         </div>
       )}
 
       {/* Slot controls grid */}
-      <div className="slots-grid">
+      <div className={beamline ? 'sup-line__grid itest-beamline__grid' : 'slots-grid'}>
         {currentSlots.map(slotId => {
           const idx = slotIds.indexOf(slotId);
-          if (idx < 0) return null;
-          
-          const name = slotNames[idx] || `Slot ${slotId}`;
-          const state = slotStates[idx] || 0;
-          const setpoint = slotSetpoints[slotId] ?? 0.0;
-          const measured = slotMeasuredCurrents[idx] || 0.0;
-          const limits = slotLimits[slotId] || { min: -5.0, max: 15.0 };
+          const hasReading = !beamline || (hardwareAvailable && idx >= 0);
+          const name = (beamline && configuredNames[slotId]) || (hasReading && slotNames[idx]) || `Slot ${slotId}`;
+          const state = hasReading ? slotStates[idx] : undefined;
+          const setpoint = (hasReading ? slotSetpoints[slotId] : null) ?? (beamline ? null : 0.0);
+          const measured = (hasReading ? slotMeasuredCurrents[idx] : null) ?? (beamline ? null : 0.0);
+          const limits = (hasReading && slotLimits[slotId]) || { min: -5.0, max: 15.0 };
+          const editor = <SlotCurrentControl key={`${deviceName}:${slotId}`} name={name} setpoint={setpoint} limits={limits}
+            readOnly={commandsLocked || (beamline && !limits.verified)} beamline={beamline}
+            canStep={Number.isFinite(slotSetpoints[slotId]) && slotLimits[slotId]?.verified}
+            storageKey={`pyconlyse.itest.current-step.${deviceName.toLowerCase()}.${slotId}`}
+            onApply={(value) => handleSlotCurrentChange(slotId, value)} />;
+          if (beamline) {
+            const outputKnown = state === 0 || state === 1;
+            return <section key={slotId} aria-label={name} data-slot-id={slotId}
+              className={`sup-line__card itest-beamline__card${dropTarget === slotId ? ' is-drop-target' : ''}`}
+              onDragOver={(event) => {
+                if (dragging.current === null || dragging.current === slotId) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTarget(slotId);
+              }}
+              onDrop={(event) => {
+                if (dragging.current === null) return;
+                event.preventDefault();
+                moveSlot(dragging.current, slotId);
+                endDrag();
+              }}>
+              <div className="sup-line__toolbar">
+                <button type="button" aria-label={`${name} · marche / arrêt`} aria-pressed={outputKnown ? state === 1 : undefined}
+                  disabled={commandsLocked || !outputKnown} onClick={() => setSlotOutputState(slotId, state === 1 ? 0 : 1)}>M/A</button>
+                <div className="sup-line__states">
+                  <span className={state === 1 ? 'itest-beamline__output-on' : ''} role="img"
+                    aria-label={outputKnown ? state === 1 ? 'Sortie en marche' : 'Sortie à l’arrêt' : 'Sortie inconnue'} />
+                </div>
+                <button type="button" className="itest-beamline__handle" draggable aria-label={`Déplacer ${name}`}
+                  title="Glisser ou utiliser les touches fléchées"
+                  onDragStart={(event) => {
+                    dragging.current = slotId;
+                    event.dataTransfer.setData('text/plain', String(slotId));
+                    event.dataTransfer.effectAllowed = 'move';
+                  }} onDragEnd={endDrag}
+                  onKeyDown={(event) => {
+                    const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -4, ArrowDown: 4 };
+                    if (!(event.key in offsets)) return;
+                    event.preventDefault();
+                    const target = currentSlots[currentSlots.indexOf(slotId) + offsets[event.key]];
+                    if (target !== undefined) moveSlot(slotId, target);
+                  }}>⠿</button>
+              </div>
+              <div className="sup-line__range">Slot {slotId}</div>
+              <h3 title={name}>{name}</h3>
+              <div className="sup-line__readings">
+                {[[setpoint, 'Consigne', 'consigne'], [measured, 'Lecture', 'lecture']].map(([value, label, field]) => (
+                  <div key={field} className={`sup-line__value sup-line__value--${field}`}>
+                    <small>{label}</small>
+                    <output aria-label={`${name} · ${label}`}>{Number.isFinite(value) ? value.toFixed(3) : '—'}</output>
+                    <span>A</span>
+                  </div>
+                ))}
+              </div>
+              {editor}
+            </section>;
+          }
           
           return (
             <div key={slotId} className="slot-card">
@@ -558,7 +697,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
                 <label className="toggle-switch">
                   <input
                     type="checkbox"
-                    checked={state === 1}
+                    checked={state === 1} disabled={readOnly} aria-label={`${name} output`}
                     onChange={(e) => setSlotOutputState(slotId, e.target.checked ? 1 : 0)}
                   />
                   <span className="toggle-slider"></span>
@@ -576,10 +715,7 @@ const ITestPSUClient = ({ deviceName, fixedTab = null, compact = false }) => {
                 </div>
               </div>
               
-              <SlotCurrentControl key={`${deviceName}:${slotId}`} name={name} setpoint={setpoint} limits={limits}
-                canStep={Number.isFinite(slotSetpoints[slotId]) && slotLimits[slotId]?.verified}
-                storageKey={`pyconlyse.itest.current-step.${deviceName.toLowerCase()}.${slotId}`}
-                onApply={(value) => handleSlotCurrentChange(slotId, value)} />
+              {editor}
             </div>
           );
         })}

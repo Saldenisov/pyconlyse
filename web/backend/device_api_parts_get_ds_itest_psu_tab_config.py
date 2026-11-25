@@ -4,10 +4,30 @@
 def _bind_device_api_parts_get_ds_itest_psu_tab_config(api):
     """Bind implementation to the owning module and its runtime state."""
 
+    def itest_slot_names(db, device_name):
+        """Read the physical slot aliases independently of SCPI availability."""
+        raw = db.get_device_property(device_name, 'config').get('config') or ()
+        config = api.json.loads(''.join(raw)) if raw else {}
+        names = {}
+        for key, value in config.items():
+            label = key.split('(', 1)[0].strip().upper()
+            number = label[5:] if label.startswith('SLOT ') else label[1:] if label.startswith('S') else ''
+            name = value[0] if isinstance(value, list) and value else value
+            if number.isdecimal() and int(number) > 0 and isinstance(name, str) and name.strip():
+                names[str(int(number))] = name.strip()
+        return names
+
+
     def get_ds_itest_psu_tab_config(device_name):
         """Get tab configuration from Tango DB property 'tab_config'"""
         try:
             db = api.tango_gateway.create_database()
+
+            slot_names = {}
+            try:
+                slot_names = itest_slot_names(db, device_name)
+            except (ValueError, AttributeError, TypeError):
+                pass
 
             # Default configuration
             default_config = {
@@ -80,12 +100,12 @@ def _bind_device_api_parts_get_ds_itest_psu_tab_config(api):
                                 'enabled': bool(tab_payload.get('enabled', True)),
                             }
 
-                        return api.jsonify({'tab_configs': normalized, 'success': True})
+                        return api.jsonify({'tab_configs': normalized, 'slot_names': slot_names, 'success': True})
             except Exception as e:
                 print(f"Warning: Could not read tab_config property: {e}")
 
             # Return default config if property doesn't exist or is invalid
-            return api.jsonify({'tab_configs': default_config, 'success': True})
+            return api.jsonify({'tab_configs': default_config, 'slot_names': slot_names, 'success': True})
 
         except Exception as e:
             return api.jsonify({'error': str(e), 'success': False}), 500
@@ -98,6 +118,13 @@ def _bind_device_api_parts_get_ds_itest_psu_tab_config(api):
         try:
             device = api.DeviceManager.get_device(device_name)
 
+            qualification = {}
+            if api.request.args.get('qualified') == '1':
+                state = str(device.state()).rsplit('.', 1)[-1]
+                if state not in ('ON', 'STANDBY', 'MOVING', 'RUNNING'):
+                    return api.jsonify(success=True, hardware_available=False, hardware_state=state)
+                qualification = {'hardware_available': True, 'hardware_state': state}
+
             # Read all attributes
             ids = api.make_json_safe(device.read_attribute('ids').value)
             names = api.make_json_safe(device.read_attribute('names').value)
@@ -107,6 +134,7 @@ def _bind_device_api_parts_get_ds_itest_psu_tab_config(api):
             current_limits = api.make_json_safe(device.read_attribute('current_limits').value)
 
             return api.jsonify({
+                **qualification,
                 'ids': ids,
                 'names': names,
                 'states': states,

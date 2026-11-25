@@ -1,0 +1,83 @@
+.itest-client.itest-beamline {
+  margin: 0;
+  max-width: none;
+  padding: 6px 0;
+  overflow-x: auto;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.itest-beamline .client-header {
+  margin-bottom: 8px;
+  padding: 0 0 4px;
+  border-bottom: 1px solid #a6b1be;
+}
+
+.itest-beamline .client-header h2 {
+  margin: 0;
+  font-size: 14px;
+  color: #001d78;
+}
+
+.itest-beamline .connection-status,
+.itest-beamline .monitor-btn {
+  font-size: 10px;
+}
+
+.itest-beamline .monitor-btn {
+  padding: 2px 5px;
+}
+
+.itest-beamline .itest-beamline__card.is-drop-target {
+  outline: 2px solid #003ca6;
+  outline-offset: -2px;
+}
+
+.itest-beamline__card h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itest-beamline .sup-line__states .itest-beamline__output-on {
+  background: #55ad55;
+}
+
+.sup-line .itest-beamline__handle:enabled {
+  cursor: grab;
+  font-size: 14px;
+}
+
+.itest-beamline__card .itest-current-editor {
+  margin-top: 5px;
+  position: relative;
+}
+
+.itest-beamline__card .itest-current-arrows {
+  order: -1;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr;
+  gap: 2px;
+}
+
+.itest-beamline__card .itest-current-arrows button:first-child {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.itest-beamline__card .itest-current-arrows button:last-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.itest-beamline__card .itest-current-editor .itest-current-arrows button,
+.itest-beamline__card .itest-current-editor .btn-set-current {
+  min-width: 18px;
+  padding-inline: 3px;
+  border-radius: 0;
+}
+
+.itest-client.itest-beamline .slot-limits {
+  color: #454545;
+  border-top: 0;
+}
